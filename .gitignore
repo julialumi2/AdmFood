@@ -1,0 +1,16 @@
+# Arquivo de configurações com Tokens e Webhooks reais
+config.py
+
+# Credenciais e chaves do Google (se houver no futuro)
+credentials.json
+*.json
+
+# Ambientes virtuais e arquivos do Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Arquivos do VS Code
+.vscode/
