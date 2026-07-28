@@ -7,7 +7,7 @@
         }
 
         body {
-            background-color: #2563eb; /* Azul do fundo principal */
+            background-color: #470000; 
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -28,30 +28,6 @@
             gap: 40px;
         }
 
-        /* --- NAVBAR --- */
-        .navbar {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .brand-logo {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 800;
-            font-size: 1.1rem;
-            color: #0f172a;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-
-        .brand-logo svg {
-            width: 24px;
-            height: 24px;
-            fill: #0f172a;
-        }
-
         /* --- CONTEÚDO PRINCIPAL (HERO) --- */
         .hero-section {
             display: grid;
@@ -67,45 +43,17 @@
             gap: 20px;
         }
 
-        .tag-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: #2563eb;
-            background: transparent;
-            cursor: pointer;
-            width: fit-content;
-        }
-
-        .tag-pill .play-icon {
-            width: 22px;
-            height: 22px;
-            background: #2563eb;
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-        }
-
-        .tag-pill u {
-            text-decoration-color: #2563eb;
-        }
-
         .hero-title {
             font-size: 2.5rem;
             font-weight: 900;
-            color: #0f172a;
+            color: #000000;
             line-height: 1.15;
             text-transform: uppercase;
             letter-spacing: -0.5px;
         }
 
         .hero-description {
-            color: #475569;
+            color: #685466;
             font-size: 0.95rem;
             line-height: 1.5;
             font-weight: 500;
@@ -160,10 +108,6 @@
             text-transform: uppercase;
         }
 
-        .form-title span {
-            color: #2563eb;
-        }
-
         .form-card {
             display: flex;
             flex-direction: column;
@@ -191,7 +135,7 @@
             min-height: 50px;
             padding: 16px 20px;       
             border-radius: 12px;
-            background-color: #4f46e5;
+            background-color: #470000;
             color: #ffffff;
             border: none;
             border-radius: 10px;
@@ -208,7 +152,7 @@
         }
 
         button[type="submit"]:hover {
-            background-color: #4338ca;
+            background-color: #1a0000;
         }
 
         button[type="submit"]:active {
@@ -220,6 +164,15 @@
             cursor: not-allowed;
         }
 
+        .status-msg {
+            margin-top: 15px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .status-msg.sucesso { color: #16a34a; }
+        .status-msg.erro { color: #dc2626; }
 
         /* --- RESPONSIVIDADE (MOBILE / TABLET) --- */
         @media (max-width: 900px) {

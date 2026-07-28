@@ -1,22 +1,27 @@
 // Preenche a data de hoje automaticamente ao carregar
 document.getElementById('data').valueAsDate = new Date();
 
-// Máscara para formatar o campo de presencial em moeda R$
+// Máscara fluida para o campo de presencial
 const inputPresencial = document.getElementById('presencial');
 
 if (inputPresencial) {
     inputPresencial.addEventListener('input', function(e) {
-        let value = e.target.value.replace(/\D/g, '');
-        if (!value) {
+        // 1. Obtém apenas os números digitados
+        let apenasNumeros = e.target.value.replace(/\D/g, '');
+
+        // 2. Se apagar tudo, limpa o campo
+        if (!apenasNumeros) {
             e.target.value = '';
             return;
         }
 
-        let valorNumerico = (parseInt(value, 10) / 100).toFixed(2);
+        // 3. Converte para o formato de moeda (R$) dividindo por 100
+        let valorDecimal = (parseFloat(apenasNumeros) / 100).toFixed(2);
 
-        let partes = valorNumerico.split('.');
+        // 4. Formata com ponto nos milhares e vírgula nos centavos
+        let partes = valorDecimal.split('.');
         partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        
+
         e.target.value = partes.join(',');
     });
 }
