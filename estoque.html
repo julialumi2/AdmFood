@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardápio Web - Controle de Estoque</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- SIDEBAR LATERAL -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i data-lucide="utensils-crossed"></i></div>
+      <div class="logo-text">
+        <h2>LOGO</h2>
+        <span>REDE • ADMIN</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section-title">Painel</div>
+
+    <nav class="sidebar-menu">
+      <a href="/" class="menu-item"><i data-lucide="bar-chart-2"></i><span>Resumo</span></a>
+      <a href="/estoque" class="menu-item active"><i data-lucide="box"></i><span>Estoque</span></a>
+      <a href="/preparo" class="menu-item"><i data-lucide="timer"></i><span>Preparo</span></a>
+      <a href="/clickup" class="menu-item"><i data-lucide="check-square"></i><span>ClickUp</span></a>
+      <a href="/insights" class="menu-item"><i data-lucide="lightbulb"></i><span>Insights</span></a>
+      <a href="/configuracoes" class="menu-item"><i data-lucide="settings"></i><span>Configurações</span></a>
+    </nav>
+  </aside>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="main-wrapper">
+    
+    <!-- HEADER SUPERIOR -->
+    <header class="top-header">
+      <div class="header-left">
+        <button class="btn-sidebar-toggle"><i data-lucide="sidebar"></i></button>
+        <span class="header-page-title">Painel da Rede</span>
+      </div>
+
+      <div class="header-right">
+        <div class="badge-avisos">
+          <i data-lucide="bell"></i>
+          <span>Avisos</span>
+          <span class="count-pill">2</span>
+        </div>
+
+        <div class="user-profile">
+          <div class="avatar">JS</div>
+          <div class="user-info">
+            <span class="user-name">Julia Suzuki</span>
+            <span class="user-role">Admin</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- PÁGINA DE ESTOQUE -->
+    <div class="page-content">
+      
+      <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
+      <div class="dashboard-title-area">
+        <div class="title-top">
+          <i data-lucide="box" class="icon-pin"></i>
+          <span>CONTROLE DE ESTOQUE</span>
+        </div>
+        <div class="title-row">
+          <h1>Insumos da Rede</h1>
+          <button class="btn-registrar-entrada">
+            Registrar entrada
+          </button>
+        </div>
+      </div>
+
+      <!-- CARDS DE RESUMO DO ESTOQUE -->
+      <div class="cards-grid">
+        
+        <!-- CARD 1: ITENS CADASTRADOS -->
+        <div class="store-card">
+          <span class="card-subtitle">ITENS CADASTRADOS</span>
+          <div class="metric-card-content">
+            <i data-lucide="box" class="metric-icon icon-red"></i>
+            <span class="store-value">8</span>
+          </div>
+        </div>
+
+        <!-- CARD 2: EM NÍVEL IDEAL -->
+        <div class="store-card">
+          <span class="card-subtitle">EM NÍVEL IDEAL</span>
+          <div class="metric-card-content">
+            <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
+            <span class="store-value">4</span>
+          </div>
+        </div>
+
+        <!-- CARD 3: ESTOQUE BAIXO -->
+        <div class="store-card">
+          <span class="card-subtitle">ESTOQUE BAIXO</span>
+          <div class="metric-card-content">
+            <i data-lucide="trending-down" class="metric-icon icon-dark"></i>
+            <span class="store-value">2</span>
+          </div>
+        </div>
+
+        <!-- CARD 4: NÍVEL CRÍTICO -->
+        <div class="store-card">
+          <span class="card-subtitle">NÍVEL CRÍTICO</span>
+          <div class="metric-card-content">
+            <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
+            <span class="store-value">2</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CONTAINER DA TABELA DE ITENS -->
+      <div class="chart-card">
+        
+        <div class="table-header-row">
+          <div>
+            <h3 class="table-title">Itens em estoque</h3>
+            <p class="table-subtitle">Consolidado de todas as unidades</p>
+          </div>
+
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" placeholder="Buscar insumo...">
+          </div>
+        </div>
+
+        <!-- TABELA DE INSUMOS -->
+        <table class="inventory-table">
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th>Categoria</th>
+              <th>Atual</th>
+              <th>Nível</th>
+              <th style="text-align: right;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <!-- ITEM 1 -->
+            <tr>
+              <td class="font-bold">Farinha de trigo</td>
+              <td class="text-muted">Secos</td>
+              <td class="font-bold">48 kg</td>
+              <td>
+                <div class="progress-container">
+                  <div class="progress-bar bar-red" style="width: 85%;"></div>
+                </div>
+                <span class="min-label">mínimo 20 kg</span>
+              </td>
+              <td style="text-align: right;">
+                <span class="badge-pill pos">OK</span>
+              </td>
+            </tr>
+
+            <!-- ITEM 2 -->
+            <tr>
+              <td class="font-bold">Queijo mussarela</td>
+              <td class="text-muted">Laticínios</td>
+              <td class="font-bold">6 kg</td>
+              <td>
+                <div class="progress-container">
+                  <div class="progress-bar bar-red" style="width: 25%;"></div>
+                </div>
+                <span class="min-label">mínimo 10 kg</span>
+              </td>
+              <td style="text-align: right;">
+                <span class="badge-pill neu-orange">Baixo</span>
+              </td>
+            </tr>
+
+            <!-- ITEM 3 -->
+            <tr>
+              <td class="font-bold">Molho de tomate</td>
+              <td class="text-muted">Molhos</td>
+              <td class="font-bold">22 L</td>
+              <td>
+                <div class="progress-container">
+                  <div class="progress-bar bar-red" style="width: 65%;"></div>
+                </div>
+                <span class="min-label">mínimo 15 L</span>
+              </td>
+              <td style="text-align: right;">
+                <span class="badge-pill pos">OK</span>
+              </td>
+            </tr>
+
+            <!-- ITEM 4 -->
+            <tr>
+              <td class="font-bold">Azeitona preta</td>
+              <td class="text-muted">Conservas</td>
+              <td class="font-bold">1.2 kg</td>
+              <td>
+                <div class="progress-container">
+                  <div class="progress-bar bar-red" style="width: 12%;"></div>
+                </div>
+                <span class="min-label">mínimo 4 kg</span>
+              </td>
+              <td style="text-align: right;">
+                <span class="badge-pill neg">Crítico</span>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+
+      </div>
+
+    </div>
+  </main>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
