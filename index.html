@@ -1,53 +1,199 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fechamento Diário de Vendas</title>
-    <link rel="stylesheet" href ="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardápio Web - Painel da Rede</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-    <div class="main-card">
-        <!-- HERO SECTION -->
-        <main class="hero-section">
-            
-            <!-- ESQUERDA: TEXTO E CHAMADA -->
-            <section class="hero-left">
-                <h1 class="hero-title">Relatório de Vendas Simplificado</h1>
 
-                <div class="hero-description">
-                    <h3 class>Agilize o envio dos relatórios de vendas e garanta a precisão dos dados em tempo real.</h3>
-                </div>
-            </section>
-
-            <!-- DIREITA: FORMULÁRIO CARD -->
-            <section class="hero-right">
-                <h2 class="form-title">Selecione a unidade e informe o valor presencial.</h2>
-
-                 <form id="form-fechamento">
-            
-                 <label for="loja">Selecione a Loja:</label>
-                 <select id="loja" name="loja" required>
-                    <option value="Artesano's">Artesano's</option>
-                    <option value="Tradiça ZN">Tradiça ZN</option>
-                    <option value="Tradiça Simus">Tradiça Simus</option>
-                    <option value="Açaí na Lata">Açaí na Lata</option>
-            </select>
-
-            <label for="data">Data do Fechamento:</label>
-            <input type="date" id="data" name="data" required>
-
-            <label for="presencial">Vendas Presencial (R$):</label>
-            <input type="number" id="presencial" name="presencial" placeholder="0,00" required autocomplete="off">
-                    <button type="submit" id="btn-enviar">PROCESSAR E ENVIAR RELATÓRIO</button>
-                    
-                </form>
-            </section>
-
-        </main>
-
+  <!-- SIDEBAR LATERAL -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <i data-lucide="utensils-crossed"></i>
+      </div>
+      <div class="logo-text">
+        <h2>LOGO</h2>
+        <span>REDE • ADMIN</span>
+      </div>
     </div>
 
-    <script src="script.js"></script>
+    <div class="sidebar-section-title">Painel</div>
+
+    <nav class="sidebar-menu">
+      <a href="#" class="menu-item active">
+        <i data-lucide="bar-chart-2"></i>
+        <span>Resumo</span>
+      </a>
+      <a href="#" class="menu-item">
+        <i data-lucide="box"></i>
+        <span>Estoque</span>
+      </a>
+      <a href="#" class="menu-item">
+        <i data-lucide="timer"></i>
+        <span>Preparo</span>
+      </a>
+      <a href="#" class="menu-item">
+        <i data-lucide="check-square"></i>
+        <span>ClickUp</span>
+      </a>
+      <a href="#" class="menu-item">
+        <i data-lucide="lightbulb"></i>
+        <span>Insights</span>
+      </a>
+      <a href="#" class="menu-item">
+        <i data-lucide="settings"></i>
+        <span>Configurações</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="main-wrapper">
+    
+    <!-- HEADER SUPERIOR -->
+    <header class="top-header">
+      <div class="header-left">
+        <button class="btn-sidebar-toggle"><i data-lucide="sidebar"></i></button>
+        <span class="header-page-title">Painel da Rede</span>
+      </div>
+
+      <div class="header-right">
+        <div class="badge-avisos">
+          <i data-lucide="bell"></i>
+          <span>Avisos</span>
+          <span class="count-pill">2</span>
+        </div>
+
+        <div class="user-profile">
+          <div class="avatar">JS</div>
+          <div class="user-info">
+            <span class="user-name">Julia Suzuki</span>
+            <span class="user-role">Admin</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTEÚDO DA PÁGINA -->
+    <div class="page-content">
+      
+      <!-- SUBTÍTULO E TÍTULO PRINCIPAL -->
+      <div class="dashboard-title-area">
+        <div class="title-top">
+          <i data-lucide="pin" class="icon-pin"></i>
+          <span>VISÃO GERAL DA REDE</span>
+        </div>
+        <div class="title-row">
+          <h1>Ontem — 28/07/2026</h1>
+          <div class="total-rede-pill">
+            Total da rede: <strong>R$ 18.450</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
+      <div class="section-header">
+        <i data-lucide="store"></i>
+        <h3>Desempenho por Unidade</h3>
+      </div>
+
+      <div class="cards-grid">
+        <!-- CARD 1 -->
+        <div class="store-card">
+          <span class="card-subtitle">UNIDADE</span>
+          <h4 class="store-name">Artesano's</h4>
+          <div class="store-value">R$ 6.200</div>
+          <div class="badge-pill pos">
+            <i data-lucide="trending-up"></i> +15%
+          </div>
+        </div>
+
+        <!-- CARD 2 -->
+        <div class="store-card">
+          <span class="card-subtitle">UNIDADE</span>
+          <h4 class="store-name">Unidade 2</h4>
+          <div class="store-value">R$ 4.850</div>
+          <div class="badge-pill pos">
+            <i data-lucide="trending-up"></i> +8%
+          </div>
+        </div>
+
+        <!-- CARD 3 -->
+        <div class="store-card">
+          <span class="card-subtitle">UNIDADE</span>
+          <h4 class="store-name">Unidade 3</h4>
+          <div class="store-value">R$ 4.100</div>
+          <div class="badge-pill neu">
+            <i data-lucide="minus"></i> Estável
+          </div>
+        </div>
+
+        <!-- CARD 4 -->
+        <div class="store-card">
+          <span class="card-subtitle">UNIDADE</span>
+          <h4 class="store-name">Unidade 4</h4>
+          <div class="store-value">R$ 3.300</div>
+          <div class="badge-pill neg">
+            <i data-lucide="trending-down"></i> -5%
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTAINER DO GRÁFICO -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">
+            <i data-lucide="line-chart"></i>
+            <h3>Gráfico Comparativo</h3>
+          </div>
+          <p class="chart-subtitle">Curva de vendas de ontem — 4 lojas</p>
+        </div>
+        
+        <div class="chart-body">
+          <canvas id="salesChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    // Configuração do Gráfico estilo Cardápio Web
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['11h', '12h', '13h', '18h', '19h', '20h', '21h', '22h'],
+        datasets: [
+          { label: "Artesano's", data: [200, 500, 750, 400, 950, 800, 600, 300], borderColor: '#d93829', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { label: 'Unidade 2', data: [150, 400, 600, 300, 750, 650, 450, 250], borderColor: '#f59e0b', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { label: 'Unidade 3', data: [100, 300, 500, 250, 600, 500, 350, 200], borderColor: '#10b981', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { label: 'Unidade 4', data: [80, 200, 400, 180, 450, 400, 250, 150], borderColor: '#3b82f6', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { 
+            grid: { color: '#f1f5f9', strokeDash: [4, 4] },
+            ticks: { callback: value => 'R$' + value }
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>
