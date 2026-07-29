@@ -28,7 +28,7 @@
     <div class="sidebar-section-title">Painel</div>
 
     <nav class="sidebar-menu">
-      <a href="#" class="menu-item active">
+      <a href="index.html" class="menu-item active">
         <i data-lucide="bar-chart-2"></i>
         <span>Resumo</span>
       </a>
@@ -66,12 +66,6 @@
       </div>
 
       <div class="header-right">
-        <div class="badge-avisos">
-          <i data-lucide="bell"></i>
-          <span>Avisos</span>
-          <span class="count-pill">2</span>
-        </div>
-
         <div class="user-profile">
           <div class="avatar">JS</div>
           <div class="user-info">
@@ -92,7 +86,7 @@
           <span>VISÃO GERAL DA REDE</span>
         </div>
         <div class="title-row">
-          <h1>Ontem — 28/07/2026</h1>
+          <h1>Ontem — <span id="data-ontem"></span></h1>
           <div class="total-rede-pill">
             Total da rede: <strong>R$ 18.450</strong>
           </div>
@@ -106,7 +100,6 @@
       </div>
 
       <div class="cards-grid">
-        <!-- CARD 1 -->
         <div class="store-card">
           <span class="card-subtitle">UNIDADE</span>
           <h4 class="store-name">Artesano's</h4>
@@ -116,7 +109,6 @@
           </div>
         </div>
 
-        <!-- CARD 2 -->
         <div class="store-card">
           <span class="card-subtitle">UNIDADE</span>
           <h4 class="store-name">Unidade 2</h4>
@@ -126,7 +118,6 @@
           </div>
         </div>
 
-        <!-- CARD 3 -->
         <div class="store-card">
           <span class="card-subtitle">UNIDADE</span>
           <h4 class="store-name">Unidade 3</h4>
@@ -136,7 +127,6 @@
           </div>
         </div>
 
-        <!-- CARD 4 -->
         <div class="store-card">
           <span class="card-subtitle">UNIDADE</span>
           <h4 class="store-name">Unidade 4</h4>
@@ -154,7 +144,7 @@
             <i data-lucide="line-chart"></i>
             <h3>Gráfico Comparativo</h3>
           </div>
-          <p class="chart-subtitle">Curva de vendas de ontem — 4 lojas</p>
+          <p class="chart-subtitle">Curva de vendas de ontem (<span id="data-grafico-sub"></span>) — 4 lojas</p>
         </div>
         
         <div class="chart-body">
@@ -165,10 +155,10 @@
     </div>
   </main>
 
+  <script src="script.js"></script>
   <script>
     lucide.createIcons();
 
-    // Configuração do Gráfico estilo Cardápio Web
     const ctx = document.getElementById('salesChart').getContext('2d');
     new Chart(ctx, {
       type: 'line',
