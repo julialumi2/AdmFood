@@ -5,13 +5,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const hoje = new Date();
 
      function redirecionarLogin() {
-      // Altere 'login.html' para a rota ou arquivo da sua tela de login
       window.location.href = "login.html"; 
     }
 
     function redirecionarRegistro() {
-      // Altere para a rota de cadastro se houver
       window.location.href = "registro.html"; 
+    }
+
+    function realizarLogin(event) {
+      event.preventDefault(); // Evita recarregar a página
+      
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      // Exemplo de direcionamento para o painel de redes após login
+      console.log("Tentando logar com:", email);
+      
+      // Aqui você altera para a URL do seu painel principal (ex: dashboard.html ou /dashboard)
+      window.location.href = "dashboard.html"; 
+    }
+
+    function loginGoogle() {
+      alert("Redirecionando para autenticação do Google...");
     }
     
     // Preenche o input date no formato YYYY-MM-DD para evitar problemas de fuso/UTC

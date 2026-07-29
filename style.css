@@ -505,8 +505,57 @@ body {
   color: #92400e;
 }
 
-.landing{
-    overflow: hidden;
+/* Container pai para alinhar os botões lado a lado e centralizados */
+.botoes-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem; /* Espaçamento de 16px entre os dois botões */
+  width: 100%;
+}
+
+/* Classe única para ambos os botões */
+.botao-primario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem; /* Espaço entre o texto e a seta (12px) */
+  
+  background-color: #D34537;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  
+  padding: 0.875rem 1.75rem; /* Altura e largura interna proporcionais */
+  border-radius: 0.75rem; /* Bordas arredondadas igual ao layout */
+  border: none;
+  
+  white-space: nowrap; /* IMPEDE A QUEBRA DE LINHA DO TEXTO DO BOTÃO */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+/* Efeito de Hover */
+.btn-primario:hover {
+  background-color: #b8382b;
+}
+
+/* Efeito de Clique */
+.btn-primario:active {
+  transform: scale(0.95);
+}
+
+/* Ajuste Responsivo para telas pequenas (smartphones) */
+@media (max-width: 640px) {
+  .botoes-container {
+    flex-direction: column; /* Em telas muito pequenas empilha um sobre o outro */
+  }
+  
+  .btn-primario {
+    width: 100%; /* Ocupa a largura total em celulares */
+  }
 }
 
 @media (max-width: 1024px) {

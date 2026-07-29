@@ -18,11 +18,6 @@
       </div>
       <span class="font-extrabold text-xl tracking-tight uppercase">LOGO</span>
     </div>
-
-    <button onclick="redirecionarLogin()" 
-            class="bg-[#D34537] hover:bg-[#b8382b] text-white font-semibold px-5 py-2.5 rounded-xl transition duration-200 shadow-sm active:scale-95">
-      Acessar painel
-    </button>
   </header>
 
   <main class="flex-1 flex flex-col items-center justify-center text-center px-4 max-w-4xl mx-auto py-12">
@@ -40,16 +35,17 @@
     </p>
 
     <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-      <button onclick="redirecionarLogin()" 
-              class="w-full sm:w-auto bg-[#D34537] hover:bg-[#b8382b] text-white font-semibold px-7 py-3.5 rounded-xl flex items-center justify-center gap-3 transition duration-200 shadow-sm active:scale-95">
-        <span>Entrar no painel</span>
+        <div class="botao-primario">
+        <a href="login.html"><button>Entrar no painel</button>
         <i class="fa-solid fa-arrow-right text-sm"></i>
-      </button>
+        </div>
+        </a>
 
-      <button onclick="redirecionarRegistro()" 
-              class="w-full sm:w-auto bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 font-semibold px-7 py-3.5 rounded-xl transition duration-200 shadow-sm active:scale-95">
-        Criar conta
-      </button>
+      <div class="botao-primario">
+        <a href="registro.html"><button>Criar conta</button>
+        <i class="fa-solid fa-arrow-right text-sm"></i>
+        </div>
+        </a>
     </div>
   </main>
 
