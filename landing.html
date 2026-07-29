@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardápio Web - Painel da Rede</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js"></script>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+  <header class="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="bg-[#D34537] text-white p-2.5 rounded-xl flex items-center justify-center shadow-sm">
+        <i class="fa-solid fa-utensils text-lg"></i>
+      </div>
+      <span class="font-extrabold text-xl tracking-tight uppercase">LOGO</span>
+    </div>
+
+    <button onclick="redirecionarLogin()" 
+            class="bg-[#D34537] hover:bg-[#b8382b] text-white font-semibold px-5 py-2.5 rounded-xl transition duration-200 shadow-sm active:scale-95">
+      Acessar painel
+    </button>
+  </header>
+
+  <main class="flex-1 flex flex-col items-center justify-center text-center px-4 max-w-4xl mx-auto py-12">
+    
+    <span class="text-[#D34537] font-semibold tracking-wider text-xs md:text-sm uppercase mb-4">
+      Painel da Rede
+    </span>
+
+    <h1 class="text-4xl md:text-6xl font-extrabold text-[#111111] leading-tight md:leading-tight tracking-tight mb-6">
+      Todos os números da sua rede de restaurantes em um só lugar
+    </h1>
+
+    <p class="text-gray-600 text-base md:text-lg max-w-2xl leading-relaxed mb-10">
+      Acompanhe vendas por unidade, estoque, fila de preparo, tarefas do ClickUp e insights automáticos para tomar decisões mais rápidas.
+    </p>
+
+    <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+      <button onclick="redirecionarLogin()" 
+              class="w-full sm:w-auto bg-[#D34537] hover:bg-[#b8382b] text-white font-semibold px-7 py-3.5 rounded-xl flex items-center justify-center gap-3 transition duration-200 shadow-sm active:scale-95">
+        <span>Entrar no painel</span>
+        <i class="fa-solid fa-arrow-right text-sm"></i>
+      </button>
+
+      <button onclick="redirecionarRegistro()" 
+              class="w-full sm:w-auto bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 font-semibold px-7 py-3.5 rounded-xl transition duration-200 shadow-sm active:scale-95">
+        Criar conta
+      </button>
+    </div>
+  </main>
+
+  </script>
+</body>
+</html>

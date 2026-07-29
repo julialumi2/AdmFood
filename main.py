@@ -10,7 +10,6 @@ def formatar_moeda(valor: float) -> str:
 
 
 def buscar_vendas_cardapio_web(store_id: str, data_str: str) -> dict:
-    """Consulta a API do Cardápio WEB filtrando por store_id."""
     url = f"https://api.cardapioweb.com/v1/relatorios/vendas?store_id={store_id}&data={data_str}"
     headers = {"Authorization": f"Bearer {CARDAPIO_WEB_TOKEN}"}
 

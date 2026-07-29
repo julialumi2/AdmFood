@@ -4,25 +4,30 @@ import requests
 
 from config import LOJAS, MAKE_WEBHOOK_URL
 from main import (
-    buscar_vendas_cardapio_web,
-    montar_bloco_comparativo,
-    obter_historico_dias_mes,
-    obter_nome_dia_semana,
+    buscar_vendas_cardapio_web, 
+    obter_historico_domingos_mes, 
+    montar_bloco_comparativo, 
+    processar_e_enviar, 
 )
-# IMPORTANTE: Importamos o nosso novo integrador de vendas
-from services.sales_integrator import SalesIntegrator
+# Import do integrador de vendas
+from sales_integrator import SalesIntegrator
 
 app = Flask(__name__)
 
-# Instanciamos o integrador da rede
+# Instancia o integrador da rede
 integrator = SalesIntegrator()
+
+
+def obter_nome_dia_semana(data_obj):
+    """Retorna o nome do dia da semana em português."""
+    dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+    return dias[data_obj.weekday()]
 
 
 # ------------------------------------------------------------------
 # ROTAS DE PÁGINAS (FRONTEND)
 # ------------------------------------------------------------------
 
-# Rota principal - Renderiza o Dashboard Executivo da Rede
 @app.route("/")
 @app.route("/dashboard")
 def home():
@@ -33,18 +38,25 @@ def home():
 # ROTAS DE API (BACKEND)
 # ------------------------------------------------------------------
 
-# 🆕 NOVA ROTA: Busca os dados consolidados das 4 lojas para a Landing Page
 @app.route("/api/v1/resumo-ontem", methods=["GET"])
 def api_resumo_ontem():
     try:
         dados = integrator.fetch_yesterday_metrics()
+        
+        # Garante que 'dados' não seja None para não quebrar a resposta
+        if not dados:
+            dados = {"total_rede": 0.0, "lojas": []}
+
         return jsonify(dados), 200
     except Exception as e:
         print(f"Erro ao buscar resumo das lojas: {e}")
-        return jsonify({"mensagem": "Erro ao carregar dados do dashboard"}), 500
+        return jsonify({
+            "mensagem": "Erro ao carregar dados do dashboard",
+            "total_rede": 0.0,
+            "lojas": []
+        }), 500
 
 
-# 🔄 SUA ROTA EXISTENTE: Processa o fechamento e envia para o Make/WhatsApp
 @app.route("/api/enviar-fechamento", methods=["POST"])
 def processar_fechamento():
     try:
@@ -70,7 +82,7 @@ def processar_fechamento():
 
         # 1. Busca vendas online no Cardápio WEB
         vendas_online = buscar_vendas_cardapio_web(
-            config_loja["cardapio_web_token"], data_str
+            config_loja.get("cardapio_web_token", ""), data_str
         )
 
         if not isinstance(vendas_online, dict):
@@ -82,7 +94,7 @@ def processar_fechamento():
         # 2. Monta o pacote de dados (payload) para o Make
         payload_make = {
             "loja": nome_loja,
-            "aba_planilha": config_loja["nome_aba"],
+            "aba_planilha": config_loja.get("nome_aba", ""),
             "data_busca": data_formatada,
             "dia_semana": dia_semana,
             "ifood": vendas_online.get("ifood", 0.0),
@@ -91,7 +103,7 @@ def processar_fechamento():
             "total_online": total_online,
             "presencial": vendas_presencial,
             "total_geral": total_geral,
-            "grupo_whatsapp_id": config_loja["grupo_whatsapp_id"],
+            "grupo_whatsapp_id": config_loja.get("grupo_whatsapp_id", ""),
         }
 
         # 3. Envia os dados consolidados para o Webhook do Make
@@ -100,19 +112,13 @@ def processar_fechamento():
         )
 
         if resposta_make.status_code in [200, 201]:
-            return (
-                jsonify({
-                    "mensagem": "Relatório processado e enviado para a automação com sucesso!"
-                }),
-                200,
-            )
+            return jsonify({
+                "mensagem": "Relatório processado e enviado para a automação com sucesso!"
+            }), 200
         else:
-            return (
-                jsonify({
-                    "mensagem": f"Erro ao comunicar com o Make (Status {resposta_make.status_code})"
-                }),
-                502,
-            )
+            return jsonify({
+                "mensagem": f"Erro ao comunicar com o Make (Status {resposta_make.status_code})"
+            }), 502
 
     except Exception as erro:
         print(f"Erro interno no servidor: {erro}")

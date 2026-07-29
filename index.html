@@ -65,6 +65,7 @@
         <span class="header-page-title">Painel da Rede</span>
       </div>
 
+      <!-- CRIAÇÃO FUTURA DE LOGIN -->
       <div class="header-right">
         <div class="user-profile">
           <div class="avatar">JS</div>
@@ -79,65 +80,33 @@
     <!-- CONTEÚDO DA PÁGINA -->
     <div class="page-content">
       
-      <!-- SUBTÍTULO E TÍTULO PRINCIPAL -->
-      <div class="dashboard-title-area">
-        <div class="title-top">
-          <i data-lucide="pin" class="icon-pin"></i>
-          <span>VISÃO GERAL DA REDE</span>
+        <!-- SUBTÍTULO E TÍTULO PRINCIPAL -->
+        <div class="dashboard-title-area">
+            <div class="title-top">
+            <i data-lucide="pin" class="icon-pin"></i>
+            <span>VISÃO GERAL DA REDE</span>
         </div>
+
         <div class="title-row">
-          <h1>Ontem — <span id="data-ontem"></span></h1>
-          <div class="total-rede-pill">
-            Total da rede: <strong>R$ 18.450</strong>
-          </div>
+        <h1>Ontem — <span id="data-ontem">...</span></h1>
+        <div class="total-rede-pill">Total da rede: <strong id="total-rede-valor">R$ 0,00</strong>
         </div>
-      </div>
+  </div>
+</div>
 
-      <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
-      <div class="section-header">
-        <i data-lucide="store"></i>
-        <h3>Desempenho por Unidade</h3>
-      </div>
+    <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
+    <div class="section-header">
+    <i data-lucide="store"></i>
+    <h3>Desempenho por Unidade</h3>
+    </div>
 
-      <div class="cards-grid">
-        <div class="store-card">
-          <span class="card-subtitle">UNIDADE</span>
-          <h4 class="store-name">Artesano's</h4>
-          <div class="store-value">R$ 6.200</div>
-          <div class="badge-pill pos">
-            <i data-lucide="trending-up"></i> +15%
-          </div>
-        </div>
-
-        <div class="store-card">
-          <span class="card-subtitle">UNIDADE</span>
-          <h4 class="store-name">Unidade 2</h4>
-          <div class="store-value">R$ 4.850</div>
-          <div class="badge-pill pos">
-            <i data-lucide="trending-up"></i> +8%
-          </div>
-        </div>
-
-        <div class="store-card">
-          <span class="card-subtitle">UNIDADE</span>
-          <h4 class="store-name">Unidade 3</h4>
-          <div class="store-value">R$ 4.100</div>
-          <div class="badge-pill neu">
-            <i data-lucide="minus"></i> Estável
-          </div>
-        </div>
-
-        <div class="store-card">
-          <span class="card-subtitle">UNIDADE</span>
-          <h4 class="store-name">Unidade 4</h4>
-          <div class="store-value">R$ 3.300</div>
-          <div class="badge-pill neg">
-            <i data-lucide="trending-down"></i> -5%
-          </div>
-        </div>
-      </div>
-
+    <!-- CONTAINER ONDE OS CARDS DAS LOJAS SERÃO INJETADOS PELO JS -->
+    <div class="cards-grid" id="container-lojas">
+    <p class="text-muted" style="padding: 12px;">Sincronizando dados com o Cardápio Web...</p>
+    </div>
+    
       <!-- CONTAINER DO GRÁFICO -->
+       <!--FUTURA CONEXÃO COM O CW-->
       <div class="chart-card">
         <div class="chart-header">
           <div class="chart-title">
