@@ -28,6 +28,64 @@ document.addEventListener('DOMContentLoaded', () => {
     function loginGoogle() {
       alert("Redirecionando para autenticação do Google...");
     }
+
+    // Função para criar o HTML do Card reutilizando as classes CSS
+    function criarCardElemento(tarefa) {
+        const card = document.createElement('div');
+        card.classList.add('task-card');
+        card.setAttribute('data-id', tarefa.id);
+
+     // Mapeia a prioridade para a classe CSS correspondente
+    const priorityClass = `priority-${tarefa.prioridade.toLowerCase()}`;
+
+    card.innerHTML = `
+     <div class="card-top">
+        <h4 class="task-title">${tarefa.titulo}</h4>
+        <span class="badge ${priorityClass}">${tarefa.prioridade}</span>
+        </div>
+    <div class="card-bottom">
+      <span class="task-meta">${tarefa.responsavel} · ${tarefa.unidade}</span>
+      <span class="task-date">${tarefa.prazo}</span>
+    </div>`;
+
+  return card;
+}
+
+    // Exemplo de inclusão de tarefa dinamicamente
+    function adicionarTarefaAoBoard(tarefa, status) {
+    // status pode ser: 'open', 'progress' ou 'done'
+    const container = document.getElementById(`list-${status}`);
+        if (container) {
+            const cardElement = criarCardElemento(tarefa);
+        container.appendChild(cardElement);
+    atualizarContadores();
+  }
+}
+
+    // Exemplo: Simulação do retorno de uma Chamada de IA (Ex: Gemini/OpenAI API)
+    async function gerarTarefaComIA(promptUsuario) {
+        // Aqui você faria o fetch para seu backend / API da IA
+        // Exemplo de resposta JSON formatada que a IA retornaria:
+    const respostaIA = {
+        id: Date.now(),
+        titulo: "Auditoria preventiva de freezer",
+        prioridade: "alta", // alta, media ou baixa
+        responsavel: "Suporte IA",
+        unidade: "Unidade 1",
+        prazo: "Hoje"
+  };
+
+  // Insere a tarefa gerada automaticamente na coluna 'Aberto'
+  adicionarTarefaAoBoard(respostaIA, 'open');
+}
+
+    // Função utilitária para atualizar a contagem do cabeçalho de cada coluna
+    function atualizarContadores() {
+    ['open', 'progress', 'done'].forEach(status => {
+    const total = document.getElementById(`list-${status}`).children.length;
+    document.getElementById(`count-${status}`).innerText = `${total} tarefa(s)`;
+  });
+}
     
     // Preenche o input date no formato YYYY-MM-DD para evitar problemas de fuso/UTC
     const inputData = document.getElementById('data');

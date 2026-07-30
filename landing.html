@@ -4,51 +4,283 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cardápio Web - Painel da Rede</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="style.css">
-  <script src="script.js"></script>
+  <link rel="stylesheet" href="landing.css">
 </head>
-<body class="min-h-screen flex flex-col justify-between">
+<body>
 
-  <header class="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="bg-[#D34537] text-white p-2.5 rounded-xl flex items-center justify-center shadow-sm">
-        <i class="fa-solid fa-utensils text-lg"></i>
-      </div>
-      <span class="font-extrabold text-xl tracking-tight uppercase">LOGO</span>
+  <!-- HEADER / TOPBAR -->
+  <header class="topbar">
+      <span class="brand-name">ADMFOOD</span>
     </div>
+    <a href="login.html" class="btn-panel">Acessar painel</a>
   </header>
 
-  <main class="flex-1 flex flex-col items-center justify-center text-center px-4 max-w-4xl mx-auto py-12">
-    
-    <span class="text-[#D34537] font-semibold tracking-wider text-xs md:text-sm uppercase mb-4">
-      Painel da Rede
-    </span>
-
-    <h1 class="text-4xl md:text-6xl font-extrabold text-[#111111] leading-tight md:leading-tight tracking-tight mb-6">
-      Todos os números da sua rede de restaurantes em um só lugar
-    </h1>
-
-    <p class="text-gray-600 text-base md:text-lg max-w-2xl leading-relaxed mb-10">
-      Acompanhe vendas por unidade, estoque, fila de preparo, tarefas do ClickUp e insights automáticos para tomar decisões mais rápidas.
-    </p>
-
-    <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-        <div class="botao-primario">
-        <a href="login.html"><button>Entrar no painel</button>
-        <i class="fa-solid fa-arrow-right text-sm"></i>
+  <!-- 1. SEÇÃO HERO (com Controle de Estoque) -->
+  <section class="hero-section">
+    <div class="hero-container">
+      
+      <!-- Coluna Esquerda: Textos e Botões -->
+      <div class="hero-content">
+        <span class="badge-pill">O escritório inteligente do seu restaurante</span>
+        <h1 class="hero-title">Todos os números da sua rede de restaurantes em um só lugar</h1>
+        <p class="hero-subtitle">Acompanhe vendas por unidade, estoque, fila de preparo, tarefas do ClickUp e insights automáticos para tomar decisões mais rápidas.</p>
+        
+        <div class="hero-buttons">
+          <a href="login.html" class="btn-white">
+            Entrar no painel 
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          <a href="registro.html" class="btn-outline">Criar conta</a>
         </div>
-        </a>
+      </div>
 
-      <div class="botao-primario">
-        <a href="registro.html"><button>Criar conta</button>
-        <i class="fa-solid fa-arrow-right text-sm"></i>
+      <!-- Coluna Direita: Card de Estoque -->
+      <div class="hero-card">
+        <div class="card-header-flex">
+          <div>
+            <div class="card-header">
+              <span class="chart-icon">📦</span>
+              <span class="card-title">Controle de Estoque</span>
+            </div>
+            <div class="card-subtext">Alertas de insumos críticos por unidade</div>
+          </div>
+          <span class="badge-alert">3 Alertas</span>
         </div>
-        </a>
+
+        <div class="stock-list">
+          <div class="stock-item">
+            <div class="stock-info">
+              <div class="stock-name">Carne Picanha (kg)</div>
+              <div class="stock-unit">Artesano's • Mínimo: 30 kg</div>
+            </div>
+            <div class="stock-status">
+              <div class="stock-qty qty-danger">12 kg</div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-danger" style="width: 40%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stock-item">
+            <div class="stock-info">
+              <div class="stock-name">Queijo Mussarela (kg)</div>
+              <div class="stock-unit">Unidade 2 • Mínimo: 20 kg</div>
+            </div>
+            <div class="stock-status">
+              <div class="stock-qty qty-warning">18 kg</div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-warning" style="width: 65%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stock-item">
+            <div class="stock-info">
+              <div class="stock-name">Embalagem Delivery (un)</div>
+              <div class="stock-unit">Unidade 3 • Mínimo: 500 un</div>
+            </div>
+            <div class="stock-status">
+              <div class="stock-qty qty-danger">120 un</div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-danger" style="width: 24%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stock-item">
+            <div class="stock-info">
+              <div class="stock-name">Óleo de Soja (L)</div>
+              <div class="stock-unit">Unidade 4 • Mínimo: 40 L</div>
+            </div>
+            <div class="stock-status">
+              <div class="stock-qty qty-ok">85 L</div>
+              <div class="progress-bar">
+                <div class="progress-fill fill-ok" style="width: 90%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
     </div>
-  </main>
+  </section>
 
-  </script>
+  <!-- 2. SEÇÃO MÉTRICAS (Alinhada com a imagem enviada) -->
+  <section class="metrics-section">
+    <div class="metrics-container">
+      <span class="metrics-tag">MÉTRICAS EM TEMPO REAL</span>
+      <h2 class="metrics-title">O que você enxerga no painel</h2>
+      <p class="metrics-subtitle">Números fictícios de demonstração do tipo de visão que o AdmFood entrega.</p>
+
+      <div class="metrics-grid">
+        <!-- Card 1 -->
+        <div class="metric-card">
+          <span class="metric-label">FATURAMENTO</span>
+          <div class="metric-value">R$ 18.450</div>
+          <span class="badge-stat stat-up">↗ +12%</span>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="metric-card">
+          <span class="metric-label">UNIDADES</span>
+          <div class="metric-value">4</div>
+          <span class="badge-stat stat-neutral">— Ativas</span>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="metric-card">
+          <span class="metric-label">PEDIDOS HOJE</span>
+          <div class="metric-value">342</div>
+          <span class="badge-stat stat-up">↗ +8%</span>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="metric-card">
+          <span class="metric-label">TEMPO MÉDIO</span>
+          <div class="metric-value">16 min</div>
+          <span class="badge-stat stat-up">↗ -2 min</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. SEÇÃO FUNCIONALIDADES (Adicionada agora) -->
+  <section class="features-section">
+    <div class="features-container">
+      <span class="section-tag">FUNCIONALIDADES</span>
+      <h2 class="section-title">Tudo que o painel oferece</h2>
+      <p class="section-subtitle">Módulos pensados para redes de restaurantes que precisam de agilidade e controle.</p>
+
+      <div class="features-grid">
+        <!-- Card 1 -->
+        <div class="feature-card">
+          <div class="feature-header">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 20V10M12 20V4M6 20v-6"/>
+            </svg>
+            <h3 class="feature-title">Resumo da rede</h3>
+          </div>
+          <p class="feature-desc">Veja faturamento, pedidos e tempo médio de todas as unidades em um único painel.</p>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="feature-card">
+          <div class="feature-header">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 8L12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>
+            </svg>
+            <h3 class="feature-title">Controle de estoque</h3>
+          </div>
+          <p class="feature-desc">Acompanhe insumos críticos, níveis por unidade e receba alertas antes de faltar.</p>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="feature-card">
+          <div class="feature-header">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <h3 class="feature-title">Fila de preparo</h3>
+          </div>
+          <p class="feature-desc">Monitore pedidos em tempo real: fila, produção e pronto para entrega.</p>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="feature-card">
+          <div class="feature-header">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="10" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <h3 class="feature-title">Integração com ClickUp</h3>
+          </div>
+          <p class="feature-desc">Conecte tarefas e projetos da operação diretamente ao painel da rede.</p>
+        </div>
+
+        <!-- Card 5 -->
+        <div class="feature-card">
+          <div class="feature-header">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9.663 17h4.674M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+            <h3 class="feature-title">Insights automáticos</h3>
+          </div>
+          <p class="feature-desc">Descubra oportunidades de crescimento e alertas baseados nos dados da sua rede.</p>
+        </div>
+
+        <!-- Card 6 -->
+        <div class="feature-card">
+          <div class="feature-header">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <h3 class="feature-title">Configurações centralizadas</h3>
+          </div>
+          <p class="feature-desc">Gerencie usuários, unidades e integrações (iFood, ClickUp, WhatsApp) em um só lugar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-container">
+      
+      <!-- Coluna 1: Marca e Sobre -->
+      <div class="footer-brand-col">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2M15 2v10M12 2v6M21 2v20M3 2v7a4 4 0 0 0 4 4h0a4 4 0 0 0 4-4V2M7 13v9"/>
+            </svg>
+          </div>
+          <span class="brand-name">ADMFOOD</span>
+        </div>
+        <p class="footer-desc">
+          Plataforma completa de gestão e inteligência para redes de restaurantes e franquias.
+        </p>
+      </div>
+
+      <!-- Coluna 2: Navegação -->
+      <div class="footer-links-col">
+        <h4 class="footer-title">Navegação</h4>
+        <ul>
+          <li><a href="#hero">Início</a></li>
+          <li><a href="#metricas">Métricas</a></li>
+          <li><a href="#funcionalidades">Funcionalidades</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 3: Recursos -->
+      <div class="footer-links-col">
+        <h4 class="footer-title">Recursos</h4>
+        <ul>
+          <li><a href="#">Integração ClickUp</a></li>
+          <li><a href="#">Gestão de Estoque</a></li>
+          <li><a href="#">Painel de Unidades</a></li>
+          <li><a href="#">Suporte técnico</a></li>
+        </ul>
+      </div>
+
+      <!-- Coluna 4: Legal & Contato -->
+      <div class="footer-links-col">
+        <h4 class="footer-title">Legal</h4>
+        <ul>
+          <li><a href="#">Termos de Uso</a></li>
+          <li><a href="#">Política de Privacidade</a></li>
+          <li><a href="#">Segurança dos Dados</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Linha Inferior (Copyright) -->
+    <div class="footer-bottom">
+      <div class="footer-bottom-container">
+        <p>&copy; 2026 AdmFood. Todos os direitos reservados.</p>
+        <a href="#top" class="btn-back-top" title="Voltar ao topo"> ↑ Voltar ao topo</a>
+      </div>
+    </div>
+  </footer>
+
 </body>
 </html>
