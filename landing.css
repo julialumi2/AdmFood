@@ -7,25 +7,45 @@
 }
 
 body {
-  background-color: #ffffff;
+  background-color: #f8f6f0;
 }
 
 /* --- HEADER / TOPBAR --- */
 .topbar {
-  background-color: #ffffff;
+  background-color: #f8f6f0;
   padding: 14px 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
+/* Barra de navegação fixa no topo */
+.navbar {
+  display: flex;
+  justify-content: space-between; /* Empurra a logo para a esquerda e o menu para a direita */
+  align-items: center;            /* Centraliza verticalmente */
+  padding: 15px 5%;               /* Espaçamento interno */
+  background-color: #f8f6f0;      /* Cor de fundo da barra */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); /* Sombra suave */
+  position: sticky;
+  top: 0;
+  z-index: 1000;                  /* Mantém no topo ao rolar a página */
+}
+
+/* Tamanho e ajuste da Imagem da Logo */
+.logo-img {
+  height: 40px;                   /* Ajuste a altura ideal para a sua logo */
+  width: auto;                    /* Mantém a proporção original */
+  display: block;
+}
+
 /* Garante o alinhamento perfeito entre o ícone e o texto */
 .brand-name {
   font-family: 'Montserrat', sans-serif;
   font-weight: 800; /* Extra Bold */
-  font-size: 18px;  /* Ajuste o tamanho conforme desejar */
+  font-size: 25px;  /* Ajuste o tamanho conforme desejar */
   letter-spacing: -0.5px; /* Deixa as letras sutilmente mais juntas, como na imagem */
-
+  margin-left: -863px;;
 }
 
 /* Cor grafite/escura do "Adm." */
@@ -38,14 +58,36 @@ body {
   color: #d93829;
 }
 
-.btn-panel {
-  background-color: #d93829;
-  color: #ffffff;
-  padding: 8px 18px;
-  border-radius: 8px;
+/* Estilo do Botão Criar Conta (Esquerda) */
+.btn-criar-conta {
+  padding: 8px 16px;
+  border: 1px solid #333333;  /* Borda elegante */
+  color: #333333;
+  border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-criar-conta:hover {
+  background-color: #f4f4f4;
+}
+
+/* Estilo do Botão Acesse o Painel (Direita - Destaque) */
+.btn-acesse-painel {
+  padding: 8px 16px;
+  background-color: #d93829; /* Ajuste para a cor principal da AdmFood */
+  color: #ffffff;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.btn-acesse-painel:hover {
+  opacity: 0.9;
 }
 
 /* --- HERO SECTION --- */
@@ -108,15 +150,6 @@ body {
   gap: 8px;
 }
 
-.btn-outline {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  color: #ffffff;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  text-decoration: none;
-  font-size: 14px;
-}
 
 /* --- CARD DE ESTOQUE --- */
 .hero-card {
@@ -264,6 +297,7 @@ body {
   background-color: #f7f5f0;
   padding: 70px 20px 40px;
   text-align: center;
+  margin-top: 50px;
 }
 
 .metrics-container {
@@ -275,6 +309,32 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 20px;
+}
+
+/* Tag superior "MÉTRICAS EM TEMPO REAL" */
+.metrics-tag {
+  font-size: 12px; /* 👈 Tamanho */
+  color: #d93829;  /* 👈 Cor (atualmente o vermelho do AdmFood) */
+  font-weight: 700;
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Título principal "O que você enxerga no painel" */
+.metrics-title {
+  font-size: 32px; /* 👈 Tamanho do título */
+  color: #1e1e1e;  /* 👈 Cor do título */
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+/* Subtítulo da seção */
+.metrics-subtitle {
+  font-size: 16px; /* 👈 Tamanho do subtítulo */
+  color: #666666;  /* 👈 Cor do subtítulo */
+  font-weight: 400;
+  margin-bottom: 40px; /* Espaço até os cards */
 }
 
 .metric-card {
@@ -333,7 +393,8 @@ body {
 /* --- 3. SEÇÃO DE FUNCIONALIDADES (Adicionada agora) --- */
 .features-section {
   background-color: #f7f5f0;
-  padding: 40px 20px 80px;
+  padding-top: 80px;
+  padding-bottom: 60px;
   text-align: center;
 }
 
@@ -346,6 +407,8 @@ body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
+  padding-top: 40px;
+  padding-bottom: 60px;
 }
 
 .feature-card {
@@ -396,11 +459,94 @@ body {
   line-height: 1.5;
 }
 
+/* --- SEÇÃO POR QUE ESCOLHER A ADMFOOD --- */
+.why-choose-section {
+  padding: 80px 20px;
+  background-color: #f8f6f0; /* Tom neutro/claro para destacar dos outros blocos */
+}
+
+.why-choose-container {
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+/* Cabeçalho */
+.section-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.section-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: #d93829; /* Vermelho AdmFood */
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.section-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin: 10px 0;
+}
+
+.section-subtitle {
+  font-size: 16px;
+  color: #666666;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* Grid de Cards */
+.why-choose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsivo automático */
+  gap: 24px;
+}
+
+/* Estilo dos Cards Individualmente */
+.why-card {
+  background-color: #ffffff;
+  padding: 30px 24px;
+  border-radius: 12px;
+  border: 1px solid #e8e5df;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.why-card:hover {
+  transform: translateY(-5px); /* Efeito sutil de elevação ao passar o mouse */
+  box-shadow: 0 8px 25px rgba(217, 56, 41, 0.08);
+  border-color: #d93829;
+}
+
+.card-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.why-card h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333333;
+  margin-bottom: 10px;
+}
+
+.why-card p {
+  font-size: 14px;
+  color: #666666;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* --- 4. RODAPÉ (FOOTER) --- */
 .footer {
   background-color: #ede9e1;
   border-top: 1px solid #e2ddd3;
-  padding-top: 60px;
+  padding-top: 40px;
   color: #555555;
 }
 
@@ -414,7 +560,7 @@ body {
 }
 
 .footer-brand-col .brand {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .footer-desc {
@@ -428,7 +574,7 @@ body {
   font-size: 14px;
   font-weight: 700;
   color: #1a1a1a;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
   letter-spacing: 0.5px;
 }
 
@@ -456,6 +602,35 @@ body {
 
 .footer-links-col a:hover {
   color: #d64928;
+}
+
+.footerbrand-name {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800; /* Extra Bold */
+  font-size: 25px;  /* Ajuste o tamanho conforme desejar */
+  letter-spacing: -0.5px;
+  display: inline-block; /* Garante o alinhamento correto do texto */
+  margin-top: 20px;
+}
+
+/* Cor grafite/escura do "Adm." */
+.brand-dark {
+  color: #333333; 
+}
+
+/* Cor avermelhada/terracota do "Food" */
+.brand-red {
+  color: #d93829;
+}
+
+/* Cor grafite/escura do "Adm." */
+.brand-dark {
+  color: #333333; 
+}
+
+/* Cor avermelhada/terracota do "Food" */
+.brand-red {
+  color: #d93829;
 }
 
 /* Linha inferior de Copyright */

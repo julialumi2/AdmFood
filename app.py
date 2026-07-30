@@ -1,129 +1,94 @@
-import datetime
-from flask import Flask, jsonify, render_template, request
 import requests
-
-from config import LOJAS, MAKE_WEBHOOK_URL
-from main import (
-    buscar_vendas_cardapio_web, 
-    obter_historico_domingos_mes, 
-    montar_bloco_comparativo, 
-    processar_e_enviar, 
-)
-# Import do integrador de vendas
-from sales_integrator import SalesIntegrator
+from datetime import datetime, timedelta
+from flask import Flask, jsonify, render_template
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # Permite requisições do JS mesmo se rodar direto do arquivo local
 
-# Instancia o integrador da rede
-integrator = SalesIntegrator()
+LOJAS_CONFIG = [
+    {
+        "id": "5116", 
+        "nome": "Artesano's", 
+        "token": "3y4g7fNFnJ37TmXPSvwmp5pqKqBAyfN817oJDseTFW5B7zZFcoQxFEJbmtWc"
+    },
+    # Para adicionar mais unidades no futuro, basta descomentar e preencher:
+    # {"id": "ID_LOJA_2", "nome": "Unidade 2", "token": "TOKEN_REAL_AQUI"},
+]
 
+def obter_faturamento_loja(loja, data_inicio, data_fim):
+    if "TOKEN_API" in loja["token"]:
+        return {"nome": loja["nome"], "total": 0.0, "sucesso": False, "erro": "Token não configurado"}
 
-def obter_nome_dia_semana(data_obj):
-    """Retorna o nome do dia da semana em português."""
-    dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-    return dias[data_obj.weekday()]
+    # Tentativa usando o endpoint v1 / v2 comum da API
+    url = f"https://api.cardapioweb.com/v1/pedidos"
+    
+    params = {
+        "data_inicio": data_inicio,
+        "data_fim": data_fim
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {loja['token']}", # Testando formato Bearer
+        "X-Token": loja["token"],                   # Testando formato X-Token
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
 
-
-# ------------------------------------------------------------------
-# ROTAS DE PÁGINAS (FRONTEND)
-# ------------------------------------------------------------------
-
-@app.route("/")
-@app.route("/dashboard")
-def home():
-    return render_template("dashboard.html")
-
-
-# ------------------------------------------------------------------
-# ROTAS DE API (BACKEND)
-# ------------------------------------------------------------------
-
-@app.route("/api/v1/resumo-ontem", methods=["GET"])
-def api_resumo_ontem():
     try:
-        dados = integrator.fetch_yesterday_metrics()
+        # allow_redirects=False impede que o Python navegue para a página HTML do portal se o token falhar
+        response = requests.get(url, headers=headers, params=params, timeout=10, allow_redirects=False)
         
-        # Garante que 'dados' não seja None para não quebrar a resposta
-        if not dados:
-            dados = {"total_rede": 0.0, "lojas": []}
+        print(f"\n================ [ DEBUG: {loja['nome']} ] ================")
+        print(f"URL Chamada: {response.url}")
+        print(f"Status Code: {response.status_code}")
+        print(f"Resposta: {response.text[:300]}")
+        print("=======================================================\n")
 
-        return jsonify(dados), 200
+        if response.status_code == 302 or response.status_code == 301:
+            print(f"⚠️ A API redirecionou para: {response.headers.get('Location')}. Token ou Endpoint inválido.")
+            return {"nome": loja["nome"], "total": 0.0, "sucesso": False}
+
+        if response.status_code != 200:
+            return {"nome": loja["nome"], "total": 0.0, "sucesso": False}
+
+        dados = response.json()
+        
+        # Mapeamento dinâmico do retorno do Cardápio Web
+        pedidos = dados.get("pedidos", dados.get("data", [])) if isinstance(dados, dict) else dados
+        
+        total = 0.0
+        if isinstance(pedidos, list):
+            total = sum(float(p.get("total", p.get("valor_total", 0))) for p in pedidos)
+
+        return {"nome": loja["nome"], "total": total, "sucesso": True}
+
     except Exception as e:
-        print(f"Erro ao buscar resumo das lojas: {e}")
-        return jsonify({
-            "mensagem": "Erro ao carregar dados do dashboard",
-            "total_rede": 0.0,
-            "lojas": []
-        }), 500
+        print(f"❌ Exceção [{loja['nome']}]: {e}")
+        return {"nome": loja["nome"], "total": 0.0, "sucesso": False}
 
+@app.route('/')
+def home():
+    return render_template('index.html') # Certifique-se de que o index.html está na pasta 'templates'
 
-@app.route("/api/enviar-fechamento", methods=["POST"])
-def processar_fechamento():
-    try:
-        dados = request.get_json()
+@app.route('/api/faturamento-ontem', methods=['GET'])
+def api_faturamento_ontem():
+    ontem = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    resultados = []
+    total_rede = 0.0
 
-        if not dados:
-            return jsonify({"mensagem": "Nenhum dado enviado."}), 400
+    for loja in LOJAS_CONFIG:
+        res = obter_faturamento_loja(loja, ontem, ontem)
+        resultados.append(res)
+        if res["sucesso"]:
+            total_rede += res["total"]
 
-        nome_loja = dados.get("loja")
-        data_str = dados.get("data")  # Formato esperado: YYYY-MM-DD
-        vendas_presencial = float(dados.get("presencial", 0.0))
+    return jsonify({
+        "data": ontem,
+        "total_rede": total_rede,
+        "lojas": resultados
+    })
 
-        # Validação da loja
-        if nome_loja not in LOJAS:
-            return jsonify({"mensagem": f"Loja '{nome_loja}' não configurada."}), 400
-
-        config_loja = LOJAS[nome_loja]
-
-        # Trata a data enviada
-        data_obj = datetime.datetime.strptime(data_str, "%Y-%m-%d").date()
-        data_formatada = data_obj.strftime("%d/%m/%Y")
-        dia_semana = obter_nome_dia_semana(data_obj)
-
-        # 1. Busca vendas online no Cardápio WEB
-        vendas_online = buscar_vendas_cardapio_web(
-            config_loja.get("cardapio_web_token", ""), data_str
-        )
-
-        if not isinstance(vendas_online, dict):
-            vendas_online = {"ifood": 0.0, "cardapio_proprio": 0.0, "99food": 0.0}
-
-        total_online = sum(vendas_online.values())
-        total_geral = total_online + vendas_presencial
-
-        # 2. Monta o pacote de dados (payload) para o Make
-        payload_make = {
-            "loja": nome_loja,
-            "aba_planilha": config_loja.get("nome_aba", ""),
-            "data_busca": data_formatada,
-            "dia_semana": dia_semana,
-            "ifood": vendas_online.get("ifood", 0.0),
-            "cardapio_web": vendas_online.get("cardapio_proprio", 0.0),
-            "99food": vendas_online.get("99food", 0.0),
-            "total_online": total_online,
-            "presencial": vendas_presencial,
-            "total_geral": total_geral,
-            "grupo_whatsapp_id": config_loja.get("grupo_whatsapp_id", ""),
-        }
-
-        # 3. Envia os dados consolidados para o Webhook do Make
-        resposta_make = requests.post(
-            MAKE_WEBHOOK_URL, json=payload_make, timeout=15
-        )
-
-        if resposta_make.status_code in [200, 201]:
-            return jsonify({
-                "mensagem": "Relatório processado e enviado para a automação com sucesso!"
-            }), 200
-        else:
-            return jsonify({
-                "mensagem": f"Erro ao comunicar com o Make (Status {resposta_make.status_code})"
-            }), 502
-
-    except Exception as erro:
-        print(f"Erro interno no servidor: {erro}")
-        return jsonify({"mensagem": f"Erro interno: {str(erro)}"}), 500
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True, port=5000)
