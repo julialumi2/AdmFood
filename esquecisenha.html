@@ -1,11 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Esqueci minha senha</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esqueci minha senha</title>
+  <!-- Google Fonts (Montserrat para a logo e fontes do sistema) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="esquecisenha.css">
 </head>
 <body>
-    
+  <div class="recovery-container">
+    <!-- Header / Logo acima do card -->
+    <div class="brand">
+      <img src="imgs/Adm Food Logo.jpg" alt="Logo Adm.Food" class="brand-logo-icon">
+      <span class="brand-name">
+        <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+      </span>
+    </div>
+
+    <!-- Card de Recuperação de Senha -->
+    <div class="recovery-card">
+      <h1 class="card-title">Esqueci minha senha</h1>
+      <p class="card-subtitle">Informe seu e-mail e enviaremos um link para redefinir sua senha.</p>
+
+      <form class="recovery-form" action="#" method="POST">
+        <div class="form-group">
+          <label for="email" class="form-label">E-mail</label>
+          <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-input" 
+            placeholder="voce@cardapioweb.com" 
+            required
+          >
+        </div>
+
+        <button type="submit" class="btn-primary">Enviar link de recuperação</button>
+      </form>
+
+      <div class="card-footer">
+        <a href="login.html" class="link-back">Voltar para o login</a>
+      </div>
+    </div>
+
+  </div>
+
 </body>
 </html>

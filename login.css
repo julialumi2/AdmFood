@@ -1,0 +1,192 @@
+/* --- RESET E ESTILOS GERAIS --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+html, body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+body {
+  background-color: #f7f5f0; /* Fundo off-white */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* --- CONTAINER CENTRALIZADO --- */
+.login-container {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* --- BRAND / LOGO --- */
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.brand-logo-icon {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  margin-top: -30px;
+}
+
+.brand-name {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 25px;
+  letter-spacing: -0.5px;
+  margin-top: -30px;
+}
+
+.brand-dark {
+  color: #1a1a1a;
+}
+
+.brand-red {
+  color: #d93829;
+}
+
+/* --- CARD DE LOGIN --- */
+.login-card {
+  background-color: #ffffff;
+  width: 100%;
+  border-radius: 16px;
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eae6df;
+  text-align: center;
+}
+
+/* Borda superior vermelha */
+.login-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background-color: #d64928;
+}
+
+.card-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111111;
+  margin-bottom: 8px;
+}
+
+.card-subtitle {
+  font-size: 14px;
+  color: #666666;
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* --- FORMULÁRIO --- */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  text-align: left;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #222222;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dcd6cd;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #333333;
+  outline: none;
+  background-color: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input::placeholder {
+  color: #aaaaaa;
+}
+
+.form-input:focus {
+  border-color: #d64928;
+  box-shadow: 0 0 0 3px rgba(214, 73, 40, 0.15);
+}
+
+/* --- LINK ESQUECI MINHA SENHA --- */
+/* Se usou a Opção A (Alinha o texto "Senha" à esquerda e o link à direita) */
+.label-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.forgot-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.link-forgot {
+  color: #d64928;         
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.link-forgot:hover {
+  color: #be3e20;
+  text-decoration: underline;
+}
+
+/* --- BOTÃO --- */
+.btn-primary {
+  width: 100%;
+  background-color: #d64928;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin-top: 8px;
+}
+
+.btn-primary:hover {
+  background-color: #be3e20;
+}

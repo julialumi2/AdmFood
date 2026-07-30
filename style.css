@@ -12,6 +12,24 @@ body {
   min-height: 100vh;
 }
 
+/* Garante o alinhamento perfeito entre o ícone e o texto */
+.brand-name {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800; /* Extra Bold */
+  font-size: 18px;  /* Ajuste o tamanho conforme desejar */
+  letter-spacing: -0.5px; /* Deixa as letras sutilmente mais juntas, como na imagem */
+
+}
+
+/* Cor grafite/escura do "Adm." */
+.brand-dark {
+  color: rgb(240, 229, 210); 
+}
+
+/* Cor avermelhada/terracota do "Food" */
+.brand-red {
+  color: #d93829;
+}
 
 /* SIDEBAR ESCURA */
 .sidebar {
@@ -570,6 +588,18 @@ body {
 /* Animação suave ao criar novos cards via IA */
 .task-card {
   animation: fadeIn 0.3s ease-in-out;
+}
+
+.forgot-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.forgot-wrapper:hover{
+  transform: translateY(-1px);
+  color: #d93829;
 }
 
 @keyframes fadeIn {
