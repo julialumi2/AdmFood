@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
+
+    // Inicializa ícones do Lucide
+    lucide.createIcons();
     // --------------------------------------------------------------------------
     // 1. INICIALIZAÇÃO DE DATAS
     // --------------------------------------------------------------------------

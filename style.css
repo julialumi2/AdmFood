@@ -6,41 +6,44 @@
 }
 
 body {
-  display: flex;
-  background-color: #fcfbfa; /* Fundo levemente aquecido do print */
+  background-color: #fcfbfa;
   color: #1e1e1e;
   min-height: 100vh;
 }
 
-/* Garante o alinhamento perfeito entre o ícone e o texto */
-.brand-name {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 800; /* Extra Bold */
-  font-size: 18px;  /* Ajuste o tamanho conforme desejar */
-  letter-spacing: -0.5px; /* Deixa as letras sutilmente mais juntas, como na imagem */
-
+/* --- ESTRUTURA DE LAYOUT LADO A LADO --- */
+.dashboard-wrapper {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  width: 100%;
+  transition: grid-template-columns 0.3s ease;
 }
 
-/* Cor grafite/escura do "Adm." */
-.brand-dark {
-  color: rgb(240, 229, 210); 
+/* Quando recolhido */
+.dashboard-wrapper.collapsed {
+  grid-template-columns: 70px 1fr;
 }
 
-/* Cor avermelhada/terracota do "Food" */
-.brand-red {
-  color: #d93829;
+.dashboard-wrapper.collapsed .brand,
+.dashboard-wrapper.collapsed .sidebar-section-title,
+.dashboard-wrapper.collapsed .menu-item span {
+  display: none;
 }
 
-/* SIDEBAR ESCURA */
+.dashboard-wrapper.collapsed .menu-item {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+/* --- SIDEBAR --- */
 .sidebar {
-  width: 240px;
-  background-color: #261a18; /* Tom escuro levemente avermelhado/café */
+  background-color: #261a18;
   color: #f1eef0;
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
-  position: fixed;
-  height: 100vh;
+  min-height: 100vh;
 }
 
 .sidebar-logo {
@@ -53,25 +56,24 @@ body {
 .logo-icon {
   width: 36px;
   height: 36px;
-  background-color: #d93829; /* Vermelho do ícone */
+  background-color: #d93829;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  flex-shrink: 0;
 }
 
-.logo-text h2 {
-  font-size: 0.95rem;
+.brand-name {
+  font-family: 'Montserrat', sans-serif;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  font-size: 18px;
+  letter-spacing: -0.5px;
 }
 
-.logo-text span {
-  font-size: 0.65rem;
-  color: #a39598;
-  font-weight: 600;
-}
+.brand-dark { color: rgb(240, 229, 210); }
+.brand-red { color: #d93829; }
 
 .sidebar-section-title {
   font-size: 0.75rem;
@@ -97,33 +99,27 @@ body {
   font-weight: 500;
   border-radius: 8px;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .menu-item:hover {
-  background-color: rgba(255,255,255,0.05);
+  background-color: rgba(255, 255, 255, 0.05);
   color: #ffffff;
 }
 
 .menu-item.active {
-  background-color: #3b2825; /* Item selecionado estilo pílula escura */
+  background-color: #3b2825;
   color: #ffffff;
   font-weight: 600;
 }
 
-.menu-item i {
-  width: 18px;
-  height: 18px;
-}
-
-/* ÁREA PRINCIPAL */
+/* --- CONTEÚDO PRINCIPAL --- */
 .main-wrapper {
-  margin-left: 240px;
-  flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-/* TOP HEADER */
 .top-header {
   height: 64px;
   background-color: #ffffff;
@@ -140,48 +136,27 @@ body {
   gap: 16px;
 }
 
-.btn-sidebar-toggle {
-  background: none;
+.btn-toggle-menu {
+  background: transparent;
   border: none;
-  color: #64748b;
   cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  transition: background-color 0.2s;
+}
+
+.btn-toggle-menu:hover {
+  background-color: #f1f5f9;
 }
 
 .header-page-title {
   font-weight: 600;
   font-size: 0.95rem;
   color: #1e293b;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.badge-avisos {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #f8fafc;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-}
-
-.count-pill {
-  background-color: #d93829;
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 700;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .user-profile {
@@ -219,7 +194,7 @@ body {
   color: #94a3b8;
 }
 
-/* CONTEÚDO */
+/* --- ÁREA INTERNA DA PÁGINA --- */
 .page-content {
   padding: 32px;
 }
@@ -237,11 +212,6 @@ body {
   font-weight: 800;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
-}
-
-.icon-pin {
-  width: 14px;
-  height: 14px;
 }
 
 .title-row {
@@ -264,11 +234,6 @@ body {
   color: #475569;
 }
 
-.total-rede-pill strong {
-  color: #0f172a;
-}
-
-/* SUBTITULO SEÇÃO */
 .section-header {
   display: flex;
   align-items: center;
@@ -277,17 +242,6 @@ body {
   margin-bottom: 16px;
 }
 
-.section-header i {
-  width: 18px;
-  height: 18px;
-}
-
-.section-header h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-/* GRID DE CARDS DAS LOJAS */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -295,68 +249,6 @@ body {
   margin-bottom: 24px;
 }
 
-.store-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-top: 4px solid #d93829; /* Borda vermelha característica no topo */
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-}
-
-.card-subtitle {
-  font-size: 0.7rem;
-  color: #94a3b8;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.store-name {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 4px 0 12px 0;
-}
-
-.store-value {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin-bottom: 12px;
-}
-
-/* BADGES ESTILO PÍLULA */
-.badge-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.badge-pill i {
-  width: 14px;
-  height: 14px;
-}
-
-.badge-pill.pos {
-  background-color: #e6f4ea;
-  color: #137333;
-}
-
-.badge-pill.neu {
-  background-color: #f1f3f4;
-  color: #5f6368;
-}
-
-.badge-pill.neg {
-  background-color: #fce8e6;
-  color: #c5221f;
-}
-
-/* GRÁFICO CONTAINER */
 .chart-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -364,331 +256,6 @@ body {
   padding: 24px;
 }
 
-.chart-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #1e293b;
-}
-
-.chart-title h3 {
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.chart-subtitle {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin-top: 4px;
-  margin-bottom: 20px;
-}
-
 .chart-body {
   height: 280px;
-}
-
-/* ==========================================================================
-   ESTILOS ESPECÍFICOS DA TELA DE ESTOQUE
-   ========================================================================== */
-.btn-registrar-entrada {
-  background-color: #d93829;
-  color: #ffffff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.btn-registrar-entrada:hover {
-  background-color: #b82b1e;
-}
-
-
-.metric-card-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.metric-icon {
-  width: 22px;
-  height: 22px;
-}
-
-.icon-red { color: #d93829; }
-.icon-green { color: #10b981; }
-.icon-dark { color: #1e293b; }
-.icon-red-alert { color: #d93829; }
-
-
-.table-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.table-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.table-subtitle {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin-top: 2px;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 16px;
-  width: 280px;
-  background-color: #ffffff;
-}
-
-.search-box i {
-  width: 18px;
-  height: 18px;
-  color: #94a3b8;
-}
-
-.search-box input {
-  border: none;
-  outline: none;
-  font-size: 0.85rem;
-  width: 100%;
-  color: #1e293b;
-}
-
-.inventory-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-}
-
-.inventory-table th {
-  font-size: 0.85rem;
-  color: #64748b;
-  font-weight: 600;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.inventory-table td {
-  padding: 18px 0;
-  border-bottom: 1px solid #f8fafc;
-  font-size: 0.9rem;
-  vertical-align: middle;
-}
-
-.font-bold {
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.text-muted {
-  color: #64748b;
-}
-
-.progress-container {
-  width: 180px;
-  height: 8px;
-  background-color: #fce8e6; 
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-
-.progress-bar.bar-red {
-  height: 100%;
-  background-color: #d93829;
-  border-radius: 4px;
-}
-
-.min-label {
-  font-size: 0.72rem;
-  color: #94a3b8;
-}
-
-.badge-pill.neu-orange {
-  background-color: #fef3c7;
-  color: #92400e;
-}
-
-/* Container pai para alinhar os botões lado a lado e centralizados */
-.botoes-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem; /* Espaçamento de 16px entre os dois botões */
-  width: 100%;
-}
-
-/* Classe única para ambos os botões */
-.botao-primario {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem; /* Espaço entre o texto e a seta (12px) */
-  
-  background-color: #D34537;
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 0.95rem;
-  
-  padding: 0.875rem 1.75rem; /* Altura e largura interna proporcionais */
-  border-radius: 0.75rem; /* Bordas arredondadas igual ao layout */
-  border: none;
-  
-  white-space: nowrap; /* IMPEDE A QUEBRA DE LINHA DO TEXTO DO BOTÃO */
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease-in-out;
-  cursor: pointer;
-}
-
-/* Efeito de Hover */
-.btn-primario:hover {
-  background-color: #b8382b;
-}
-
-/* Efeito de Clique */
-.btn-primario:active {
-  transform: scale(0.95);
-}
-
-/* Botão de Destaque para IA */
-.btn-ia {
-  background: linear-gradient(135deg, #6366f1, #a855f7);
-  color: #ffffff;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.btn-ia:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.35);
-}
-
-/* Animação suave ao criar novos cards via IA */
-.task-card {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.forgot-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 6px;
-  font-size: 14px;
-}
-
-.forgot-wrapper:hover{
-  transform: translateY(-1px);
-  color: #d93829;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Ajuste Responsivo para telas pequenas (smartphones) */
-@media (max-width: 640px) {
-  .botoes-container {
-    flex-direction: column; /* Em telas muito pequenas empilha um sobre o outro */
-  }
-  
-  .btn-primario {
-    width: 100%; /* Ocupa a largura total em celulares */
-  }
-}
-
-@media (max-width: 1024px) {
-  .cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-  }
-
-  .title-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .total-rede-pill {
-    align-self: flex-start;
-  }
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-in-out;
-    z-index: 999;
-    width: 260px;
-  }
-
-  .sidebar.mobile-open {
-    transform: translateX(0);
-  }
-
-  .main-wrapper {
-    margin-left: 0;
-  }
-
-  .top-header {
-    padding: 0 16px;
-  }
-
-  .page-content {
-    padding: 20px 16px;
-  }
-
-  .header-right .user-info {
-    display: none;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .title-row h1 {
-    font-size: 1.4rem; 
-  }
-
-  .chart-body {
-    height: 220px; /
-  }
-}
-
-@media (max-width: 480px) {
-  .badge-avisos span:not(.count-pill) {
-    display: none; /* Mantém apenas o ícone e a pílula com número */
-  }
-  
-  .total-rede-pill {
-    width: 100%;
-    text-align: center;
-  }
 }

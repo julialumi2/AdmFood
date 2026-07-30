@@ -13,122 +13,140 @@
 </head>
 <body>
 
-  <!-- SIDEBAR LATERAL -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <div class="logo-icon">
-        <i data-lucide="utensils-crossed"></i>
-      </div>
-      <div class="brand">
-      <span class="brand-name">
-       <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
-  </span>
-    </div>
-    </div>
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
 
-    <div class="sidebar-section-title">Painel</div>
-
-    <nav class="sidebar-menu">
-      <a href="index.html" class="menu-item active">
-        <i data-lucide="bar-chart-2"></i>
-        <span>Resumo</span>
-      </a>
-      <a href="estoque.html" class="menu-item">
-        <i data-lucide="box"></i>
-        <span>Estoque</span>
-      </a>
-      <a href="#" class="menu-item">
-        <i data-lucide="timer"></i>
-        <span>Preparo</span>
-      </a>
-      <a href="clickup.html" class="menu-item">
-        <i data-lucide="check-square"></i>
-        <span>ClickUp</span>
-      </a>
-      <a href="#" class="menu-item">
-        <i data-lucide="lightbulb"></i>
-        <span>Insights</span>
-      </a>
-      <a href="#" class="menu-item">
-        <i data-lucide="settings"></i>
-        <span>Configurações</span>
-      </a>
-    </nav>
-  </aside>
-
-  <!-- CONTEÚDO PRINCIPAL -->
-  <main class="main-wrapper">
-    
-    <!-- HEADER SUPERIOR -->
-    <header class="top-header">
-      <div class="header-left">
-        <button class="btn-sidebar-toggle"><i data-lucide="sidebar"></i></button>
-        <span class="header-page-title">Painel da Rede</span>
-      </div>
-
-      <!-- CRIAÇÃO FUTURA DE LOGIN -->
-      <div class="header-right">
-        <div class="user-profile">
-          <div class="avatar">JS</div>
-          <div class="user-info">
-            <span class="user-name">Julia Suzuki</span>
-            <span class="user-role">Admin</span>
-          </div>
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
         </div>
       </div>
-    </header>
 
-    <!-- CONTEÚDO DA PÁGINA -->
-    <div class="page-content">
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item active">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
       
-        <!-- SUBTÍTULO E TÍTULO PRINCIPAL -->
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">Painel da Rede</span>
+        </div>
+
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="avatar">JS</div>
+            <div class="user-info">
+              <span class="user-name">Julia Suzuki</span>
+              <span class="user-role">Admin</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTEÚDO DA PÁGINA -->
+      <div class="page-content">
+        
         <div class="dashboard-title-area">
-            <div class="title-top">
+          <div class="title-top">
             <i data-lucide="pin" class="icon-pin"></i>
             <span>VISÃO GERAL DA REDE</span>
-        </div>
-
-        <div class="title-row">
-        <h1>Ontem — <span id="data-ontem">...</span></h1>
-        <div class="total-rede-pill">Total da rede: <strong id="total-rede-valor">R$ 0,00</strong>
-        </div>
-  </div>
-</div>
-
-    <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
-    <div class="section-header">
-    <i data-lucide="store"></i>
-    <h3>Desempenho por Unidade</h3>
-    </div>
-
-    <!-- CONTAINER ONDE OS CARDS DAS LOJAS SERÃO INJETADOS PELO JS -->
-    <div class="cards-grid" id="container-lojas">
-    <p class="text-muted" style="padding: 12px;">Sincronizando dados com o Cardápio Web...</p>
-    </div>
-    
-      <!-- CONTAINER DO GRÁFICO -->
-       <!--FUTURA CONEXÃO COM O CW-->
-      <div class="chart-card">
-        <div class="chart-header">
-          <div class="chart-title">
-            <i data-lucide="line-chart"></i>
-            <h3>Gráfico Comparativo</h3>
           </div>
-          <p class="chart-subtitle">Curva de vendas de ontem (<span id="data-grafico-sub"></span>) — 4 lojas</p>
+
+          <div class="title-row">
+            <h1>Ontem — <span id="data-ontem">...</span></h1>
+            <div class="total-rede-pill">Total da rede: <strong id="total-rede-valor">R$ 0,00</strong></div>
+          </div>
+        </div>
+
+        <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
+        <div class="section-header">
+          <i data-lucide="store"></i>
+          <h3>Desempenho por Unidade</h3>
+        </div>
+
+        <!-- CARDS INJETADOS PELO JS -->
+        <div class="cards-grid" id="container-lojas">
+          <p class="text-muted" style="padding: 12px;">Sincronizando dados com o Cardápio Web...</p>
         </div>
         
-        <div class="chart-body">
-          <canvas id="salesChart"></canvas>
+        <!-- CONTAINER DO GRÁFICO -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <i data-lucide="line-chart"></i>
+              <h3>Gráfico Comparativo</h3>
+            </div>
+            <p class="chart-subtitle">Curva de vendas de ontem (<span id="data-grafico-sub"></span>) — 4 lojas</p>
+          </div>
+          
+          <div class="chart-body">
+            <canvas id="salesChart"></canvas>
+          </div>
         </div>
-      </div>
 
-    </div>
-  </main>
+      </div>
+    </main>
+
+  </div>
 
   <script src="script.js"></script>
   <script>
     lucide.createIcons();
 
+    // LÓGICA DE RECOLHER A SIDEBAR
+    const toggleBtn = document.getElementById('toggleMenuBtn');
+    const container = document.getElementById('dashboardWrapper');
+
+    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+      container.classList.add('collapsed');
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      container.classList.toggle('collapsed');
+      const isCollapsed = container.classList.contains('collapsed');
+      localStorage.setItem('sidebar-collapsed', isCollapsed);
+    });
+
+    // GRÁFICO CHART.JS
     const ctx = document.getElementById('salesChart').getContext('2d');
     new Chart(ctx, {
       type: 'line',
