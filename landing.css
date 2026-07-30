@@ -7,40 +7,35 @@
 }
 
 body {
-  background-color: #f7f5f0;
+  background-color: #ffffff;
 }
 
 /* --- HEADER / TOPBAR --- */
 .topbar {
-  background-color: #f4e3d7;
+  background-color: #ffffff;
   padding: 14px 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.brand-icon {
-  background-color: #d93829;
-  color: #ffffff;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
+/* Garante o alinhamento perfeito entre o ícone e o texto */
 .brand-name {
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-  color: #2b1a17;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800; /* Extra Bold */
+  font-size: 18px;  /* Ajuste o tamanho conforme desejar */
+  letter-spacing: -0.5px; /* Deixa as letras sutilmente mais juntas, como na imagem */
+
+}
+
+/* Cor grafite/escura do "Adm." */
+.brand-dark {
+  color: #333333; 
+}
+
+/* Cor avermelhada/terracota do "Food" */
+.brand-red {
+  color: #d93829;
 }
 
 .btn-panel {
@@ -445,9 +440,14 @@ body {
 
 .footer-links-col li {
   margin-bottom: 10px;
+  color: #666666;
+  text-decoration: none;
+  font-size: 14px;
+  transition: color 0.2s ease;
 }
 
 .footer-links-col a {
+  margin-bottom: 10px;
   color: #666666;
   text-decoration: none;
   font-size: 14px;
