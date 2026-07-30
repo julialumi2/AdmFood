@@ -90,12 +90,31 @@ body {
   opacity: 0.9;
 }
 
-/* --- HERO SECTION --- */
+/* Container principal da Hero Section */
 .hero-section {
-  background-color: #d93829;
+  position: relative;          
   padding: 50px 40px 60px;
+  height: 500px;
+  background-color: #1a1a1a; 
 }
 
+/* Camada da Imagem de Fundo com Opacidade */
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('imgs/Modern\ Office\ Desk\ Setup.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.2; 
+  z-index: 1; /* Fica na camada de trás */
+}
+
+/* Conteúdo (Texto, Botões) fica na camada da frente */
 .hero-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -103,6 +122,20 @@ body {
   grid-template-columns: 1fr 1.1fr;
   gap: 40px;
   align-items: center;
+}
+
+/* Ajuste das cores do texto para contrastar com o fundo */
+.hero-text h1 {
+  color: #ffffff; /* Texto branco para destacar no fundo escuro */
+  font-size: 42px;
+  font-weight: 800;
+  margin-bottom: 20px;
+}
+
+.hero-text p {
+  color: #e2ddd3;
+  font-size: 18px;
+  margin-bottom: 30px;
 }
 
 .badge-pill {
@@ -117,7 +150,7 @@ body {
 }
 
 .hero-title {
-  color: #ffffff;
+  color: #000000;
   font-size: 44px;
   font-weight: 800;
   line-height: 1.1;
@@ -125,7 +158,7 @@ body {
 }
 
 .hero-subtitle {
-  color: rgba(255, 255, 255, 0.88);
+  color: #000000;
   font-size: 15px;
   line-height: 1.5;
   margin-bottom: 32px;
@@ -148,125 +181,6 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-
-/* --- CARD DE ESTOQUE --- */
-.hero-card {
-  background-color: #fdfbf7;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
-}
-
-.card-header-flex {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.card-title {
-  font-weight: 700;
-  font-size: 16px;
-  color: #1f1f1f;
-}
-
-.card-subtext {
-  font-size: 12px;
-  color: #888888;
-  margin-top: 2px;
-}
-
-.badge-alert {
-  background-color: #fdeaea;
-  color: #d93829;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 12px;
-}
-
-.stock-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.stock-item {
-  background-color: #f8f6f0;
-  border: 1px solid #eee8df;
-  border-radius: 10px;
-  padding: 12px 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.stock-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: #222222;
-}
-
-.stock-unit {
-  font-size: 11px;
-  color: #777777;
-  margin-top: 2px;
-}
-
-.stock-status {
-  text-align: right;
-  width: 110px;
-}
-
-.stock-qty {
-  font-size: 13px;
-  font-weight: 800;
-  margin-bottom: 4px;
-}
-
-.qty-danger { color: #d93829; }
-.qty-warning { color: #e67e22; }
-.qty-ok { color: #27ae60; }
-
-.progress-bar {
-  width: 100%;
-  height: 6px;
-  background-color: #e5dfd5;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 4px;
-}
-
-.fill-danger { background-color: #d93829; }
-.fill-warning { background-color: #e67e22; }
-.fill-ok { background-color: #27ae60; }
-
-.card-footer-action {
-  margin-top: 18px;
-  text-align: center;
-}
-
-.link-stock {
-  color: #d93829;
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.link-stock:hover {
-  text-decoration: underline;
 }
 
 /* --- ESTILOS COMPARTILHADOS DE SEÇÃO --- */
@@ -507,20 +421,25 @@ body {
   gap: 24px;
 }
 
-/* Estilo dos Cards Individualmente */
-.why-card {
-  background-color: #ffffff;
-  padding: 30px 24px;
-  border-radius: 12px;
-  border: 1px solid #e8e5df;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* --- IMAGENS DENTRO DOS CARDS --- */
+.card-img-wrapper {
+  width: 100%;
+  height: 160px;
+  overflow: hidden;
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
-.why-card:hover {
-  transform: translateY(-5px); /* Efeito sutil de elevação ao passar o mouse */
-  box-shadow: 0 8px 25px rgba(217, 56, 41, 0.08);
-  border-color: #d93829;
+.card-img-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Faz a imagem preencher o espaço sem distorcer */
+  transition: transform 0.3s ease;
+}
+
+/* Efeito de zoom na imagem ao passar o mouse no card */
+.why-card:hover .card-img-wrapper img {
+  transform: scale(1.05);
 }
 
 .card-icon {
