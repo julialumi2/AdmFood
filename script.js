@@ -347,3 +347,91 @@ function loginGoogle() {
       }
     });
   };
+
+  // Contador global para gerar IDs únicos para as tarefas
+let taskIdCounter = 5;
+
+// Função chamada ao clicar no botão "+ Nova Tarefa"
+function criarNovaTarefa() {
+  const modal = document.getElementById("modalTarefa");
+  if (modal) modal.style.display = "flex";
+}
+
+// Função para fechar o modal
+function fecharModal() {
+  const modal = document.getElementById("modalTarefa");
+  if (modal) {
+    modal.style.display = "none";
+    document.getElementById("formNovaTarefa").reset();
+  }
+}
+
+// Função enviada ao submeter o formulário
+function salvarNovaTarefa(event) {
+  event.preventDefault();
+
+  const titulo = document.getElementById("tituloTarefa").value;
+  const prioridade = document.getElementById("prioridadeTarefa").value;
+  const categoria = document.getElementById("categoriaTarefa").value; // 👈 Pega a categoria selecionada
+  const descricao = document.getElementById("descricaoTarefa").value;
+
+  // Encontra a primeira coluna ("A Fazer")
+  const colunaTodo = document.querySelector('.kanban-column[data-status="todo"] .task-list');
+
+  if (colunaTodo) {
+    const labelPrioridade = prioridade === 'alta' ? 'Alta' : prioridade === 'media' ? 'Média' : 'Baixa';
+
+    const newCard = document.createElement("div");
+    newCard.className = "task-card";
+    newCard.setAttribute("draggable", "true");
+    newCard.id = `task-${taskIdCounter++}`;
+
+    newCard.innerHTML = `
+      <div class="card-top">
+        <h4 class="task-title">${titulo}</h4>
+        <span class="badge priority-${prioridade}">${labelPrioridade}</span>
+      </div>
+      <p style="font-size: 0.8rem; color: #52525b;">${descricao}</p>
+      <div class="card-bottom">
+        <span class="task-meta">${categoria}</span> <!-- 👈 Usa a categoria inserida -->
+        <span class="task-date">Hoje</span>
+      </div>
+    `;
+
+    // Reativa o drag and drop no novo card
+    newCard.addEventListener("dragstart", (e) => {
+      newCard.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", newCard.id);
+    });
+
+    newCard.addEventListener("dragend", () => {
+      newCard.classList.remove("dragging");
+      if (typeof atualizarContadores === "function") atualizarContadores();
+    });
+
+    colunaTodo.appendChild(newCard);
+
+    if (typeof atualizarContadores === "function") atualizarContadores();
+  }
+
+  fecharModal();
+}
+
+    // Ativa o Drag and Drop no novo card
+    newCard.addEventListener("dragstart", (e) => {
+      newCard.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", newCard.id);
+    });
+
+    newCard.addEventListener("dragend", () => {
+      newCard.classList.remove("dragging");
+      if (typeof atualizarContadores === "function") atualizarContadores();
+    });
+
+    // Adiciona na coluna "A Fazer"
+    colunaTodo.appendChild(newCard);
+
+    // Atualiza os contadores das colunas
+    if (typeof atualizarContadores === "function") atualizarContadores();
+
+  fecharModal();
