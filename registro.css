@@ -15,7 +15,7 @@ body {
 }
 
 /* --- CONTAINER CENTRALIZADO --- */
-.login-container {
+.registro-container {
   width: 100%;
   max-width: 440px;
   display: flex;
@@ -55,7 +55,7 @@ body {
 }
 
 /* --- CARD --- */
-.login-card {
+.registro-card {
   background-color: #ffffff;
   width: 100%;
   border-radius: 16px;
@@ -67,7 +67,7 @@ body {
 }
 
 /* Borda superior vermelha idêntica à referência */
-.login-card::before {
+.registro-card::before {
   content: "";
   position: absolute;
   top: 0;
@@ -92,7 +92,7 @@ body {
 }
 
 /* --- FORMULÁRIO --- */
-.login-form {
+.registro-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -133,7 +133,7 @@ body {
 }
 
 /* --- CARD --- */
-.login-card {
+.registro-card {
   background-color: #ffffff;
   width: 100%;
   border-radius: 16px;
@@ -146,7 +146,7 @@ body {
 }
 
 /* Borda superior vermelha idêntica à referência */
-.login-card::before {
+.registro-card::before {
   content: "";
   position: absolute;
   top: 0;
@@ -171,7 +171,7 @@ body {
 }
 
 /* --- FORMULÁRIO --- */
-.login-form {
+.registro-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -209,33 +209,6 @@ body {
 .form-input:focus {
   border-color: #d93829;
   box-shadow: 0 0 0 3px rgba(214, 73, 40, 0.15);
-}
-
-/* --- LINK ESQUECI MINHA SENHA --- */
-/* Se usou a Opção A (Alinha o texto "Senha" à esquerda e o link à direita) */
-.label-wrapper {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.forgot-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 6px;
-}
-
-.link-forgot {
-  color: #d64928;         
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: color 0.2s ease, text-decoration 0.2s ease;
-}
-
-.link-forgot:hover {
-  color: #be3e20;
-  text-decoration: underline;
 }
 
 /* --- BOTÃO --- */
