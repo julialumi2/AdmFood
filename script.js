@@ -5,6 +5,29 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
 
+  const toggleCheckbox = document.getElementById('theme-toggle-checkbox');
+
+  // Garante que o elemento existe na página antes de continuar
+  if (!toggleCheckbox) return;
+
+  // 1. Aplica o tema salvo no localStorage ao carregar a página
+  if (localStorage.getItem('theme') === 'dark') {
+    document.body.classList.add('dark-mode');
+    toggleCheckbox.checked = true;
+  }
+
+  // 2. Evento de troca ao clicar no toggle
+  toggleCheckbox.addEventListener('change', () => {
+    if (toggleCheckbox.checked) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('theme', 'light');
+    }
+  });
+});
+
   // 2. INICIALIZAÇÃO DE DATAS DA INTERFACE
   const hoje = new Date();
 
@@ -122,8 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     });
-  }
-});
+  };
 
 // ==============================================================================
 // FUNÇÕES AUXILIARES E INTEGRAÇÃO DE APIs
@@ -269,5 +291,4 @@ function atualizarContadores() {
     if (el && countEl) {
       countEl.innerText = `${el.children.length} tarefa(s)`;
     }
-  });
-}
+  })};

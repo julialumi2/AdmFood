@@ -8,42 +8,60 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+  <script src="script.js" defer></script>
 </head>
 <body>
 
   <!-- HEADER / TOPBAR -->
   <header class="topbar">
     <div class="logo-img">
-    <img src="imgs/Adm Food Logo-Photoroom.png" alt="Logo AdmFood" class="logo-img" />
+      <img src="imgs/Adm Food Logo-Photoroom.png" alt="Logo AdmFood" class="logo-img" />
     </div>
 
-      <span class="brand-name">
-        <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
-      </span>
+    <span class="brand-name">
+      <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+    </span>
 
-     <!-- Botões de Ação no canto direito -->
+    <!-- Botões de Ação no canto direito -->
     <div class="header-actions">
       <a href="registro.html" class="btn-criar-conta">Criar Conta</a>
       <a href="login.html" class="btn-acesse-painel">Acesse o Painel</a>
+
+      <!-- Toggle Switch de Tema -->
+      <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+        <input type="checkbox" id="theme-toggle-checkbox">
+        <span class="slider">
+          <!-- Ícone do Sol -->
+          <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+          </svg>
+          <!-- Ícone da Lua -->
+          <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </span>
+      </label>
     </div>
   </header>
 
+  <!-- 1. HERO SECTION -->
   <section class="hero-section">
     <div class="hero-container">
-    <div class="hero-text">
-      <h1>Controle total da sua rede de restaurantes na palma da mão</h1>
-      <p>Gestão de estoque, alertas no WhatsApp e desempenho multi-lojas reunidos em um só lugar.</p>
-      <div class="hero-buttons">
+      <div class="hero-text">
+        <h1>Controle total da sua rede de restaurantes na palma da mão</h1>
+        <p>Gestão de estoque, alertas no WhatsApp e desempenho multi-lojas reunidos em um só lugar.</p>
+        <div class="hero-buttons">
           <a href="login.html" class="btn-white">
             Entrar no painel 
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </a>
         </div>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
-  <!-- 2. SEÇÃO MÉTRICAS (Alinhada com a imagem enviada) -->
+  <!-- 2. SEÇÃO MÉTRICAS -->
   <section class="metrics-section">
     <div class="metrics-container">
       <span class="metrics-tag">MÉTRICAS EM TEMPO REAL</span>
@@ -82,7 +100,7 @@
     </div>
   </section>
 
-  <!-- 3. SEÇÃO FUNCIONALIDADES (Adicionada agora) -->
+  <!-- 3. SEÇÃO FUNCIONALIDADES -->
   <section class="features-section">
     <div class="features-container">
       <span class="section-tag">FUNCIONALIDADES</span>
@@ -162,58 +180,55 @@
     </div>
   </section>
 
-  <!-- 2. SEÇÃO POR QUE ESCOLHER A ADMFOOD (COM IMAGENS/ILUSTRAÇÕES NOS CARDS) -->
-<section class="why-choose-section" id="diferenciais">
-  <div class="why-choose-container">
-    <div class="section-header">
-      <span class="section-tag">DIFERENCIAIS</span>
-      <h2 class="section-title">Por que escolher o <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>?</h2>
+  <!-- 4. SEÇÃO POR QUE ESCOLHER A ADMFOOD -->
+  <section class="why-choose-section" id="diferenciais">
+    <div class="why-choose-container">
+      <div class="section-header">
+        <span class="section-tag">DIFERENCIAIS</span>
+        <h2 class="section-title">Por que escolher o <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>?</h2>
+      </div>
+
+      <div class="why-choose-grid">
+        <!-- Card 1 -->
+        <div class="why-card">
+          <div class="card-img-wrapper">
+            <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=500&q=80" alt="Visão Multi-lojas" />
+          </div>
+          <h3>Visão Unificada Multi-lojas</h3>
+          <p>Acompanhe Presencial, iFood e Delivery de todas as unidades em um único painel.</p>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="why-card">
+          <div class="card-img-wrapper">
+            <img src="https://images.unsplash.com/photo-1611746872915-64382b5c76da?auto=format&fit=crop&w=500&q=80" alt="Alertas WhatsApp" />
+          </div>
+          <h3>Alertas no WhatsApp</h3>
+          <p>Avisos automáticos de estoque baixo e validades direto no grupo da equipe.</p>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="why-card">
+          <div class="card-img-wrapper">
+            <img src="https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=500&q=80" alt="Cozinha e Tempo de Preparo" />
+          </div>
+          <h3>Tempo de Preparo</h3>
+          <p>Identifique gargalos na cozinha comparando horários de pedido e entrega.</p>
+        </div>
+      </div>
     </div>
+  </section>
 
-    <div class="why-choose-grid">
-      <!-- Card 1 com Imagem de Fundo/Apoio -->
-      <div class="why-card">
-        <div class="card-img-wrapper">
-          <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=500&q=80" alt="Visão Multi-lojas" />
-        </div>
-        <h3>Visão Unificada Multi-lojas</h3>
-        <p>Acompanhe Presencial, iFood e Delivery de todas as unidades em um único painel.</p>
-      </div>
-
-      <!-- Card 2 -->
-      <div class="why-card">
-        <div class="card-img-wrapper">
-          <img src="https://images.unsplash.com/photo-1611746872915-64382b5c76da?auto=format&fit=crop&w=500&q=80" alt="Alertas WhatsApp" />
-        </div>
-        <h3>Alertas no WhatsApp</h3>
-        <p>Avisos automáticos de estoque baixo e validades direto no grupo da equipe.</p>
-      </div>
-
-      <!-- Card 3 -->
-      <div class="why-card">
-        <div class="card-img-wrapper">
-          <img src="https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=500&q=80" alt="Cozinha e Tempo de Preparo" />
-        </div>
-        <h3>Tempo de Preparo</h3>
-        <p>Identifique gargalos na cozinha comparando horários de pedido e entrega.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
+  <!-- FOOTER -->
   <footer class="footer">
     <div class="footer-container">
       
       <!-- Coluna 1: Marca e Sobre -->
       <div class="footer-brand-col">
         <div class="brand">
-          <div class="brand-icon">
-          </div>
-          <div class="brand">
-      <span class="footerbrand-name">
-       <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
-  </span>
-    </div>
+          <span class="footerbrand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
         </div>
         <p class="footer-desc">
           Plataforma completa de gestão e inteligência para redes de restaurantes e franquias.
@@ -224,9 +239,9 @@
       <div class="footer-links-col">
         <h4 class="footer-title">Navegação</h4>
         <ul>
-          <li>Início</li>
-          <li>Métricas</li>
-          <li>Funcionalidades</li>
+          <li><a href="#">Início</a></li>
+          <li><a href="#">Métricas</a></li>
+          <li><a href="#diferenciais">Funcionalidades</a></li>
         </ul>
       </div>
 

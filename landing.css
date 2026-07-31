@@ -6,63 +6,90 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* --- MODO CLARO PADRÃO VS MODO ESCURO --- */
+:root {
+  /* Modo Claro (Default) */
+  --bg-color: #ffffff;
+  --bg-secondary: #f8f6f0;
+  --text-color: #1a1a1a;
+  --text-muted: #666666;
+  --card-bg: #ffffff;
+  --card-border: #eae6df;
+  --border-color: #e2ddd3;
+  --footer-bg: #ede9e1;
+  --primary-color: #d93829; /* Vermelho AdmFood */
+  --brand-dark-color: #333333;
+}
+
+/* Quando o body tiver a classe .dark-mode ou .dark-theme */
+body.dark-mode,
+body.dark-theme {
+  --bg-color: #121214;
+  --bg-secondary: #1a1a1e;
+  --text-color: #f5f5f7;
+  --text-muted: #a1a1aa;
+  --card-bg: #202024;
+  --card-border: #2e2e32;
+  --border-color: #2e2e32;
+  --footer-bg: #18181b;
+  --brand-dark-color: #ffffff;
+}
+
 body {
-  background-color: #f8f6f0;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* --- HEADER / TOPBAR --- */
 .topbar {
-  background-color: #f8f6f0;
+  background-color: var(--bg-color);
   padding: 14px 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-/* Barra de navegação fixa no topo */
-.navbar {
-  display: flex;
-  justify-content: space-between; /* Empurra a logo para a esquerda e o menu para a direita */
-  align-items: center;            /* Centraliza verticalmente */
-  padding: 15px 5%;               /* Espaçamento interno */
-  background-color: #f8f6f0;      /* Cor de fundo da barra */
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); /* Sombra suave */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   position: sticky;
   top: 0;
-  z-index: 1000;                  /* Mantém no topo ao rolar a página */
+  z-index: 1000;
+  transition: background-color 0.3s ease;
+  border-bottom: 1px solid var(--border-color);
 }
 
-/* Tamanho e ajuste da Imagem da Logo */
 .logo-img {
-  height: 40px;                   /* Ajuste a altura ideal para a sua logo */
-  width: auto;                    /* Mantém a proporção original */
+  height: 40px;
+  width: auto;
   display: block;
 }
 
-/* Garante o alinhamento perfeito entre o ícone e o texto */
 .brand-name {
   font-family: 'Montserrat', sans-serif;
-  font-weight: 800; /* Extra Bold */
-  font-size: 25px;  /* Ajuste o tamanho conforme desejar */
-  letter-spacing: -0.5px; /* Deixa as letras sutilmente mais juntas, como na imagem */
-  margin-left: -863px;;
+  font-weight: 800;
+  font-size: 25px;
+  letter-spacing: -0.5px;
+  margin-left: -780px;
 }
 
-/* Cor grafite/escura do "Adm." */
 .brand-dark {
-  color: #333333; 
+  color: var(--brand-dark-color);
+  transition: color 0.3s ease;
 }
 
-/* Cor avermelhada/terracota do "Food" */
 .brand-red {
-  color: #d93829;
+  color: var(--primary-color);
 }
 
-/* Estilo do Botão Criar Conta (Esquerda) */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Botão Criar Conta */
 .btn-criar-conta {
   padding: 8px 16px;
-  border: 1px solid #333333;  /* Borda elegante */
-  color: #333333;
+  border: 1px solid var(--text-color);
+  color: var(--text-color);
   border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
@@ -71,13 +98,15 @@ body {
 }
 
 .btn-criar-conta:hover {
-  background-color: #f4f4f4;
+  background-color: var(--bg-secondary);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
-/* Estilo do Botão Acesse o Painel (Direita - Destaque) */
+/* Botão Acesse o Painel */
 .btn-acesse-painel {
   padding: 8px 16px;
-  background-color: #d93829; /* Ajuste para a cor principal da AdmFood */
+  background-color: var(--primary-color);
   color: #ffffff;
   border-radius: 6px;
   text-decoration: none;
@@ -90,15 +119,78 @@ body {
   opacity: 0.9;
 }
 
-/* Container principal da Hero Section */
-.hero-section {
-  position: relative;          
-  padding: 50px 40px 60px;
-  height: 500px;
-  background-color: #1a1a1a; 
+/* ======================================================
+   TOGGLE SWITCH DE TEMA (MODO ESCURO / CLARO)
+   ====================================================== */
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 54px;
+  height: 28px;
 }
 
-/* Camada da Imagem de Fundo com Opacidade */
+.theme-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.slider .sun-icon {
+  color: #f39c12;
+}
+
+.slider .moon-icon {
+  color: #f1c40f;
+}
+
+.slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+  background-color: #2e2e32;
+}
+
+input:checked + .slider::before {
+  transform: translateX(26px);
+}
+
+/* --- HERO SECTION --- */
+.hero-section {
+  position: relative;
+  padding: 80px 40px 60px;
+  min-height: 520px;
+  background-color: #1a1a1a; /* Mantido fixo escuro para dar o destaque de apresentação */
+  display: flex;
+  align-items: center;
+}
+
 .hero-section::before {
   content: '';
   position: absolute;
@@ -106,12 +198,12 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url('imgs/Modern\ Office\ Desk\ Setup.png');
+  background-image: url('imgs/Modern Office Desk Setup.png');
   background-size: cover;
   background-position: center;
-  background-repeat: no-repeat;
-  opacity: 0.2; 
-  z-index: 1; /* Fica na camada de trás */
+  background-position-y: 30%;
+  opacity: 0.2;
+  z-index: 1;
 }
 
 /* Conteúdo (Texto, Botões) fica na camada da frente */
@@ -122,9 +214,9 @@ body {
   grid-template-columns: 1fr 1.1fr;
   gap: 40px;
   align-items: center;
+  z-index: 10;
 }
 
-/* Ajuste das cores do texto para contrastar com o fundo */
 .hero-text h1 {
   color: #ffffff; /* Texto branco para destacar no fundo escuro */
   font-size: 42px;
@@ -136,82 +228,68 @@ body {
   color: #e2ddd3;
   font-size: 18px;
   margin-bottom: 30px;
-}
-
-.badge-pill {
-  display: inline-block;
-  background-color: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 24px;
-}
-
-.hero-title {
-  color: #000000;
-  font-size: 44px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin-bottom: 24px;
-}
-
-.hero-subtitle {
-  color: #000000;
-  font-size: 15px;
-  line-height: 1.5;
-  margin-bottom: 32px;
-  max-width: 480px;
-}
-
-.hero-buttons {
-  display: flex;
-  gap: 14px;
+  max-width: 600px;
 }
 
 .btn-white {
-  background-color: #ffffff;
-  color: #d93829;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 700;
-  text-decoration: none;
-  font-size: 14px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 12px 24px;
+  background-color: var(--primary-color);
+  color: #ffffff;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.btn-white:hover {
+  background-color: #ffffff;
+  color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.btn-white:hover svg {
+  transform: translateX(4px);
+  transition: transform 0.2s ease;
 }
 
 /* --- ESTILOS COMPARTILHADOS DE SEÇÃO --- */
 .section-tag {
-  color: #d93829;
+  color: var(--primary-color);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 1px;
   display: block;
   margin-bottom: 12px;
+  text-transform: uppercase;
 }
 
 .section-title {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 800;
-  color: #1a1a1a;
+  color: var(--text-color);
   margin-bottom: 10px;
 }
 
 .section-subtitle {
-  color: #666666;
+  color: var(--text-muted);
   font-size: 15px;
-  margin-bottom: 48px;
+  margin-bottom: 40px;
 }
 
 /* --- 2. SEÇÃO DE MÉTRICAS --- */
 .metrics-section {
-  background-color: #f7f5f0;
-  padding: 70px 20px 40px;
+  background-color: var(--bg-secondary);
+  padding: 80px 20px;
   text-align: center;
-  margin-top: 50px;
+  transition: background-color 0.3s ease;
 }
 
 .metrics-container {
@@ -225,41 +303,39 @@ body {
   gap: 20px;
 }
 
-/* Tag superior "MÉTRICAS EM TEMPO REAL" */
 .metrics-tag {
-  font-size: 12px; /* 👈 Tamanho */
-  color: #d93829;  /* 👈 Cor (atualmente o vermelho do AdmFood) */
+  font-size: 12px;
+  color: var(--primary-color);
   font-weight: 700;
   letter-spacing: 1px;
   display: block;
   margin-bottom: 8px;
 }
 
-/* Título principal "O que você enxerga no painel" */
 .metrics-title {
-  font-size: 32px; /* 👈 Tamanho do título */
-  color: #1e1e1e;  /* 👈 Cor do título */
+  font-size: 32px;
+  color: var(--text-color);
   font-weight: 800;
   margin-bottom: 8px;
 }
 
-/* Subtítulo da seção */
 .metrics-subtitle {
-  font-size: 16px; /* 👈 Tamanho do subtítulo */
-  color: #666666;  /* 👈 Cor do subtítulo */
+  font-size: 16px;
+  color: var(--text-muted);
   font-weight: 400;
-  margin-bottom: 40px; /* Espaço até os cards */
+  margin-bottom: 40px;
 }
 
 .metric-card {
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   border-radius: 14px;
   padding: 24px;
   text-align: left;
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
-  border: 1px solid #eae6df;
+  border: 1px solid var(--card-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .metric-card::before {
@@ -269,20 +345,20 @@ body {
   left: 0;
   right: 0;
   height: 4px;
-  background-color: #d93829;
+  background-color: var(--primary-color);
 }
 
 .metric-label {
   font-size: 11px;
   font-weight: 700;
-  color: #888888;
+  color: var(--text-muted);
   letter-spacing: 0.5px;
 }
 
 .metric-value {
   font-size: 28px;
   font-weight: 800;
-  color: #111111;
+  color: var(--text-color);
   margin: 12px 0 14px 0;
 }
 
@@ -295,21 +371,21 @@ body {
 }
 
 .stat-up {
-  background-color: #dcfce7;
+  background-color: rgba(31, 185, 84, 0.15);
   color: #1fb954;
 }
 
 .stat-neutral {
-  background-color: #f0ede6;
-  color: #777777;
+  background-color: rgba(161, 161, 170, 0.15);
+  color: var(--text-muted);
 }
 
-/* --- 3. SEÇÃO DE FUNCIONALIDADES (Adicionada agora) --- */
+/* --- 3. SEÇÃO DE FUNCIONALIDADES --- */
 .features-section {
-  background-color: #f7f5f0;
-  padding-top: 80px;
-  padding-bottom: 60px;
+  background-color: var(--bg-color);
+  padding: 80px 20px;
   text-align: center;
+  transition: background-color 0.3s ease;
 }
 
 .features-container {
@@ -321,22 +397,21 @@ body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
-  padding-top: 40px;
-  padding-bottom: 60px;
+  margin-top: 20px;
 }
 
 .feature-card {
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   border-radius: 16px;
   padding: 28px;
   text-align: left;
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
-  border: 1px solid #eae6df;
+  border: 1px solid var(--card-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Borda superior idêntica */
 .feature-card::before {
   content: "";
   position: absolute;
@@ -344,7 +419,7 @@ body {
   left: 0;
   right: 0;
   height: 4px;
-  background-color: #d93829;
+  background-color: var(--primary-color);
 }
 
 .feature-header {
@@ -357,26 +432,27 @@ body {
 .feature-icon {
   width: 20px;
   height: 20px;
-  color: #d93829;
+  color: var(--primary-color);
   flex-shrink: 0;
 }
 
 .feature-title {
   font-size: 17px;
   font-weight: 700;
-  color: #111111;
+  color: var(--text-color);
 }
 
 .feature-desc {
   font-size: 14px;
-  color: #666666;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
-/* --- SEÇÃO POR QUE ESCOLHER A ADMFOOD --- */
+/* --- 4. SEÇÃO POR QUE ESCOLHER --- */
 .why-choose-section {
   padding: 80px 20px;
-  background-color: #f8f6f0; /* Tom neutro/claro para destacar dos outros blocos */
+  background-color: var(--bg-secondary);
+  transition: background-color 0.3s ease;
 }
 
 .why-choose-container {
@@ -384,44 +460,25 @@ body {
   margin: 0 auto;
 }
 
-/* Cabeçalho */
 .section-header {
   text-align: center;
   margin-bottom: 50px;
 }
 
-.section-tag {
-  font-size: 12px;
-  font-weight: 700;
-  color: #d93829; /* Vermelho AdmFood */
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-}
-
-.section-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 32px;
-  font-weight: 800;
-  color: #1a1a1a;
-  margin: 10px 0;
-}
-
-.section-subtitle {
-  font-size: 16px;
-  color: #666666;
-  max-width: 600px;
-  margin: 0 auto;
-  line-height: 1.5;
-}
-
-/* Grid de Cards */
 .why-choose-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsivo automático */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
 }
 
-/* --- IMAGENS DENTRO DOS CARDS --- */
+.why-card {
+  background-color: var(--card-bg);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--card-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
 .card-img-wrapper {
   width: 100%;
   height: 160px;
@@ -433,40 +490,34 @@ body {
 .card-img-wrapper img {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Faz a imagem preencher o espaço sem distorcer */
+  object-fit: cover;
   transition: transform 0.3s ease;
 }
 
-/* Efeito de zoom na imagem ao passar o mouse no card */
 .why-card:hover .card-img-wrapper img {
   transform: scale(1.05);
-}
-
-.card-icon {
-  font-size: 32px;
-  margin-bottom: 16px;
 }
 
 .why-card h3 {
   font-size: 18px;
   font-weight: 700;
-  color: #333333;
+  color: var(--text-color);
   margin-bottom: 10px;
 }
 
 .why-card p {
   font-size: 14px;
-  color: #666666;
+  color: var(--text-muted);
   line-height: 1.6;
-  margin: 0;
 }
 
-/* --- 4. RODAPÉ (FOOTER) --- */
+/* --- 5. RODAPÉ (FOOTER) --- */
 .footer {
-  background-color: #ede9e1;
-  border-top: 1px solid #e2ddd3;
-  padding-top: 40px;
-  color: #555555;
+  background-color: var(--footer-bg);
+  border-top: 1px solid var(--border-color);
+  padding-top: 50px;
+  color: var(--text-muted);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .footer-container {
@@ -478,86 +529,54 @@ body {
   gap: 40px;
 }
 
-.footer-brand-col .brand {
-  margin-bottom: 10px;
-}
-
 .footer-desc {
   font-size: 14px;
-  color: #666666;
+  color: var(--text-muted);
   line-height: 1.6;
   max-width: 280px;
 }
 
 .footer-title {
   font-size: 14px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 10px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 16px;
   letter-spacing: 0.5px;
 }
 
 .footer-links-col ul {
   list-style: none;
-  padding: 0;
-  margin: 0;
 }
 
 .footer-links-col li {
   margin-bottom: 10px;
-  color: #666666;
-  text-decoration: none;
   font-size: 14px;
-  transition: color 0.2s ease;
 }
 
 .footer-links-col a {
-  margin-bottom: 10px;
-  color: #666666;
+  color: var(--text-muted);
   text-decoration: none;
   font-size: 14px;
   transition: color 0.2s ease;
 }
 
 .footer-links-col a:hover {
-  color: #d64928;
+  color: var(--primary-color);
 }
 
 .footerbrand-name {
   font-family: 'Montserrat', sans-serif;
-  font-weight: 800; /* Extra Bold */
-  font-size: 25px;  /* Ajuste o tamanho conforme desejar */
+  font-weight: 800;
+  font-size: 25px;
   letter-spacing: -0.5px;
-  display: inline-block; /* Garante o alinhamento correto do texto */
-  margin-top: 20px;
+  display: inline-block;
+  margin-bottom: 12px;
 }
 
-/* Cor grafite/escura do "Adm." */
-.brand-dark {
-  color: #333333; 
-}
-
-/* Cor avermelhada/terracota do "Food" */
-.brand-red {
-  color: #d93829;
-}
-
-/* Cor grafite/escura do "Adm." */
-.brand-dark {
-  color: #333333; 
-}
-
-/* Cor avermelhada/terracota do "Food" */
-.brand-red {
-  color: #d93829;
-}
-
-/* Linha inferior de Copyright */
 .footer-bottom {
-  border-top: 1px solid #e2ddd3;
+  border-top: 1px solid var(--border-color);
   padding: 20px;
-  background: #D93829;
-  background: linear-gradient(90deg, rgba(217, 56, 41, 1) 44%, rgba(235, 48, 30, 1) 100%);
+  background: var(--primary-color);
 }
 
 .footer-bottom-container {
@@ -567,11 +586,11 @@ body {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: wheat;
+  color: #ffffff;
 }
 
 .btn-back-top {
-  color: #d64928;
+  color: #ffffff;
   text-decoration: none;
   font-weight: 600;
   font-size: 13px;
@@ -581,14 +600,6 @@ body {
 .btn-back-top:hover {
   opacity: 0.8;
   text-decoration: underline;
-}
-
-/* Responsividade do Footer */
-@media (max-width: 800px) {
-  .footer-container {
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
-  }
 }
 
 @media (max-width: 500px) {
