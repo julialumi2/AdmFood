@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - ClickUp</title>
+  <link rel="stylesheet" href="clickup.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item active">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+      
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">CLICKUP</span>
+        </div>
+
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="avatar">JS</div>
+            <div class="user-info">
+              <span class="user-name">Julia Suzuki</span>
+              <span class="user-role">Admin</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ÁREA INTERNA DA PÁGINA -->
+      <div class="page-content">
+        
+        <div class="title-area">
+          <div class="title-top">
+            <i data-lucide="check-square" style="width: 16px; height: 16px;"></i>
+            <span>TAREFAS & PROJETOS</span>
+          </div>
+          <div class="title-row">
+            <h1>Gerenciador de Tarefas</h1>
+            <button class="total-rede-pill" onclick="criarNovaTarefa()">
+              + Nova Tarefa
+            </button>
+          </div>
+        </div>
+
+        <!-- QUADRO KANBAN -->
+        <div class="kanban-board">
+          
+          <!-- Coluna: A Fazer -->
+          <div class="kanban-column" data-status="todo">
+            <div class="column-header">
+              <h3><i data-lucide="circle"></i> A Fazer</h3>
+              <span class="task-count">2</span>
+            </div>
+            <div class="task-list">
+              
+              <div class="task-card" draggable="true" id="task-1">
+                <div class="card-top">
+                  <h4 class="task-title">Embalagens</h4>
+                  <span class="badge priority-alta">Alta</span>
+                </div>
+                <p>Fazer pedido de reposição de embalagens</p>
+                <div class="card-bottom">
+                  <span class="task-meta">Embalagens</span>
+                  <span class="task-date">Hoje</span>
+                </div>
+              </div>
+
+              <div class="task-card" draggable="true" id="task-2">
+                <div class="card-top">
+                  <h4 class="task-title">Atualização de Cardápio</h4>
+                  <span class="badge priority-media">Alta</span>
+                </div>
+                <p>Cadastrar o novo Smash Burger duplo no cardápio digital e iFood.</p>
+                <div class="card-bottom">
+                  <span class="task-meta">Cardápio</span>
+                  <span class="task-date">Hoje</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Coluna: Em Andamento -->
+          <div class="kanban-column" data-status="doing">
+            <div class="column-header">
+              <h3><i data-lucide="clock"></i> Em Andamento</h3>
+              <span class="task-count">1</span>
+            </div>
+            <div class="task-list">
+              
+              <div class="task-card" draggable="true" id="task-3">
+                <div class="card-top">
+                  <h4 class="task-title">Limpar chapa</h4>
+                  <span class="badge priority-alta">Urgente</span>
+                </div>
+                <p>Limpar chapa para o dia de burguer duplo.</p>
+                <div class="card-bottom">
+                  <span class="task-meta">Limpeza</span>
+                  <span class="task-date">Em breve</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Coluna: Feito -->
+          <div class="kanban-column" data-status="done">
+            <div class="column-header">
+              <h3><i data-lucide="check-circle-2"></i> Feito</h3>
+              <span class="task-count">1</span>
+            </div>
+            <div class="task-list">
+              
+              <div class="task-card" draggable="true" id="task-4">
+                <div class="card-top">
+                  <h4 class="task-title">Varrer salão</h4>
+                  <span class="badge priority-baixa">Baixa</span>
+                </div>
+                <p>Varrer salão para iniciar operação.</p>
+                <div class="card-bottom">
+                  <span class="task-meta">Limpeza</span>
+                  <span class="task-date">Concluído</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div> <!-- /kanban-board -->
+      </div> <!-- /page-content -->
+    </main>
+  </div> <!-- /dashboard-wrapper -->
+</body>
+</html>

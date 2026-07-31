@@ -5,30 +5,77 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
 
+  // 2. TOGGLE MODO NOTURNO
   const toggleCheckbox = document.getElementById('theme-toggle-checkbox');
+  if (toggleCheckbox) {
+    // Aplica o tema salvo no localStorage ao carregar a página
+    if (localStorage.getItem('theme') === 'dark') {
+      document.body.classList.add('dark-mode');
+      toggleCheckbox.checked = true;
+    }
 
-  // Garante que o elemento existe na página antes de continuar
-  if (!toggleCheckbox) return;
-
-  // 1. Aplica o tema salvo no localStorage ao carregar a página
-  if (localStorage.getItem('theme') === 'dark') {
-    document.body.classList.add('dark-mode');
-    toggleCheckbox.checked = true;
+    // Evento de troca ao clicar no toggle
+    toggleCheckbox.addEventListener('change', () => {
+      if (toggleCheckbox.checked) {
+        document.body.classList.add('dark-mode');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.body.classList.remove('dark-mode');
+        localStorage.setItem('theme', 'light');
+      }
+    });
   }
 
-  // 2. Evento de troca ao clicar no toggle
-  toggleCheckbox.addEventListener('change', () => {
-    if (toggleCheckbox.checked) {
-      document.body.classList.add('dark-mode');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.body.classList.remove('dark-mode');
-      localStorage.setItem('theme', 'light');
-    }
-  });
-});
+  // 3. LÓGICA DE RECOLHER A SIDEBAR (TOGGLE MENU)
+  // Suporta tanto 'btnToggleMenu' quanto 'toggleMenuBtn' para evitar conflito entre telas
+  const toggleBtn = document.getElementById('btnToggleMenu') || document.getElementById('toggleMenuBtn');
+  const container = document.getElementById('dashboardWrapper');
 
-  // 2. INICIALIZAÇÃO DE DATAS DA INTERFACE
+  if (container) {
+    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+      container.classList.add('collapsed');
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        container.classList.toggle('collapsed');
+        const isCollapsed = container.classList.contains('collapsed');
+        localStorage.setItem('sidebar-collapsed', isCollapsed);
+      });
+    }
+  }
+
+  // 4. GRÁFICO CHART.JS
+  const salesChartElem = document.getElementById('salesChart');
+  if (salesChartElem && typeof Chart !== 'undefined') {
+    const ctx = salesChartElem.getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['11h', '12h', '13h', '18h', '19h', '20h', '21h', '22h'],
+        datasets: [
+          { label: "Artesano's", data: [200, 500, 750, 400, 950, 800, 600, 300], borderColor: '#d93829', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { label: 'Unidade 2', data: [150, 400, 600, 300, 750, 650, 450, 250], borderColor: '#f59e0b', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { label: 'Unidade 3', data: [100, 300, 500, 250, 600, 500, 350, 200], borderColor: '#10b981', borderWidth: 2, tension: 0.3, pointRadius: 0 },
+          { label: 'Unidade 4', data: [80, 200, 400, 180, 450, 400, 250, 150], borderColor: '#3b82f6', borderWidth: 2, tension: 0.3, pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { 
+            grid: { color: '#f1f5f9', strokeDash: [4, 4] },
+            ticks: { callback: value => 'R$' + value }
+          }
+        }
+      }
+    });
+  }
+
+  // 5. INICIALIZAÇÃO DE DATAS DA INTERFACE
   const hoje = new Date();
 
   // Data do Form (Input Date)
@@ -40,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inputData.value = `${ano}-${mes}-${dia}`;
   }
 
-  // Data de Ontem para o Dashboard/Resumo
+  // Data do dia anterior para página de Home 
   const ontem = new Date(hoje);
   ontem.setDate(hoje.getDate() - 1);
 
@@ -56,10 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const elDataGrafico = document.getElementById('data-grafico-sub');
   if (elDataGrafico) elDataGrafico.textContent = dataOntemFormatada;
 
-  // 3. BUSCA O FATURAMENTO REAL DA REDE VIA FLASK
+  // 6. BUSCA O FATURAMENTO REAL DA REDE VIA FLASK
   carregarDadosLojas();
 
-  // 4. MÁSCARA FLUIDA DE MOEDA PARA O CAMPO PRESENCIAL
+  // 7. MÁSCARA FLUIDA DE MOEDA PARA O CAMPO PRESENCIAL
   const inputPresencial = document.getElementById('presencial');
   if (inputPresencial) {
     inputPresencial.addEventListener('input', function (e) {
@@ -78,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 5. ENVIO DO FORMULÁRIO DE FECHAMENTO
+  // 8. ENVIO DO FORMULÁRIO DE FECHAMENTO
   const formFechamento = document.getElementById('form-fechamento');
   if (formFechamento) {
     formFechamento.addEventListener('submit', async function (e) {
@@ -145,10 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     });
-  };
+  }
+
+}); // Fim do DOMContentLoaded
+
 
 // ==============================================================================
-// FUNÇÕES AUXILIARES E INTEGRAÇÃO DE APIs
+// FUNÇÕES AUXILIARES E INTEGRAÇÃO DE APIs (ESCOPO GLOBAL)
 // ==============================================================================
 
 /**
@@ -163,7 +213,6 @@ async function carregarDadosLojas() {
   container.innerHTML = `<p class="text-muted" style="padding: 12px;">Sincronizando com o Cardápio Web via Flask...</p>`;
 
   try {
-    // Chamada segura para o seu servidor Python (Flask)
     const response = await fetch('http://127.0.0.1:5000/api/faturamento-ontem');
 
     if (!response.ok) {
@@ -172,7 +221,6 @@ async function carregarDadosLojas() {
 
     const dados = await response.json();
 
-    // 1. Atualiza o Total da Rede no topo
     if (totalRedeElem) {
       totalRedeElem.textContent = dados.total_rede.toLocaleString('pt-BR', {
         style: 'currency',
@@ -180,7 +228,6 @@ async function carregarDadosLojas() {
       });
     }
 
-    // 2. Renderiza os cards das unidades no HTML
     container.innerHTML = dados.lojas.map(loja => {
       if (!loja.sucesso) {
         return `
@@ -210,7 +257,7 @@ async function carregarDadosLojas() {
       `;
     }).join('');
 
-    // Reativa os ícones da biblioteca Lucide
+    // Reativa os ícones da biblioteca Lucide nos novos elementos criados dinamicamente
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
     }
@@ -232,63 +279,71 @@ function redirecionarRegistro() {
 
 function realizarLogin(event) {
   event.preventDefault();
-  const email = document.getElementById("email").value;
+  const email = document.getElementById("email")?.value;
   console.log("Tentando logar com:", email);
-  window.location.href = "dashboard.html";
+  window.location.href = "index.html";
 }
 
 function loginGoogle() {
   alert("Redirecionando para autenticação do Google...");
 }
 
-// QUADRO DE TAREFAS (KANBAN / IA)
-function criarCardElemento(tarefa) {
-  const card = document.createElement('div');
-  card.classList.add('task-card');
-  card.setAttribute('data-id', tarefa.id);
+// Elementos do Kanban
+  const cards = document.querySelectorAll(".task-card");
+  const columns = document.querySelectorAll(".kanban-column");
 
-  const priorityClass = `priority-${tarefa.prioridade.toLowerCase()}`;
+  // 1. CONFIGURA OS CARDS PARA SEREM ARRASTÁVEIS
+  cards.forEach((card) => {
+    // Quando começa a arrastar
+    card.addEventListener("dragstart", (e) => {
+      card.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", card.id);
+    });
 
-  card.innerHTML = `
-    <div class="card-top">
-      <h4 class="task-title">${tarefa.titulo}</h4>
-      <span class="badge ${priorityClass}">${tarefa.prioridade}</span>
-    </div>
-    <div class="card-bottom">
-      <span class="task-meta">${tarefa.responsavel} · ${tarefa.unidade}</span>
-      <span class="task-date">${tarefa.prazo}</span>
-    </div>`;
+    // Quando termina de arrastar
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      atualizarContadores(); // Atualiza a contagem dos cards
+    });
+  });
 
-  return card;
-}
+  // 2. CONFIGURA AS COLUNAS PARA RECEBEREM OS CARDS
+  columns.forEach((column) => {
+    const taskList = column.querySelector(".task-list");
 
-function adicionarTarefaAoBoard(tarefa, status) {
-  const container = document.getElementById(`list-${status}`);
-  if (container) {
-    const cardElement = criarCardElemento(tarefa);
-    container.appendChild(cardElement);
-    atualizarContadores();
-  }
-}
+    // Permite que o elemento seja solto na coluna
+    column.addEventListener("dragover", (e) => {
+      e.preventDefault(); // Necessário para permitir o "drop"
+      column.classList.add("drag-over");
+    });
 
-async function gerarTarefaComIA(promptUsuario) {
-  const respostaIA = {
-    id: Date.now(),
-    titulo: "Auditoria preventiva de freezer",
-    prioridade: "alta",
-    responsavel: "Suporte IA",
-    unidade: "Unidade 1",
-    prazo: "Hoje"
+    // Quando o card sai da área da coluna
+    column.addEventListener("dragleave", () => {
+      column.classList.remove("drag-over");
+    });
+
+    // Quando o card é solto na coluna
+    column.addEventListener("drop", (e) => {
+      e.preventDefault();
+      column.classList.remove("drag-over");
+
+      const cardId = e.dataTransfer.getData("text/plain");
+      const draggingCard = document.getElementById(cardId);
+
+      if (draggingCard && taskList) {
+        taskList.appendChild(draggingCard);
+        atualizarContadores();
+      }
+    });
+  });
+
+  // 3. FUNÇÃO PARA ATUALIZAR O NÚMERO DE TAREFAS EM CADA COLUNA
+  function atualizarContadores() {
+    columns.forEach((column) => {
+      const countSpan = column.querySelector(".task-count");
+      const taskCount = column.querySelectorAll(".task-card").length;
+      if (countSpan) {
+        countSpan.textContent = taskCount;
+      }
+    });
   };
-
-  adicionarTarefaAoBoard(respostaIA, 'open');
-}
-
-function atualizarContadores() {
-  ['open', 'progress', 'done'].forEach(status => {
-    const el = document.getElementById(`list-${status}`);
-    const countEl = document.getElementById(`count-${status}`);
-    if (el && countEl) {
-      countEl.innerText = `${el.children.length} tarefa(s)`;
-    }
-  })};

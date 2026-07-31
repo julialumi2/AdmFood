@@ -11,6 +11,17 @@ body {
   min-height: 100vh;
 }
 
+p{
+    font-size: 0.8rem;
+    color: #52525b;
+}
+
+button{
+    border:none;
+    cursor:pointer;
+    font-weight:700;
+}
+
 /* --- ESTRUTURA DE LAYOUT LADO A LADO --- */
 .dashboard-wrapper {
   display: grid;
@@ -84,6 +95,9 @@ body {
   color: #8c7b7e;
   margin-bottom: 12px;
   padding-left: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-menu {
@@ -100,21 +114,22 @@ body {
   color: #d1c7c9;
   text-decoration: none;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   border-radius: 8px;
   transition: all 0.2s ease;
   white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
 }
 
 .menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.08);
   color: #ffffff;
 }
 
 .menu-item.active {
   background-color: #3b2825;
   color: #ffffff;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* --- CONTEÚDO PRINCIPAL --- */
@@ -203,7 +218,7 @@ body {
   padding: 32px;
 }
 
-.dashboard-title-area {
+.title-area {
   margin-bottom: 28px;
 }
 
@@ -231,11 +246,16 @@ body {
 }
 
 .total-rede-pill {
-  background-color: #f1f5f9;
+  background-color: #dc2626;
   padding: 8px 16px;
   border-radius: 8px;
   font-size: 0.85rem;
-  color: #475569;
+  color: #ffffff;
+}
+
+.total-rede-pill:hover{
+    background-color: #961818;
+    color: #ffffff;
 }
 
 .section-header {
@@ -262,4 +282,173 @@ body {
 
 .chart-body {
   height: 280px;
+}
+
+/* === QUADRO KANBAN & CARDS DE TAREFA ==== */
+/* Estrutura de colunas lado a lado */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+/* Base para destaque no topo das colunas */
+.kanban-column {
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 400px;
+  border-top-width: 4px;
+}
+
+/* Coluna: A Fazer */
+.kanban-column[data-status="todo"] {
+  border-top-color: #3b82f6;
+  background-color: #c2d7f8 ;
+}
+
+.kanban-column[data-status="todo"] .column-header h3 {
+  color: #1d4ed8;
+}
+
+.kanban-column[data-status="todo"] .task-count {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Coluna: Em Andamento */
+.kanban-column[data-status="doing"] {
+  border-top-color: #f59e0b; 
+  background-color: #fad699 ;
+}
+
+.kanban-column[data-status="doing"] .column-header h3 {
+  color: #b45309;
+}
+
+.kanban-column[data-status="doing"] .task-count {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* Coluna: Feito / Concluído */
+.kanban-column[data-status="done"] {
+  border-top-color: #10b981; /* Verde */
+  background-color: #aef3dc;
+}
+
+.kanban-column[data-status="done"] .column-header h3 {
+  color: #047857;
+}
+
+.kanban-column[data-status="done"] .task-count {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.task-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #e4e4e7;
+  color: #52525b;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+/* Container que lista os cards */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100px;
+}
+
+/* Card Individual de Tarefa */
+.task-card {
+  background-color: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #d1d5db;
+}
+
+/* Topo do Card (Título + Badge) */
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #18181b;
+  line-height: 1.35;
+}
+
+/* Base do Card (Meta informações e Prazo) */
+.card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #71717a;
+  border-top: 1px solid #f4f4f5;
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.task-meta {
+  font-weight: 500;
+}
+
+.task-date {
+  font-weight: 600;
+  color: #d93829;
+}
+
+/* Tags / Badges de Prioridade */
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.badge.priority-alta {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.badge.priority-media {
+  background-color: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.badge.priority-baixa {
+  background-color: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
 }
