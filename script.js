@@ -196,6 +196,188 @@ document.addEventListener('DOMContentLoaded', () => {
 
 }); // Fim do DOMContentLoaded
 
+// Inicializar Ícones Lucide
+lucide.createIcons();
+
+// --- DADOS DA APLICAÇÃO ---
+const dashboardData = {
+  geral: {
+    title: 'Visão Geral (Todas)',
+    faturamento: '142.850,00',
+    faturamentoTrend: '+12.4%',
+    faturamentoUp: true,
+    pedidos: '3.420',
+    pedidosTrend: '+5.1%',
+    pedidosUp: true,
+    ticket: '41,76',
+    ticketTrend: '-1.2%',
+    ticketUp: false,
+    destaque: 'Loja 2 - Shopping (42% do total)',
+    stores: [
+      { name: 'Loja 1 - Centro', pedidos: '1.150', ticket: '38,90', faturamento: '44.735,00', status: 'Operação Normal', badgeClass: 'badge-green' },
+      { name: 'Loja 2 - Shopping', pedidos: '1.580', ticket: '48,20', faturamento: '76.156,00', status: 'Recorde de Vendas', badgeClass: 'badge-green' },
+      { name: 'Loja 3 - Zona Sul', pedidos: '690', ticket: '31,80', faturamento: '21.942,00', status: 'Estoque Baixo', badgeClass: 'badge-orange' }
+    ]
+  },
+  loja1: {
+    title: 'Loja 1 - Centro',
+    faturamento: '44.735,00',
+    faturamentoTrend: '+8.1%',
+    faturamentoUp: true,
+    pedidos: '1.150',
+    pedidosTrend: '+3.4%',
+    pedidosUp: true,
+    ticket: '38,90',
+    ticketTrend: '+1.5%',
+    ticketUp: true,
+    destaque: 'Pico: 12h às 14h',
+    stores: [
+      { name: 'Loja 1 - Centro', pedidos: '1.150', ticket: '38,90', faturamento: '44.735,00', status: 'Operação Normal', badgeClass: 'badge-green' }
+    ]
+  },
+  loja2: {
+    title: 'Loja 2 - Shopping',
+    faturamento: '76.156,00',
+    faturamentoTrend: '+18.6%',
+    faturamentoUp: true,
+    pedidos: '1.580',
+    pedidosTrend: '+9.2%',
+    pedidosUp: true,
+    ticket: '48,20',
+    ticketTrend: '-0.8%',
+    ticketUp: false,
+    destaque: 'Maior Ticket Médio',
+    stores: [
+      { name: 'Loja 2 - Shopping', pedidos: '1.580', ticket: '48,20', faturamento: '76.156,00', status: 'Recorde de Vendas', badgeClass: 'badge-green' }
+    ]
+  },
+  loja3: {
+    title: 'Loja 3 - Zona Sul',
+    faturamento: '21.942,00',
+    faturamentoTrend: '-2.3%',
+    faturamentoUp: false,
+    pedidos: '690',
+    pedidosTrend: '-1.1%',
+    pedidosUp: false,
+    ticket: '31,80',
+    ticketTrend: '-4.2%',
+    ticketUp: false,
+    destaque: 'Promocional Necessária',
+    stores: [
+      { name: 'Loja 3 - Zona Sul', pedidos: '690', ticket: '31,80', faturamento: '21.942,00', status: 'Estoque Baixo', badgeClass: 'badge-orange' }
+    ]
+  }
+};
+
+let currentTab = 'geral';
+
+// --- ELEMENTOS DO DOM ---
+const sidebar = document.getElementById('sidebar');
+const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+const tabButtons = document.querySelectorAll('.tab-btn');
+const btnWhatsApp = document.getElementById('btn-whatsapp');
+const periodSelect = document.getElementById('period-select');
+
+// --- RETRÁTIL DA SIDEBAR ---
+toggleSidebarBtn.addEventListener('click', () => {
+  sidebar.classList.toggle('collapsed');
+});
+
+// --- RENDERIZAR TELA ---
+function updateDashboard(tabKey) {
+  currentTab = tabKey;
+  const data = dashboardData[tabKey];
+
+  // Atualiza Valores nos Cards
+  document.getElementById('val-faturamento').textContent = `R$ ${data.faturamento}`;
+  document.getElementById('val-pedidos').textContent = data.pedidos;
+  document.getElementById('val-ticket').textContent = `R$ ${data.ticket}`;
+  document.getElementById('val-destaque').textContent = data.destaque;
+
+  // Atualiza Trends
+  renderTrend('trend-faturamento', data.faturamentoTrend, data.faturamentoUp);
+  renderTrend('trend-pedidos', data.pedidosTrend, data.pedidosUp);
+  renderTrend('trend-ticket', data.ticketTrend, data.ticketUp);
+
+  // Renderiza Lista de Status Operacional
+  const statusContainer = document.getElementById('status-list');
+  statusContainer.innerHTML = data.stores.map(store => `
+    <div class="status-item">
+      <div>
+        <p class="font-bold">${store.name}</p>
+        <p class="panel-subtitle">${store.pedidos} pedidos hoje</p>
+      </div>
+      <span class="badge ${store.badgeClass}">${store.status}</span>
+    </div>
+  `).join('');
+
+  // Renderiza Tabela
+  const tableBody = document.getElementById('table-body');
+  tableBody.innerHTML = data.stores.map(store => `
+    <tr>
+      <td class="font-bold">${store.name}</td>
+      <td>${store.pedidos}</td>
+      <td>R$ ${store.ticket}</td>
+      <td class="font-bold">R$ ${store.faturamento}</td>
+      <td><span class="badge ${store.badgeClass}">${store.status}</span></td>
+    </tr>
+  `).join('');
+
+  // Re-inicializa ícones do Lucide após re-renderizar HTML
+  lucide.createIcons();
+}
+
+// Auxiliar para Tendência (Up/Down)
+function renderTrend(elementId, trendValue, isUp) {
+  const container = document.getElementById(elementId);
+  const icon = isUp ? 'trending-up' : 'trending-down';
+  const colorClass = isUp ? 'trend-up' : 'trend-down';
+
+  container.innerHTML = `
+    <span class="trend-value ${colorClass}">
+      <i data-lucide="${icon}"></i> ${trendValue}
+    </span>
+    <span class="trend-sub">vs. período anterior</span>
+  `;
+}
+
+// --- TROCA DE ABAS ---
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateDashboard(btn.dataset.tab);
+  });
+});
+
+// --- ENVIAR PARA O WHATSAPP ---
+btnWhatsApp.addEventListener('click', () => {
+  const data = dashboardData[currentTab];
+  const period = periodSelect.value;
+
+  let message = `📊 *RELATÓRIO ADMFOOD - ${data.title.toUpperCase()}*\n`;
+  message += `📅 *Período:* ${period}\n\n`;
+  message += `💰 *Faturamento:* R$ ${data.faturamento}\n`;
+  message += `📦 *Total de Pedidos:* ${data.pedidos}\n`;
+  message += `🎯 *Ticket Médio:* R$ ${data.ticket}\n`;
+  message += `🏆 *Destaque:* ${data.destaque}\n\n`;
+
+  if (currentTab === 'geral') {
+    message += `--- *Detalhamento por Loja* ---\n`;
+    data.stores.forEach(store => {
+      message += `• *${store.name}:* R$ ${store.faturamento} (${store.pedidos} pedidos)\n`;
+    });
+  }
+
+  message += `\n_Enviado via AdmFood Analytics_`;
+
+  const encodedUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(encodedUrl, '_blank');
+});
+
+// Inicialização Inicial
+updateDashboard('geral');
+
 
 // ==============================================================================
 // FUNÇÕES AUXILIARES E INTEGRAÇÃO DE APIs (ESCOPO GLOBAL)

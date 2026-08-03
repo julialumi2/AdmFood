@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - ClickUp</title>
+  <link rel="stylesheet" href="insight.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="insight.html" class="menu-item active">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+      
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">INSIGHTS</span>
+        </div>
+
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="avatar">JS</div>
+            <div class="user-info">
+              <span class="user-name">Julia Suzuki</span>
+              <span class="user-role">Admin</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- PÁGINA DE INSIGHT -->
+    <div class="page-content">
+      
+      <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
+      <div class="dashboard-title-area">
+        <div class="title-top">
+          <i data-lucide="box" class="icon-pin"></i>
+          <span>ANÁLISE DE DESEMPENHO</span>
+        </div>
+
+        <!-- HEADER INTERNO / TÍTULO E CONTROLES -->
+        <div class="content-header">
+  
+        <!-- Lado Esquerdo: Categoria e Título -->
+        <div class="header-titles">
+        <h1 class="page-title">Relatório de vendas</h1>
+    </div>
+
+  <!-- Lado Direito: Select + Botão WhatsApp -->
+  <div class="action-controls">
+    <div class="select-wrapper">
+      <select id="period-select">
+        <option value="Últimos 30 dias">Últimos 30 dias</option>
+        <option value="Este Mês">Este Mês</option>
+        <option value="Último Trimestre">Último Trimestre</option>
+      </select>
+      <i data-lucide="chevron-down" class="select-icon"></i>
+    </div>
+
+    <button class="btn-whatsapp" id="btn-whatsapp">
+      <i data-lucide="message-circle"></i>
+      <span>Exportar para WhatsApp</span>
+    </button>
+  </div>
+
+</div>
+      </div>
+
+      <!-- 4. NAVEGAÇÃO DE ABAS (LOJAS) -->
+        <div class="tabs-bar">
+          <button class="tab-btn active" data-tab="geral">
+            <i data-lucide="store"></i>
+            <span>Visão Geral (Todas)</span>
+            <span class="tab-badge">3 Unidades</span>
+          </button>
+          <button class="tab-btn" data-tab="loja1">
+            <i data-lucide="store"></i>
+            <span>Loja 1 - Centro</span>
+          </button>
+          <button class="tab-btn" data-tab="loja2">
+            <i data-lucide="store"></i>
+            <span>Loja 2 - Shopping</span>
+          </button>
+          <button class="tab-btn" data-tab="loja3">
+            <i data-lucide="store"></i>
+            <span>Loja 3 - Zona Sul</span>
+          </button>
+        </div>
+
+      <!-- 5. CARDS DE MÉTRICAS -->
+        <div class="metrics-grid">
+          
+          <!-- Card 1 -->
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Faturamento Total</span>
+              <div class="card-icon"><i data-lucide="dollar-sign"></i></div>
+            </div>
+            <div class="card-value" id="val-faturamento">R$ 142.850,00</div>
+            <div class="card-trend" id="trend-faturamento">
+              <span class="trend-value trend-up"><i data-lucide="trending-up"></i> +12.4%</span>
+              <span class="trend-sub">vs. período anterior</span>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Total de Pedidos</span>
+              <div class="card-icon"><i data-lucide="shopping-bag"></i></div>
+            </div>
+            <div class="card-value" id="val-pedidos">3.420</div>
+            <div class="card-trend" id="trend-pedidos">
+              <span class="trend-value trend-up"><i data-lucide="trending-up"></i> +5.1%</span>
+              <span class="trend-sub">vs. período anterior</span>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Ticket Médio</span>
+              <div class="card-icon"><i data-lucide="bar-chart-2"></i></div>
+            </div>
+            <div class="card-value" id="val-ticket">R$ 41,76</div>
+            <div class="card-trend" id="trend-ticket">
+              <span class="trend-value trend-down"><i data-lucide="trending-down"></i> -1.2%</span>
+              <span class="trend-sub">vs. período anterior</span>
+            </div>
+          </div>
+
+          <!-- Card 4 -->
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Destaque Operacional</span>
+              <div class="card-icon card-icon-amber"><i data-lucide="award"></i></div>
+            </div>
+            <div class="card-value card-value-sm" id="val-destaque">Loja 2 - Shopping</div>
+            <p class="trend-sub">Medição em tempo real</p>
+          </div>
+
+        </div>
+
+        <!-- 6. GRÁFICO E STATUS -->
+        <div class="analytics-grid">
+          
+          <!-- Visual do Gráfico -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Comparativo de Vendas</h3>
+              <span class="panel-subtitle">Valores em R$ (Milhares)</span>
+            </div>
+            <div class="chart-container">
+              <div class="chart-bar-group">
+                <div class="bar-fill" style="height: 60%;">
+                  <span class="tooltip">R$ 44.7k</span>
+                </div>
+                <span class="bar-label">Loja 1</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="bar-fill highlight" style="height: 95%;">
+                  <span class="tooltip">R$ 76.1k</span>
+                </div>
+                <span class="bar-label font-bold">Loja 2</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="bar-fill" style="height: 35%;">
+                  <span class="tooltip">R$ 21.9k</span>
+                </div>
+                <span class="bar-label">Loja 3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status da Operação -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Status Operacional</h3>
+            </div>
+            <div class="status-list" id="status-list">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 7. TABELA DETALHADA -->
+        <div class="panel panel-table">
+          <div class="panel-header">
+            <h3 class="panel-title">Detalhamento por Unidade</h3>
+            <span class="panel-subtitle">Atualizado há 5 min</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Unidade</th>
+                  <th>Pedidos</th>
+                  <th>Ticket Médio</th>
+                  <th>Faturamento Total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+  </div>
+</body>
+</html>
