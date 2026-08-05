@@ -11,15 +11,15 @@ body {
   min-height: 100vh;
 }
 
-p{
-    font-size: 0.8rem;
-    color: #52525b;
+p {
+  font-size: 0.8rem;
+  color: #52525b;
 }
 
-button{
-    border:none;
-    cursor:pointer;
-    font-weight:700;
+button {
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
 }
 
 /* --- ESTRUTURA DE LAYOUT LADO A LADO --- */
@@ -251,41 +251,15 @@ button{
   border-radius: 8px;
   font-size: 0.85rem;
   color: #ffffff;
+  transition: background-color 0.2s;
 }
 
-.total-rede-pill:hover{
-    background-color: #961818;
-    color: #ffffff;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #475569;
-  margin-bottom: 16px;
-}
-
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.chart-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 24px;
-}
-
-.chart-body {
-  height: 280px;
+.total-rede-pill:hover {
+  background-color: #961818;
+  color: #ffffff;
 }
 
 /* === QUADRO KANBAN & CARDS DE TAREFA ==== */
-/* Estrutura de colunas lado a lado */
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -294,7 +268,6 @@ button{
   margin-top: 16px;
 }
 
-/* Base para destaque no topo das colunas */
 .kanban-column {
   border: 1px solid #e4e4e7;
   border-radius: 12px;
@@ -309,11 +282,14 @@ button{
 /* Coluna: A Fazer */
 .kanban-column[data-status="todo"] {
   border-top-color: #3b82f6;
-  background-color: #c2d7f8 ;
+  background-color: #f0f6ff;
 }
 
 .kanban-column[data-status="todo"] .column-header h3 {
   color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .kanban-column[data-status="todo"] .task-count {
@@ -324,11 +300,14 @@ button{
 /* Coluna: Em Andamento */
 .kanban-column[data-status="doing"] {
   border-top-color: #f59e0b; 
-  background-color: #fad699 ;
+  background-color: #fffbeb;
 }
 
 .kanban-column[data-status="doing"] .column-header h3 {
   color: #b45309;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .kanban-column[data-status="doing"] .task-count {
@@ -338,12 +317,15 @@ button{
 
 /* Coluna: Feito / Concluído */
 .kanban-column[data-status="done"] {
-  border-top-color: #10b981; /* Verde */
-  background-color: #aef3dc;
+  border-top-color: #10b981;
+  background-color: #f0fdf4;
 }
 
 .kanban-column[data-status="done"] .column-header h3 {
   color: #047857;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .kanban-column[data-status="done"] .task-count {
@@ -351,16 +333,20 @@ button{
   color: #065f46;
 }
 
+.column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .task-count {
   font-size: 0.75rem;
   font-weight: 600;
-  background-color: #e4e4e7;
-  color: #52525b;
   padding: 2px 8px;
   border-radius: 12px;
 }
 
-/* Container que lista os cards */
+/* Container de lista */
 .task-list {
   display: flex;
   flex-direction: column;
@@ -388,7 +374,6 @@ button{
   border-color: #d1d5db;
 }
 
-/* Topo do Card (Título + Badge) */
 .card-top {
   display: flex;
   align-items: flex-start;
@@ -403,7 +388,6 @@ button{
   line-height: 1.35;
 }
 
-/* Base do Card (Meta informações e Prazo) */
 .card-bottom {
   display: flex;
   align-items: center;
@@ -453,7 +437,7 @@ button{
   border: 1px solid #bbf7d0;
 }
 
-/* Estilos do Modal de Criar Tarefa */
+/* === ESTILOS DOS MODAIS === */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -472,8 +456,14 @@ button{
   padding: 24px;
   border-radius: 12px;
   width: 100%;
-  max-width: 450px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  max-width: 480px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content.modal-large {
+  max-width: 600px;
 }
 
 .modal-header {
@@ -483,12 +473,58 @@ button{
   margin-bottom: 20px;
 }
 
+.modal-title-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #f4f4f5;
+  color: #3f3f46;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #71717a;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-icon.danger:hover {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
 .btn-close {
   background: none;
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
   color: #71717a;
+  line-height: 1;
+}
+
+.form-group-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 .form-group {
@@ -514,11 +550,178 @@ button{
   font-size: 0.9rem;
 }
 
+/* Modal Detalhes Interno */
+.detalhe-titulo {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #18181b;
+  margin-bottom: 16px;
+}
+
+.task-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  background-color: #f8fafc;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.info-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.detalhe-secao {
+  margin-bottom: 20px;
+}
+
+.detalhe-secao h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.detalhe-descricao {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* Checklist / Subtarefas */
+.checklist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.checklist-progress {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background-color: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: #dc2626;
+  transition: width 0.3s ease;
+}
+
+.checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.subtask-item input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #dc2626;
+}
+
+.subtask-item.completed span {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.add-subtask-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-subtask-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+/* Comentários */
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.comment-card {
+  background: #f1f5f9;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.comment-author {
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.comment-text {
+  color: #475569;
+}
+
+.add-comment-box {
+  display: flex;
+  gap: 8px;
+}
+
+.add-comment-box input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+/* Botões do Modal */
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 20px;
+}
+
+.modal-actions.border-top {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
 }
 
 .btn-secondary {
@@ -528,14 +731,50 @@ button{
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
+  color: #27272a;
+}
+
+.btn-secondary:hover {
+  background: #d4d4d8;
 }
 
 .btn-primary {
-  background: #ef4444;
+  background: #dc2626;
   color: white;
   border: none;
   padding: 10px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #b91c1c;
+}
+
+.btn-secondary-sm {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.btn-secondary-sm:hover {
+  background: #e2e8f0;
+}
+
+.btn-primary-sm {
+  background: #dc2626;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.btn-primary-sm:hover {
+  background: #b91c1c;
 }

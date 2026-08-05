@@ -200,93 +200,157 @@ document.addEventListener('DOMContentLoaded', () => {
 lucide.createIcons();
 
 // --- DADOS DA APLICAÇÃO ---
-const dashboardData = {
-  geral: {
-    title: 'Visão Geral (Todas)',
-    faturamento: '142.850,00',
-    faturamentoTrend: '+12.4%',
-    faturamentoUp: true,
-    pedidos: '3.420',
-    pedidosTrend: '+5.1%',
-    pedidosUp: true,
-    ticket: '41,76',
-    ticketTrend: '-1.2%',
-    ticketUp: false,
-    destaque: 'Loja 2 - Shopping (42% do total)',
-    stores: [
-      { name: 'Loja 1 - Centro', pedidos: '1.150', ticket: '38,90', faturamento: '44.735,00', status: 'Operação Normal', badgeClass: 'badge-green' },
-      { name: 'Loja 2 - Shopping', pedidos: '1.580', ticket: '48,20', faturamento: '76.156,00', status: 'Recorde de Vendas', badgeClass: 'badge-green' },
-      { name: 'Loja 3 - Zona Sul', pedidos: '690', ticket: '31,80', faturamento: '21.942,00', status: 'Estoque Baixo', badgeClass: 'badge-orange' }
-    ]
-  },
-  loja1: {
-    title: 'Loja 1 - Centro',
-    faturamento: '44.735,00',
-    faturamentoTrend: '+8.1%',
-    faturamentoUp: true,
-    pedidos: '1.150',
-    pedidosTrend: '+3.4%',
-    pedidosUp: true,
-    ticket: '38,90',
-    ticketTrend: '+1.5%',
-    ticketUp: true,
-    destaque: 'Pico: 12h às 14h',
-    stores: [
-      { name: 'Loja 1 - Centro', pedidos: '1.150', ticket: '38,90', faturamento: '44.735,00', status: 'Operação Normal', badgeClass: 'badge-green' }
-    ]
-  },
-  loja2: {
-    title: 'Loja 2 - Shopping',
-    faturamento: '76.156,00',
-    faturamentoTrend: '+18.6%',
-    faturamentoUp: true,
-    pedidos: '1.580',
-    pedidosTrend: '+9.2%',
-    pedidosUp: true,
-    ticket: '48,20',
-    ticketTrend: '-0.8%',
-    ticketUp: false,
-    destaque: 'Maior Ticket Médio',
-    stores: [
-      { name: 'Loja 2 - Shopping', pedidos: '1.580', ticket: '48,20', faturamento: '76.156,00', status: 'Recorde de Vendas', badgeClass: 'badge-green' }
-    ]
-  },
-  loja3: {
-    title: 'Loja 3 - Zona Sul',
-    faturamento: '21.942,00',
-    faturamentoTrend: '-2.3%',
-    faturamentoUp: false,
-    pedidos: '690',
-    pedidosTrend: '-1.1%',
-    pedidosUp: false,
-    ticket: '31,80',
-    ticketTrend: '-4.2%',
-    ticketUp: false,
-    destaque: 'Promocional Necessária',
-    stores: [
-      { name: 'Loja 3 - Zona Sul', pedidos: '690', ticket: '31,80', faturamento: '21.942,00', status: 'Estoque Baixo', badgeClass: 'badge-orange' }
-    ]
-  }
-};
-
+// Preenchido de verdade via carregarInsights(), buscando do backend Flask
+// (que por sua vez lê do cache local sincronizado com a Cardápio Web).
+let dashboardData = {};
 let currentTab = 'geral';
+let canalChartInstance = null;
+
+// Quando o usuário aplica um filtro de data no Histórico Diário, ele fica
+// "travado" nesse resultado (em vez do período do filtro geral) até ser limpo.
+let filtroHistoricoAtivo = false;
+let ultimoDiarioFiltrado = [];
+
+// Paleta usada tanto no gráfico de rosca quanto na bolinha colorida da tabela,
+// pra ficarem sempre com a mesma cor por posição.
+const CORES_CANAL = ['#3b82f6', '#f59e0b', '#a855f7', '#10b981', '#e11d48', '#06b6d4'];
+
+// Lojas que têm vendas presenciais (fora da Cardápio Web) e precisam do
+// formulário de lançamento manual.
+const UNIDADES_COM_PRESENCIAL = ['Hamburgueria Artesanos', 'Tradiça ZN'];
+
+// Só o Artesanos lança a quantidade de vendas presenciais (a ZN só lança o
+// valor) — controla tanto o campo extra do formulário quanto a coluna de
+// "Total de Vendas (dia)" na tabela de lançamentos.
+const UNIDADES_COM_QUANTIDADE_PRESENCIAL = ['Hamburgueria Artesanos'];
 
 // --- ELEMENTOS DO DOM ---
-const sidebar = document.getElementById('sidebar');
-const toggleSidebarBtn = document.getElementById('toggle-sidebar');
 const tabButtons = document.querySelectorAll('.tab-btn');
 const btnWhatsApp = document.getElementById('btn-whatsapp');
 const periodSelect = document.getElementById('period-select');
+const formPresencial = document.getElementById('form-presencial');
+const presencialDiaInput = document.getElementById('presencial-dia');
+const presencialValorInput = document.getElementById('presencial-valor');
+const presencialQuantidadeInput = document.getElementById('presencial-quantidade');
+const presencialQuantidadeField = document.getElementById('presencial-quantidade-field');
+const presencialThTotal = document.getElementById('presencial-th-total');
+const formHistoricoFiltro = document.getElementById('form-historico-filtro');
+const historicoInicioInput = document.getElementById('historico-inicio');
+const historicoFimInput = document.getElementById('historico-fim');
+const btnLimparFiltroHistorico = document.getElementById('btn-limpar-filtro-historico');
 
-// --- RETRÁTIL DA SIDEBAR ---
-toggleSidebarBtn.addEventListener('click', () => {
-  sidebar.classList.toggle('collapsed');
-});
+// Renderiza a tabela de Histórico Diário. Cada bloco de dia (que pode ter
+// várias linhas quando é a Visão Geral, uma por unidade) recebe uma faixa
+// de fundo alternada — todas as linhas do mesmo dia compartilham a mesma
+// cor, e o dia seguinte já vem com um tom diferente, facilitando identificar
+// onde um dia termina e o outro começa sem depender de uma borda chamativa.
+function renderHistoricoDiario(diario) {
+  const dailyTableBody = document.getElementById('daily-table-body');
+  if (!dailyTableBody) return;
+
+  let grupoAlternado = false;
+  dailyTableBody.innerHTML = diario.length
+    ? diario.map((item, indice) => {
+        const inicioDeGrupo = indice === 0 || diario[indice - 1].diaIso !== item.diaIso;
+        if (inicioDeGrupo) grupoAlternado = !grupoAlternado;
+        const classeGrupo = grupoAlternado ? 'grupo-dia-a' : 'grupo-dia-b';
+        return `
+          <tr class="${classeGrupo}${inicioDeGrupo ? ' inicio-grupo-dia' : ''}">
+            <td class="font-bold dia-com-semana">
+              <span class="dia-data">${item.dia}</span>
+              <span class="dia-semana-badge">${item.diaSemana}</span>
+            </td>
+            <td>${item.unidade}</td>
+            <td>${item.pedidos}</td>
+            <td>R$ ${item.ticket}</td>
+            <td class="font-bold">R$ ${item.faturamento}</td>
+          </tr>
+        `;
+      }).join('')
+    : `<tr><td colspan="5" class="panel-subtitle">Nenhum dia encontrado nesse filtro.</td></tr>`;
+}
+
+if (formHistoricoFiltro) {
+  formHistoricoFiltro.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const inicio = historicoInicioInput.value;
+    const fim = historicoFimInput.value;
+    if (!inicio || !fim) return;
+
+    try {
+      const resposta = await fetch(
+        `http://127.0.0.1:5000/api/historico-diario?unidade=${encodeURIComponent(currentTab)}&inicio=${inicio}&fim=${fim}`
+      );
+      if (!resposta.ok) {
+        const erroDados = await resposta.json().catch(() => ({}));
+        throw new Error(erroDados.erro || `Erro no servidor Flask: ${resposta.status}`);
+      }
+      const dados = await resposta.json();
+      filtroHistoricoAtivo = true;
+      ultimoDiarioFiltrado = dados.diario || [];
+      renderHistoricoDiario(ultimoDiarioFiltrado);
+    } catch (erro) {
+      console.error('Falha ao filtrar histórico diário:', erro);
+      alert('Não foi possível aplicar o filtro. Confira se o Flask está rodando.');
+    }
+  });
+}
+
+if (btnLimparFiltroHistorico) {
+  btnLimparFiltroHistorico.addEventListener('click', () => {
+    filtroHistoricoAtivo = false;
+    ultimoDiarioFiltrado = [];
+    historicoInicioInput.value = '';
+    historicoFimInput.value = '';
+    const data = dashboardData[currentTab];
+    renderHistoricoDiario(data ? (data.diario || []) : []);
+  });
+}
 
 // --- RENDERIZAR TELA ---
 function updateDashboard(tabKey) {
   currentTab = tabKey;
   const data = dashboardData[tabKey];
+
+  // Trocar de aba limpa o filtro de data do Histórico Diário — ele foi
+  // buscado pra uma unidade específica e não faz sentido continuar mostrado
+  // se o usuário for pra outra aba.
+  if (filtroHistoricoAtivo) {
+    filtroHistoricoAtivo = false;
+    ultimoDiarioFiltrado = [];
+    if (historicoInicioInput) historicoInicioInput.value = '';
+    if (historicoFimInput) historicoFimInput.value = '';
+  }
+
+  const canalDataLabel = document.getElementById('canal-data-label');
+  if (canalDataLabel) {
+    canalDataLabel.textContent = data.canalDataLabel || '--/--/----';
+  }
+
+  // "Destaque Operacional" só faz sentido comparando lojas — não aparece na
+  // Visão Geral, só nas abas de cada loja.
+  const cardDestaque = document.getElementById('card-destaque-operacional');
+  if (cardDestaque) {
+    cardDestaque.style.display = tabKey === 'geral' ? 'none' : '';
+  }
+
+  // "Vendas Presenciais" só existe nas lojas que não têm 100% do faturamento
+  // capturado pela Cardápio Web.
+  const painelPresencial = document.getElementById('panel-vendas-presenciais');
+  if (painelPresencial) {
+    const temPresencial = UNIDADES_COM_PRESENCIAL.includes(tabKey);
+    painelPresencial.style.display = temPresencial ? '' : 'none';
+
+    // Só o Artesanos lança quantidade de vendas presenciais — a ZN fica só
+    // com o valor, sem o campo extra e sem a coluna de total do dia.
+    const temQuantidade = UNIDADES_COM_QUANTIDADE_PRESENCIAL.includes(tabKey);
+    if (presencialQuantidadeField) presencialQuantidadeField.style.display = temQuantidade ? '' : 'none';
+    if (presencialThTotal) presencialThTotal.style.display = temQuantidade ? '' : 'none';
+
+    if (temPresencial) {
+      carregarPresencial(tabKey);
+    }
+  }
 
   // Atualiza Valores nos Cards
   document.getElementById('val-faturamento').textContent = `R$ ${data.faturamento}`;
@@ -294,41 +358,85 @@ function updateDashboard(tabKey) {
   document.getElementById('val-ticket').textContent = `R$ ${data.ticket}`;
   document.getElementById('val-destaque').textContent = data.destaque;
 
+  // Em todas as abas, os 3 primeiros cards mostram só o dia anterior (não o
+  // período do filtro) — o texto abaixo do trend deixa isso claro.
+  const textoComparacao = `vs. dia anterior (${data.canalDataLabel || ''})`;
+
   // Atualiza Trends
-  renderTrend('trend-faturamento', data.faturamentoTrend, data.faturamentoUp);
-  renderTrend('trend-pedidos', data.pedidosTrend, data.pedidosUp);
-  renderTrend('trend-ticket', data.ticketTrend, data.ticketUp);
+  renderTrend('trend-faturamento', data.faturamentoTrend, data.faturamentoUp, textoComparacao);
+  renderTrend('trend-pedidos', data.pedidosTrend, data.pedidosUp, textoComparacao);
+  renderTrend('trend-ticket', data.ticketTrend, data.ticketUp, textoComparacao);
 
-  // Renderiza Lista de Status Operacional
-  const statusContainer = document.getElementById('status-list');
-  statusContainer.innerHTML = data.stores.map(store => `
-    <div class="status-item">
-      <div>
-        <p class="font-bold">${store.name}</p>
-        <p class="panel-subtitle">${store.pedidos} pedidos hoje</p>
-      </div>
-      <span class="badge ${store.badgeClass}">${store.status}</span>
-    </div>
-  `).join('');
+  // Renderiza Histórico Diário (respeitando o filtro de datas, se houver um ativo)
+  renderHistoricoDiario(filtroHistoricoAtivo ? ultimoDiarioFiltrado : (data.diario || []));
 
-  // Renderiza Tabela
-  const tableBody = document.getElementById('table-body');
-  tableBody.innerHTML = data.stores.map(store => `
-    <tr>
-      <td class="font-bold">${store.name}</td>
-      <td>${store.pedidos}</td>
-      <td>R$ ${store.ticket}</td>
-      <td class="font-bold">R$ ${store.faturamento}</td>
-      <td><span class="badge ${store.badgeClass}">${store.status}</span></td>
-    </tr>
-  `).join('');
+  // Renderiza Análise de Pedidos por Canal de Vendas (gráfico de rosca + tabela)
+  renderCanalAnalysis(data.canais || []);
 
   // Re-inicializa ícones do Lucide após re-renderizar HTML
   lucide.createIcons();
 }
 
+// Gráfico de rosca + tabela de canais, no mesmo formato do painel da Cardápio Web
+function renderCanalAnalysis(canais) {
+  const canalTableBody = document.getElementById('canal-table-body');
+  const canvas = document.getElementById('canalChart');
+  if (!canalTableBody || !canvas) return;
+
+  if (canalChartInstance) {
+    canalChartInstance.destroy();
+    canalChartInstance = null;
+  }
+
+  if (!canais.length) {
+    canalTableBody.innerHTML = `<tr><td colspan="4" class="panel-subtitle">Nenhum dado de canal nesse período.</td></tr>`;
+    return;
+  }
+
+  canalTableBody.innerHTML = canais.map((c, i) => `
+    <tr>
+      <td>
+        <span class="canal-nome">
+          <span class="canal-dot" style="background-color: ${CORES_CANAL[i % CORES_CANAL.length]};"></span>
+          ${c.canal}
+        </span>
+      </td>
+      <td class="font-bold">R$ ${c.faturamento}</td>
+      <td>${c.pedidos}</td>
+      <td>R$ ${c.ticket}</td>
+    </tr>
+  `).join('');
+
+  if (typeof Chart !== 'undefined') {
+    canalChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: canais.map(c => c.canal),
+        datasets: [{
+          data: canais.map(c => c.faturamentoNumero),
+          backgroundColor: canais.map((_, i) => CORES_CANAL[i % CORES_CANAL.length]),
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.label}: R$ ${canais[ctx.dataIndex].faturamento} (${canais[ctx.dataIndex].percentual}%)`,
+            },
+          },
+        },
+      },
+    });
+  }
+}
+
 // Auxiliar para Tendência (Up/Down)
-function renderTrend(elementId, trendValue, isUp) {
+function renderTrend(elementId, trendValue, isUp, textoComparacao = 'vs. período anterior') {
   const container = document.getElementById(elementId);
   const icon = isUp ? 'trending-up' : 'trending-down';
   const colorClass = isUp ? 'trend-up' : 'trend-down';
@@ -337,13 +445,14 @@ function renderTrend(elementId, trendValue, isUp) {
     <span class="trend-value ${colorClass}">
       <i data-lucide="${icon}"></i> ${trendValue}
     </span>
-    <span class="trend-sub">vs. período anterior</span>
+    <span class="trend-sub">${textoComparacao}</span>
   `;
 }
 
 // --- TROCA DE ABAS ---
 tabButtons.forEach(btn => {
   btn.addEventListener('click', () => {
+    if (!dashboardData[btn.dataset.tab]) return;
     tabButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     updateDashboard(btn.dataset.tab);
@@ -351,32 +460,218 @@ tabButtons.forEach(btn => {
 });
 
 // --- ENVIAR PARA O WHATSAPP ---
-btnWhatsApp.addEventListener('click', () => {
-  const data = dashboardData[currentTab];
-  const period = periodSelect.value;
+if (btnWhatsApp) {
+  btnWhatsApp.addEventListener('click', () => {
+    const data = dashboardData[currentTab];
+    if (!data) return;
+    const period = periodSelect ? periodSelect.value : '';
 
-  let message = `📊 *RELATÓRIO ADMFOOD - ${data.title.toUpperCase()}*\n`;
-  message += `📅 *Período:* ${period}\n\n`;
-  message += `💰 *Faturamento:* R$ ${data.faturamento}\n`;
-  message += `📦 *Total de Pedidos:* ${data.pedidos}\n`;
-  message += `🎯 *Ticket Médio:* R$ ${data.ticket}\n`;
-  message += `🏆 *Destaque:* ${data.destaque}\n\n`;
+    let message = `📊 *RELATÓRIO ADMFOOD - ${data.title.toUpperCase()}*\n`;
+    message += `📅 *Período:* ${period}\n\n`;
+    message += `💰 *Faturamento:* R$ ${data.faturamento}\n`;
+    message += `📦 *Total de Pedidos:* ${data.pedidos}\n`;
+    message += `🎯 *Ticket Médio:* R$ ${data.ticket}\n`;
+    message += `🏆 *Destaque:* ${data.destaque}\n\n`;
 
-  if (currentTab === 'geral') {
-    message += `--- *Detalhamento por Loja* ---\n`;
-    data.stores.forEach(store => {
-      message += `• *${store.name}:* R$ ${store.faturamento} (${store.pedidos} pedidos)\n`;
-    });
+    if (currentTab === 'geral') {
+      message += `--- *Detalhamento por Loja* ---\n`;
+      data.stores.forEach(store => {
+        message += `• *${store.name}:* R$ ${store.faturamento} (${store.pedidos} pedidos)\n`;
+      });
+    }
+
+    message += `\n_Enviado via AdmFood Analytics_`;
+
+    const encodedUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(encodedUrl, '_blank');
+  });
+}
+
+// --- CARREGA OS DADOS REAIS DE INSIGHTS (BACKEND FLASK -> CACHE CARDÁPIO WEB) ---
+async function carregarInsights(periodo) {
+  const canalTableBody = document.getElementById('canal-table-body');
+  if (canalTableBody) {
+    canalTableBody.innerHTML = `<tr><td colspan="4" class="panel-subtitle">Carregando dados...</td></tr>`;
   }
 
-  message += `\n_Enviado via AdmFood Analytics_`;
+  try {
+    const resposta = await fetch(`http://127.0.0.1:5000/api/insights?periodo=${encodeURIComponent(periodo)}`);
+    if (!resposta.ok) {
+      throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    }
+    dashboardData = await resposta.json();
+    updateDashboard(dashboardData[currentTab] ? currentTab : 'geral');
+  } catch (erro) {
+    console.error('Falha ao carregar insights:', erro);
+    if (canalTableBody) {
+      canalTableBody.innerHTML = `<tr><td colspan="4" style="color: #ef4444;">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
+    }
+  }
+}
 
-  const encodedUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-  window.open(encodedUrl, '_blank');
-});
+// --- VENDAS PRESENCIAIS (CRUD manual, fora da Cardápio Web) ---
+// Quando não-nulo, o formulário está editando esse dia (em vez de criar um
+// lançamento novo) — usado pra saber se precisa apagar o registro antigo
+// caso o usuário troque a data durante a edição.
+let presencialEditandoDiaOriginal = null;
+const btnPresencialCancelarEdicao = document.getElementById('btn-presencial-cancelar-edicao');
+const btnPresencialSalvarTexto = document.getElementById('btn-presencial-salvar-texto');
 
-// Inicialização Inicial
-updateDashboard('geral');
+async function carregarPresencial(unidade) {
+  const tbody = document.getElementById('presencial-table-body');
+  if (!tbody) return;
+
+  if (presencialDiaInput && !presencialDiaInput.value) {
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    presencialDiaInput.value = ontem.toISOString().slice(0, 10);
+  }
+
+  const temQuantidade = UNIDADES_COM_QUANTIDADE_PRESENCIAL.includes(unidade);
+  const colspan = temQuantidade ? 4 : 3;
+
+  tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Carregando...</td></tr>`;
+  try {
+    const resposta = await fetch(`http://127.0.0.1:5000/api/venda-presencial?unidade=${encodeURIComponent(unidade)}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const lancamentos = dados.lancamentos || [];
+    tbody.innerHTML = lancamentos.length
+      ? lancamentos.map(l => `
+          <tr>
+            <td>${l.dia}</td>
+            <td class="font-bold">R$ ${l.valor}</td>
+            ${temQuantidade ? `<td class="font-bold">R$ ${l.totalDia}</td>` : ''}
+            <td>
+              <div class="acoes-linha">
+                <button type="button" class="btn-acao-icone btn-editar"
+                  data-dia-iso="${l.diaIso}" data-valor="${l.valorNumero}" data-quantidade="${l.quantidade}"
+                  title="Editar">
+                  <i data-lucide="pencil"></i>
+                </button>
+                <button type="button" class="btn-acao-icone btn-excluir" data-dia-iso="${l.diaIso}" title="Excluir">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')
+      : `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum lançamento presencial ainda.</td></tr>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('Falha ao carregar vendas presenciais:', erro);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="color:#ef4444;">Não foi possível carregar os lançamentos.</td></tr>`;
+  }
+}
+
+function cancelarEdicaoPresencial() {
+  presencialEditandoDiaOriginal = null;
+  presencialValorInput.value = '';
+  if (presencialQuantidadeInput) presencialQuantidadeInput.value = '';
+  if (presencialDiaInput) {
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    presencialDiaInput.value = ontem.toISOString().slice(0, 10);
+  }
+  if (btnPresencialSalvarTexto) btnPresencialSalvarTexto.textContent = 'Salvar';
+  if (btnPresencialCancelarEdicao) btnPresencialCancelarEdicao.style.display = 'none';
+}
+
+const presencialTableBody = document.getElementById('presencial-table-body');
+if (presencialTableBody) {
+  presencialTableBody.addEventListener('click', async (evento) => {
+    const btnEditar = evento.target.closest('.btn-editar');
+    const btnExcluir = evento.target.closest('.btn-excluir');
+
+    if (btnEditar) {
+      presencialEditandoDiaOriginal = btnEditar.dataset.diaIso;
+      presencialDiaInput.value = btnEditar.dataset.diaIso;
+      presencialValorInput.value = btnEditar.dataset.valor;
+      if (presencialQuantidadeInput) presencialQuantidadeInput.value = btnEditar.dataset.quantidade;
+      if (btnPresencialSalvarTexto) btnPresencialSalvarTexto.textContent = 'Salvar edição';
+      if (btnPresencialCancelarEdicao) btnPresencialCancelarEdicao.style.display = '';
+      presencialValorInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    if (btnExcluir) {
+      const diaIso = btnExcluir.dataset.diaIso;
+      if (!confirm(`Excluir o lançamento presencial de ${diaIso.split('-').reverse().join('/')}?`)) return;
+
+      try {
+        const resposta = await fetch(
+          `http://127.0.0.1:5000/api/venda-presencial?unidade=${encodeURIComponent(currentTab)}&dia=${diaIso}`,
+          { method: 'DELETE' }
+        );
+        if (!resposta.ok) {
+          const erroDados = await resposta.json().catch(() => ({}));
+          throw new Error(erroDados.erro || `Erro no servidor Flask: ${resposta.status}`);
+        }
+        if (presencialEditandoDiaOriginal === diaIso) cancelarEdicaoPresencial();
+        await carregarPresencial(currentTab);
+        await carregarInsights(periodSelect ? periodSelect.value : 'Últimos 30 dias');
+      } catch (erro) {
+        console.error('Falha ao excluir venda presencial:', erro);
+        alert('Não foi possível excluir o lançamento. Confira se o Flask está rodando.');
+      }
+    }
+  });
+}
+
+if (btnPresencialCancelarEdicao) {
+  btnPresencialCancelarEdicao.addEventListener('click', cancelarEdicaoPresencial);
+}
+
+if (formPresencial) {
+  formPresencial.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    if (!UNIDADES_COM_PRESENCIAL.includes(currentTab)) return;
+
+    const dia = presencialDiaInput.value;
+    const valor = presencialValorInput.value;
+    if (!dia || valor === '') return;
+
+    const temQuantidade = UNIDADES_COM_QUANTIDADE_PRESENCIAL.includes(currentTab);
+    const quantidade = temQuantidade && presencialQuantidadeInput ? (presencialQuantidadeInput.value || 0) : 0;
+
+    try {
+      // Editando e trocou a data: precisa apagar o registro antigo primeiro,
+      // senão fica um lançamento órfão no dia original (a chave é unidade+dia).
+      if (presencialEditandoDiaOriginal && presencialEditandoDiaOriginal !== dia) {
+        await fetch(
+          `http://127.0.0.1:5000/api/venda-presencial?unidade=${encodeURIComponent(currentTab)}&dia=${presencialEditandoDiaOriginal}`,
+          { method: 'DELETE' }
+        );
+      }
+
+      const resposta = await fetch('http://127.0.0.1:5000/api/venda-presencial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unidade: currentTab, dia, valor, quantidade }),
+      });
+      if (!resposta.ok) {
+        const erroDados = await resposta.json().catch(() => ({}));
+        throw new Error(erroDados.erro || `Erro no servidor Flask: ${resposta.status}`);
+      }
+      cancelarEdicaoPresencial();
+      await carregarPresencial(currentTab);
+      await carregarInsights(periodSelect ? periodSelect.value : 'Últimos 30 dias');
+    } catch (erro) {
+      console.error('Falha ao salvar venda presencial:', erro);
+      alert('Não foi possível salvar o lançamento presencial. Confira se o Flask está rodando.');
+    }
+  });
+}
+
+// Só roda na página de Insights (identificada pela presença das abas)
+if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
+  carregarInsights(periodSelect ? periodSelect.value : '30d');
+
+  if (periodSelect) {
+    periodSelect.addEventListener('change', () => {
+      carregarInsights(periodSelect.value);
+    });
+  }
+}
 
 
 // ==============================================================================

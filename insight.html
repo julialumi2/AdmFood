@@ -73,6 +73,20 @@
         </div>
 
         <div class="header-right">
+          <!-- Toggle Switch de Tema (mesmo padrão da landing.html) -->
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+
           <div class="user-profile">
             <div class="avatar">JS</div>
             <div class="user-info">
@@ -126,19 +140,23 @@
           <button class="tab-btn active" data-tab="geral">
             <i data-lucide="store"></i>
             <span>Visão Geral (Todas)</span>
-            <span class="tab-badge">3 Unidades</span>
+            <span class="tab-badge">4 Unidades</span>
           </button>
-          <button class="tab-btn" data-tab="loja1">
+          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
             <i data-lucide="store"></i>
-            <span>Loja 1 - Centro</span>
+            <span>Hamburgueria Artesanos</span>
           </button>
-          <button class="tab-btn" data-tab="loja2">
+          <button class="tab-btn" data-tab="Açaí Na Lata">
             <i data-lucide="store"></i>
-            <span>Loja 2 - Shopping</span>
+            <span>Açaí Na Lata</span>
           </button>
-          <button class="tab-btn" data-tab="loja3">
+          <button class="tab-btn" data-tab="Tradiça ZN">
             <i data-lucide="store"></i>
-            <span>Loja 3 - Zona Sul</span>
+            <span>Tradiça ZN</span>
+          </button>
+          <button class="tab-btn" data-tab="Tradiça Simus">
+            <i data-lucide="store"></i>
+            <span>Tradiça Simus</span>
           </button>
         </div>
 
@@ -184,8 +202,8 @@
             </div>
           </div>
 
-          <!-- Card 4 -->
-          <div class="metric-card">
+          <!-- Card 4 (escondido na Visão Geral, só faz sentido comparando lojas) -->
+          <div class="metric-card" id="card-destaque-operacional">
             <div class="card-header">
               <span class="card-label">Destaque Operacional</span>
               <div class="card-icon card-icon-amber"><i data-lucide="award"></i></div>
@@ -196,67 +214,115 @@
 
         </div>
 
-        <!-- 6. GRÁFICO E STATUS -->
-        <div class="analytics-grid">
-          
-          <!-- Visual do Gráfico -->
-          <div class="panel">
+        <!-- 6. ANÁLISE DE PEDIDOS POR CANAL DE VENDAS (mesmo formato do painel da Cardápio Web) -->
+        <div class="analytics-grid" id="analytics-grid">
+          <div class="panel" id="panel-canal-analise">
             <div class="panel-header">
-              <h3 class="panel-title">Comparativo de Vendas</h3>
-              <span class="panel-subtitle">Valores em R$ (Milhares)</span>
+              <h3 class="panel-title">Análise dos pedidos por canal de vendas</h3>
+              <span class="panel-subtitle">Faturamento por canal — <span id="canal-data-label">--/--/----</span></span>
             </div>
-            <div class="chart-container">
-              <div class="chart-bar-group">
-                <div class="bar-fill" style="height: 60%;">
-                  <span class="tooltip">R$ 44.7k</span>
-                </div>
-                <span class="bar-label">Loja 1</span>
+            <div class="canal-analysis" id="canal-analysis">
+              <div class="canal-chart-wrapper">
+                <canvas id="canalChart"></canvas>
               </div>
-              <div class="chart-bar-group">
-                <div class="bar-fill highlight" style="height: 95%;">
-                  <span class="tooltip">R$ 76.1k</span>
-                </div>
-                <span class="bar-label font-bold">Loja 2</span>
-              </div>
-              <div class="chart-bar-group">
-                <div class="bar-fill" style="height: 35%;">
-                  <span class="tooltip">R$ 21.9k</span>
-                </div>
-                <span class="bar-label">Loja 3</span>
+              <div class="table-responsive canal-table-wrapper">
+                <table class="canal-table">
+                  <thead>
+                    <tr>
+                      <th>Canal de vendas</th>
+                      <th>Faturamento</th>
+                      <th>Pedidos</th>
+                      <th>Ticket médio</th>
+                    </tr>
+                  </thead>
+                  <tbody id="canal-table-body">
+                    <!-- Renderizado dinamicamente via JS -->
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-
-          <!-- Status da Operação -->
-          <div class="panel">
-            <div class="panel-header">
-              <h3 class="panel-title">Status Operacional</h3>
-            </div>
-            <div class="status-list" id="status-list">
-              <!-- Renderizado dinamicamente via JS -->
-            </div>
-          </div>
-
         </div>
 
-        <!-- 7. TABELA DETALHADA -->
-        <div class="panel panel-table">
+        <!-- 8. VENDAS PRESENCIAIS (lançamento manual, só nas lojas sem cobertura total da Cardápio Web) -->
+        <div class="panel" id="panel-vendas-presenciais" style="display: none;">
           <div class="panel-header">
-            <h3 class="panel-title">Detalhamento por Unidade</h3>
-            <span class="panel-subtitle">Atualizado há 5 min</span>
+            <h3 class="panel-title">Vendas Presenciais</h3>
+            <span class="panel-subtitle">Valores que não passam pela Cardápio Web — lançamento manual</span>
           </div>
+          <form class="presencial-form" id="form-presencial">
+            <div class="presencial-field">
+              <label for="presencial-dia">Dia</label>
+              <input type="date" id="presencial-dia" required>
+            </div>
+            <div class="presencial-field">
+              <label for="presencial-valor">Valor (R$)</label>
+              <input type="number" id="presencial-valor" min="0" step="0.01" placeholder="0,00" required>
+            </div>
+            <div class="presencial-field" id="presencial-quantidade-field">
+              <label for="presencial-quantidade">Qtd. de vendas</label>
+              <input type="number" id="presencial-quantidade" min="0" step="1" placeholder="0">
+            </div>
+            <button type="submit" class="btn-whatsapp" id="btn-presencial-salvar">
+              <i data-lucide="save"></i>
+              <span id="btn-presencial-salvar-texto">Salvar</span>
+            </button>
+            <button type="button" class="btn-limpar-filtro" id="btn-presencial-cancelar-edicao" style="display: none;">
+              Cancelar edição
+            </button>
+          </form>
           <div class="table-responsive">
             <table>
               <thead>
                 <tr>
+                  <th>Dia</th>
+                  <th>Valor Presencial</th>
+                  <th id="presencial-th-total">Total de Vendas (dia)</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="presencial-table-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 9. HISTÓRICO DIÁRIO -->
+        <div class="panel panel-table">
+          <div class="panel-header">
+            <h3 class="panel-title">Histórico Diário</h3>
+            <span class="panel-subtitle" id="daily-subtitle">Um lançamento por dia sincronizado</span>
+          </div>
+          <form class="historico-filtro" id="form-historico-filtro">
+            <div class="presencial-field">
+              <label for="historico-inicio">De</label>
+              <input type="date" id="historico-inicio">
+            </div>
+            <div class="presencial-field">
+              <label for="historico-fim">Até</label>
+              <input type="date" id="historico-fim">
+            </div>
+            <button type="submit" class="btn-whatsapp">
+              <i data-lucide="filter"></i>
+              <span>Filtrar</span>
+            </button>
+            <button type="button" class="btn-limpar-filtro" id="btn-limpar-filtro-historico">
+              Limpar filtro
+            </button>
+          </form>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Dia</th>
                   <th>Unidade</th>
                   <th>Pedidos</th>
                   <th>Ticket Médio</th>
-                  <th>Faturamento Total</th>
-                  <th>Status</th>
+                  <th>Faturamento</th>
                 </tr>
               </thead>
-              <tbody id="table-body">
+              <tbody id="daily-table-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
             </table>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - ClickUp</title>
+  <title>AdmFood - Estoque</title>
   <link rel="stylesheet" href="estoque.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -73,6 +73,21 @@
         </div>
 
         <div class="header-right">
+          <!-- Botão de tema -->
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+
+          <!-- Perfil -->
           <div class="user-profile">
             <div class="avatar">JS</div>
             <div class="user-info">
@@ -84,164 +99,147 @@
       </header>
 
       <!-- PÁGINA DE ESTOQUE -->
-    <div class="page-content">
-      
-      <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
-      <div class="dashboard-title-area">
-        <div class="title-top">
-          <i data-lucide="box" class="icon-pin"></i>
-          <span>CONTROLE DE ESTOQUE</span>
-        </div>
-        <div class="title-row">
-          <h1>Insumos da Rede</h1>
-          <!--FUTURA CONEXÃO COM O DBA-->
-          <button class="btn-registrar-entrada">Registrar entrada</button>
-        </div>
-      </div>
-
-      <!-- CARDS DE RESUMO DO ESTOQUE -->
-      <div class="cards-grid">
+      <div class="page-content">
         
-        <!-- CARD 1: ITENS CADASTRADOS -->
-        <!--FUTURA CONEXÃO COM O DBA-->
-        <div class="store-card">
-          <span class="card-subtitle">ITENS CADASTRADOS</span>
-          <div class="metric-card-content">
-            <i data-lucide="box" class="metric-icon icon-red"></i>
-            <span class="store-value">8</span>
+        <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="box" class="icon-pin"></i>
+            <span>CONTROLE DE ESTOQUE</span>
+          </div>
+          <div class="title-row">
+            <h1>Insumos da Rede</h1>
+            <button class="btn-registrar-entrada">Registrar entrada</button>
           </div>
         </div>
 
-        <!-- CARD 2: EM NÍVEL IDEAL -->
-        <!--FUTURA CONEXÃO COM O DBA-->
-        <div class="store-card">
-          <span class="card-subtitle">EM NÍVEL IDEAL</span>
-          <div class="metric-card-content">
-            <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
-            <span class="store-value">4</span>
+        <!-- CARDS DE RESUMO DO ESTOQUE -->
+        <div class="cards-grid">
+          <div class="store-card">
+            <span class="card-subtitle">ITENS CADASTRADOS</span>
+            <div class="metric-card-content">
+              <i data-lucide="box" class="metric-icon icon-red"></i>
+              <span class="store-value">8</span>
+            </div>
+          </div>
+
+          <div class="store-card">
+            <span class="card-subtitle">EM NÍVEL IDEAL</span>
+            <div class="metric-card-content">
+              <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
+              <span class="store-value">4</span>
+            </div>
+          </div>
+
+          <div class="store-card">
+            <span class="card-subtitle">ESTOQUE BAIXO</span>
+            <div class="metric-card-content">
+              <i data-lucide="trending-down" class="metric-icon icon-dark"></i>
+              <span class="store-value">2</span>
+            </div>
+          </div>
+
+          <div class="store-card">
+            <span class="card-subtitle">NÍVEL CRÍTICO</span>
+            <div class="metric-card-content">
+              <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
+              <span class="store-value">2</span>
+            </div>
           </div>
         </div>
 
-        <!-- CARD 3: ESTOQUE BAIXO -->
-        <!--FUTURA CONEXÃO COM O DBA--> 
-        <div class="store-card">
-          <span class="card-subtitle">ESTOQUE BAIXO</span>
-          <div class="metric-card-content">
-            <i data-lucide="trending-down" class="metric-icon icon-dark"></i>
-            <span class="store-value">2</span>
+        <!-- CONTAINER DA TABELA DE ITENS -->
+        <div class="chart-card">
+          <div class="table-header-row">
+            <div>
+              <h3 class="table-title">Itens em estoque</h3>
+              <p class="table-subtitle">Consolidado de todas as unidades</p>
+            </div>
+
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" placeholder="Buscar insumo...">
+            </div>
           </div>
+
+          <!-- TABELA DE INSUMOS -->
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Categoria</th>
+                <th>Atual</th>
+                <th>Nível</th>
+                <th style="text-align: right;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-bold">Farinha de trigo</td>
+                <td class="text-muted">Secos</td>
+                <td class="font-bold">48 kg</td>
+                <td>
+                  <div class="progress-container">
+                    <div class="progress-bar bar-red" style="width: 85%;"></div>
+                  </div>
+                  <span class="min-label">mínimo 20 kg</span>
+                </td>
+                <td style="text-align: right;">
+                  <span class="badge-pill pos">OK</span>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="font-bold">Queijo mussarela</td>
+                <td class="text-muted">Laticínios</td>
+                <td class="font-bold">6 kg</td>
+                <td>
+                  <div class="progress-container">
+                    <div class="progress-bar bar-red" style="width: 25%;"></div>
+                  </div>
+                  <span class="min-label">mínimo 10 kg</span>
+                </td>
+                <td style="text-align: right;">
+                  <span class="badge-pill neu-orange">Baixo</span>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="font-bold">Molho de tomate</td>
+                <td class="text-muted">Molhos</td>
+                <td class="font-bold">22 L</td>
+                <td>
+                  <div class="progress-container">
+                    <div class="progress-bar bar-red" style="width: 65%;"></div>
+                  </div>
+                  <span class="min-label">mínimo 15 L</span>
+                </td>
+                <td style="text-align: right;">
+                  <span class="badge-pill pos">OK</span>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="font-bold">Azeitona preta</td>
+                <td class="text-muted">Conservas</td>
+                <td class="font-bold">1.2 kg</td>
+                <td>
+                  <div class="progress-container">
+                    <div class="progress-bar bar-red" style="width: 12%;"></div>
+                  </div>
+                  <span class="min-label">mínimo 4 kg</span>
+                </td>
+                <td style="text-align: right;">
+                  <span class="badge-pill neg">Crítico</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- CARD 4: NÍVEL CRÍTICO -->
-        <!--FUTURA CONEXÃO COM O DBA-->
-        <div class="store-card">
-          <span class="card-subtitle">NÍVEL CRÍTICO</span>
-          <div class="metric-card-content">
-            <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
-            <span class="store-value">2</span>
-          </div>
-        </div>
+      </div> <!-- /page-content -->
+    </main> <!-- /main-wrapper -->
+  </div> <!-- /dashboard-wrapper -->
 
-      </div>
-
-      <!-- CONTAINER DA TABELA DE ITENS -->
-      <div class="chart-card">
-        
-        <div class="table-header-row">
-          <div>
-            <h3 class="table-title">Itens em estoque</h3>
-            <p class="table-subtitle">Consolidado de todas as unidades</p>
-          </div>
-
-          <div class="search-box">
-            <i data-lucide="search"></i>
-            <input type="text" placeholder="Buscar insumo...">
-          </div>
-        </div>
-
-        <!-- TABELA DE INSUMOS -->
-        <table class="inventory-table">
-          <thead>
-            <tr>
-              <th>Insumo</th>
-              <th>Categoria</th>
-              <th>Atual</th>
-              <th>Nível</th>
-              <th style="text-align: right;">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            
-            <!-- ITEM 1 -->
-            <!--FUTURA CONEXÃO COM O DBA-->
-            <tr>
-              <td class="font-bold">Farinha de trigo</td>
-              <td class="text-muted">Secos</td>
-              <td class="font-bold">48 kg</td>
-              <td>
-                <div class="progress-container">
-                  <div class="progress-bar bar-red" style="width: 85%;"></div>
-                </div>
-                <span class="min-label">mínimo 20 kg</span>
-              </td>
-              <td style="text-align: right;">
-                <span class="badge-pill pos">OK</span>
-              </td>
-            </tr>
-
-            <!-- ITEM 2 -->
-            <!--FUTURA CONEXÃO COM O DBA-->
-            <tr>
-              <td class="font-bold">Queijo mussarela</td>
-              <td class="text-muted">Laticínios</td>
-              <td class="font-bold">6 kg</td>
-              <td>
-                <div class="progress-container">
-                  <div class="progress-bar bar-red" style="width: 25%;"></div>
-                </div>
-                <span class="min-label">mínimo 10 kg</span>
-              </td>
-              <td style="text-align: right;">
-                <span class="badge-pill neu-orange">Baixo</span>
-              </td>
-            </tr>
-
-            <!-- ITEM 3 -->
-            <!--FUTURA CONEXÃO COM O DBA-->
-            <tr>
-              <td class="font-bold">Molho de tomate</td>
-              <td class="text-muted">Molhos</td>
-              <td class="font-bold">22 L</td>
-              <td>
-                <div class="progress-container">
-                  <div class="progress-bar bar-red" style="width: 65%;"></div>
-                </div>
-                <span class="min-label">mínimo 15 L</span>
-              </td>
-              <td style="text-align: right;">
-                <span class="badge-pill pos">OK</span>
-              </td>
-            </tr>
-
-            <!-- ITEM 4 -->
-            <!--FUTURA CONEXÃO COM O DBA-->
-            <tr>
-              <td class="font-bold">Azeitona preta</td>
-              <td class="text-muted">Conservas</td>
-              <td class="font-bold">1.2 kg</td>
-              <td>
-                <div class="progress-container">
-                  <div class="progress-bar bar-red" style="width: 12%;"></div>
-                </div>
-                <span class="min-label">mínimo 4 kg</span>
-              </td>
-              <td style="text-align: right;">
-                <span class="badge-pill neg">Crítico</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-  </div>
 </body>
 </html>

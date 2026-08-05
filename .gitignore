@@ -12,5 +12,10 @@ __pycache__/
 venv/
 .env
 
+# Cache local de faturamento sincronizado com a Cardápio Web
+admfood.db
+sincronizar.log
+completar_pedidos.log
+
 # Arquivos do VS Code
 .vscode/

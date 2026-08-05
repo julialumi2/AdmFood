@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - Preparo</title>
+  <link rel="stylesheet" href="preparo.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <a href="preparo.html" class="menu-item active">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="insight.html" class="menu-item">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+      
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">PREPARO</span>
+        </div>
+
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="avatar">JS</div>
+            <div class="user-info">
+              <span class="user-name">Julia Suzuki</span>
+              <span class="user-role">Admin</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- PÁGINA DE INSIGHT -->
+    <div class="page-content">
+      
+      <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
+      <div class="dashboard-title-area">
+        <div class="title-top">
+          <i data-lucide="box" class="icon-pin"></i>
+          <span>ANÁLISE DE PREPARO</span>
+        </div>
+
+        <!-- HEADER INTERNO / TÍTULO E CONTROLES -->
+        <div class="content-header">
+  
+        <!-- Lado Esquerdo: Categoria e Título -->
+        <div class="header-titles">
+        <h1 class="page-title">Relatório de vendas</h1>
+    </div>

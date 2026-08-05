@@ -1,3 +1,6 @@
+/* ======================================================
+   1. RESET & VARIÁVEIS GLOBAIS DE TEMA
+   ====================================================== */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -5,13 +8,45 @@
   font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
-body {
-  background-color: #fcfbfa;
-  color: #1e1e1e;
-  min-height: 100vh;
+:root {
+  /* Modo Claro (Default) */
+  --bg-color: #fcfbfa;
+  --bg-card: #ffffff;
+  --bg-secondary: #f8f6f0;
+  --text-color: #1e293b;
+  --text-title: #18181b;
+  --text-muted: #64748b;
+  --border-color: #f0ece9;
+  --border-card: #e2e8f0;
+  --primary-color: #d93829; /* Vermelho AdmFood */
+  --brand-dark-color: #333333;
+  --sidebar-bg: #261a18;
+  --sidebar-text: #f1eef0;
 }
 
-/* --- ESTRUTURA DE LAYOUT LADO A LADO --- */
+/* Quando o body possui a classe .dark-mode */
+body.dark-mode {
+  --bg-color: #121214;
+  --bg-card: #202024;
+  --bg-secondary: #1a1a1e;
+  --text-color: #f5f5f7;
+  --text-title: #ffffff;
+  --text-muted: #a1a1aa;
+  --border-color: #2e2e32;
+  --border-card: #2e2e32;
+  --brand-dark-color: #ffffff;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ======================================================
+   2. ESTRUTURA DE LAYOUT LADO A LADO
+   ====================================================== */
 .dashboard-wrapper {
   display: grid;
   grid-template-columns: 240px 1fr;
@@ -36,10 +71,12 @@ body {
   padding: 12px 0;
 }
 
-/* --- SIDEBAR --- */
+/* ======================================================
+   3. SIDEBAR LATERAL
+   ====================================================== */
 .sidebar {
-  background-color: #261a18;
-  color: #f1eef0;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
@@ -56,7 +93,7 @@ body {
 .logo-icon {
   width: 36px;
   height: 36px;
-  background-color: #d93829;
+  background-color: var(--primary-color);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -75,8 +112,9 @@ body {
 .brand-dark { 
   color: rgb(240, 229, 210); 
 }
+
 .brand-red { 
-  color: #d93829; 
+  color: var(--primary-color); 
 }
 
 .sidebar-section-title {
@@ -117,7 +155,73 @@ body {
   font-weight: 600;
 }
 
-/* --- CONTEÚDO PRINCIPAL --- */
+/* ======================================================
+   4. TOGGLE SWITCH DE TEMA (MODO ESCURO / CLARO)
+   ====================================================== */
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 54px;
+  height: 28px;
+  margin-right: 4px; /* Ajuste fino de alinhamento */
+  flex-shrink: 0; /* Impede que o botão encolha */
+}
+
+.theme-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-card);
+  transition: 0.4s;
+  border-radius: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.slider .sun-icon {
+  color: #f39c12;
+}
+
+.slider .moon-icon {
+  color: #f1c40f;
+}
+
+.slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+  background-color: #2e2e32;
+}
+
+input:checked + .slider::before {
+  transform: translateX(26px);
+}
+
+/* ======================================================
+   5. CONTEÚDO PRINCIPAL & HEADER
+   ====================================================== */
 .main-wrapper {
   display: flex;
   flex-direction: column;
@@ -126,18 +230,26 @@ body {
 
 .top-header {
   height: 64px;
-  background-color: #ffffff;
-  border-bottom: 1px solid #f0ece9;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 32px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+/* Container do lado direito (onde o switch e o perfil se alinham) */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px; /* Espaço entre o botão noturno e a foto do perfil */
 }
 
 .btn-toggle-menu {
@@ -149,18 +261,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
-  transition: background-color 0.2s;
+  color: var(--text-muted);
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .btn-toggle-menu:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-secondary);
 }
 
 .header-page-title {
   font-weight: 600;
   font-size: 0.95rem;
-  color: #1e293b;
+  color: var(--text-title);
 }
 
 .user-profile {
@@ -172,7 +284,7 @@ body {
 .avatar {
   width: 36px;
   height: 36px;
-  background-color: #d93829;
+  background-color: var(--primary-color);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -190,15 +302,17 @@ body {
 .user-name {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-title);
 }
 
 .user-role {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
-/* --- ÁREA INTERNA DA PÁGINA --- */
+/* ======================================================
+   6. ÁREA INTERNA DA PÁGINA (DASHBOARD)
+   ====================================================== */
 .page-content {
   padding: 32px;
 }
@@ -211,7 +325,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #d93829;
+  color: var(--primary-color);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.5px;
@@ -227,22 +341,23 @@ body {
 .title-row h1 {
   font-size: 1.8rem;
   font-weight: 800;
-  color: #18181b;
+  color: var(--text-title);
 }
 
 .total-rede-pill {
-  background-color: #f1f5f9;
+  background-color: var(--bg-secondary);
   padding: 8px 16px;
   border-radius: 8px;
   font-size: 0.85rem;
-  color: #475569;
+  color: var(--text-muted);
+  transition: background-color 0.3s ease;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #475569;
+  color: var(--text-muted);
   margin-bottom: 16px;
 }
 
@@ -254,12 +369,17 @@ body {
 }
 
 .chart-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
   border-radius: 16px;
   padding: 24px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .chart-body {
   height: 280px;
+}
+
+.text-muted {
+  color: var(--text-muted);
 }

@@ -73,6 +73,21 @@
         </div>
 
         <div class="header-right">
+          <!-- Botão de tema -->
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+
+          <!-- Perfil -->
           <div class="user-profile">
             <div class="avatar">JS</div>
             <div class="user-info">
@@ -110,7 +125,7 @@
             </div>
             <div class="task-list">
               
-              <div class="task-card" draggable="true" id="task-1">
+              <div class="task-card" draggable="true" id="task-1" onclick="abrirDetalhesTarefa('1')">
                 <div class="card-top">
                   <h4 class="task-title">Embalagens</h4>
                   <span class="badge priority-alta">Alta</span>
@@ -118,19 +133,19 @@
                 <p>Fazer pedido de reposição de embalagens</p>
                 <div class="card-bottom">
                   <span class="task-meta">Embalagens</span>
-                  <span class="task-date">Hoje</span>
+                  <span class="task-date">03/08/2026</span>
                 </div>
               </div>
 
-              <div class="task-card" draggable="true" id="task-2">
+              <div class="task-card" draggable="true" id="task-2" onclick="abrirDetalhesTarefa('2')">
                 <div class="card-top">
                   <h4 class="task-title">Atualização de Cardápio</h4>
-                  <span class="badge priority-media">Alta</span>
+                  <span class="badge priority-media">Média</span>
                 </div>
                 <p>Cadastrar o novo Smash Burger duplo no cardápio digital e iFood.</p>
                 <div class="card-bottom">
                   <span class="task-meta">Cardápio</span>
-                  <span class="task-date">Hoje</span>
+                  <span class="task-date">05/08/2026</span>
                 </div>
               </div>
 
@@ -145,7 +160,7 @@
             </div>
             <div class="task-list">
               
-              <div class="task-card" draggable="true" id="task-3">
+              <div class="task-card" draggable="true" id="task-3" onclick="abrirDetalhesTarefa('3')">
                 <div class="card-top">
                   <h4 class="task-title">Limpar chapa</h4>
                   <span class="badge priority-alta">Urgente</span>
@@ -153,7 +168,7 @@
                 <p>Limpar chapa para o dia de burguer duplo.</p>
                 <div class="card-bottom">
                   <span class="task-meta">Limpeza</span>
-                  <span class="task-date">Em breve</span>
+                  <span class="task-date">03/08/2026</span>
                 </div>
               </div>
 
@@ -168,7 +183,7 @@
             </div>
             <div class="task-list">
               
-              <div class="task-card" draggable="true" id="task-4">
+              <div class="task-card" draggable="true" id="task-4" onclick="abrirDetalhesTarefa('4')">
                 <div class="card-top">
                   <h4 class="task-title">Varrer salão</h4>
                   <span class="badge priority-baixa">Baixa</span>
@@ -176,7 +191,7 @@
                 <p>Varrer salão para iniciar operação.</p>
                 <div class="card-bottom">
                   <span class="task-meta">Limpeza</span>
-                  <span class="task-date">Concluído</span>
+                  <span class="task-date">02/08/2026</span>
                 </div>
               </div>
 
@@ -189,11 +204,11 @@
   </div> <!-- /dashboard-wrapper -->
 
   <!-- MODAL DE CRIAR NOVA TAREFA -->
-  <div id="modalTarefa" class="modal-overlay" style="display: none;">
+  <div id="modalCriarTarefa" class="modal-overlay" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">
         <h2>Nova Tarefa</h2>
-        <button class="btn-close" onclick="fecharModal()">&times;</button>
+        <button class="btn-close" onclick="fecharModalCriar()">&times;</button>
       </div>
       <form id="formNovaTarefa" onsubmit="salvarNovaTarefa(event)">
         <div class="form-group">
@@ -201,12 +216,31 @@
           <input type="text" id="tituloTarefa" required placeholder="Ex: Preparar 50kg de blend">
         </div>
 
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="prioridadeTarefa">Prioridade</label>
+            <select id="prioridadeTarefa">
+              <option value="alta">Alta</option>
+              <option value="media" selected>Média</option>
+              <option value="baixa">Baixa</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="dataLimiteTarefa">Data Limite</label>
+            <input type="date" id="dataLimiteTarefa" required>
+          </div>
+        </div>
+
         <div class="form-group">
-          <label for="prioridadeTarefa">Prioridade</label>
-          <select id="prioridadeTarefa">
-            <option value="alta">Alta</option>
-            <option value="media" selected>Média</option>
-            <option value="baixa">Baixa</option>
+          <label for="categoriaTarefa">Categoria</label>
+          <select id="categoriaTarefa">
+            <option value="Cozinha">Cozinha</option>
+            <option value="Estoque">Estoque</option>
+            <option value="Embalagens">Embalagens</option>
+            <option value="Cardápio">Cardápio</option>
+            <option value="Limpeza">Limpeza</option>
+            <option value="Geral" selected>Geral</option>
           </select>
         </div>
 
@@ -215,24 +249,87 @@
           <textarea id="descricaoTarefa" rows="3" placeholder="Detalhes da atividade..."></textarea>
         </div>
 
-        <div class="form-group">
-        <label for="categoriaTarefa">Categoria</label>
-        <select id="categoriaTarefa">
-            <option value="Cozinha">Cozinha</option>
-            <option value="Estoque">Estoque</option>
-            <option value="Embalagens">Embalagens</option>
-            <option value="Cardápio">Cardápio</option>
-            <option value="Limpeza">Limpeza</option>
-            <option value="Geral" selected>Geral</option>
-         </select>
-        </div>
-    
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+          <button type="button" class="btn-secondary" onclick="fecharModalCriar()">Cancelar</button>
           <button type="submit" class="btn-primary">Criar Tarefa</button>
         </div>
       </form>
     </div>
   </div>
+
+  <!-- MODAL DE VER / EDITAR / EXCLUIR TAREFA -->
+  <div id="modalDetalhesTarefa" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <div class="modal-title-status">
+          <span class="badge priority-alta" id="detalheBadge">Alta</span>
+          <span class="status-pill" id="detalheStatus">A Fazer</span>
+        </div>
+        <div class="modal-header-actions">
+          <button class="btn-icon danger" onclick="excluirTarefa()" title="Excluir Tarefa">
+            <i data-lucide="trash-2"></i>
+          </button>
+          <button class="btn-close" onclick="fecharModalDetalhes()">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <h2 id="detalheTitulo" class="detalhe-titulo">Título da Tarefa</h2>
+
+        <div class="task-info-grid">
+          <div class="info-item">
+            <span class="info-label">Categoria</span>
+            <span class="info-value" id="detalheCategoria">Embalagens</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Data Limite</span>
+            <span class="info-value" id="detalheData">03/08/2026</span>
+          </div>
+        </div>
+
+        <div class="detalhe-secao">
+          <h3>Descrição</h3>
+          <p id="detalheDescricao" class="detalhe-descricao">Descrição detalhada do item...</p>
+        </div>
+
+        <!-- SUBTAREFAS / CHECKLIST -->
+        <div class="detalhe-secao">
+          <div class="checklist-header">
+            <h3>Subtarefas</h3>
+            <span class="checklist-progress" id="checklistProgressText">0/0</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="checklistProgressBar" style="width: 0%;"></div>
+          </div>
+          <div class="checklist-items" id="checklistContainer">
+            <!-- Renderizado dinamicamente via script.js -->
+          </div>
+          <div class="add-subtask-row">
+            <input type="text" id="novaSubtarefaInput" placeholder="Adicionar nova subtarefa...">
+            <button type="button" class="btn-secondary-sm" onclick="adicionarSubtarefa()">Adicionar</button>
+          </div>
+        </div>
+
+        <!-- SEÇÃO DE COMENTÁRIOS -->
+        <div class="detalhe-secao">
+          <h3>Comentários</h3>
+          <div class="comments-list" id="commentsContainer">
+            <!-- Renderizado dinamicamente via script.js -->
+          </div>
+          <div class="add-comment-box">
+            <input type="text" id="novoComentarioInput" placeholder="Escreva um comentário...">
+            <button type="button" class="btn-primary-sm" onclick="enviarComentario()">Enviar</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-actions border-top">
+        <button type="button" class="btn-secondary" onclick="fecharModalDetalhes()">Fechar</button>
+        <button type="button" class="btn-primary" onclick="alterarStatusModal()">Mover de Status</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

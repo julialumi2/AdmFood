@@ -1,3 +1,6 @@
+/* ======================================================
+   1. RESET & VARIÁVEIS GLOBAIS DE TEMA
+   ====================================================== */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -5,29 +8,58 @@
   font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
+:root {
+  /* Modo Claro (Default) */
+  --bg-color: #fcfbfa;
+  --bg-card: #ffffff;
+  --bg-secondary: #f8f6f0;
+  --text-color: #1e293b;
+  --text-title: #18181b;
+  --text-muted: #64748b;
+  --border-color: #f0ece9;
+  --border-card: #e2e8f0;
+  --primary-color: #d93829; /* Vermelho AdmFood */
+  --brand-dark-color: #333333;
+  --sidebar-bg: #261a18;
+  --sidebar-text: #f1eef0;
+}
+
+/* Modo Escuro */
+body.dark-mode {
+  --bg-color: #121214;
+  --bg-card: #202024;
+  --bg-secondary: #1a1a1e;
+  --text-color: #f5f5f7;
+  --text-title: #ffffff;
+  --text-muted: #a1a1aa;
+  --border-color: #2e2e32;
+  --border-card: #2e2e32;
+  --brand-dark-color: #ffffff;
+}
+
 body {
-  background-color: #fcfbfa;
-  color: #1e1e1e;
+  background-color: var(--bg-color);
+  color: var(--text-color);
   min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* --- LAYOUT GRID PRINCIPAL --- */
 .dashboard-wrapper {
   display: grid;
-  grid-template-columns: 260px 1fr; /* 260px para a Sidebar, o restante para o conteúdo */
+  grid-template-columns: 260px 1fr;
   min-height: 100vh;
-  transition: grid-template-columns 0.3s ease; /* Transição suave ao recolher/expandir */
+  transition: grid-template-columns 0.3s ease;
 }
 
-/* Espaçamento interno da área de conteúdo */
 .page-content {
   padding: 32px;
 }
 
 /* --- SIDEBAR --- */
 .sidebar {
-  background-color: #261a18;
-  color: #f1eef0;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
@@ -46,7 +78,7 @@ body {
 .logo-icon {
   width: 36px;
   height: 36px;
-  background-color: #d93829;
+  background-color: var(--primary-color);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -65,8 +97,9 @@ body {
 .brand-dark { 
   color: rgb(240, 229, 210); 
 }
+
 .brand-red { 
-  color: #d93829; 
+  color: var(--primary-color); 
 }
 
 .sidebar-section-title {
@@ -97,7 +130,6 @@ body {
   border-radius: 8px;
   transition: all 0.2s ease;
   white-space: nowrap;
-  -webkit-font-smoothing: antialiased;
 }
 
 .menu-item:hover {
@@ -111,7 +143,7 @@ body {
   font-weight: 700;
 }
 
-/* --- ESTADOS DE SIDEBAR RECOLHIDA (COLLAPSED) --- */
+/* --- SIDEBAR RECOLHIDA (COLLAPSED) --- */
 .dashboard-wrapper.collapsed {
   grid-template-columns: 80px 1fr;
 }
@@ -138,12 +170,7 @@ body {
   margin-bottom: 32px;
 }
 
-.dashboard-wrapper.collapsed #toggleMenuBtn i,
-.dashboard-wrapper.collapsed #btnToggleMenu i {
-  transform: rotate(180deg);
-}
-
-/* --- CONTEÚDO PRINCIPAL --- */
+/* --- HEADER SUPERIOR --- */
 .main-wrapper {
   display: flex;
   flex-direction: column;
@@ -152,18 +179,25 @@ body {
 
 .top-header {
   height: 64px;
-  background-color: #ffffff;
-  border-bottom: 1px solid #f0ece9;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 32px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 .btn-toggle-menu {
@@ -175,18 +209,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
+  color: var(--text-muted);
   transition: background-color 0.2s;
 }
 
 .btn-toggle-menu:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-secondary);
 }
 
 .header-page-title {
   font-weight: 600;
   font-size: 0.95rem;
-  color: #1e293b;
+  color: var(--text-title);
 }
 
 .user-profile {
@@ -198,7 +232,7 @@ body {
 .avatar {
   width: 36px;
   height: 36px;
-  background-color: #d93829;
+  background-color: var(--primary-color);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -216,15 +250,75 @@ body {
 .user-name {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-title);
 }
 
 .user-role {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
-/* Header da Página de Estoque */
+/* ======================================================
+   TOGGLE SWITCH DE TEMA (MODO ESCURO / CLARO)
+   ====================================================== */
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 54px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.theme-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-card);
+  transition: 0.4s;
+  border-radius: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.slider .sun-icon { color: #f39c12; }
+.slider .moon-icon { color: #f1c40f; }
+
+.slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+  background-color: #2e2e32;
+}
+
+input:checked + .slider::before {
+  transform: translateX(26px);
+}
+
+/* ======================================================
+   CONTEÚDO DA PÁGINA DE ESTOQUE
+   ====================================================== */
 .dashboard-title-area {
   display: flex;
   flex-direction: column;
@@ -238,7 +332,7 @@ body {
   gap: 8px;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #d93829;
+  color: var(--primary-color);
   letter-spacing: 0.05em;
 }
 
@@ -256,13 +350,12 @@ body {
 .dashboard-title-area h1 {
   font-size: 1.75rem;
   font-weight: 800;
-  color: #09090b;
+  color: var(--text-title);
   margin: 0;
 }
 
-/* Botão Registrar Entrada */
 .btn-registrar-entrada {
-  background-color: #ef4444;
+  background-color: var(--primary-color);
   color: #ffffff;
   border: none;
   padding: 10px 18px;
@@ -270,11 +363,11 @@ body {
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: opacity 0.2s ease, transform 0.1s ease;
 }
 
 .btn-registrar-entrada:hover {
-  background-color: #dc2626;
+  opacity: 0.9;
   transform: translateY(-1px);
 }
 
@@ -287,20 +380,21 @@ body {
 }
 
 .store-card {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
   border-radius: 12px;
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .card-subtitle {
   font-size: 0.7rem;
   font-weight: 700;
-  color: #71717a;
+  color: var(--text-muted);
   letter-spacing: 0.05em;
 }
 
@@ -313,10 +407,9 @@ body {
 .store-value {
   font-size: 1.8rem;
   font-weight: 800;
-  color: #09090b;
+  color: var(--text-title);
 }
 
-/* Ícones dos Cards Métricos */
 .metric-icon {
   width: 28px;
   height: 28px;
@@ -327,13 +420,14 @@ body {
 .icon-dark { color: #f59e0b; }
 .icon-red-alert { color: #dc2626; }
 
-/* Card Container da Tabela */
+/* Container da Tabela */
 .chart-card {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .table-header-row {
@@ -348,23 +442,22 @@ body {
 .table-title {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #09090b;
+  color: var(--text-title);
   margin: 0;
 }
 
 .table-subtitle {
   font-size: 0.85rem;
-  color: #71717a;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
-/* Input de Pesquisa */
 .search-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: #f4f4f5;
-  border: 1px solid #e4e4e7;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-card);
   border-radius: 8px;
   padding: 8px 12px;
   width: 100%;
@@ -374,7 +467,7 @@ body {
 .search-box i {
   width: 18px;
   height: 18px;
-  color: #71717a;
+  color: var(--text-muted);
 }
 
 .search-box input {
@@ -383,10 +476,10 @@ body {
   outline: none;
   font-size: 0.85rem;
   width: 100%;
-  color: #09090b;
+  color: var(--text-color);
 }
 
-/* Estilização da Tabela de Insumos */
+/* Tabela */
 .inventory-table {
   width: 100%;
   border-collapse: collapse;
@@ -396,18 +489,18 @@ body {
 .inventory-table th {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #71717a;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 12px 16px;
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .inventory-table td {
   padding: 16px;
-  border-bottom: 1px solid #f4f4f5;
+  border-bottom: 1px solid var(--border-color);
   font-size: 0.9rem;
-  color: #27272a;
+  color: var(--text-color);
   vertical-align: middle;
 }
 
@@ -417,19 +510,19 @@ body {
 
 .font-bold {
   font-weight: 600;
-  color: #09090b;
+  color: var(--text-title);
 }
 
 .text-muted {
-  color: #71717a;
+  color: var(--text-muted);
 }
 
-/* Barra de Progresso do Estoque */
+/* Progresso e Badges */
 .progress-container {
   width: 100%;
   max-width: 160px;
   height: 8px;
-  background-color: #f4f4f5;
+  background-color: var(--bg-secondary);
   border-radius: 999px;
   overflow: hidden;
   margin-bottom: 4px;
@@ -447,11 +540,10 @@ body {
 
 .min-label {
   font-size: 0.72rem;
-  color: #a1a1aa;
+  color: var(--text-muted);
   display: block;
 }
 
-/* Pills de Status (Badges) */
 .badge-pill {
   padding: 4px 10px;
   border-radius: 999px;
@@ -460,20 +552,17 @@ body {
   display: inline-block;
 }
 
-/* Status OK (Verde) */
 .badge-pill.pos {
-  background-color: #dcfce7;
-  color: #15803d;
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
 }
 
-/* Status Baixo (Laranja) */
 .badge-pill.neu-orange {
-  background-color: #ffedd5;
-  color: #c2410c;
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
 }
 
-/* Status Crítico (Vermelho) */
 .badge-pill.neg {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
 }
