@@ -383,3 +383,76 @@ input:checked + .slider::before {
 .text-muted {
   color: var(--text-muted);
 }
+
+/* ======================================================
+   RESPONSIVO (CELULAR / TELAS ESTREITAS)
+   ====================================================== */
+@media (max-width: 768px) {
+  .dashboard-wrapper,
+  .dashboard-wrapper.collapsed {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .sidebar {
+    padding: 16px 8px;
+    align-items: center;
+  }
+
+  .brand-name,
+  .sidebar-section-title,
+  .menu-item span {
+    display: none;
+  }
+
+  .menu-item {
+    justify-content: center;
+    padding: 10px 0;
+    width: 100%;
+  }
+
+  .sidebar-logo {
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+
+  .btn-toggle-menu {
+    display: none;
+  }
+
+  .top-header {
+    padding: 0 16px;
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .header-page-title {
+    font-size: 0.85rem;
+  }
+
+  .page-content {
+    padding: 16px;
+  }
+
+  .title-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .title-row h1 {
+    font-size: 1.25rem;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-card {
+    padding: 16px;
+  }
+
+  .chart-body {
+    height: 220px;
+  }
+}

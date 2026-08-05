@@ -945,3 +945,116 @@ tr:hover {
 #btn-canal-voltar-ontem {
   margin-left: 8px;
 }
+
+/* ======================================================
+   RESPONSIVO (CELULAR / TELAS ESTREITAS)
+   ====================================================== */
+@media (max-width: 768px) {
+  /* Sidebar sempre no modo "só ícones" no celular, independente do botão
+     de recolher/expandir — evita a coluna de 260px comer a tela toda. */
+  .dashboard-wrapper,
+  .dashboard-wrapper.collapsed {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .sidebar,
+  .dashboard-wrapper.collapsed .sidebar {
+    padding: 16px 8px;
+    align-items: center;
+  }
+
+  .brand-name,
+  .sidebar-section-title,
+  .menu-item span,
+  .dashboard-wrapper.collapsed .brand-name,
+  .dashboard-wrapper.collapsed .sidebar-section-title,
+  .dashboard-wrapper.collapsed .menu-item span {
+    display: none;
+  }
+
+  .menu-item,
+  .dashboard-wrapper.collapsed .menu-item {
+    justify-content: center;
+    padding: 10px 0;
+    width: 100%;
+  }
+
+  .sidebar-logo,
+  .dashboard-wrapper.collapsed .sidebar-logo {
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+
+  .btn-toggle-menu {
+    display: none;
+  }
+
+  /* Cabeçalho e conteúdo com menos respiro nas laterais */
+  .top-header {
+    padding: 0 16px;
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .header-page-title {
+    font-size: 0.85rem;
+  }
+
+  .page-content {
+    padding: 16px;
+  }
+
+  .title-row h1,
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  /* Cards de métrica, um por linha, mais compactos */
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-value {
+    font-size: 1.25rem;
+  }
+
+  /* Painéis e tabelas com menos padding pra caber mais conteúdo útil */
+  .panel {
+    padding: 16px;
+  }
+
+  .panel-table .panel-header {
+    padding: 16px;
+  }
+
+  th, td {
+    padding: 10px 12px;
+  }
+
+  /* Gráfico de canal empilhado, gráfico menor */
+  .canal-chart-wrapper {
+    width: 160px;
+    height: 160px;
+  }
+
+  /* Formulários (presencial, filtro de histórico) ocupam a largura toda */
+  .presencial-form,
+  .historico-filtro {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .presencial-field,
+  .presencial-form input,
+  .historico-filtro input {
+    width: 100%;
+  }
+
+  .presencial-form button,
+  .historico-filtro button {
+    width: 100%;
+    justify-content: center;
+  }
+}
