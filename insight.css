@@ -926,3 +926,22 @@ tr:hover {
 .inicio-grupo-dia td {
   border-top: 1px solid var(--border-color);
 }
+
+/* Clicar num dia do Histórico Diário atualiza o gráfico de canal com os
+   dados daquele dia + loja específicos. */
+#daily-table-body tr {
+  cursor: pointer;
+}
+
+#daily-table-body tr.linha-selecionada {
+  outline: 2px solid var(--primary-red);
+  outline-offset: -2px;
+}
+
+#canal-unidade-label {
+  color: var(--text-muted);
+}
+
+#btn-canal-voltar-ontem {
+  margin-left: 8px;
+}

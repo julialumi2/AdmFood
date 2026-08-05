@@ -4,10 +4,13 @@ Evita ter que buscar pedido por pedido a cada carregamento da página —
 a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 """
 
+import os
 import sqlite3
 from contextlib import contextmanager
 
-CAMINHO_BANCO = "admfood.db"
+# Em produção (Dokploy), aponta pra um volume persistente (ex: /app/data/admfood.db)
+# via a variável DATABASE_PATH, senão perde os dados a cada novo deploy.
+CAMINHO_BANCO = os.environ.get("DATABASE_PATH", "admfood.db")
 
 
 @contextmanager

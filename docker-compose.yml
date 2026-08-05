@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - SINCRONIZACAO_AUTOMATICA=true
+      - DATABASE_PATH=/app/data/admfood.db
+      - MAKE_WEBHOOK_URL=${MAKE_WEBHOOK_URL}
+      - TOKEN_ARTESANOS=${TOKEN_ARTESANOS}
+      - GRUPO_WHATSAPP_ARTESANOS=${GRUPO_WHATSAPP_ARTESANOS}
+      - TOKEN_ACAI=${TOKEN_ACAI}
+      - GRUPO_WHATSAPP_ACAI=${GRUPO_WHATSAPP_ACAI}
+      - TOKEN_ZN=${TOKEN_ZN}
+      - GRUPO_WHATSAPP_ZN=${GRUPO_WHATSAPP_ZN}
+      - TOKEN_SIMUS=${TOKEN_SIMUS}
+      - GRUPO_WHATSAPP_SIMUS=${GRUPO_WHATSAPP_SIMUS}
+    volumes:
+      - admfood_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  admfood_data:

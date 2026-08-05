@@ -202,16 +202,6 @@
             </div>
           </div>
 
-          <!-- Card 4 (escondido na Visão Geral, só faz sentido comparando lojas) -->
-          <div class="metric-card" id="card-destaque-operacional">
-            <div class="card-header">
-              <span class="card-label">Destaque Operacional</span>
-              <div class="card-icon card-icon-amber"><i data-lucide="award"></i></div>
-            </div>
-            <div class="card-value card-value-sm" id="val-destaque">Loja 2 - Shopping</div>
-            <p class="trend-sub">Medição em tempo real</p>
-          </div>
-
         </div>
 
         <!-- 6. ANÁLISE DE PEDIDOS POR CANAL DE VENDAS (mesmo formato do painel da Cardápio Web) -->
@@ -219,7 +209,11 @@
           <div class="panel" id="panel-canal-analise">
             <div class="panel-header">
               <h3 class="panel-title">Análise dos pedidos por canal de vendas</h3>
-              <span class="panel-subtitle">Faturamento por canal — <span id="canal-data-label">--/--/----</span></span>
+              <span class="panel-subtitle">
+                Faturamento por canal — <span id="canal-data-label">--/--/----</span>
+                <span id="canal-unidade-label"></span>
+                <button type="button" class="btn-limpar-filtro" id="btn-canal-voltar-ontem" style="display: none;">Voltar para ontem</button>
+              </span>
             </div>
             <div class="canal-analysis" id="canal-analysis">
               <div class="canal-chart-wrapper">

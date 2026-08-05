@@ -1,6 +1,3 @@
-# Arquivo de configurações com Tokens e Webhooks reais
-config.py
-
 # Credenciais e chaves do Google (se houver no futuro)
 credentials.json
 *.json
@@ -15,7 +12,7 @@ venv/
 # Cache local de faturamento sincronizado com a Cardápio Web
 admfood.db
 sincronizar.log
-completar_pedidos.log
+completar_pedidos*.log
 
 # Arquivos do VS Code
 .vscode/

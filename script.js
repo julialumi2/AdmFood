@@ -211,6 +211,11 @@ let canalChartInstance = null;
 let filtroHistoricoAtivo = false;
 let ultimoDiarioFiltrado = [];
 
+// Quando o usuário clica num dia do Histórico Diário, a Análise de Canal
+// passa a mostrar os dados desse dia + loja específicos, em vez do padrão
+// (dia anterior da aba atual) — { unidade, diaIso } ou null.
+let canalSelecionado = null;
+
 // Paleta usada tanto no gráfico de rosca quanto na bolinha colorida da tabela,
 // pra ficarem sempre com a mesma cor por posição.
 const CORES_CANAL = ['#3b82f6', '#f59e0b', '#a855f7', '#10b981', '#e11d48', '#06b6d4'];
@@ -254,8 +259,12 @@ function renderHistoricoDiario(diario) {
         const inicioDeGrupo = indice === 0 || diario[indice - 1].diaIso !== item.diaIso;
         if (inicioDeGrupo) grupoAlternado = !grupoAlternado;
         const classeGrupo = grupoAlternado ? 'grupo-dia-a' : 'grupo-dia-b';
+        const chave = `${item.diaIso}|${item.unidade}`;
+        const selecionada = canalSelecionado && canalSelecionado.diaIso === item.diaIso && canalSelecionado.unidade === item.unidade;
         return `
-          <tr class="${classeGrupo}${inicioDeGrupo ? ' inicio-grupo-dia' : ''}">
+          <tr class="${classeGrupo}${inicioDeGrupo ? ' inicio-grupo-dia' : ''}${selecionada ? ' linha-selecionada' : ''}"
+            data-chave="${chave}" data-dia-iso="${item.diaIso}" data-unidade="${item.unidade}"
+            title="Ver análise de canal desse dia">
             <td class="font-bold dia-com-semana">
               <span class="dia-data">${item.dia}</span>
               <span class="dia-semana-badge">${item.diaSemana}</span>
@@ -270,6 +279,15 @@ function renderHistoricoDiario(diario) {
     : `<tr><td colspan="5" class="panel-subtitle">Nenhum dia encontrado nesse filtro.</td></tr>`;
 }
 
+const dailyTableBodyEl = document.getElementById('daily-table-body');
+if (dailyTableBodyEl) {
+  dailyTableBodyEl.addEventListener('click', (evento) => {
+    const linha = evento.target.closest('tr[data-dia-iso]');
+    if (!linha) return;
+    exibirCanalDoDia(linha.dataset.unidade, linha.dataset.diaIso);
+  });
+}
+
 if (formHistoricoFiltro) {
   formHistoricoFiltro.addEventListener('submit', async (evento) => {
     evento.preventDefault();
@@ -279,7 +297,7 @@ if (formHistoricoFiltro) {
 
     try {
       const resposta = await fetch(
-        `http://127.0.0.1:5000/api/historico-diario?unidade=${encodeURIComponent(currentTab)}&inicio=${inicio}&fim=${fim}`
+        `/api/historico-diario?unidade=${encodeURIComponent(currentTab)}&inicio=${inicio}&fim=${fim}`
       );
       if (!resposta.ok) {
         const erroDados = await resposta.json().catch(() => ({}));
@@ -322,17 +340,10 @@ function updateDashboard(tabKey) {
     if (historicoFimInput) historicoFimInput.value = '';
   }
 
-  const canalDataLabel = document.getElementById('canal-data-label');
-  if (canalDataLabel) {
-    canalDataLabel.textContent = data.canalDataLabel || '--/--/----';
-  }
-
-  // "Destaque Operacional" só faz sentido comparando lojas — não aparece na
-  // Visão Geral, só nas abas de cada loja.
-  const cardDestaque = document.getElementById('card-destaque-operacional');
-  if (cardDestaque) {
-    cardDestaque.style.display = tabKey === 'geral' ? 'none' : '';
-  }
+  // Trocar de aba também limpa a seleção de dia clicado no Histórico Diário
+  // — a análise de canal volta a mostrar o dia anterior (padrão) da aba atual.
+  canalSelecionado = null;
+  exibirCanalPadrao(data, tabKey);
 
   // "Vendas Presenciais" só existe nas lojas que não têm 100% do faturamento
   // capturado pela Cardápio Web.
@@ -356,11 +367,10 @@ function updateDashboard(tabKey) {
   document.getElementById('val-faturamento').textContent = `R$ ${data.faturamento}`;
   document.getElementById('val-pedidos').textContent = data.pedidos;
   document.getElementById('val-ticket').textContent = `R$ ${data.ticket}`;
-  document.getElementById('val-destaque').textContent = data.destaque;
 
   // Em todas as abas, os 3 primeiros cards mostram só o dia anterior (não o
-  // período do filtro) — o texto abaixo do trend deixa isso claro.
-  const textoComparacao = `vs. dia anterior (${data.canalDataLabel || ''})`;
+  // período do filtro) — o texto abaixo do trend é só a data mesmo.
+  const textoComparacao = data.canalDataLabel || '';
 
   // Atualiza Trends
   renderTrend('trend-faturamento', data.faturamentoTrend, data.faturamentoUp, textoComparacao);
@@ -370,15 +380,126 @@ function updateDashboard(tabKey) {
   // Renderiza Histórico Diário (respeitando o filtro de datas, se houver um ativo)
   renderHistoricoDiario(filtroHistoricoAtivo ? ultimoDiarioFiltrado : (data.diario || []));
 
-  // Renderiza Análise de Pedidos por Canal de Vendas (gráfico de rosca + tabela)
-  renderCanalAnalysis(data.canais || []);
-
   // Re-inicializa ícones do Lucide após re-renderizar HTML
   lucide.createIcons();
 }
 
+// Nomes de exibição dos canais em todas as abas (Visão Geral + as 4 lojas).
+// "portal" vira "Presencial" em todo lugar na Visão Geral; nas abas de loja
+// individual, só na Tradiça Simus (nas outras lojas continua "portal").
+function nomeExibicaoCanal(canalBruto, unidade) {
+  const mapa = { ifood: 'IFood', food99: '99Food', catalog: 'Cardápio Web' };
+
+  if (!unidade || unidade === 'geral') {
+    if (canalBruto === 'portal') return 'Presencial';
+    return mapa[canalBruto] || canalBruto;
+  }
+
+  if (unidade === 'Tradiça Simus' && canalBruto === 'portal') return 'Presencial';
+  return mapa[canalBruto] || canalBruto;
+}
+
+// Mostra a análise de canal padrão da aba atual (dia anterior, já vindo em
+// dashboardData) — usado ao trocar de aba ou ao voltar de um dia selecionado
+// no Histórico Diário.
+function exibirCanalPadrao(data, tabKey) {
+  const canalDataLabel = document.getElementById('canal-data-label');
+  if (canalDataLabel) canalDataLabel.textContent = data.canalDataLabel || '--/--/----';
+
+  const unidadeLabel = document.getElementById('canal-unidade-label');
+  if (unidadeLabel) unidadeLabel.textContent = tabKey !== 'geral' ? `— ${tabKey}` : '';
+
+  const btnVoltar = document.getElementById('btn-canal-voltar-ontem');
+  if (btnVoltar) btnVoltar.style.display = 'none';
+
+  destacarLinhaHistoricoSelecionada(null);
+  renderCanalAnalysis(data.canais || [], tabKey);
+}
+
+// Busca e mostra a análise de canal de um dia + loja específicos, clicado
+// no Histórico Diário.
+async function exibirCanalDoDia(unidade, diaIso) {
+  try {
+    const resposta = await fetch(
+      `/api/canal-analise?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`
+    );
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+
+    canalSelecionado = { unidade, diaIso };
+
+    const canalDataLabel = document.getElementById('canal-data-label');
+    if (canalDataLabel) canalDataLabel.textContent = dados.dataLabel || '--/--/----';
+
+    const unidadeLabel = document.getElementById('canal-unidade-label');
+    if (unidadeLabel) unidadeLabel.textContent = `— ${unidade}`;
+
+    const btnVoltar = document.getElementById('btn-canal-voltar-ontem');
+    if (btnVoltar) btnVoltar.style.display = '';
+
+    destacarLinhaHistoricoSelecionada(diaIso + '|' + unidade);
+    renderCanalAnalysis(dados.canais || [], unidade);
+  } catch (erro) {
+    console.error('Falha ao carregar análise de canal do dia:', erro);
+    alert('Não foi possível carregar a análise de canal desse dia. Confira se o Flask está rodando.');
+  }
+}
+
+function destacarLinhaHistoricoSelecionada(chave) {
+  const linhas = document.querySelectorAll('#daily-table-body tr[data-chave]');
+  linhas.forEach(tr => {
+    tr.classList.toggle('linha-selecionada', chave !== null && tr.dataset.chave === chave);
+  });
+}
+
+const btnCanalVoltarOntem = document.getElementById('btn-canal-voltar-ontem');
+if (btnCanalVoltarOntem) {
+  btnCanalVoltarOntem.addEventListener('click', () => {
+    canalSelecionado = null;
+    const data = dashboardData[currentTab];
+    if (data) exibirCanalPadrao(data, currentTab);
+  });
+}
+
+function _formatarMoedaBR(valor) {
+  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _formatarNumeroBR(valor) {
+  return valor.toLocaleString('pt-BR');
+}
+
+// Regra do gráfico de canal: só pode existir uma legenda por canal — se dois
+// canais brutos diferentes (ex: "portal" e "Presencial") viram o mesmo nome
+// de exibição, eles são somados numa linha só antes de desenhar.
+function mesclarCanaisPorNomeExibicao(canais, unidadeParaLabels) {
+  const totalFaturamento = canais.reduce((soma, c) => soma + c.faturamentoNumero, 0) || 1;
+  const grupos = new Map();
+
+  canais.forEach(c => {
+    const nome = nomeExibicaoCanal(c.canal, unidadeParaLabels);
+    const pedidosNumero = parseInt(String(c.pedidos).replace(/\./g, ''), 10) || 0;
+    const atual = grupos.get(nome) || { canal: nome, faturamentoNumero: 0, pedidosNumero: 0 };
+    atual.faturamentoNumero += c.faturamentoNumero;
+    atual.pedidosNumero += pedidosNumero;
+    grupos.set(nome, atual);
+  });
+
+  const mesclados = Array.from(grupos.values()).map(g => ({
+    canal: g.canal,
+    faturamentoNumero: g.faturamentoNumero,
+    faturamento: _formatarMoedaBR(g.faturamentoNumero),
+    pedidos: _formatarNumeroBR(g.pedidosNumero),
+    ticket: _formatarMoedaBR(g.pedidosNumero ? g.faturamentoNumero / g.pedidosNumero : 0),
+    percentual: Math.round((g.faturamentoNumero / totalFaturamento) * 1000) / 10,
+  }));
+
+  mesclados.sort((a, b) => b.faturamentoNumero - a.faturamentoNumero);
+  return mesclados;
+}
+
 // Gráfico de rosca + tabela de canais, no mesmo formato do painel da Cardápio Web
-function renderCanalAnalysis(canais) {
+function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
   const canalTableBody = document.getElementById('canal-table-body');
   const canvas = document.getElementById('canalChart');
   if (!canalTableBody || !canvas) return;
@@ -388,10 +509,12 @@ function renderCanalAnalysis(canais) {
     canalChartInstance = null;
   }
 
-  if (!canais.length) {
+  if (!canaisBrutos.length) {
     canalTableBody.innerHTML = `<tr><td colspan="4" class="panel-subtitle">Nenhum dado de canal nesse período.</td></tr>`;
     return;
   }
+
+  const canais = mesclarCanaisPorNomeExibicao(canaisBrutos, unidadeParaLabels);
 
   canalTableBody.innerHTML = canais.map((c, i) => `
     <tr>
@@ -436,8 +559,16 @@ function renderCanalAnalysis(canais) {
 }
 
 // Auxiliar para Tendência (Up/Down)
-function renderTrend(elementId, trendValue, isUp, textoComparacao = 'vs. período anterior') {
+function renderTrend(elementId, trendValue, isUp, textoComparacao = '') {
   const container = document.getElementById(elementId);
+
+  // Sem dado do dia anterior pra comparar (ex: segunda-feira, loja fechada)
+  // — não mostra "período novo" nem a seta de tendência, só a data.
+  if (trendValue === 'período novo') {
+    container.innerHTML = `<span class="trend-sub">${textoComparacao}</span>`;
+    return;
+  }
+
   const icon = isUp ? 'trending-up' : 'trending-down';
   const colorClass = isUp ? 'trend-up' : 'trend-down';
 
@@ -468,15 +599,15 @@ if (btnWhatsApp) {
 
     let message = `📊 *RELATÓRIO ADMFOOD - ${data.title.toUpperCase()}*\n`;
     message += `📅 *Período:* ${period}\n\n`;
-    message += `💰 *Faturamento:* R$ ${data.faturamento}\n`;
-    message += `📦 *Total de Pedidos:* ${data.pedidos}\n`;
-    message += `🎯 *Ticket Médio:* R$ ${data.ticket}\n`;
-    message += `🏆 *Destaque:* ${data.destaque}\n\n`;
+    message += `💰 *Faturamento (dia anterior):* R$ ${data.faturamento}\n`;
+    message += `📦 *Total de Pedidos (dia anterior):* ${data.pedidos}\n`;
+    message += `🎯 *Ticket Médio (dia anterior):* R$ ${data.ticket}\n\n`;
 
-    if (currentTab === 'geral') {
-      message += `--- *Detalhamento por Loja* ---\n`;
-      data.stores.forEach(store => {
-        message += `• *${store.name}:* R$ ${store.faturamento} (${store.pedidos} pedidos)\n`;
+    if (data.canais && data.canais.length) {
+      message += `--- *Canal de Vendas (${data.canalDataLabel || 'dia anterior'})* ---\n`;
+      data.canais.forEach(canal => {
+        const nome = nomeExibicaoCanal(canal.canal, currentTab);
+        message += `• *${nome}:* R$ ${canal.faturamento} (${canal.pedidos} pedidos)\n`;
       });
     }
 
@@ -495,7 +626,7 @@ async function carregarInsights(periodo) {
   }
 
   try {
-    const resposta = await fetch(`http://127.0.0.1:5000/api/insights?periodo=${encodeURIComponent(periodo)}`);
+    const resposta = await fetch(`/api/insights?periodo=${encodeURIComponent(periodo)}`);
     if (!resposta.ok) {
       throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     }
@@ -532,7 +663,7 @@ async function carregarPresencial(unidade) {
 
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Carregando...</td></tr>`;
   try {
-    const resposta = await fetch(`http://127.0.0.1:5000/api/venda-presencial?unidade=${encodeURIComponent(unidade)}`);
+    const resposta = await fetch(`/api/venda-presencial?unidade=${encodeURIComponent(unidade)}`);
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
     const lancamentos = dados.lancamentos || [];
@@ -599,7 +730,7 @@ if (presencialTableBody) {
 
       try {
         const resposta = await fetch(
-          `http://127.0.0.1:5000/api/venda-presencial?unidade=${encodeURIComponent(currentTab)}&dia=${diaIso}`,
+          `/api/venda-presencial?unidade=${encodeURIComponent(currentTab)}&dia=${diaIso}`,
           { method: 'DELETE' }
         );
         if (!resposta.ok) {
@@ -638,12 +769,12 @@ if (formPresencial) {
       // senão fica um lançamento órfão no dia original (a chave é unidade+dia).
       if (presencialEditandoDiaOriginal && presencialEditandoDiaOriginal !== dia) {
         await fetch(
-          `http://127.0.0.1:5000/api/venda-presencial?unidade=${encodeURIComponent(currentTab)}&dia=${presencialEditandoDiaOriginal}`,
+          `/api/venda-presencial?unidade=${encodeURIComponent(currentTab)}&dia=${presencialEditandoDiaOriginal}`,
           { method: 'DELETE' }
         );
       }
 
-      const resposta = await fetch('http://127.0.0.1:5000/api/venda-presencial', {
+      const resposta = await fetch('/api/venda-presencial', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ unidade: currentTab, dia, valor, quantidade }),
@@ -690,7 +821,7 @@ async function carregarDadosLojas() {
   container.innerHTML = `<p class="text-muted" style="padding: 12px;">Sincronizando com o Cardápio Web via Flask...</p>`;
 
   try {
-    const response = await fetch('http://127.0.0.1:5000/api/faturamento-ontem');
+    const response = await fetch('/api/faturamento-ontem');
 
     if (!response.ok) {
       throw new Error(`Erro no servidor Flask: ${response.status}`);

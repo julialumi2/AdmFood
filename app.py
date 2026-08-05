@@ -1,5 +1,6 @@
+import os
 from datetime import date, timedelta
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import LOJAS
@@ -13,11 +14,28 @@ from backend.armazenamento import (
     buscar_presencial_por_unidade,
     buscar_faturamento_dia,
 )
+from sincronizar import sincronizar_dia
 
 app = Flask(__name__)
 CORS(app)  # Permite requisições do JS mesmo se rodar direto do arquivo local
 
 inicializar_banco()
+
+# Sincronização diária automática com a Cardápio Web. Localmente isso já é
+# feito pelo Agendador de Tarefas do Windows (fora do processo do Flask),
+# mas em produção (Dokploy) não existe esse agendador — o próprio processo
+# da aplicação precisa disparar a sincronização todo dia.
+if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
+    # Evita agendar duas vezes por causa do reloader do modo debug.
+    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        def _rodar_sincronizacao_diaria():
+            sincronizar_dia(date.today() - timedelta(days=1))
+
+        _scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
+        _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=3, minute=0)
+        _scheduler.start()
 
 PERIODOS_DIAS = {
     "Últimos 30 dias": 30,
@@ -87,30 +105,6 @@ def _dia_semana_abrev(dia_iso):
     return DIAS_SEMANA_ABREV[date.fromisoformat(dia_iso).weekday()]
 
 
-def _agregar_por_unidade(linhas):
-    agregados = {}
-    for linha in linhas:
-        atual = agregados.setdefault(
-            linha["unidade"],
-            {"unidade": linha["unidade"], "faturamento": 0.0, "pedidos": 0, "soma_ticket": 0.0, "dias": 0},
-        )
-        atual["faturamento"] += linha["faturamento_dia"]
-        atual["pedidos"] += linha["quantidade_pedidos"]
-        atual["soma_ticket"] += linha["ticket_medio"]
-        atual["dias"] += 1
-
-    resultado = []
-    for item in agregados.values():
-        resultado.append({
-            "unidade": item["unidade"],
-            "faturamento": item["faturamento"],
-            "pedidos": item["pedidos"],
-            "ticket_medio": item["soma_ticket"] / item["dias"] if item["dias"] else 0.0,
-        })
-    resultado.sort(key=lambda i: i["faturamento"], reverse=True)
-    return resultado
-
-
 def _agregar_canais(linhas_canais, unidade_filtro):
     if unidade_filtro is not None:
         linhas_canais = [l for l in linhas_canais if l["unidade"] == unidade_filtro]
@@ -136,6 +130,37 @@ def _agregar_canais(linhas_canais, unidade_filtro):
         })
     resultado.sort(key=lambda i: i["faturamento"], reverse=True)
     return resultado
+
+
+def _linhas_canais_com_presencial(dia_iso):
+    """Canais da Cardápio Web de um dia + venda presencial como um canal
+    "Presencial" a mais (também não passa pela Cardápio Web)."""
+    linhas_canais = buscar_canais_periodo(dia_iso, dia_iso)
+    linhas_canais = linhas_canais + [
+        {
+            "unidade": p["unidade"],
+            "dia": p["dia"],
+            "canal": "Presencial",
+            "quantidade_pedidos": p.get("quantidade") or 0,
+            "faturamento": p["valor"],
+        }
+        for p in buscar_presencial_periodo(dia_iso, dia_iso)
+    ]
+    return linhas_canais
+
+
+def _formatar_canais(canais):
+    return [
+        {
+            "canal": c["canal"],
+            "faturamento": _formatar_moeda(c["faturamento"]),
+            "faturamentoNumero": round(c["faturamento"], 2),
+            "pedidos": _formatar_numero(c["pedidos"]),
+            "ticket": _formatar_moeda(c["ticket_medio"]),
+            "percentual": round(c["percentual"], 1),
+        }
+        for c in canais
+    ]
 
 
 def _formatar_diario(linhas):
@@ -201,42 +226,41 @@ def _texto_tendencia(percentual):
     return f"{sinal}{percentual:.1f}%"
 
 
-def _montar_bloco(unidade_filtro, linhas_periodo, resumo_geral, titulo, linhas_canais, canal_data_label):
+def _montar_bloco(unidade_filtro, linhas_periodo, titulo, linhas_canais, canal_data_label):
     base = linhas_periodo if unidade_filtro is None else [l for l in linhas_periodo if l["unidade"] == unidade_filtro]
-
-    destaque = resumo_geral[0] if resumo_geral else None
-    if destaque and resumo_geral:
-        total_geral = sum(i["faturamento"] for i in resumo_geral) or 1
-        pct = round(destaque["faturamento"] / total_geral * 100)
-        destaque_texto = f"{destaque['unidade']} ({pct}% do total)"
-    else:
-        destaque_texto = "—"
 
     diario = sorted(base, key=lambda l: (l["dia"], l["unidade"]), reverse=True)
     canais = _agregar_canais(linhas_canais, unidade_filtro)
 
     return {
         "title": titulo,
-        "destaque": destaque_texto,
         "canalDataLabel": canal_data_label,
         "diario": _formatar_diario(diario),
-        "canais": [
-            {
-                "canal": c["canal"],
-                "faturamento": _formatar_moeda(c["faturamento"]),
-                "faturamentoNumero": round(c["faturamento"], 2),
-                "pedidos": _formatar_numero(c["pedidos"]),
-                "ticket": _formatar_moeda(c["ticket_medio"]),
-                "percentual": round(c["percentual"], 1),
-            }
-            for c in canais
-        ],
+        "canais": _formatar_canais(canais),
     }
+
+
+DIRETORIO_BASE = os.path.dirname(os.path.abspath(__file__))
+EXTENSOES_PUBLICAS = {".html", ".css", ".js"}
 
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return send_from_directory(DIRETORIO_BASE, 'index.html')
+
+
+@app.route('/<path:nome_arquivo>')
+def arquivo_estatico(nome_arquivo):
+    # As páginas (insight.html, estoque.html, etc) e seus CSS/JS ficam soltos
+    # na raiz do projeto, junto com o código do backend — por isso essa rota
+    # só serve HTML/CSS/JS de nomes diretos, nunca .py/.env/.db/.log nem
+    # nada dentro de subpastas (o que bloqueia acesso a backend/, .git/ etc).
+    if '/' in nome_arquivo or '\\' in nome_arquivo:
+        abort(404)
+    _, extensao = os.path.splitext(nome_arquivo)
+    if extensao.lower() not in EXTENSOES_PUBLICAS:
+        abort(404)
+    return send_from_directory(DIRETORIO_BASE, nome_arquivo)
 
 
 @app.route('/api/faturamento-ontem', methods=['GET'])
@@ -351,6 +375,28 @@ def api_historico_diario():
     return jsonify({"diario": _formatar_diario(diario)})
 
 
+@app.route('/api/canal-analise', methods=['GET'])
+def api_canal_analise():
+    unidade = request.args.get('unidade', 'geral')
+    dia = request.args.get('dia')
+
+    if not dia:
+        return jsonify({"erro": "Informe o dia."}), 400
+    try:
+        date.fromisoformat(dia)
+    except ValueError:
+        return jsonify({"erro": "Data inválida."}), 400
+
+    linhas_canais = _linhas_canais_com_presencial(dia)
+    unidade_filtro = None if unidade == 'geral' else unidade
+    canais = _agregar_canais(linhas_canais, unidade_filtro)
+
+    return jsonify({
+        "dataLabel": _formatar_data_br(dia),
+        "canais": _formatar_canais(canais),
+    })
+
+
 @app.route('/api/insights', methods=['GET'])
 def api_insights():
     periodo = request.args.get('periodo', 'Últimos 30 dias')
@@ -367,31 +413,17 @@ def api_insights():
     data_anteontem = data_ontem - timedelta(days=1)
     ontem = data_ontem.isoformat()
     anteontem = data_anteontem.isoformat()
-    linhas_canais = buscar_canais_periodo(ontem, ontem)
-    # Vendas presenciais do dia entram na análise de canais como um canal
-    # "Presencial" a mais, já que também não passam pela Cardápio Web.
-    linhas_canais = linhas_canais + [
-        {
-            "unidade": p["unidade"],
-            "dia": p["dia"],
-            "canal": "Presencial",
-            "quantidade_pedidos": p.get("quantidade") or 0,
-            "faturamento": p["valor"],
-        }
-        for p in buscar_presencial_periodo(ontem, ontem)
-    ]
+    linhas_canais = _linhas_canais_com_presencial(ontem)
     canal_data_label = _formatar_data_br(ontem)
-
-    resumo_geral = _agregar_por_unidade(linhas_periodo)
 
     resposta = {
         "geral": _montar_bloco(
-            None, linhas_periodo, resumo_geral, "Visão Geral (Todas)", linhas_canais, canal_data_label
+            None, linhas_periodo, "Visão Geral (Todas)", linhas_canais, canal_data_label
         )
     }
     for nome_unidade in LOJAS.keys():
         resposta[nome_unidade] = _montar_bloco(
-            nome_unidade, linhas_periodo, resumo_geral, nome_unidade, linhas_canais, canal_data_label
+            nome_unidade, linhas_periodo, nome_unidade, linhas_canais, canal_data_label
         )
 
     # Os cards de topo (Faturamento Total / Total de Pedidos / Ticket Médio)
