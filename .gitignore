@@ -13,6 +13,7 @@ venv/
 admfood.db
 sincronizar.log
 completar_pedidos*.log
+flask_dev.log
 
 # Arquivos do VS Code
 .vscode/

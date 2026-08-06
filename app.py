@@ -99,6 +99,7 @@ def _formatar_data_br(dia_iso):
 
 
 DIAS_SEMANA_ABREV = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+DIAS_SEMANA_COMPLETO = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
 
 
 def _dia_semana_abrev(dia_iso):
@@ -394,6 +395,49 @@ def api_canal_analise():
     return jsonify({
         "dataLabel": _formatar_data_br(dia),
         "canais": _formatar_canais(canais),
+    })
+
+
+@app.route('/api/faturamento-mesmo-dia-semana', methods=['GET'])
+def api_faturamento_mesmo_dia_semana():
+    # Pra montar a comparação "1ª terça do mês", "2ª terça do mês" etc no
+    # relatório do WhatsApp: todas as ocorrências do mesmo dia da semana de
+    # `dia`, dentro do mesmo mês, em ordem cronológica.
+    unidade = request.args.get('unidade')
+    dia = request.args.get('dia')
+
+    if unidade not in LOJAS:
+        return jsonify({"erro": "Unidade inválida."}), 400
+    if not dia:
+        return jsonify({"erro": "Informe o dia."}), 400
+    try:
+        data_ref = date.fromisoformat(dia)
+    except ValueError:
+        return jsonify({"erro": "Data inválida."}), 400
+
+    primeiro_dia_mes = data_ref.replace(day=1)
+    if primeiro_dia_mes.month == 12:
+        primeiro_dia_prox_mes = primeiro_dia_mes.replace(year=primeiro_dia_mes.year + 1, month=1)
+    else:
+        primeiro_dia_prox_mes = primeiro_dia_mes.replace(month=primeiro_dia_mes.month + 1)
+    ultimo_dia_mes = primeiro_dia_prox_mes - timedelta(days=1)
+
+    linhas = _aplicar_presencial(
+        buscar_faturamento_periodo(primeiro_dia_mes.isoformat(), ultimo_dia_mes.isoformat()),
+        buscar_presencial_periodo(primeiro_dia_mes.isoformat(), ultimo_dia_mes.isoformat()),
+    )
+    linhas = [
+        l for l in linhas
+        if l["unidade"] == unidade and date.fromisoformat(l["dia"]).weekday() == data_ref.weekday()
+    ]
+    linhas.sort(key=lambda l: l["dia"])
+
+    return jsonify({
+        "diaSemana": DIAS_SEMANA_COMPLETO[data_ref.weekday()],
+        "ocorrencias": [
+            {"dia": _formatar_data_br(l["dia"]), "faturamento": _formatar_moeda(l["faturamento_dia"])}
+            for l in linhas
+        ],
     })
 
 

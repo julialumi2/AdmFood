@@ -472,12 +472,13 @@ function _formatarNumeroBR(valor) {
 // Regra do gráfico de canal: só pode existir uma legenda por canal — se dois
 // canais brutos diferentes (ex: "portal" e "Presencial") viram o mesmo nome
 // de exibição, eles são somados numa linha só antes de desenhar.
-function mesclarCanaisPorNomeExibicao(canais, unidadeParaLabels) {
+function mesclarCanaisPorNomeExibicao(canais, unidadeParaLabels, resolverNome) {
+  const resolver = resolverNome || (canalBruto => nomeExibicaoCanal(canalBruto, unidadeParaLabels));
   const totalFaturamento = canais.reduce((soma, c) => soma + c.faturamentoNumero, 0) || 1;
   const grupos = new Map();
 
   canais.forEach(c => {
-    const nome = nomeExibicaoCanal(c.canal, unidadeParaLabels);
+    const nome = resolver(c.canal);
     const pedidosNumero = parseInt(String(c.pedidos).replace(/\./g, ''), 10) || 0;
     const atual = grupos.get(nome) || { canal: nome, faturamentoNumero: 0, pedidosNumero: 0 };
     atual.faturamentoNumero += c.faturamentoNumero;
@@ -591,30 +592,83 @@ tabButtons.forEach(btn => {
 });
 
 // --- ENVIAR PARA O WHATSAPP ---
-if (btnWhatsApp) {
-  btnWhatsApp.addEventListener('click', () => {
-    const data = dashboardData[currentTab];
-    if (!data) return;
-    const period = periodSelect ? periodSelect.value : '';
+// O relatório sempre traz as 4 lojas juntas (independente da aba atual),
+// com o faturamento do dia anterior por canal + a comparação com as outras
+// ocorrências do mesmo dia da semana dentro do mês.
+const NOMES_CURTOS_WHATSAPP = {
+  'Hamburgueria Artesanos': 'Artesanos',
+  'Tradiça ZN': 'Tradiça',
+  'Tradiça Simus': 'Simus',
+  'Açaí Na Lata': 'Açaí NaLata',
+};
 
-    let message = `📊 *RELATÓRIO ADMFOOD - ${data.title.toUpperCase()}*\n`;
-    message += `📅 *Período:* ${period}\n\n`;
-    message += `💰 *Faturamento (dia anterior):* R$ ${data.faturamento}\n`;
-    message += `📦 *Total de Pedidos (dia anterior):* ${data.pedidos}\n`;
-    message += `🎯 *Ticket Médio (dia anterior):* R$ ${data.ticket}\n\n`;
+// Nesse relatório, "portal" vira "Presencial" em qualquer loja (não só na
+// Simus) — o modelo só tem essas 4 categorias fixas, então todo canal
+// precisa cair em uma delas pra o "Total do dia" fechar certinho.
+function nomeExibicaoCanalRelatorio(canalBruto) {
+  const mapa = { ifood: 'IFood', food99: '99Food', catalog: 'Cardápio Web', portal: 'Presencial' };
+  return mapa[canalBruto] || canalBruto;
+}
 
-    if (data.canais && data.canais.length) {
-      message += `--- *Canal de Vendas (${data.canalDataLabel || 'dia anterior'})* ---\n`;
-      data.canais.forEach(canal => {
-        const nome = nomeExibicaoCanal(canal.canal, currentTab);
-        message += `• *${nome}:* R$ ${canal.faturamento} (${canal.pedidos} pedidos)\n`;
-      });
+async function montarRelatorioWhatsApp() {
+  const ontem = new Date();
+  ontem.setDate(ontem.getDate() - 1);
+  const diaIso = ontem.toISOString().slice(0, 10);
+
+  const blocos = [];
+  for (const unidade of Object.keys(NOMES_CURTOS_WHATSAPP)) {
+    const [respCanal, respSemana] = await Promise.all([
+      fetch(`/api/canal-analise?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`),
+      fetch(`/api/faturamento-mesmo-dia-semana?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`),
+    ]);
+    if (!respCanal.ok || !respSemana.ok) {
+      throw new Error(`Erro no servidor Flask ao montar o relatório de ${unidade}`);
     }
+    const dadosCanal = await respCanal.json();
+    const dadosSemana = await respSemana.json();
 
-    message += `\n_Enviado via AdmFood Analytics_`;
+    const canaisMesclados = mesclarCanaisPorNomeExibicao(dadosCanal.canais || [], null, nomeExibicaoCanalRelatorio);
+    const valorPorNome = {};
+    canaisMesclados.forEach(c => { valorPorNome[c.canal] = c.faturamento; });
+    const totalDia = canaisMesclados.reduce((soma, c) => soma + c.faturamentoNumero, 0);
 
-    const encodedUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(encodedUrl, '_blank');
+    const ocorrencias = dadosSemana.ocorrencias || [];
+    const diaSemana = dadosSemana.diaSemana || '';
+    const valoresSemana = [0, 1, 2, 3].map(i => (ocorrencias[i] ? ocorrencias[i].faturamento : '0,00'));
+
+    let bloco = `*Faturamento do dia ${NOMES_CURTOS_WHATSAPP[unidade]}*\n\n`;
+    bloco += `💵 Presencial: R$ ${valorPorNome['Presencial'] || '0,00'}\n`;
+    bloco += `📱 iFood: R$ ${valorPorNome['IFood'] || '0,00'}\n`;
+    bloco += `🌐 Cardápio Web: R$ ${valorPorNome['Cardápio Web'] || '0,00'}\n`;
+    bloco += `🛵 99 Food: R$ ${valorPorNome['99Food'] || '0,00'}\n\n`;
+    bloco += `Total do dia: R$ ${_formatarMoedaBR(totalDia)}\n\n`;
+    bloco += `- 1 ${diaSemana} do mês: R$ ${valoresSemana[0]}\n`;
+    bloco += `- 2 ${diaSemana} do mês: R$ ${valoresSemana[1]}\n`;
+    bloco += `- 3 ${diaSemana} do mês: R$ ${valoresSemana[2]}\n`;
+    bloco += `- 4 ${diaSemana} do mês: R$ ${valoresSemana[3]}`;
+
+    blocos.push(bloco);
+  }
+
+  return blocos.join('\n\n\n');
+}
+
+if (btnWhatsApp) {
+  btnWhatsApp.addEventListener('click', async () => {
+    const htmlOriginal = btnWhatsApp.innerHTML;
+    btnWhatsApp.disabled = true;
+    btnWhatsApp.innerHTML = '<span>Montando relatório...</span>';
+    try {
+      const mensagem = await montarRelatorioWhatsApp();
+      const encodedUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+      window.open(encodedUrl, '_blank');
+    } catch (erro) {
+      console.error('Falha ao montar relatório do WhatsApp:', erro);
+      alert('Não foi possível montar o relatório. Confira se o Flask está rodando.');
+    } finally {
+      btnWhatsApp.disabled = false;
+      btnWhatsApp.innerHTML = htmlOriginal;
+    }
   });
 }
 
