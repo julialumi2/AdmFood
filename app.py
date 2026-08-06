@@ -13,8 +13,11 @@ from backend.armazenamento import (
     buscar_presencial_periodo,
     buscar_presencial_por_unidade,
     buscar_faturamento_dia,
+    buscar_ultima_sincronizacao,
+    salvar_resumo_do_dia,
 )
-from sincronizar import sincronizar_dia
+from backend.cardapio_web import buscar_resumo_do_dia
+from sincronizar import sincronizar_dia, DIA_FECHADO
 
 app = Flask(__name__)
 CORS(app)  # Permite requisições do JS mesmo se rodar direto do arquivo local
@@ -269,7 +272,10 @@ def api_faturamento_ontem():
     # Lê do mesmo cache local sincronizado, em vez de chamar a Cardápio Web
     # ao vivo (o endpoint antigo usava uma URL da API que nunca funcionou).
     ontem = (date.today() - timedelta(days=1)).isoformat()
-    linhas = buscar_faturamento_periodo(ontem, ontem)
+    linhas = _aplicar_presencial(
+        buscar_faturamento_periodo(ontem, ontem),
+        buscar_presencial_periodo(ontem, ontem),
+    )
     total_rede = sum(l["faturamento_dia"] for l in linhas)
 
     lojas = [
@@ -282,6 +288,101 @@ def api_faturamento_ontem():
             lojas.append({"nome": nome_unidade, "total": 0.0, "sucesso": False})
 
     return jsonify({"data": ontem, "total_rede": total_rede, "lojas": lojas})
+
+
+@app.route('/api/faturamento-rede-diario', methods=['GET'])
+def api_faturamento_rede_diario():
+    # Faturamento da rede (4 lojas somadas) dia a dia, pro gráfico da Home.
+    try:
+        dias = int(request.args.get('dias', 7))
+    except ValueError:
+        dias = 7
+    dias = max(1, min(dias, 90))
+
+    hoje = date.today()
+    fim = hoje - timedelta(days=1)
+    inicio = fim - timedelta(days=dias - 1)
+
+    linhas = _aplicar_presencial(
+        buscar_faturamento_periodo(inicio.isoformat(), fim.isoformat()),
+        buscar_presencial_periodo(inicio.isoformat(), fim.isoformat()),
+    )
+
+    por_dia = {}
+    for l in linhas:
+        por_dia[l["dia"]] = por_dia.get(l["dia"], 0.0) + l["faturamento_dia"]
+
+    dias_ordenados = sorted(por_dia.keys())
+    return jsonify({
+        "dias": [
+            {
+                "dia": _formatar_data_br(d),
+                "diaSemana": _dia_semana_abrev(d),
+                "faturamento": round(por_dia[d], 2),
+            }
+            for d in dias_ordenados
+        ]
+    })
+
+
+def _mascarar_token(token):
+    if not token:
+        return "— não configurado —"
+    if len(token) <= 8:
+        return "•" * len(token)
+    return f"{token[:4]}{'•' * 8}{token[-4:]}"
+
+
+@app.route('/api/config/lojas', methods=['GET'])
+def api_config_lojas():
+    ultimo_dia = buscar_ultima_sincronizacao()
+    return jsonify({
+        "ultimaSincronizacao": _formatar_data_br(ultimo_dia) if ultimo_dia else None,
+        "lojas": [
+            {
+                "nome": nome,
+                "tokenMascarado": _mascarar_token(cfg.get("cardapio_web_token")),
+                "temPresencial": nome in UNIDADES_COM_PRESENCIAL,
+            }
+            for nome, cfg in LOJAS.items()
+        ],
+    })
+
+
+@app.route('/api/sincronizar-agora', methods=['POST'])
+def api_sincronizar_agora():
+    ontem = date.today() - timedelta(days=1)
+
+    if ontem.weekday() == DIA_FECHADO:
+        return jsonify({
+            "diaLabel": _formatar_data_br(ontem.isoformat()),
+            "fechado": True,
+            "resultados": [],
+        })
+
+    resultados = []
+    for nome_unidade, config_loja in LOJAS.items():
+        token = config_loja.get("cardapio_web_token")
+        if not token:
+            resultados.append({"unidade": nome_unidade, "sucesso": False, "mensagem": "Token não configurado"})
+            continue
+        try:
+            resumo = buscar_resumo_do_dia(token, ontem)
+            salvar_resumo_do_dia(nome_unidade, ontem.isoformat(), resumo)
+            resultados.append({
+                "unidade": nome_unidade,
+                "sucesso": True,
+                "faturamento": _formatar_moeda(resumo["faturamento_dia"]),
+                "pedidos": resumo["quantidade_pedidos"],
+            })
+        except Exception as erro:
+            resultados.append({"unidade": nome_unidade, "sucesso": False, "mensagem": str(erro)})
+
+    return jsonify({
+        "diaLabel": _formatar_data_br(ontem.isoformat()),
+        "fechado": False,
+        "resultados": resultados,
+    })
 
 
 @app.route('/api/venda-presencial', methods=['POST'])
@@ -489,4 +590,9 @@ def api_insights():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # threaded=True: sem isso, o servidor de desenvolvimento atende um
+    # pedido de cada vez — uma sincronização manual demorada (chama a
+    # Cardápio Web pedido por pedido) travaria a página inteira pra
+    # qualquer outra aba/pessoa até terminar. Em produção isso já não
+    # acontece, porque o Gunicorn roda vários workers em paralelo.
+    app.run(debug=True, port=5000, threaded=True)

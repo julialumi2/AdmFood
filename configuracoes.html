@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - Configurações</title>
+  <link rel="stylesheet" href="configuracoes.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="insight.html" class="menu-item">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="configuracoes.html" class="menu-item active">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">CONFIGURAÇÕES</span>
+        </div>
+
+        <div class="header-right">
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+
+          <div class="user-profile">
+            <div class="avatar">JS</div>
+            <div class="user-info">
+              <span class="user-name">Julia Suzuki</span>
+              <span class="user-role">Admin</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTEÚDO DA PÁGINA -->
+      <div class="page-content">
+
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="settings"></i>
+            <span>PREFERÊNCIAS DO SISTEMA</span>
+          </div>
+          <div class="title-row">
+            <h1>Configurações</h1>
+          </div>
+        </div>
+
+        <!-- APARÊNCIA -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Aparência</h3>
+            <span class="panel-subtitle">Vale pra todas as telas do sistema</span>
+          </div>
+          <div class="toggle-tile">
+            <div class="toggle-tile-info">
+              <i data-lucide="moon"></i>
+              <div>
+                <p class="toggle-tile-title">Modo escuro</p>
+                <p class="toggle-tile-subtitle">Aplica em Resumo, Insights, Estoque e ClickUp</p>
+              </div>
+            </div>
+            <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+              <input type="checkbox" id="theme-toggle-checkbox-config">
+              <span class="slider">
+                <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+                </svg>
+                <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- LOJAS CADASTRADAS -->
+        <div class="panel panel-table">
+          <div class="panel-header">
+            <h3 class="panel-title">Lojas Cadastradas</h3>
+            <span class="panel-subtitle">Integração com a Cardápio Web</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Unidade</th>
+                  <th>Token da Cardápio Web</th>
+                  <th>Vendas Presenciais</th>
+                </tr>
+              </thead>
+              <tbody id="config-lojas-body">
+                <tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SINCRONIZAÇÃO -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Sincronização com a Cardápio Web</h3>
+            <span class="panel-subtitle">Última sincronização: <span id="config-ultima-sync">—</span></span>
+          </div>
+
+          <div class="sync-info">
+            <i data-lucide="clock"></i>
+            <p>Automática, todo dia às <strong>03:00</strong> (horário de Brasília) — busca sempre o dia anterior.</p>
+          </div>
+
+          <button type="button" class="btn-whatsapp" id="btn-sincronizar-agora">
+            <i data-lucide="refresh-cw"></i>
+            <span>Sincronizar agora</span>
+          </button>
+
+          <div id="sync-resultado" class="sync-resultado"></div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- NAVEGAÇÃO INFERIOR (SÓ NO CELULAR) -->
+    <nav class="mobile-bottom-nav">
+      <a href="index.html" class="mobile-nav-item">
+        <i data-lucide="bar-chart-2"></i>
+        <span>Resumo</span>
+      </a>
+      <a href="estoque.html" class="mobile-nav-item">
+        <i data-lucide="box"></i>
+        <span>Estoque</span>
+      </a>
+      <a href="clickup.html" class="mobile-nav-item">
+        <i data-lucide="check-square"></i>
+        <span>ClickUp</span>
+      </a>
+      <a href="insight.html" class="mobile-nav-item">
+        <i data-lucide="lightbulb"></i>
+        <span>Insights</span>
+      </a>
+    </nav>
+  </div>
+</body>
+</html>

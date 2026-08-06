@@ -5,24 +5,21 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
 
-  // 2. TOGGLE MODO NOTURNO
-  const toggleCheckbox = document.getElementById('theme-toggle-checkbox');
-  if (toggleCheckbox) {
-    // Aplica o tema salvo no localStorage ao carregar a página
-    if (localStorage.getItem('theme') === 'dark') {
-      document.body.classList.add('dark-mode');
-      toggleCheckbox.checked = true;
-    }
+  // 2. TOGGLE MODO NOTURNO (a tela de Configurações tem 2 interruptores na
+  // mesma página — cabeçalho + painel de Aparência — mantidos sincronizados)
+  const togglesTema = document.querySelectorAll('#theme-toggle-checkbox, #theme-toggle-checkbox-config');
+  if (togglesTema.length) {
+    const temaEscuroSalvo = localStorage.getItem('theme') === 'dark';
+    document.body.classList.toggle('dark-mode', temaEscuroSalvo);
+    togglesTema.forEach(chk => { chk.checked = temaEscuroSalvo; });
 
-    // Evento de troca ao clicar no toggle
-    toggleCheckbox.addEventListener('change', () => {
-      if (toggleCheckbox.checked) {
-        document.body.classList.add('dark-mode');
-        localStorage.setItem('theme', 'dark');
-      } else {
-        document.body.classList.remove('dark-mode');
-        localStorage.setItem('theme', 'light');
-      }
+    togglesTema.forEach(chk => {
+      chk.addEventListener('change', () => {
+        const ligado = chk.checked;
+        document.body.classList.toggle('dark-mode', ligado);
+        localStorage.setItem('theme', ligado ? 'dark' : 'light');
+        togglesTema.forEach(outro => { outro.checked = ligado; });
+      });
     });
   }
 
@@ -45,34 +42,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 4. GRÁFICO CHART.JS
-  const salesChartElem = document.getElementById('salesChart');
-  if (salesChartElem && typeof Chart !== 'undefined') {
-    const ctx = salesChartElem.getContext('2d');
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: ['11h', '12h', '13h', '18h', '19h', '20h', '21h', '22h'],
-        datasets: [
-          { label: "Artesano's", data: [200, 500, 750, 400, 950, 800, 600, 300], borderColor: '#d93829', borderWidth: 2, tension: 0.3, pointRadius: 0 },
-          { label: 'Unidade 2', data: [150, 400, 600, 300, 750, 650, 450, 250], borderColor: '#f59e0b', borderWidth: 2, tension: 0.3, pointRadius: 0 },
-          { label: 'Unidade 3', data: [100, 300, 500, 250, 600, 500, 350, 200], borderColor: '#10b981', borderWidth: 2, tension: 0.3, pointRadius: 0 },
-          { label: 'Unidade 4', data: [80, 200, 400, 180, 450, 400, 250, 150], borderColor: '#3b82f6', borderWidth: 2, tension: 0.3, pointRadius: 0 }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { display: false } },
-          y: { 
-            grid: { color: '#f1f5f9', strokeDash: [4, 4] },
-            ticks: { callback: value => 'R$' + value }
-          }
-        }
-      }
-    });
+  // 4. GRÁFICO DE FATURAMENTO DA REDE (dados reais, ver carregarGraficoRede)
+  if (document.getElementById('salesChart')) {
+    carregarGraficoRede();
+  }
+
+  // 4.1 TELA DE CONFIGURAÇÕES
+  if (document.getElementById('config-lojas-body')) {
+    carregarConfigLojas();
+  }
+  const btnSincronizarAgora = document.getElementById('btn-sincronizar-agora');
+  if (btnSincronizarAgora) {
+    btnSincronizarAgora.addEventListener('click', sincronizarAgora);
   }
 
   // 5. INICIALIZAÇÃO DE DATAS DA INTERFACE
@@ -99,9 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const elDataOntem = document.getElementById('data-ontem');
   if (elDataOntem) elDataOntem.textContent = dataOntemFormatada;
-
-  const elDataGrafico = document.getElementById('data-grafico-sub');
-  if (elDataGrafico) elDataGrafico.textContent = dataOntemFormatada;
 
   // 6. BUSCA O FATURAMENTO REAL DA REDE VIA FLASK
   carregarDadosLojas();
@@ -910,6 +888,154 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
 // ==============================================================================
 // FUNÇÕES AUXILIARES E INTEGRAÇÃO DE APIs (ESCOPO GLOBAL)
 // ==============================================================================
+
+// Cores por posição, reaproveitadas em outras telas do sistema
+const CORES_GRAFICO_REDE = ['#d93829', '#f59e0b', '#10b981', '#3b82f6'];
+
+/**
+ * Busca o faturamento real da rede dos últimos dias e desenha o gráfico de
+ * linha da Home — antes disso era um mock com números inventados.
+ */
+let graficoRedeInstance = null;
+async function carregarGraficoRede() {
+  const canvas = document.getElementById('salesChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  try {
+    const resposta = await fetch('/api/faturamento-rede-diario?dias=7');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const dias = dados.dias || [];
+
+    if (graficoRedeInstance) {
+      graficoRedeInstance.destroy();
+      graficoRedeInstance = null;
+    }
+
+    graficoRedeInstance = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: dias.map(d => d.diaSemana),
+        datasets: [{
+          label: 'Faturamento da rede',
+          data: dias.map(d => d.faturamento),
+          borderColor: CORES_GRAFICO_REDE[0],
+          backgroundColor: 'rgba(217, 56, 41, 0.08)',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: CORES_GRAFICO_REDE[0],
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (itens) => dias[itens[0].dataIndex]?.dia || '',
+              label: (ctx) => `R$ ${ctx.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            grid: { color: '#f1f5f9' },
+            ticks: { callback: value => 'R$' + value.toLocaleString('pt-BR') },
+          },
+        },
+      },
+    });
+  } catch (erro) {
+    console.error('Falha ao carregar gráfico da rede:', erro);
+  }
+}
+
+/**
+ * Tela de Configurações: carrega a lista de lojas cadastradas (com o token
+ * mascarado, nunca o valor real) e a data da última sincronização.
+ */
+async function carregarConfigLojas() {
+  const tbody = document.getElementById('config-lojas-body');
+  const ultimaSyncElem = document.getElementById('config-ultima-sync');
+  if (!tbody) return;
+
+  try {
+    const resposta = await fetch('/api/config/lojas');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+
+    if (ultimaSyncElem) {
+      ultimaSyncElem.textContent = dados.ultimaSincronizacao || 'nunca sincronizado';
+    }
+
+    const lojas = dados.lojas || [];
+    tbody.innerHTML = lojas.length
+      ? lojas.map(loja => `
+          <tr>
+            <td class="font-bold">${loja.nome}</td>
+            <td class="token-mascarado">${loja.tokenMascarado}</td>
+            <td>
+              <span class="badge ${loja.temPresencial ? 'badge-green' : 'badge-neutral'}">
+                ${loja.temPresencial ? 'Sim' : 'Não'}
+              </span>
+            </td>
+          </tr>
+        `).join('')
+      : `<tr><td colspan="3" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
+  } catch (erro) {
+    console.error('Falha ao carregar lojas cadastradas:', erro);
+    tbody.innerHTML = `<tr><td colspan="3" style="color:#ef4444;">Não foi possível carregar as lojas. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+/**
+ * Dispara a sincronização com a Cardápio Web pro dia anterior, na hora,
+ * pelo botão "Sincronizar agora" — mesma lógica do sincronizar.py, só que
+ * disparada manualmente em vez de esperar o agendamento das 3h.
+ */
+async function sincronizarAgora() {
+  const botao = document.getElementById('btn-sincronizar-agora');
+  const resultadoElem = document.getElementById('sync-resultado');
+  if (!botao) return;
+
+  const htmlOriginal = botao.innerHTML;
+  botao.disabled = true;
+  botao.innerHTML = '<span>Sincronizando... isso pode levar alguns minutos</span>';
+  if (resultadoElem) resultadoElem.innerHTML = '';
+
+  try {
+    const resposta = await fetch('/api/sincronizar-agora', { method: 'POST' });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+
+    if (resultadoElem) {
+      if (dados.fechado) {
+        resultadoElem.innerHTML = `<div class="sync-resultado-item">${dados.diaLabel} é segunda-feira — lojas fechadas, nada a sincronizar.</div>`;
+      } else {
+        resultadoElem.innerHTML = (dados.resultados || []).map(r => {
+          if (!r.sucesso) {
+            return `<div class="sync-resultado-item erro">${r.unidade}: ${r.mensagem}</div>`;
+          }
+          return `<div class="sync-resultado-item">${r.unidade}: R$ ${r.faturamento} (${r.pedidos} pedidos)</div>`;
+        }).join('');
+      }
+    }
+
+    carregarConfigLojas();
+  } catch (erro) {
+    console.error('Falha ao sincronizar:', erro);
+    if (resultadoElem) {
+      resultadoElem.innerHTML = `<div class="sync-resultado-item erro">Não foi possível sincronizar. Confira se o Flask está rodando.</div>`;
+    }
+  } finally {
+    botao.disabled = false;
+    botao.innerHTML = htmlOriginal;
+  }
+}
 
 /**
  * Consulta o backend Flask para obter o faturamento de ontem da rede

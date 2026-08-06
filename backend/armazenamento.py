@@ -225,6 +225,16 @@ def buscar_faturamento_dia(unidade, dia_iso):
         return linha["faturamento_dia"] if linha else 0.0
 
 
+def buscar_ultima_sincronizacao():
+    """Data mais recente com faturamento registrado (de qualquer unidade) —
+    usada como indicativo aproximado de "última sincronização"."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT MAX(dia) AS ultimo_dia FROM faturamento_diario WHERE quantidade_pedidos > 0 OR faturamento_dia > 0"
+        ).fetchone()
+        return linha["ultimo_dia"] if linha and linha["ultimo_dia"] else None
+
+
 def buscar_presencial_por_unidade(unidade, limite=10):
     with conexao() as conn:
         linhas = conn.execute(
