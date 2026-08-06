@@ -1,6 +1,42 @@
 /* Estilos específicos da tela de Insights — a base compartilhada
    (sidebar, cabeçalho, painéis, tabelas, botões) está em theme.css */
 
+/* SELETOR DE PERÍODO (CALENDÁRIO, DATA INÍCIO - FIM) */
+.date-range-picker {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.date-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.date-range-field label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.date-range-field input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: 8px var(--space-3);
+  font-size: 0.875rem;
+  color: var(--text-dark);
+  outline: none;
+}
+
+.date-range-sep {
+  color: var(--text-muted);
+  padding-bottom: 10px;
+}
+
 /* ABAS DE LOJA */
 .tabs-bar {
   display: flex;
@@ -143,6 +179,20 @@
 }
 
 @media (max-width: 768px) {
+  .date-range-picker {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .date-range-field { flex: 1; min-width: 130px; }
+  .date-range-sep { display: none; }
+
+  .date-range-field input {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
   .tabs-bar {
     gap: var(--space-1);
     margin: 0 calc(-1 * var(--space-4));

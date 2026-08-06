@@ -184,11 +184,6 @@ let dashboardData = {};
 let currentTab = 'geral';
 let canalChartInstance = null;
 
-// Quando o usuário aplica um filtro de data no Histórico Diário, ele fica
-// "travado" nesse resultado (em vez do período do filtro geral) até ser limpo.
-let filtroHistoricoAtivo = false;
-let ultimoDiarioFiltrado = [];
-
 // Quando o usuário clica num dia do Histórico Diário, a Análise de Canal
 // passa a mostrar os dados desse dia + loja específicos, em vez do padrão
 // (dia anterior da aba atual) — { unidade, diaIso } ou null.
@@ -210,18 +205,14 @@ const UNIDADES_COM_QUANTIDADE_PRESENCIAL = ['Hamburgueria Artesanos'];
 // --- ELEMENTOS DO DOM ---
 const tabButtons = document.querySelectorAll('.tab-btn');
 const btnWhatsApp = document.getElementById('btn-whatsapp');
-const periodSelect = document.getElementById('period-select');
+const dataInicioInput = document.getElementById('insight-data-inicio');
+const dataFimInput = document.getElementById('insight-data-fim');
 const formPresencial = document.getElementById('form-presencial');
 const presencialDiaInput = document.getElementById('presencial-dia');
 const presencialValorInput = document.getElementById('presencial-valor');
 const presencialQuantidadeInput = document.getElementById('presencial-quantidade');
 const presencialQuantidadeField = document.getElementById('presencial-quantidade-field');
 const presencialThTotal = document.getElementById('presencial-th-total');
-const formHistoricoFiltro = document.getElementById('form-historico-filtro');
-const historicoInicioInput = document.getElementById('historico-inicio');
-const historicoFimInput = document.getElementById('historico-fim');
-const btnLimparFiltroHistorico = document.getElementById('btn-limpar-filtro-historico');
-
 // Renderiza a tabela de Histórico Diário. Cada bloco de dia (que pode ter
 // várias linhas quando é a Visão Geral, uma por unidade) recebe uma faixa
 // de fundo alternada — todas as linhas do mesmo dia compartilham a mesma
@@ -254,7 +245,7 @@ function renderHistoricoDiario(diario) {
           </tr>
         `;
       }).join('')
-    : `<tr><td colspan="5" class="panel-subtitle">Nenhum dia encontrado nesse filtro.</td></tr>`;
+    : `<tr><td colspan="5" class="panel-subtitle">Nenhum dia encontrado nesse período.</td></tr>`;
 }
 
 const dailyTableBodyEl = document.getElementById('daily-table-body');
@@ -266,57 +257,10 @@ if (dailyTableBodyEl) {
   });
 }
 
-if (formHistoricoFiltro) {
-  formHistoricoFiltro.addEventListener('submit', async (evento) => {
-    evento.preventDefault();
-    const inicio = historicoInicioInput.value;
-    const fim = historicoFimInput.value;
-    if (!inicio || !fim) return;
-
-    try {
-      const resposta = await fetch(
-        `/api/historico-diario?unidade=${encodeURIComponent(currentTab)}&inicio=${inicio}&fim=${fim}`
-      );
-      if (!resposta.ok) {
-        const erroDados = await resposta.json().catch(() => ({}));
-        throw new Error(erroDados.erro || `Erro no servidor Flask: ${resposta.status}`);
-      }
-      const dados = await resposta.json();
-      filtroHistoricoAtivo = true;
-      ultimoDiarioFiltrado = dados.diario || [];
-      renderHistoricoDiario(ultimoDiarioFiltrado);
-    } catch (erro) {
-      console.error('Falha ao filtrar histórico diário:', erro);
-      alert('Não foi possível aplicar o filtro. Confira se o Flask está rodando.');
-    }
-  });
-}
-
-if (btnLimparFiltroHistorico) {
-  btnLimparFiltroHistorico.addEventListener('click', () => {
-    filtroHistoricoAtivo = false;
-    ultimoDiarioFiltrado = [];
-    historicoInicioInput.value = '';
-    historicoFimInput.value = '';
-    const data = dashboardData[currentTab];
-    renderHistoricoDiario(data ? (data.diario || []) : []);
-  });
-}
-
 // --- RENDERIZAR TELA ---
 function updateDashboard(tabKey) {
   currentTab = tabKey;
   const data = dashboardData[tabKey];
-
-  // Trocar de aba limpa o filtro de data do Histórico Diário — ele foi
-  // buscado pra uma unidade específica e não faz sentido continuar mostrado
-  // se o usuário for pra outra aba.
-  if (filtroHistoricoAtivo) {
-    filtroHistoricoAtivo = false;
-    ultimoDiarioFiltrado = [];
-    if (historicoInicioInput) historicoInicioInput.value = '';
-    if (historicoFimInput) historicoFimInput.value = '';
-  }
 
   // Trocar de aba também limpa a seleção de dia clicado no Histórico Diário
   // — a análise de canal volta a mostrar o dia anterior (padrão) da aba atual.
@@ -341,8 +285,8 @@ function updateDashboard(tabKey) {
     }
   }
 
-  // Renderiza Histórico Diário (respeitando o filtro de datas, se houver um ativo)
-  renderHistoricoDiario(filtroHistoricoAtivo ? ultimoDiarioFiltrado : (data.diario || []));
+  // Renderiza Histórico Diário (já respeita o período selecionado no topo)
+  renderHistoricoDiario(data.diario || []);
 
   // Re-inicializa ícones do Lucide após re-renderizar HTML
   lucide.createIcons();
@@ -433,7 +377,7 @@ async function exibirCanalDoDia(unidade, diaIso) {
     destacarLinhaHistoricoSelecionada(diaIso + '|' + unidade);
     renderCanalAnalysis(dados.canais || [], unidade);
 
-    const diarioAtual = filtroHistoricoAtivo ? ultimoDiarioFiltrado : ((dashboardData[currentTab] || {}).diario || []);
+    const diarioAtual = (dashboardData[currentTab] || {}).diario || [];
     const linhaDoDia = diarioAtual.find(item => item.diaIso === diaIso && item.unidade === unidade);
     if (linhaDoDia) {
       atualizarCardsTopo({
@@ -526,7 +470,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
   }
 
   if (!canaisBrutos.length) {
-    canalTableBody.innerHTML = `<tr><td colspan="4" class="panel-subtitle">Nenhum dado de canal nesse período.</td></tr>`;
+    canalTableBody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhum dado de canal nesse período.</td></tr>`;
     return;
   }
 
@@ -540,9 +484,10 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
           ${c.canal}
         </span>
       </td>
-      <td class="font-bold">R$ ${c.faturamento}</td>
       <td>${c.pedidos}</td>
       <td>R$ ${c.ticket}</td>
+      <td class="font-bold">R$ ${c.faturamento}</td>
+      <td>${c.percentual}%</td>
     </tr>
   `).join('');
 
@@ -699,14 +644,28 @@ if (btnWhatsApp) {
 }
 
 // --- CARREGA OS DADOS REAIS DE INSIGHTS (BACKEND FLASK -> CACHE CARDÁPIO WEB) ---
-async function carregarInsights(periodo) {
+// Período selecionado no calendário de data início-fim, no topo da página.
+// Sem os dois campos preenchidos, usa o padrão dos últimos 30 dias.
+function periodoInsightsSelecionado() {
+  const hoje = new Date();
+  const fimPadrao = hoje.toISOString().slice(0, 10);
+  const inicioPadraoData = new Date();
+  inicioPadraoData.setDate(hoje.getDate() - 29);
+  const inicioPadrao = inicioPadraoData.toISOString().slice(0, 10);
+
+  const inicio = (dataInicioInput && dataInicioInput.value) || inicioPadrao;
+  const fim = (dataFimInput && dataFimInput.value) || fimPadrao;
+  return { inicio, fim };
+}
+
+async function carregarInsights(inicio, fim) {
   const canalTableBody = document.getElementById('canal-table-body');
   if (canalTableBody) {
-    canalTableBody.innerHTML = `<tr><td colspan="4" class="panel-subtitle">Carregando dados...</td></tr>`;
+    canalTableBody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Carregando dados...</td></tr>`;
   }
 
   try {
-    const resposta = await fetch(`/api/insights?periodo=${encodeURIComponent(periodo)}`);
+    const resposta = await fetch(`/api/insights?inicio=${inicio}&fim=${fim}`);
     if (!resposta.ok) {
       throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     }
@@ -715,7 +674,7 @@ async function carregarInsights(periodo) {
   } catch (erro) {
     console.error('Falha ao carregar insights:', erro);
     if (canalTableBody) {
-      canalTableBody.innerHTML = `<tr><td colspan="4" style="color: #ef4444;">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
+      canalTableBody.innerHTML = `<tr><td colspan="5" style="color: #ef4444;">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
     }
   }
 }
@@ -819,7 +778,10 @@ if (presencialTableBody) {
         }
         if (presencialEditandoDiaOriginal === diaIso) cancelarEdicaoPresencial();
         await carregarPresencial(currentTab);
-        await carregarInsights(periodSelect ? periodSelect.value : 'Últimos 30 dias');
+        {
+          const { inicio, fim } = periodoInsightsSelecionado();
+          await carregarInsights(inicio, fim);
+        }
       } catch (erro) {
         console.error('Falha ao excluir venda presencial:', erro);
         alert('Não foi possível excluir o lançamento. Confira se o Flask está rodando.');
@@ -865,7 +827,10 @@ if (formPresencial) {
       }
       cancelarEdicaoPresencial();
       await carregarPresencial(currentTab);
-      await carregarInsights(periodSelect ? periodSelect.value : 'Últimos 30 dias');
+      {
+        const { inicio, fim } = periodoInsightsSelecionado();
+        await carregarInsights(inicio, fim);
+      }
     } catch (erro) {
       console.error('Falha ao salvar venda presencial:', erro);
       alert('Não foi possível salvar o lançamento presencial. Confira se o Flask está rodando.');
@@ -875,13 +840,25 @@ if (formPresencial) {
 
 // Só roda na página de Insights (identificada pela presença das abas)
 if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
-  carregarInsights(periodSelect ? periodSelect.value : '30d');
-
-  if (periodSelect) {
-    periodSelect.addEventListener('change', () => {
-      carregarInsights(periodSelect.value);
-    });
+  // Preenche o calendário com o período padrão (últimos 30 dias) antes da
+  // primeira busca, pra já aparecer selecionado em vez de vazio.
+  if (dataInicioInput && dataFimInput && !dataInicioInput.value && !dataFimInput.value) {
+    const padrao = periodoInsightsSelecionado();
+    dataInicioInput.value = padrao.inicio;
+    dataFimInput.value = padrao.fim;
   }
+
+  const { inicio, fim } = periodoInsightsSelecionado();
+  carregarInsights(inicio, fim);
+
+  [dataInicioInput, dataFimInput].forEach((input) => {
+    if (!input) return;
+    input.addEventListener('change', () => {
+      if (!dataInicioInput.value || !dataFimInput.value) return;
+      const periodo = periodoInsightsSelecionado();
+      carregarInsights(periodo.inicio, periodo.fim);
+    });
+  });
 }
 
 

@@ -116,15 +116,18 @@
         <h1 class="page-title">Relatório de vendas</h1>
     </div>
 
-  <!-- Lado Direito: Select + Botão WhatsApp -->
+  <!-- Lado Direito: Seletor de Período (calendário) + Botão WhatsApp -->
   <div class="action-controls">
-    <div class="select-wrapper">
-      <select id="period-select">
-        <option value="Últimos 30 dias">Últimos 30 dias</option>
-        <option value="Este Mês">Este Mês</option>
-        <option value="Último Trimestre">Último Trimestre</option>
-      </select>
-      <i data-lucide="chevron-down" class="select-icon"></i>
+    <div class="date-range-picker">
+      <div class="date-range-field">
+        <label for="insight-data-inicio">De</label>
+        <input type="date" id="insight-data-inicio">
+      </div>
+      <span class="date-range-sep">–</span>
+      <div class="date-range-field">
+        <label for="insight-data-fim">Até</label>
+        <input type="date" id="insight-data-fim">
+      </div>
     </div>
 
     <button class="btn-whatsapp" id="btn-whatsapp">
@@ -225,9 +228,10 @@
                   <thead>
                     <tr>
                       <th>Canal de vendas</th>
-                      <th>Faturamento</th>
                       <th>Pedidos</th>
                       <th>Ticket médio</th>
+                      <th>Faturamento</th>
+                      <th>%</th>
                     </tr>
                   </thead>
                   <tbody id="canal-table-body">
@@ -289,23 +293,6 @@
             <h3 class="panel-title">Histórico Diário</h3>
             <span class="panel-subtitle" id="daily-subtitle">Um lançamento por dia sincronizado</span>
           </div>
-          <form class="historico-filtro" id="form-historico-filtro">
-            <div class="presencial-field">
-              <label for="historico-inicio">De</label>
-              <input type="date" id="historico-inicio">
-            </div>
-            <div class="presencial-field">
-              <label for="historico-fim">Até</label>
-              <input type="date" id="historico-fim">
-            </div>
-            <button type="submit" class="btn-whatsapp">
-              <i data-lucide="filter"></i>
-              <span>Filtrar</span>
-            </button>
-            <button type="button" class="btn-limpar-filtro" id="btn-limpar-filtro-historico">
-              Limpar filtro
-            </button>
-          </form>
           <div class="table-responsive">
             <table>
               <thead>

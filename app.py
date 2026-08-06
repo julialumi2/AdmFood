@@ -40,12 +40,6 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
         _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=3, minute=0)
         _scheduler.start()
 
-PERIODOS_DIAS = {
-    "Últimos 30 dias": 30,
-    "Este Mês": None,  # tratado à parte: do dia 1 do mês até hoje
-    "Último Trimestre": 90,
-}
-
 # Lojas que registram vendas presenciais (não passam pela Cardápio Web e
 # precisam ser lançadas manualmente).
 UNIDADES_COM_PRESENCIAL = {"Hamburgueria Artesanos", "Tradiça ZN"}
@@ -73,18 +67,6 @@ def _aplicar_presencial(linhas, linhas_presencial):
                 "quantidade_pedidos": qtd_presencial,
             }
     return list(por_chave.values())
-
-
-def _calcular_intervalo(periodo):
-    hoje = date.today()
-
-    if periodo == "Este Mês":
-        inicio = hoje.replace(day=1)
-    else:
-        dias = PERIODOS_DIAS.get(periodo, 30)
-        inicio = hoje - timedelta(days=dias - 1)
-
-    return inicio, hoje
 
 
 def _formatar_moeda(valor):
@@ -450,33 +432,6 @@ def api_listar_venda_presencial():
     })
 
 
-@app.route('/api/historico-diario', methods=['GET'])
-def api_historico_diario():
-    unidade = request.args.get('unidade', 'geral')
-    inicio = request.args.get('inicio')
-    fim = request.args.get('fim')
-
-    if not inicio or not fim:
-        return jsonify({"erro": "Informe inicio e fim (YYYY-MM-DD)."}), 400
-    try:
-        date.fromisoformat(inicio)
-        date.fromisoformat(fim)
-    except ValueError:
-        return jsonify({"erro": "Datas inválidas."}), 400
-    if inicio > fim:
-        inicio, fim = fim, inicio
-
-    linhas = _aplicar_presencial(
-        buscar_faturamento_periodo(inicio, fim),
-        buscar_presencial_periodo(inicio, fim),
-    )
-    if unidade != 'geral':
-        linhas = [l for l in linhas if l["unidade"] == unidade]
-
-    diario = sorted(linhas, key=lambda l: (l["dia"], l["unidade"]), reverse=True)
-    return jsonify({"diario": _formatar_diario(diario)})
-
-
 @app.route('/api/canal-analise', methods=['GET'])
 def api_canal_analise():
     unidade = request.args.get('unidade', 'geral')
@@ -544,8 +499,20 @@ def api_faturamento_mesmo_dia_semana():
 
 @app.route('/api/insights', methods=['GET'])
 def api_insights():
-    periodo = request.args.get('periodo', 'Últimos 30 dias')
-    inicio, fim = _calcular_intervalo(periodo)
+    inicio_str = request.args.get('inicio')
+    fim_str = request.args.get('fim')
+
+    if inicio_str and fim_str:
+        try:
+            inicio = date.fromisoformat(inicio_str)
+            fim = date.fromisoformat(fim_str)
+        except ValueError:
+            return jsonify({"erro": "Datas inválidas."}), 400
+        if inicio > fim:
+            inicio, fim = fim, inicio
+    else:
+        fim = date.today()
+        inicio = fim - timedelta(days=29)
 
     linhas_periodo = _aplicar_presencial(
         buscar_faturamento_periodo(inicio.isoformat(), fim.isoformat()),
