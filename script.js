@@ -655,14 +655,25 @@ async function montarRelatorioWhatsApp() {
 
 if (btnWhatsApp) {
   btnWhatsApp.addEventListener('click', async () => {
+    // Abre a aba já no clique, de forma síncrona — no celular, o navegador
+    // bloqueia window.open() chamado depois de um await (as buscas dos
+    // dados), porque perde a ligação direta com o gesto do usuário. Só
+    // preenchemos o endereço dessa aba depois que a mensagem estiver pronta.
+    const novaAba = window.open('', '_blank');
+
     const htmlOriginal = btnWhatsApp.innerHTML;
     btnWhatsApp.disabled = true;
     btnWhatsApp.innerHTML = '<span>Montando relatório...</span>';
     try {
       const mensagem = await montarRelatorioWhatsApp();
       const encodedUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
-      window.open(encodedUrl, '_blank');
+      if (novaAba) {
+        novaAba.location.href = encodedUrl;
+      } else {
+        window.location.href = encodedUrl;
+      }
     } catch (erro) {
+      if (novaAba) novaAba.close();
       console.error('Falha ao montar relatório do WhatsApp:', erro);
       alert('Não foi possível montar o relatório. Confira se o Flask está rodando.');
     } finally {
@@ -1078,22 +1089,5 @@ function salvarNovaTarefa(event) {
 
   fecharModal();
 }
-
-    // Ativa o Drag and Drop no novo card
-    newCard.addEventListener("dragstart", (e) => {
-      newCard.classList.add("dragging");
-      e.dataTransfer.setData("text/plain", newCard.id);
-    });
-
-    newCard.addEventListener("dragend", () => {
-      newCard.classList.remove("dragging");
-      if (typeof atualizarContadores === "function") atualizarContadores();
-    });
-
-    // Adiciona na coluna "A Fazer"
-    colunaTodo.appendChild(newCard);
-
-    // Atualiza os contadores das colunas
-    if (typeof atualizarContadores === "function") atualizarContadores();
 
   fecharModal();
