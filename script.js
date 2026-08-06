@@ -363,20 +363,6 @@ function updateDashboard(tabKey) {
     }
   }
 
-  // Atualiza Valores nos Cards
-  document.getElementById('val-faturamento').textContent = `R$ ${data.faturamento}`;
-  document.getElementById('val-pedidos').textContent = data.pedidos;
-  document.getElementById('val-ticket').textContent = `R$ ${data.ticket}`;
-
-  // Em todas as abas, os 3 primeiros cards mostram só o dia anterior (não o
-  // período do filtro) — o texto abaixo do trend é só a data mesmo.
-  const textoComparacao = data.canalDataLabel || '';
-
-  // Atualiza Trends
-  renderTrend('trend-faturamento', data.faturamentoTrend, data.faturamentoUp, textoComparacao);
-  renderTrend('trend-pedidos', data.pedidosTrend, data.pedidosUp, textoComparacao);
-  renderTrend('trend-ticket', data.ticketTrend, data.ticketUp, textoComparacao);
-
   // Renderiza Histórico Diário (respeitando o filtro de datas, se houver um ativo)
   renderHistoricoDiario(filtroHistoricoAtivo ? ultimoDiarioFiltrado : (data.diario || []));
 
@@ -399,9 +385,22 @@ function nomeExibicaoCanal(canalBruto, unidade) {
   return mapa[canalBruto] || canalBruto;
 }
 
+// Atualiza os 3 cards de topo (Faturamento/Pedidos/Ticket) — usado tanto no
+// estado padrão da aba (dia anterior) quanto ao clicar num dia específico
+// do Histórico Diário.
+function atualizarCardsTopo(opcoes) {
+  document.getElementById('val-faturamento').textContent = `R$ ${opcoes.faturamento}`;
+  document.getElementById('val-pedidos').textContent = opcoes.pedidos;
+  document.getElementById('val-ticket').textContent = `R$ ${opcoes.ticket}`;
+
+  renderTrend('trend-faturamento', opcoes.faturamentoTrend, opcoes.faturamentoUp, opcoes.textoComparacao);
+  renderTrend('trend-pedidos', opcoes.pedidosTrend, opcoes.pedidosUp, opcoes.textoComparacao);
+  renderTrend('trend-ticket', opcoes.ticketTrend, opcoes.ticketUp, opcoes.textoComparacao);
+}
+
 // Mostra a análise de canal padrão da aba atual (dia anterior, já vindo em
 // dashboardData) — usado ao trocar de aba ou ao voltar de um dia selecionado
-// no Histórico Diário.
+// no Histórico Diário. Também restaura os cards de topo pro padrão da aba.
 function exibirCanalPadrao(data, tabKey) {
   const canalDataLabel = document.getElementById('canal-data-label');
   if (canalDataLabel) canalDataLabel.textContent = data.canalDataLabel || '--/--/----';
@@ -414,10 +413,26 @@ function exibirCanalPadrao(data, tabKey) {
 
   destacarLinhaHistoricoSelecionada(null);
   renderCanalAnalysis(data.canais || [], tabKey);
+
+  // Em todas as abas, os 3 primeiros cards mostram só o dia anterior (não o
+  // período do filtro) — o texto abaixo do trend é só a data mesmo.
+  atualizarCardsTopo({
+    faturamento: data.faturamento,
+    pedidos: data.pedidos,
+    ticket: data.ticket,
+    faturamentoTrend: data.faturamentoTrend,
+    faturamentoUp: data.faturamentoUp,
+    pedidosTrend: data.pedidosTrend,
+    pedidosUp: data.pedidosUp,
+    ticketTrend: data.ticketTrend,
+    ticketUp: data.ticketUp,
+    textoComparacao: data.canalDataLabel || '',
+  });
 }
 
 // Busca e mostra a análise de canal de um dia + loja específicos, clicado
-// no Histórico Diário.
+// no Histórico Diário — e também atualiza os cards de topo com os valores
+// desse mesmo dia (já disponíveis na lista do Histórico Diário carregada).
 async function exibirCanalDoDia(unidade, diaIso) {
   try {
     const resposta = await fetch(
@@ -439,6 +454,28 @@ async function exibirCanalDoDia(unidade, diaIso) {
 
     destacarLinhaHistoricoSelecionada(diaIso + '|' + unidade);
     renderCanalAnalysis(dados.canais || [], unidade);
+
+    const diarioAtual = filtroHistoricoAtivo ? ultimoDiarioFiltrado : ((dashboardData[currentTab] || {}).diario || []);
+    const linhaDoDia = diarioAtual.find(item => item.diaIso === diaIso && item.unidade === unidade);
+    if (linhaDoDia) {
+      atualizarCardsTopo({
+        faturamento: linhaDoDia.faturamento,
+        pedidos: linhaDoDia.pedidos,
+        ticket: linhaDoDia.ticket,
+        faturamentoTrend: 'período novo',
+        faturamentoUp: true,
+        pedidosTrend: 'período novo',
+        pedidosUp: true,
+        ticketTrend: 'período novo',
+        ticketUp: true,
+        textoComparacao: linhaDoDia.dia,
+      });
+    }
+
+    // Sobe a página pra deixar claro que os cards e o gráfico acabaram de
+    // mudar — clicar num dia lá embaixo, no Histórico Diário, não deixaria
+    // isso visível sem rolar de volta pro topo.
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (erro) {
     console.error('Falha ao carregar análise de canal do dia:', erro);
     alert('Não foi possível carregar a análise de canal desse dia. Confira se o Flask está rodando.');
