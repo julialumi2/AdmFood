@@ -615,8 +615,7 @@ if (btnWhatsApp) {
   btnWhatsApp.addEventListener('click', async () => {
     // Abre a aba já no clique, de forma síncrona — no celular, o navegador
     // bloqueia window.open() chamado depois de um await (as buscas dos
-    // dados), porque perde a ligação direta com o gesto do usuário. Só
-    // preenchemos o endereço dessa aba depois que a mensagem estiver pronta.
+    // dados), porque perde a ligação direta com o gesto do usuário.
     const novaAba = window.open('', '_blank');
 
     const htmlOriginal = btnWhatsApp.innerHTML;
@@ -624,11 +623,33 @@ if (btnWhatsApp) {
     btnWhatsApp.innerHTML = '<span>Montando relatório...</span>';
     try {
       const mensagem = await montarRelatorioWhatsApp();
-      const encodedUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+
+      // Mandar o texto pronto pela URL (?text=) depende do app do WhatsApp
+      // decodificar certo o link — em alguns celulares isso corrompe os
+      // emojis (viram um quadrado/símbolo quebrado). Copiar pra área de
+      // transferência e colar manualmente não passa por essa decodificação
+      // nenhuma, então preserva os emojis sempre.
+      let copiado = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(mensagem);
+          copiado = true;
+        } catch (erroClipboard) {
+          console.error('Falha ao copiar mensagem:', erroClipboard);
+        }
+      }
+
+      const destino = 'https://wa.me/';
       if (novaAba) {
-        novaAba.location.href = encodedUrl;
+        novaAba.location.href = destino;
       } else {
-        window.location.href = encodedUrl;
+        window.open(destino, '_blank');
+      }
+
+      if (copiado) {
+        alert('Mensagem copiada! Cole (Ctrl+V ou segurar e colar) no campo de texto do WhatsApp.');
+      } else {
+        alert('Não foi possível copiar automaticamente. Copie a mensagem abaixo e cole no WhatsApp:\n\n' + mensagem);
       }
     } catch (erro) {
       if (novaAba) novaAba.close();
