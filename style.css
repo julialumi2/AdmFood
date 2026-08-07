@@ -105,6 +105,16 @@
   white-space: nowrap;
 }
 
+.home-canal-legend-percentual {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 42px;
+  text-align: right;
+  color: var(--text-faint);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
 /* RANKING DE LOJAS + STATUS DE SINCRONIZAÇÃO, LADO A LADO */
 .home-secondary-row {
   display: grid;

@@ -1072,7 +1072,10 @@ async function carregarCanalRedeHome() {
             <span class="home-canal-legend-dot" style="background-color: ${CORES_CANAL[i % CORES_CANAL.length]};"></span>
             ${c.canal}
           </span>
-          <span class="home-canal-legend-valor">R$ ${c.faturamento}</span>
+          <span class="home-canal-legend-valor">
+            R$ ${c.faturamento}
+            <span class="home-canal-legend-percentual">${c.percentual}%</span>
+          </span>
         </div>
       `).join('');
     }
