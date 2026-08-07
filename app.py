@@ -12,7 +12,6 @@ from backend.armazenamento import (
     excluir_venda_presencial,
     buscar_presencial_periodo,
     buscar_presencial_por_unidade,
-    buscar_pedidos_dia,
     buscar_ultima_sincronizacao,
     salvar_resumo_do_dia,
 )
@@ -425,7 +424,6 @@ def api_listar_venda_presencial():
                 "valor": _formatar_moeda(l["valor"]),
                 "valorNumero": l["valor"],
                 "quantidade": l["quantidade"],
-                "totalPedidosDia": buscar_pedidos_dia(unidade, l["dia"]) + (l["quantidade"] or 0),
             }
             for l in lancamentos
         ]
