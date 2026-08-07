@@ -107,6 +107,14 @@ body.dark-mode {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* overflow-x:hidden só no body não basta — um elemento com margem negativa
+   (ex: o tabs-bar do Insights, que sangra até a borda no celular) ainda
+   força o navegador a calcular uma viewport de layout mais larga que a
+   tela real, encolhendo a página inteira. Precisa estar no html também. */
+html {
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--bg-main);
   color: var(--text-dark);
