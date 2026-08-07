@@ -683,6 +683,24 @@ if (btnWhatsAppCopiar) {
   });
 }
 
+// Trava a data de fim pra nunca ficar antes da data de início (e vice-versa)
+// — tanto no seletor nativo do navegador (via min/max, que já desabilita as
+// datas inválidas visualmente) quanto corrigindo na marra se, mesmo assim,
+// o campo ficar com um intervalo invertido (ex: digitando a data direto).
+function validarIntervaloDatasInsights() {
+  if (!dataInicioInput || !dataFimInput) return;
+
+  // Corrige primeiro um intervalo invertido (usando os valores originais),
+  // só depois trava o min/max um do outro — senão o max de início acaba
+  // herdando o valor de fim de ANTES da correção.
+  if (dataInicioInput.value && dataFimInput.value && dataFimInput.value < dataInicioInput.value) {
+    dataFimInput.value = dataInicioInput.value;
+  }
+
+  if (dataInicioInput.value) dataFimInput.min = dataInicioInput.value;
+  if (dataFimInput.value) dataInicioInput.max = dataFimInput.value;
+}
+
 // --- CARREGA OS DADOS REAIS DE INSIGHTS (BACKEND FLASK -> CACHE CARDÁPIO WEB) ---
 // Período selecionado no calendário de data início-fim, no topo da página.
 // Sem os dois campos preenchidos, usa o padrão dos últimos 30 dias.
@@ -887,6 +905,7 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
     dataInicioInput.value = padrao.inicio;
     dataFimInput.value = padrao.fim;
   }
+  validarIntervaloDatasInsights();
 
   const { inicio, fim } = periodoInsightsSelecionado();
   carregarInsights(inicio, fim);
@@ -894,6 +913,7 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
   [dataInicioInput, dataFimInput].forEach((input) => {
     if (!input) return;
     input.addEventListener('change', () => {
+      validarIntervaloDatasInsights();
       if (!dataInicioInput.value || !dataFimInput.value) return;
       const periodo = periodoInsightsSelecionado();
       carregarInsights(periodo.inicio, periodo.fim);
