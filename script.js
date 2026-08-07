@@ -709,7 +709,7 @@ async function carregarPresencial(unidade) {
           <tr>
             <td>${l.dia}</td>
             <td class="font-bold">R$ ${l.valor}</td>
-            ${temQuantidade ? `<td class="font-bold">R$ ${l.totalDia}</td>` : ''}
+            ${temQuantidade ? `<td class="font-bold">${l.totalPedidosDia}</td>` : ''}
             <td>
               <div class="acoes-linha">
                 <button type="button" class="btn-acao-icone btn-editar"

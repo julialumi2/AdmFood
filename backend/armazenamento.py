@@ -214,15 +214,15 @@ def buscar_presencial_periodo(inicio_iso, fim_iso):
         return [dict(linha) for linha in linhas]
 
 
-def buscar_faturamento_dia(unidade, dia_iso):
-    """Faturamento do dia só da Cardápio Web (sem presencial), ou 0.0 se não
-    houver registro pra esse dia."""
+def buscar_pedidos_dia(unidade, dia_iso):
+    """Quantidade de pedidos do dia só da Cardápio Web (sem presencial), ou 0
+    se não houver registro pra esse dia."""
     with conexao() as conn:
         linha = conn.execute(
-            "SELECT faturamento_dia FROM faturamento_diario WHERE unidade = ? AND dia = ?",
+            "SELECT quantidade_pedidos FROM faturamento_diario WHERE unidade = ? AND dia = ?",
             (unidade, dia_iso),
         ).fetchone()
-        return linha["faturamento_dia"] if linha else 0.0
+        return linha["quantidade_pedidos"] if linha else 0
 
 
 def buscar_ultima_sincronizacao():
