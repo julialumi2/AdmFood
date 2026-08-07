@@ -197,10 +197,10 @@ const CORES_CANAL = ['#3b82f6', '#f59e0b', '#a855f7', '#10b981', '#e11d48', '#06
 // formulário de lançamento manual.
 const UNIDADES_COM_PRESENCIAL = ['Hamburgueria Artesanos', 'Tradiça ZN'];
 
-// Só o Artesanos lança a quantidade de vendas presenciais (a ZN só lança o
-// valor) — controla tanto o campo extra do formulário quanto a coluna de
-// "Total de Vendas (dia)" na tabela de lançamentos.
-const UNIDADES_COM_QUANTIDADE_PRESENCIAL = ['Hamburgueria Artesanos'];
+// Lojas que lançam a quantidade de vendas presenciais (não só o valor) —
+// controla tanto o campo extra do formulário quanto a coluna de "Total de
+// Vendas (dia)" na tabela de lançamentos, e permite calcular o ticket médio.
+const UNIDADES_COM_QUANTIDADE_PRESENCIAL = ['Hamburgueria Artesanos', 'Tradiça ZN'];
 
 // --- ELEMENTOS DO DOM ---
 const tabButtons = document.querySelectorAll('.tab-btn');
@@ -274,8 +274,6 @@ function updateDashboard(tabKey) {
     const temPresencial = UNIDADES_COM_PRESENCIAL.includes(tabKey);
     painelPresencial.style.display = temPresencial ? '' : 'none';
 
-    // Só o Artesanos lança quantidade de vendas presenciais — a ZN fica só
-    // com o valor, sem o campo extra e sem a coluna de total do dia.
     const temQuantidade = UNIDADES_COM_QUANTIDADE_PRESENCIAL.includes(tabKey);
     if (presencialQuantidadeField) presencialQuantidadeField.style.display = temQuantidade ? '' : 'none';
     if (presencialThTotal) presencialThTotal.style.display = temQuantidade ? '' : 'none';
