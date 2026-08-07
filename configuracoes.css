@@ -3,6 +3,25 @@
 
 .page-content { max-width: 860px; }
 
+.config-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.config-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-6);
+}
+
+/* min-width: 0 — sem isso, um item de grid não encolhe abaixo do tamanho
+   mínimo do conteúdo, o que pode empurrar a página pra fora da tela no
+   celular (mesmo problema já visto no painel de canais do Insights). */
+.config-row > .panel {
+  min-width: 0;
+}
+
 .toggle-tile {
   display: flex;
   align-items: center;
@@ -67,6 +86,8 @@
    manual) estão em theme.css — reaproveitados também na Home. */
 
 @media (max-width: 768px) {
+  .config-row { grid-template-columns: 1fr; }
+
   .toggle-tile { flex-wrap: wrap; }
 
   .btn-whatsapp {

@@ -1107,6 +1107,23 @@ async function carregarCanalRedeHome() {
   }
 }
 
+// Considera "em dia" se a última sincronização foi hoje ou ontem — regra
+// compartilhada entre a Home (status por loja) e Configurações (tabela de
+// lojas + resumo geral), pra não duplicar a mesma lógica em dois lugares.
+function _sincronizacaoEmDia(dataStr) {
+  if (!dataStr) return false;
+  const hoje = new Date();
+  const ontem = new Date(hoje);
+  ontem.setDate(hoje.getDate() - 1);
+  const formatarBr = d => d.toLocaleDateString('pt-BR');
+  return dataStr === formatarBr(hoje) || dataStr === formatarBr(ontem);
+}
+
+function _badgeSincronizacao(dataStr) {
+  const emDia = _sincronizacaoEmDia(dataStr);
+  return `<span class="badge ${emDia ? 'badge-green' : 'badge-orange'}">${dataStr || 'nunca sincronizou'}</span>`;
+}
+
 /**
  * Home: lista compacta de quando cada loja sincronizou pela última vez,
  * com aviso visual se alguma estiver atrasada (não sincronizou ontem/hoje).
@@ -1122,26 +1139,13 @@ async function carregarStatusSincronizacaoHome() {
     const dados = await resposta.json();
     const lojas = dados.lojas || [];
 
-    const hoje = new Date();
-    const ontem = new Date(hoje);
-    ontem.setDate(hoje.getDate() - 1);
-    const formatarBr = d => d.toLocaleDateString('pt-BR');
-    const datasEmDia = new Set([formatarBr(hoje), formatarBr(ontem)]);
-
     lista.innerHTML = lojas.length
-      ? lojas.map(loja => {
-          const emDia = loja.ultimaSincronizacao && datasEmDia.has(loja.ultimaSincronizacao);
-          return `
-            <div class="sync-status-item">
-              <span class="sync-status-nome">${loja.nome}</span>
-              <span class="sync-status-data">
-                <span class="badge ${emDia ? 'badge-green' : 'badge-orange'}">
-                  ${loja.ultimaSincronizacao || 'nunca sincronizou'}
-                </span>
-              </span>
-            </div>
-          `;
-        }).join('')
+      ? lojas.map(loja => `
+          <div class="sync-status-item">
+            <span class="sync-status-nome">${loja.nome}</span>
+            <span class="sync-status-data">${_badgeSincronizacao(loja.ultimaSincronizacao)}</span>
+          </div>
+        `).join('')
       : `<p class="panel-subtitle">Nenhuma loja cadastrada.</p>`;
   } catch (erro) {
     console.error('Falha ao carregar status de sincronização:', erro);
@@ -1156,6 +1160,8 @@ async function carregarStatusSincronizacaoHome() {
 async function carregarConfigLojas() {
   const tbody = document.getElementById('config-lojas-body');
   const ultimaSyncElem = document.getElementById('config-ultima-sync');
+  const pillLojas = document.getElementById('config-status-lojas');
+  const pillSync = document.getElementById('config-status-sync');
   if (!tbody) return;
 
   try {
@@ -1168,6 +1174,19 @@ async function carregarConfigLojas() {
     }
 
     const lojas = dados.lojas || [];
+
+    if (pillLojas) pillLojas.textContent = `${lojas.length} ${lojas.length === 1 ? 'loja conectada' : 'lojas conectadas'}`;
+    if (pillSync) {
+      const atrasadas = lojas.filter(l => !_sincronizacaoEmDia(l.ultimaSincronizacao));
+      if (atrasadas.length === 0) {
+        pillSync.textContent = 'Sincronização em dia';
+        pillSync.className = 'badge-pill pos';
+      } else {
+        pillSync.textContent = `${atrasadas.length} ${atrasadas.length === 1 ? 'loja atrasada' : 'lojas atrasadas'}`;
+        pillSync.className = 'badge-pill neg';
+      }
+    }
+
     tbody.innerHTML = lojas.length
       ? lojas.map(loja => `
           <tr>
@@ -1178,12 +1197,13 @@ async function carregarConfigLojas() {
                 ${loja.temPresencial ? 'Sim' : 'Não'}
               </span>
             </td>
+            <td>${_badgeSincronizacao(loja.ultimaSincronizacao)}</td>
           </tr>
         `).join('')
-      : `<tr><td colspan="3" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
+      : `<tr><td colspan="4" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
   } catch (erro) {
     console.error('Falha ao carregar lojas cadastradas:', erro);
-    tbody.innerHTML = `<tr><td colspan="3" style="color:#ef4444;">Não foi possível carregar as lojas. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="color:#ef4444;">Não foi possível carregar as lojas. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 

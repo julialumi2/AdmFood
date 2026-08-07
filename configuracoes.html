@@ -106,35 +106,60 @@
           </div>
           <div class="title-row">
             <h1>Configurações</h1>
+            <div class="config-status-pills">
+              <span class="badge-pill" id="config-status-lojas">-- lojas conectadas</span>
+              <span class="badge-pill" id="config-status-sync">Verificando sincronização...</span>
+            </div>
           </div>
         </div>
 
-        <!-- APARÊNCIA -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Aparência</h3>
-            <span class="panel-subtitle">Vale pra todas as telas do sistema</span>
-          </div>
-          <div class="toggle-tile">
-            <div class="toggle-tile-info">
-              <i data-lucide="moon"></i>
-              <div>
-                <p class="toggle-tile-title">Modo escuro</p>
-                <p class="toggle-tile-subtitle">Aplica em Resumo, Insights, Estoque e ClickUp</p>
-              </div>
+        <!-- APARÊNCIA + SINCRONIZAÇÃO -->
+        <div class="config-row">
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Aparência</h3>
+              <span class="panel-subtitle">Vale pra todas as telas do sistema</span>
             </div>
-            <label class="theme-switch" title="Alternar Modo Escuro/Claro">
-              <input type="checkbox" id="theme-toggle-checkbox-config">
-              <span class="slider">
-                <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="5"></circle>
-                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
-                </svg>
-                <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                </svg>
-              </span>
-            </label>
+            <div class="toggle-tile">
+              <div class="toggle-tile-info">
+                <i data-lucide="moon"></i>
+                <div>
+                  <p class="toggle-tile-title">Modo escuro</p>
+                  <p class="toggle-tile-subtitle">Aplica em Resumo, Insights, Estoque e ClickUp</p>
+                </div>
+              </div>
+              <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+                <input type="checkbox" id="theme-toggle-checkbox-config">
+                <span class="slider">
+                  <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+                  </svg>
+                  <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Sincronização com a Cardápio Web</h3>
+              <span class="panel-subtitle">Última sincronização: <span id="config-ultima-sync">—</span></span>
+            </div>
+
+            <div class="sync-info">
+              <i data-lucide="clock"></i>
+              <p>Automática, todo dia às <strong>03:00</strong> (horário de Brasília) — busca sempre o dia anterior.</p>
+            </div>
+
+            <button type="button" class="btn-whatsapp" id="btn-sincronizar-agora">
+              <i data-lucide="refresh-cw"></i>
+              <span>Sincronizar agora</span>
+            </button>
+
+            <div id="sync-resultado" class="sync-resultado"></div>
           </div>
         </div>
 
@@ -151,33 +176,14 @@
                   <th>Unidade</th>
                   <th>Token da Cardápio Web</th>
                   <th>Vendas Presenciais</th>
+                  <th>Última Sincronização</th>
                 </tr>
               </thead>
               <tbody id="config-lojas-body">
-                <tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>
+                <tr><td colspan="4" class="panel-subtitle">Carregando...</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
-
-        <!-- SINCRONIZAÇÃO -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Sincronização com a Cardápio Web</h3>
-            <span class="panel-subtitle">Última sincronização: <span id="config-ultima-sync">—</span></span>
-          </div>
-
-          <div class="sync-info">
-            <i data-lucide="clock"></i>
-            <p>Automática, todo dia às <strong>03:00</strong> (horário de Brasília) — busca sempre o dia anterior.</p>
-          </div>
-
-          <button type="button" class="btn-whatsapp" id="btn-sincronizar-agora">
-            <i data-lucide="refresh-cw"></i>
-            <span>Sincronizar agora</span>
-          </button>
-
-          <div id="sync-resultado" class="sync-resultado"></div>
         </div>
 
       </div>
