@@ -756,6 +756,45 @@ async function carregarInsights(inicio, fim) {
   }
 }
 
+// Painel "Insights Automáticos": compara ontem com a média dos últimos 7
+// dias (sempre esse recorte fixo, independente do período selecionado no
+// filtro da tela — é uma checagem de "o que mudou recentemente").
+async function carregarInsightsAutomaticos() {
+  const lista = document.getElementById('insights-automaticos-lista');
+  const subtitulo = document.getElementById('insights-automaticos-subtitle');
+  if (!lista) return;
+
+  lista.innerHTML = `<p class="panel-subtitle">Analisando...</p>`;
+  try {
+    const resposta = await fetch('/api/insights-automaticos');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const insights = dados.insights || [];
+
+    if (subtitulo) {
+      subtitulo.textContent = `Comparando ontem (${dados.dataLabel}) com a média de ${dados.periodoBaseLabel}`;
+    }
+
+    lista.innerHTML = insights.length
+      ? insights.map(i => {
+          const verbo = i.direcao === 'alta' ? 'aumentou' : 'caiu';
+          const icone = i.direcao === 'alta' ? 'trending-up' : 'trending-down';
+          return `
+            <div class="insight-automatico-item ${i.direcao}">
+              <div class="insight-automatico-icone"><i data-lucide="${icone}"></i></div>
+              <p>${i.rotulo} <strong>${verbo} ${i.percentual}%</strong> comparado à média dos últimos 7 dias.</p>
+            </div>
+          `;
+        }).join('')
+      : `<p class="panel-subtitle">Nada fora do padrão — ontem ficou parecido com a média dos últimos 7 dias.</p>`;
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('Falha ao carregar insights automáticos:', erro);
+    lista.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar os insights automáticos.</p>`;
+  }
+}
+
 // --- VENDAS PRESENCIAIS (CRUD manual, fora da Cardápio Web) ---
 // Quando não-nulo, o formulário está editando esse dia (em vez de criar um
 // lançamento novo) — usado pra saber se precisa apagar o registro antigo
@@ -947,6 +986,8 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
       if (painel) painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
+
+  carregarInsightsAutomaticos();
 
   [dataInicioInput, dataFimInput].forEach((input) => {
     if (!input) return;

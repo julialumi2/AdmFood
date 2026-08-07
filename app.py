@@ -522,6 +522,59 @@ def api_insights():
     return jsonify(resposta)
 
 
+# Nomes de exibição dos canais pra rede toda — mesma regra da Visão Geral
+# no frontend (nomeExibicaoCanal em script.js): "portal" sempre vira
+# "Presencial" aqui, já que esse relatório nunca é por loja individual.
+NOMES_CANAL_REDE = {"ifood": "IFood", "food99": "99Food", "catalog": "Cardápio Web", "portal": "Presencial"}
+
+
+@app.route('/api/insights-automaticos', methods=['GET'])
+def api_insights_automaticos():
+    # Sempre compara ontem contra a média dos 7 dias anteriores a ontem —
+    # independente do período selecionado no filtro da tela, porque essa
+    # é uma checagem de "o que mudou recentemente", não do histórico.
+    ontem = date.today() - timedelta(days=1)
+    base_fim = ontem - timedelta(days=1)
+    base_inicio = base_fim - timedelta(days=6)
+    dias_base = (base_fim - base_inicio).days + 1
+
+    canais_ontem = _agregar_canais(_linhas_canais_com_presencial(ontem.isoformat()), None)
+    canais_base = _agregar_canais(
+        _linhas_canais_com_presencial(base_inicio.isoformat(), base_fim.isoformat()), None
+    )
+
+    valor_ontem = {c["canal"]: c["faturamento"] for c in canais_ontem}
+    valor_medio_base = {c["canal"]: c["faturamento"] / dias_base for c in canais_base}
+
+    insights = []
+
+    def _avaliar(rotulo, atual, medio):
+        if medio <= 0:
+            return
+        variacao = (atual - medio) / medio * 100
+        if abs(variacao) < 8:  # abaixo disso é ruído normal do dia a dia, não vale destacar
+            return
+        insights.append({
+            "rotulo": rotulo,
+            "percentual": round(abs(variacao), 1),
+            "direcao": "alta" if variacao > 0 else "baixa",
+        })
+
+    _avaliar("Faturamento total", sum(valor_ontem.values()), sum(valor_medio_base.values()))
+
+    for canal_bruto in set(valor_ontem) | set(valor_medio_base):
+        nome = NOMES_CANAL_REDE.get(canal_bruto, canal_bruto)
+        _avaliar(nome, valor_ontem.get(canal_bruto, 0.0), valor_medio_base.get(canal_bruto, 0.0))
+
+    insights.sort(key=lambda i: i["percentual"], reverse=True)
+
+    return jsonify({
+        "dataLabel": _formatar_data_br(ontem.isoformat()),
+        "periodoBaseLabel": f"{_formatar_data_br(base_inicio.isoformat())} a {_formatar_data_br(base_fim.isoformat())}",
+        "insights": insights[:5],
+    })
+
+
 if __name__ == '__main__':
     # threaded=True: sem isso, o servidor de desenvolvimento atende um
     # pedido de cada vez — uma sincronização manual demorada (chama a
