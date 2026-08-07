@@ -63,28 +63,8 @@
   flex-shrink: 0;
 }
 
-.sync-resultado {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sync-resultado:empty { display: none; }
-
-.sync-resultado-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px var(--space-3);
-  border-radius: var(--radius-sm);
-  background-color: var(--surface-muted);
-  font-size: 0.82rem;
-}
-
-.sync-resultado-item.erro {
-  background-color: var(--danger-soft);
-  color: var(--danger);
-}
+/* .sync-resultado / .sync-resultado-item (resultado da sincronização
+   manual) estão em theme.css — reaproveitados também na Home. */
 
 @media (max-width: 768px) {
   .toggle-tile { flex-wrap: wrap; }

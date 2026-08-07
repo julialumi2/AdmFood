@@ -1,2 +1,210 @@
 /* Estilos específicos da tela de Resumo (Home) — a base compartilhada
    (sidebar, cabeçalho, cards, gráfico) está em theme.css. */
+
+/* AÇÕES RÁPIDAS */
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px var(--space-4);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.quick-action-btn:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  border-color: var(--primary);
+}
+
+.quick-action-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+.quick-action-btn i { width: 16px; height: 16px; color: var(--primary); flex-shrink: 0; }
+
+/* GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA, LADO A LADO */
+.home-charts-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-6);
+}
+
+/* min-width: 0 — sem isso, um item de grid não encolhe abaixo do tamanho
+   mínimo do conteúdo (canvas do gráfico), o que pode empurrar a página
+   pra fora da tela no celular. */
+.home-charts-row > .chart-card,
+.home-secondary-row > .panel {
+  min-width: 0;
+}
+
+.home-canal-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.home-canal-chart-wrapper {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+  margin: 0 auto;
+}
+
+.home-canal-legend {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.home-canal-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 0.82rem;
+}
+
+.home-canal-legend-nome {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.home-canal-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.home-canal-legend-valor {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* RANKING DE LOJAS + STATUS DE SINCRONIZAÇÃO, LADO A LADO */
+.home-secondary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-6);
+}
+
+.ranking-lista,
+.sync-status-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ranking-posicao {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ranking-item:first-child .ranking-posicao {
+  background-color: var(--warning-soft);
+  color: var(--warning);
+}
+
+.ranking-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ranking-nome-valor {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+}
+
+.ranking-nome-valor .nome { font-weight: 600; color: var(--text-dark); }
+.ranking-nome-valor .valor { font-weight: 700; color: var(--text-dark); white-space: nowrap; }
+
+.ranking-barra-bg {
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background-color: var(--surface-muted-border);
+  overflow: hidden;
+}
+
+.ranking-barra-fill {
+  height: 100%;
+  background-color: var(--primary);
+  border-radius: 3px;
+}
+
+.sync-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 14px;
+  background-color: var(--surface-muted);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.sync-status-nome { font-weight: 600; color: var(--text-dark); }
+.sync-status-data { color: var(--text-muted); font-size: 0.78rem; }
+
+@media (max-width: 768px) {
+  .quick-actions { gap: var(--space-2); }
+
+  .quick-action-btn {
+    flex: 1;
+    min-width: 140px;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .home-charts-row,
+  .home-secondary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .home-canal-body { justify-content: center; }
+}

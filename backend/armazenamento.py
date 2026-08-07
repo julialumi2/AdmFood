@@ -215,13 +215,21 @@ def buscar_presencial_periodo(inicio_iso, fim_iso):
 
 
 
-def buscar_ultima_sincronizacao():
-    """Data mais recente com faturamento registrado (de qualquer unidade) —
-    usada como indicativo aproximado de "última sincronização"."""
+def buscar_ultima_sincronizacao(unidade=None):
+    """Data mais recente com faturamento registrado — de uma unidade
+    específica, ou de qualquer uma (usada como indicativo aproximado de
+    "última sincronização")."""
     with conexao() as conn:
-        linha = conn.execute(
-            "SELECT MAX(dia) AS ultimo_dia FROM faturamento_diario WHERE quantidade_pedidos > 0 OR faturamento_dia > 0"
-        ).fetchone()
+        if unidade:
+            linha = conn.execute(
+                "SELECT MAX(dia) AS ultimo_dia FROM faturamento_diario "
+                "WHERE unidade = ? AND (quantidade_pedidos > 0 OR faturamento_dia > 0)",
+                (unidade,),
+            ).fetchone()
+        else:
+            linha = conn.execute(
+                "SELECT MAX(dia) AS ultimo_dia FROM faturamento_diario WHERE quantidade_pedidos > 0 OR faturamento_dia > 0"
+            ).fetchone()
         return linha["ultimo_dia"] if linha and linha["ultimo_dia"] else None
 
 

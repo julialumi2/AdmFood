@@ -114,6 +114,26 @@
           </div>
         </div>
 
+        <!-- AÇÕES RÁPIDAS -->
+        <div class="quick-actions">
+          <a href="insight.html" class="quick-action-btn">
+            <i data-lucide="lightbulb"></i>
+            <span>Ver Insights</span>
+          </a>
+          <a href="insight.html#panel-vendas-presenciais" class="quick-action-btn">
+            <i data-lucide="banknote"></i>
+            <span>Lançar venda presencial</span>
+          </a>
+          <button type="button" class="quick-action-btn" id="btn-sincronizar-agora">
+            <i data-lucide="refresh-cw"></i>
+            <span>Sincronizar agora</span>
+          </button>
+          <a href="configuracoes.html" class="quick-action-btn">
+            <i data-lucide="settings"></i>
+            <span>Configurações</span>
+          </a>
+        </div>
+
         <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
         <div class="section-header">
           <i data-lucide="store"></i>
@@ -124,19 +144,63 @@
         <div class="cards-grid" id="container-lojas">
           <p class="text-muted" style="padding: 12px;">Sincronizando dados com o Cardápio Web...</p>
         </div>
-        
-        <!-- CONTAINER DO GRÁFICO -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">
-              <i data-lucide="line-chart"></i>
-              <h3>Faturamento da Rede</h3>
+
+        <!-- GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA -->
+        <div class="home-charts-row">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">
+                <i data-lucide="line-chart"></i>
+                <h3>Faturamento da Rede</h3>
+              </div>
+              <p class="chart-subtitle">Últimos 7 dias — 4 lojas somadas</p>
             </div>
-            <p class="chart-subtitle">Últimos 7 dias — 4 lojas somadas</p>
+
+            <div class="chart-body">
+              <canvas id="salesChart"></canvas>
+            </div>
           </div>
 
-          <div class="chart-body">
-            <canvas id="salesChart"></canvas>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">
+                <i data-lucide="pie-chart"></i>
+                <h3>Canais de Venda</h3>
+              </div>
+              <p class="chart-subtitle">Últimos 7 dias — 4 lojas somadas</p>
+            </div>
+
+            <div class="home-canal-body">
+              <div class="home-canal-chart-wrapper">
+                <canvas id="homeCanalChart"></canvas>
+              </div>
+              <div class="home-canal-legend" id="home-canal-legend">
+                <!-- Renderizado dinamicamente via JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RANKING DE LOJAS + STATUS DE SINCRONIZAÇÃO -->
+        <div class="home-secondary-row">
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Ranking de Lojas</h3>
+              <span class="panel-subtitle">Faturamento de ontem</span>
+            </div>
+            <div class="ranking-lista" id="ranking-lojas">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">Status de Sincronização</h3>
+            </div>
+            <div class="sync-status-lista" id="home-sync-status">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+            <div class="sync-resultado" id="sync-resultado"></div>
           </div>
         </div>
 

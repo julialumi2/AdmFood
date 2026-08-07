@@ -944,6 +944,30 @@ tr:hover { background-color: var(--surface-muted); }
 .btn-acao-icone.btn-excluir:hover { color: var(--danger); border-color: var(--danger); }
 .btn-acao-icone i { width: 15px; height: 15px; pointer-events: none; }
 
+/* Resultado de uma sincronização manual — usado em Configurações e na Home. */
+.sync-resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sync-resultado:empty { display: none; }
+
+.sync-resultado-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  font-size: 0.82rem;
+}
+
+.sync-resultado-item.erro {
+  background-color: var(--danger-soft);
+  color: var(--danger);
+}
+
 /* ---------------------------------------------------------------------
    10. MODAIS
    --------------------------------------------------------------------- */

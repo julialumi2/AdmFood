@@ -294,16 +294,18 @@ def _mascarar_token(token):
 @app.route('/api/config/lojas', methods=['GET'])
 def api_config_lojas():
     ultimo_dia = buscar_ultima_sincronizacao()
+    lojas = []
+    for nome, cfg in LOJAS.items():
+        ultimo_dia_loja = buscar_ultima_sincronizacao(nome)
+        lojas.append({
+            "nome": nome,
+            "tokenMascarado": _mascarar_token(cfg.get("cardapio_web_token")),
+            "temPresencial": nome in UNIDADES_COM_PRESENCIAL,
+            "ultimaSincronizacao": _formatar_data_br(ultimo_dia_loja) if ultimo_dia_loja else None,
+        })
     return jsonify({
         "ultimaSincronizacao": _formatar_data_br(ultimo_dia) if ultimo_dia else None,
-        "lojas": [
-            {
-                "nome": nome,
-                "tokenMascarado": _mascarar_token(cfg.get("cardapio_web_token")),
-                "temPresencial": nome in UNIDADES_COM_PRESENCIAL,
-            }
-            for nome, cfg in LOJAS.items()
-        ],
+        "lojas": lojas,
     })
 
 

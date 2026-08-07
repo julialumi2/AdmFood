@@ -47,6 +47,16 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarGraficoRede();
   }
 
+  // 4.05 GRÁFICO DE CANAIS DE VENDA DA REDE (Home)
+  if (document.getElementById('homeCanalChart')) {
+    carregarCanalRedeHome();
+  }
+
+  // 4.06 STATUS DE SINCRONIZAÇÃO POR LOJA (Home)
+  if (document.getElementById('home-sync-status')) {
+    carregarStatusSincronizacaoHome();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -916,8 +926,27 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
   }
   validarIntervaloDatasInsights();
 
+  // Se veio de um link direto pra "Vendas Presenciais" (ex: atalho da Home),
+  // já troca pra uma loja que tem esse painel — ele fica escondido na Visão
+  // Geral (só aparece nas abas de loja com presencial), então o link não
+  // levaria a lugar nenhum se ficasse na aba padrão.
+  if (window.location.hash === '#panel-vendas-presenciais' && UNIDADES_COM_PRESENCIAL.length) {
+    const lojaAlvo = UNIDADES_COM_PRESENCIAL[0];
+    const botaoAlvo = [...tabButtons].find(b => b.dataset.tab === lojaAlvo);
+    if (botaoAlvo) {
+      tabButtons.forEach(b => b.classList.remove('active'));
+      botaoAlvo.classList.add('active');
+      currentTab = lojaAlvo;
+    }
+  }
+
   const { inicio, fim } = periodoInsightsSelecionado();
-  carregarInsights(inicio, fim);
+  carregarInsights(inicio, fim).then(() => {
+    if (window.location.hash === '#panel-vendas-presenciais') {
+      const painel = document.getElementById('panel-vendas-presenciais');
+      if (painel) painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
 
   [dataInicioInput, dataFimInput].forEach((input) => {
     if (!input) return;
@@ -1001,6 +1030,126 @@ async function carregarGraficoRede() {
 }
 
 /**
+ * Gráfico de rosca com o mix de canais de venda da rede inteira (Presencial
+ * + IFood + 99Food + Cardápio Web), no mesmo período de 7 dias do gráfico
+ * de faturamento acima — o detalhamento por dia e por loja fica em Insights.
+ */
+let homeCanalChartInstance = null;
+async function carregarCanalRedeHome() {
+  const canvas = document.getElementById('homeCanalChart');
+  const legenda = document.getElementById('home-canal-legend');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const hoje = new Date();
+  const fim = new Date(hoje);
+  fim.setDate(hoje.getDate() - 1);
+  const inicio = new Date(fim);
+  inicio.setDate(fim.getDate() - 6);
+  const paraIso = d => d.toISOString().slice(0, 10);
+
+  try {
+    const resposta = await fetch(`/api/insights?inicio=${paraIso(inicio)}&fim=${paraIso(fim)}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const canaisBrutos = (dados.geral && dados.geral.canais) || [];
+
+    if (homeCanalChartInstance) {
+      homeCanalChartInstance.destroy();
+      homeCanalChartInstance = null;
+    }
+
+    if (!canaisBrutos.length) {
+      if (legenda) legenda.innerHTML = `<p class="panel-subtitle">Nenhum dado de canal nesse período.</p>`;
+      return;
+    }
+
+    const canais = mesclarCanaisPorNomeExibicao(canaisBrutos, 'geral');
+
+    if (legenda) {
+      legenda.innerHTML = canais.map((c, i) => `
+        <div class="home-canal-legend-item">
+          <span class="home-canal-legend-nome">
+            <span class="home-canal-legend-dot" style="background-color: ${CORES_CANAL[i % CORES_CANAL.length]};"></span>
+            ${c.canal}
+          </span>
+          <span class="home-canal-legend-valor">R$ ${c.faturamento}</span>
+        </div>
+      `).join('');
+    }
+
+    homeCanalChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: canais.map(c => c.canal),
+        datasets: [{
+          data: canais.map(c => c.faturamentoNumero),
+          backgroundColor: canais.map((_, i) => CORES_CANAL[i % CORES_CANAL.length]),
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.label}: R$ ${canais[ctx.dataIndex].faturamento} (${canais[ctx.dataIndex].percentual}%)`,
+            },
+          },
+        },
+      },
+    });
+  } catch (erro) {
+    console.error('Falha ao carregar gráfico de canais da rede:', erro);
+    if (legenda) legenda.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar os canais.</p>`;
+  }
+}
+
+/**
+ * Home: lista compacta de quando cada loja sincronizou pela última vez,
+ * com aviso visual se alguma estiver atrasada (não sincronizou ontem/hoje).
+ */
+async function carregarStatusSincronizacaoHome() {
+  const lista = document.getElementById('home-sync-status');
+  if (!lista) return;
+
+  lista.innerHTML = `<p class="panel-subtitle">Carregando...</p>`;
+  try {
+    const resposta = await fetch('/api/config/lojas');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const lojas = dados.lojas || [];
+
+    const hoje = new Date();
+    const ontem = new Date(hoje);
+    ontem.setDate(hoje.getDate() - 1);
+    const formatarBr = d => d.toLocaleDateString('pt-BR');
+    const datasEmDia = new Set([formatarBr(hoje), formatarBr(ontem)]);
+
+    lista.innerHTML = lojas.length
+      ? lojas.map(loja => {
+          const emDia = loja.ultimaSincronizacao && datasEmDia.has(loja.ultimaSincronizacao);
+          return `
+            <div class="sync-status-item">
+              <span class="sync-status-nome">${loja.nome}</span>
+              <span class="sync-status-data">
+                <span class="badge ${emDia ? 'badge-green' : 'badge-orange'}">
+                  ${loja.ultimaSincronizacao || 'nunca sincronizou'}
+                </span>
+              </span>
+            </div>
+          `;
+        }).join('')
+      : `<p class="panel-subtitle">Nenhuma loja cadastrada.</p>`;
+  } catch (erro) {
+    console.error('Falha ao carregar status de sincronização:', erro);
+    lista.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar o status.</p>`;
+  }
+}
+
+/**
  * Tela de Configurações: carrega a lista de lojas cadastradas (com o token
  * mascarado, nunca o valor real) e a data da última sincronização.
  */
@@ -1072,6 +1221,7 @@ async function sincronizarAgora() {
     }
 
     carregarConfigLojas();
+    if (document.getElementById('home-sync-status')) carregarStatusSincronizacaoHome();
   } catch (erro) {
     console.error('Falha ao sincronizar:', erro);
     if (resultadoElem) {
@@ -1139,6 +1289,8 @@ async function carregarDadosLojas() {
       `;
     }).join('');
 
+    renderRankingLojasHome(dados.lojas);
+
     // Reativa os ícones da biblioteca Lucide nos novos elementos criados dinamicamente
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
@@ -1148,6 +1300,42 @@ async function carregarDadosLojas() {
     console.error('Falha ao conectar com o backend Flask:', error);
     container.innerHTML = `<p style="color: #ef4444; padding: 12px;">Não foi possível carregar o status das lojas. Certifique-se de que o Flask está rodando.</p>`;
   }
+}
+
+/**
+ * Home: ranking das lojas por faturamento de ontem, reaproveitando os
+ * mesmos dados já buscados pra montar os cards de "Desempenho por Unidade"
+ * — sem precisar de uma segunda chamada ao backend.
+ */
+function renderRankingLojasHome(lojas) {
+  const lista = document.getElementById('ranking-lojas');
+  if (!lista) return;
+
+  const ranking = (lojas || []).filter(l => l.sucesso).sort((a, b) => b.total - a.total);
+  if (!ranking.length) {
+    lista.innerHTML = `<p class="panel-subtitle">Nenhum dado disponível.</p>`;
+    return;
+  }
+
+  const maiorValor = ranking[0].total || 1;
+  lista.innerHTML = ranking.map((loja, i) => {
+    const valorFormatado = loja.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const percentualBarra = Math.max(6, Math.round((loja.total / maiorValor) * 100));
+    return `
+      <div class="ranking-item">
+        <span class="ranking-posicao">${i + 1}º</span>
+        <div class="ranking-info">
+          <div class="ranking-nome-valor">
+            <span class="nome">${loja.nome}</span>
+            <span class="valor">${valorFormatado}</span>
+          </div>
+          <div class="ranking-barra-bg">
+            <div class="ranking-barra-fill" style="width: ${percentualBarra}%;"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // REDIRECIONAMENTOS E LOGIN
