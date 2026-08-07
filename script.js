@@ -186,7 +186,7 @@ let canalChartInstance = null;
 
 // Quando o usuário clica num dia do Histórico Diário, a Análise de Canal
 // passa a mostrar os dados desse dia + loja específicos, em vez do padrão
-// (dia anterior da aba atual) — { unidade, diaIso } ou null.
+// (período selecionado no filtro) — { unidade, diaIso } ou null.
 let canalSelecionado = null;
 
 // Paleta usada tanto no gráfico de rosca quanto na bolinha colorida da tabela,
@@ -263,7 +263,7 @@ function updateDashboard(tabKey) {
   const data = dashboardData[tabKey];
 
   // Trocar de aba também limpa a seleção de dia clicado no Histórico Diário
-  // — a análise de canal volta a mostrar o dia anterior (padrão) da aba atual.
+  // — a análise de canal volta a mostrar o período selecionado (padrão).
   canalSelecionado = null;
   exibirCanalPadrao(data, tabKey);
 
@@ -306,8 +306,8 @@ function nomeExibicaoCanal(canalBruto, unidade) {
 }
 
 // Atualiza os 3 cards de topo (Faturamento/Pedidos/Ticket) — usado tanto no
-// estado padrão da aba (dia anterior) quanto ao clicar num dia específico
-// do Histórico Diário.
+// estado padrão da aba (período selecionado) quanto ao clicar num dia
+// específico do Histórico Diário.
 function atualizarCardsTopo(opcoes) {
   document.getElementById('val-faturamento').textContent = `R$ ${opcoes.faturamento}`;
   document.getElementById('val-pedidos').textContent = opcoes.pedidos;
@@ -318,9 +318,9 @@ function atualizarCardsTopo(opcoes) {
   renderTrend('trend-ticket', opcoes.ticketTrend, opcoes.ticketUp, opcoes.textoComparacao);
 }
 
-// Mostra a análise de canal padrão da aba atual (dia anterior, já vindo em
-// dashboardData) — usado ao trocar de aba ou ao voltar de um dia selecionado
-// no Histórico Diário. Também restaura os cards de topo pro padrão da aba.
+// Mostra a análise de canal padrão da aba atual (período selecionado, já
+// vindo em dashboardData) — usado ao trocar de aba ou ao voltar de um dia
+// selecionado no Histórico Diário. Também restaura os cards de topo.
 function exibirCanalPadrao(data, tabKey) {
   const canalDataLabel = document.getElementById('canal-data-label');
   if (canalDataLabel) canalDataLabel.textContent = data.canalDataLabel || '--/--/----';
@@ -334,8 +334,8 @@ function exibirCanalPadrao(data, tabKey) {
   destacarLinhaHistoricoSelecionada(null);
   renderCanalAnalysis(data.canais || [], tabKey);
 
-  // Em todas as abas, os 3 primeiros cards mostram só o dia anterior (não o
-  // período do filtro) — o texto abaixo do trend é só a data mesmo.
+  // Em todas as abas, os 3 primeiros cards somam o período selecionado no
+  // filtro — o texto abaixo é o próprio período, sem seta de tendência.
   atualizarCardsTopo({
     faturamento: data.faturamento,
     pedidos: data.pedidos,

@@ -117,10 +117,12 @@ def _agregar_canais(linhas_canais, unidade_filtro):
     return resultado
 
 
-def _linhas_canais_com_presencial(dia_iso):
-    """Canais da Cardápio Web de um dia + venda presencial como um canal
-    "Presencial" a mais (também não passa pela Cardápio Web)."""
-    linhas_canais = buscar_canais_periodo(dia_iso, dia_iso)
+def _linhas_canais_com_presencial(inicio_iso, fim_iso=None):
+    """Canais da Cardápio Web de um dia (ou período) + venda presencial como
+    um canal "Presencial" a mais (também não passa pela Cardápio Web)."""
+    if fim_iso is None:
+        fim_iso = inicio_iso
+    linhas_canais = buscar_canais_periodo(inicio_iso, fim_iso)
     linhas_canais = linhas_canais + [
         {
             "unidade": p["unidade"],
@@ -129,7 +131,7 @@ def _linhas_canais_com_presencial(dia_iso):
             "quantidade_pedidos": p.get("quantidade") or 0,
             "faturamento": p["valor"],
         }
-        for p in buscar_presencial_periodo(dia_iso, dia_iso)
+        for p in buscar_presencial_periodo(inicio_iso, fim_iso)
     ]
     return linhas_canais
 
@@ -163,52 +165,27 @@ def _formatar_diario(linhas):
     ]
 
 
-def _cards_dia_anterior(unidade_filtro, linhas_ontem, linhas_anteontem):
-    """Faturamento Total / Total de Pedidos / Ticket Médio sempre do dia
-    anterior, independente do período selecionado no filtro — vale pra
-    Visão Geral e pra cada loja."""
-    base_ontem = linhas_ontem if unidade_filtro is None else [l for l in linhas_ontem if l["unidade"] == unidade_filtro]
-    base_anteontem = (
-        linhas_anteontem if unidade_filtro is None else [l for l in linhas_anteontem if l["unidade"] == unidade_filtro]
-    )
+def _cards_periodo(unidade_filtro, linhas_periodo):
+    """Faturamento Total / Total de Pedidos / Ticket Médio somados no
+    período selecionado no filtro (início-fim) — vale pra Visão Geral e
+    pra cada loja."""
+    base = linhas_periodo if unidade_filtro is None else [l for l in linhas_periodo if l["unidade"] == unidade_filtro]
 
-    fat = sum(l["faturamento_dia"] for l in base_ontem)
-    ped = sum(l["quantidade_pedidos"] for l in base_ontem)
-    tik = sum(l["ticket_medio"] for l in base_ontem) / len(base_ontem) if base_ontem else 0.0
-
-    fat_ant = sum(l["faturamento_dia"] for l in base_anteontem)
-    ped_ant = sum(l["quantidade_pedidos"] for l in base_anteontem)
-    tik_ant = sum(l["ticket_medio"] for l in base_anteontem) / len(base_anteontem) if base_anteontem else 0.0
-
-    perc_fat, up_fat = _tendencia(fat, fat_ant)
-    perc_ped, up_ped = _tendencia(ped, ped_ant)
-    perc_tik, up_tik = _tendencia(tik, tik_ant)
+    fat = sum(l["faturamento_dia"] for l in base)
+    ped = sum(l["quantidade_pedidos"] for l in base)
+    tik = fat / ped if ped else 0.0
 
     return {
         "faturamento": _formatar_moeda(fat),
-        "faturamentoTrend": _texto_tendencia(perc_fat),
-        "faturamentoUp": up_fat,
+        "faturamentoTrend": "período novo",
+        "faturamentoUp": True,
         "pedidos": _formatar_numero(ped),
-        "pedidosTrend": _texto_tendencia(perc_ped),
-        "pedidosUp": up_ped,
+        "pedidosTrend": "período novo",
+        "pedidosUp": True,
         "ticket": _formatar_moeda(tik),
-        "ticketTrend": _texto_tendencia(perc_tik),
-        "ticketUp": up_tik,
+        "ticketTrend": "período novo",
+        "ticketUp": True,
     }
-
-
-def _tendencia(atual, anterior):
-    if anterior == 0:
-        return None, atual > 0
-    percentual = ((atual - anterior) / anterior) * 100
-    return percentual, percentual >= 0
-
-
-def _texto_tendencia(percentual):
-    if percentual is None:
-        return "período novo"
-    sinal = "+" if percentual >= 0 else ""
-    return f"{sinal}{percentual:.1f}%"
 
 
 def _montar_bloco(unidade_filtro, linhas_periodo, titulo, linhas_canais, canal_data_label):
@@ -517,14 +494,14 @@ def api_insights():
         buscar_presencial_periodo(inicio.isoformat(), fim.isoformat()),
     )
 
-    # Análise por canal sempre reflete o dia anterior (mesmo recorte da Cardápio Web),
-    # independente do período selecionado no filtro geral.
-    data_ontem = date.today() - timedelta(days=1)
-    data_anteontem = data_ontem - timedelta(days=1)
-    ontem = data_ontem.isoformat()
-    anteontem = data_anteontem.isoformat()
-    linhas_canais = _linhas_canais_com_presencial(ontem)
-    canal_data_label = _formatar_data_br(ontem)
+    # Cards de topo, gráfico e tabela de canais agora refletem todos o mesmo
+    # período selecionado no filtro (início-fim) — antes ficavam travados no
+    # dia anterior, independente do filtro.
+    linhas_canais = _linhas_canais_com_presencial(inicio.isoformat(), fim.isoformat())
+    if inicio == fim:
+        canal_data_label = _formatar_data_br(inicio.isoformat())
+    else:
+        canal_data_label = f"{_formatar_data_br(inicio.isoformat())} até {_formatar_data_br(fim.isoformat())}"
 
     resposta = {
         "geral": _montar_bloco(
@@ -536,20 +513,9 @@ def api_insights():
             nome_unidade, linhas_periodo, nome_unidade, linhas_canais, canal_data_label
         )
 
-    # Os cards de topo (Faturamento Total / Total de Pedidos / Ticket Médio)
-    # sempre mostram só o dia anterior, não o período do filtro — em todas as
-    # abas (Visão Geral e cada loja). O resto do bloco (histórico,
-    # detalhamento, canais) continua respeitando o período selecionado.
-    linhas_ontem = _aplicar_presencial(
-        buscar_faturamento_periodo(ontem, ontem), buscar_presencial_periodo(ontem, ontem)
-    )
-    linhas_anteontem = _aplicar_presencial(
-        buscar_faturamento_periodo(anteontem, anteontem), buscar_presencial_periodo(anteontem, anteontem)
-    )
-
-    resposta["geral"].update(_cards_dia_anterior(None, linhas_ontem, linhas_anteontem))
+    resposta["geral"].update(_cards_periodo(None, linhas_periodo))
     for nome_unidade in LOJAS.keys():
-        resposta[nome_unidade].update(_cards_dia_anterior(nome_unidade, linhas_ontem, linhas_anteontem))
+        resposta[nome_unidade].update(_cards_periodo(nome_unidade, linhas_periodo))
 
     return jsonify(resposta)
 
