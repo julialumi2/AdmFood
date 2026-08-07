@@ -99,6 +99,15 @@
   gap: var(--space-6);
 }
 
+/* Item de grid, por padrão, não encolhe abaixo do tamanho mínimo do
+   conteúdo (min-width: auto) — com a tabela de canais (5 colunas) dentro,
+   isso empurrava o painel inteiro (e a página) pra fora da tela no
+   celular. Com min-width: 0 ele passa a respeitar a coluna "1fr" do grid
+   de verdade, e quem rola por dentro é só a tabela (table-responsive). */
+.analytics-grid > .panel {
+  min-width: 0;
+}
+
 /* ANÁLISE DE PEDIDOS POR CANAL DE VENDAS */
 .canal-analysis {
   display: flex;

@@ -551,8 +551,10 @@ tabButtons.forEach(btn => {
 
 // --- ENVIAR PARA O WHATSAPP ---
 // O relatório sempre traz as 4 lojas juntas (independente da aba atual),
-// com o faturamento do dia anterior por canal + a comparação com as outras
-// ocorrências do mesmo dia da semana dentro do mês.
+// com o faturamento por canal do período selecionado no calendário do topo
+// da página (mesmos dados já carregados em dashboardData). A comparação com
+// as outras ocorrências do mesmo dia da semana dentro do mês só faz sentido
+// pra um único dia, então só entra quando início e fim são o mesmo dia.
 const NOMES_CURTOS_WHATSAPP = {
   'Hamburgueria Artesanos': 'Artesanos',
   'Tradiça ZN': 'Tradiça',
@@ -569,41 +571,48 @@ function nomeExibicaoCanalRelatorio(canalBruto) {
 }
 
 async function montarRelatorioWhatsApp() {
-  const ontem = new Date();
-  ontem.setDate(ontem.getDate() - 1);
-  const diaIso = ontem.toISOString().slice(0, 10);
+  const { inicio, fim } = periodoInsightsSelecionado();
+  const mesmoDia = inicio === fim;
 
   const blocos = [];
   for (const unidade of Object.keys(NOMES_CURTOS_WHATSAPP)) {
-    const [respCanal, respSemana] = await Promise.all([
-      fetch(`/api/canal-analise?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`),
-      fetch(`/api/faturamento-mesmo-dia-semana?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`),
-    ]);
-    if (!respCanal.ok || !respSemana.ok) {
-      throw new Error(`Erro no servidor Flask ao montar o relatório de ${unidade}`);
-    }
-    const dadosCanal = await respCanal.json();
-    const dadosSemana = await respSemana.json();
+    const data = dashboardData[unidade];
+    if (!data) continue;
 
-    const canaisMesclados = mesclarCanaisPorNomeExibicao(dadosCanal.canais || [], null, nomeExibicaoCanalRelatorio);
+    const canaisMesclados = mesclarCanaisPorNomeExibicao(data.canais || [], null, nomeExibicaoCanalRelatorio);
     const valorPorNome = {};
     canaisMesclados.forEach(c => { valorPorNome[c.canal] = c.faturamento; });
-    const totalDia = canaisMesclados.reduce((soma, c) => soma + c.faturamentoNumero, 0);
+    const totalPeriodo = canaisMesclados.reduce((soma, c) => soma + c.faturamentoNumero, 0);
 
-    const ocorrencias = dadosSemana.ocorrencias || [];
-    const diaSemana = dadosSemana.diaSemana || '';
-    const valoresSemana = [0, 1, 2, 3].map(i => (ocorrencias[i] ? ocorrencias[i].faturamento : '0,00'));
+    const rotulo = mesmoDia ? 'do dia' : 'do período';
+    const cabecalho = mesmoDia
+      ? `Faturamento do dia ${NOMES_CURTOS_WHATSAPP[unidade]}`
+      : `Faturamento do período ${NOMES_CURTOS_WHATSAPP[unidade]} — ${data.canalDataLabel}`;
 
-    let bloco = `*Faturamento do dia ${NOMES_CURTOS_WHATSAPP[unidade]}*\n\n`;
+    let bloco = `*${cabecalho}*\n\n`;
     bloco += `💵 Presencial: R$ ${valorPorNome['Presencial'] || '0,00'}\n`;
     bloco += `📱 iFood: R$ ${valorPorNome['IFood'] || '0,00'}\n`;
     bloco += `🌐 Cardápio Web: R$ ${valorPorNome['Cardápio Web'] || '0,00'}\n`;
     bloco += `🛵 99 Food: R$ ${valorPorNome['99Food'] || '0,00'}\n\n`;
-    bloco += `Total do dia: R$ ${_formatarMoedaBR(totalDia)}\n\n`;
-    bloco += `- 1 ${diaSemana} do mês: R$ ${valoresSemana[0]}\n`;
-    bloco += `- 2 ${diaSemana} do mês: R$ ${valoresSemana[1]}\n`;
-    bloco += `- 3 ${diaSemana} do mês: R$ ${valoresSemana[2]}\n`;
-    bloco += `- 4 ${diaSemana} do mês: R$ ${valoresSemana[3]}`;
+    bloco += `Total ${rotulo}: R$ ${_formatarMoedaBR(totalPeriodo)}`;
+
+    // A comparação "1ª/2ª/3ª/4ª [dia da semana] do mês" só faz sentido pra
+    // um único dia — não entra quando o período selecionado tem mais de um dia.
+    if (mesmoDia) {
+      const respSemana = await fetch(`/api/faturamento-mesmo-dia-semana?unidade=${encodeURIComponent(unidade)}&dia=${inicio}`);
+      if (respSemana.ok) {
+        const dadosSemana = await respSemana.json();
+        const ocorrencias = dadosSemana.ocorrencias || [];
+        const diaSemana = dadosSemana.diaSemana || '';
+        const valoresSemana = [0, 1, 2, 3].map(i => (ocorrencias[i] ? ocorrencias[i].faturamento : '0,00'));
+
+        bloco += `\n\n`;
+        bloco += `- 1 ${diaSemana} do mês: R$ ${valoresSemana[0]}\n`;
+        bloco += `- 2 ${diaSemana} do mês: R$ ${valoresSemana[1]}\n`;
+        bloco += `- 3 ${diaSemana} do mês: R$ ${valoresSemana[2]}\n`;
+        bloco += `- 4 ${diaSemana} do mês: R$ ${valoresSemana[3]}`;
+      }
+    }
 
     blocos.push(bloco);
   }
