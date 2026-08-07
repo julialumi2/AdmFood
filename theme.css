@@ -68,7 +68,11 @@
   --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.08);
 
   --sidebar-width: 260px;
-  --sidebar-width-collapsed: 80px;
+  /* A sidebar flutuante tem 16px de margem de cada lado (var(--space-4)) —
+     soma 32px aqui pra o retângulo renderizado (depois de tirar a margem)
+     ficar com os mesmos 80px de largura do desenho original. Sem isso, o
+     ícone da logo (36px) não cabia no espaço sobrando e ficava cortado. */
+  --sidebar-width-collapsed: calc(80px + var(--space-4) * 2);
 }
 
 body.dark-mode {
@@ -191,6 +195,7 @@ body {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
   min-height: 100vh;
+  min-height: 100dvh; /* no celular, 100vh conta com a barra de endereço escondida — dvh usa a altura real visível, senão sobra espaço embaixo quando a barra aparece */
   background-color: var(--bg-main);
   transition: grid-template-columns 0.25s ease;
 }
@@ -211,6 +216,7 @@ body {
   margin: var(--space-4);
   border-radius: var(--radius-lg);
   height: calc(100vh - var(--space-4) * 2);
+  height: calc(100dvh - var(--space-4) * 2);
   position: sticky;
   top: var(--space-4);
   transition: padding 0.25s ease, margin 0.25s ease;
@@ -316,6 +322,9 @@ body {
 
 .dashboard-wrapper.collapsed .sidebar-logo {
   justify-content: center;
+  /* gap some sozinho quando o texto da marca é escondido (display:none),
+     mas ainda reservava o espaço — sem isso o ícone ficava fora do centro. */
+  gap: 0;
   margin-bottom: var(--space-8);
 }
 
