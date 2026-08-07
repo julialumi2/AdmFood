@@ -611,53 +611,74 @@ async function montarRelatorioWhatsApp() {
   return blocos.join('\n\n\n');
 }
 
+// Copiar pra área de transferência exige um clique "fresco" (sem await no
+// meio) em alguns navegadores de celular, senão o pedido de permissão é
+// negado (a mesma exigência que existia pro window.open, só que mais
+// rígida). Por isso o relatório é montado primeiro, mostrado num modal, e
+// só then o clique em "Copiar" — um gesto novo e direto — chama a área de
+// transferência, sem nenhum await antes.
+const modalWhatsApp = document.getElementById('modal-whatsapp');
+const whatsappTextoRelatorio = document.getElementById('whatsapp-texto-relatorio');
+const btnWhatsAppFechar = document.getElementById('btn-whatsapp-fechar');
+const btnWhatsAppAbrir = document.getElementById('btn-whatsapp-abrir');
+const btnWhatsAppCopiar = document.getElementById('btn-whatsapp-copiar');
+
+function fecharModalWhatsApp() {
+  if (modalWhatsApp) modalWhatsApp.style.display = 'none';
+}
+
 if (btnWhatsApp) {
   btnWhatsApp.addEventListener('click', async () => {
-    // Abre a aba já no clique, de forma síncrona — no celular, o navegador
-    // bloqueia window.open() chamado depois de um await (as buscas dos
-    // dados), porque perde a ligação direta com o gesto do usuário.
-    const novaAba = window.open('', '_blank');
-
     const htmlOriginal = btnWhatsApp.innerHTML;
     btnWhatsApp.disabled = true;
     btnWhatsApp.innerHTML = '<span>Montando relatório...</span>';
     try {
       const mensagem = await montarRelatorioWhatsApp();
-
-      // Mandar o texto pronto pela URL (?text=) depende do app do WhatsApp
-      // decodificar certo o link — em alguns celulares isso corrompe os
-      // emojis (viram um quadrado/símbolo quebrado). Copiar pra área de
-      // transferência e colar manualmente não passa por essa decodificação
-      // nenhuma, então preserva os emojis sempre.
-      let copiado = false;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        try {
-          await navigator.clipboard.writeText(mensagem);
-          copiado = true;
-        } catch (erroClipboard) {
-          console.error('Falha ao copiar mensagem:', erroClipboard);
-        }
-      }
-
-      const destino = 'https://wa.me/';
-      if (novaAba) {
-        novaAba.location.href = destino;
-      } else {
-        window.open(destino, '_blank');
-      }
-
-      if (copiado) {
-        alert('Mensagem copiada! Cole (Ctrl+V ou segurar e colar) no campo de texto do WhatsApp.');
-      } else {
-        alert('Não foi possível copiar automaticamente. Copie a mensagem abaixo e cole no WhatsApp:\n\n' + mensagem);
-      }
+      if (whatsappTextoRelatorio) whatsappTextoRelatorio.value = mensagem;
+      if (modalWhatsApp) modalWhatsApp.style.display = 'flex';
     } catch (erro) {
-      if (novaAba) novaAba.close();
       console.error('Falha ao montar relatório do WhatsApp:', erro);
       alert('Não foi possível montar o relatório. Confira se o Flask está rodando.');
     } finally {
       btnWhatsApp.disabled = false;
       btnWhatsApp.innerHTML = htmlOriginal;
+    }
+  });
+}
+
+if (btnWhatsAppFechar) btnWhatsAppFechar.addEventListener('click', fecharModalWhatsApp);
+if (modalWhatsApp) {
+  modalWhatsApp.addEventListener('click', (evento) => {
+    if (evento.target === modalWhatsApp) fecharModalWhatsApp();
+  });
+}
+
+if (btnWhatsAppAbrir) {
+  btnWhatsAppAbrir.addEventListener('click', () => {
+    window.open('https://wa.me/', '_blank');
+  });
+}
+
+if (btnWhatsAppCopiar) {
+  btnWhatsAppCopiar.addEventListener('click', async () => {
+    const texto = whatsappTextoRelatorio ? whatsappTextoRelatorio.value : '';
+    const textoOriginalBotao = btnWhatsAppCopiar.textContent;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        whatsappTextoRelatorio.select();
+        document.execCommand('copy');
+      }
+      btnWhatsAppCopiar.textContent = 'Copiado!';
+    } catch (erro) {
+      console.error('Falha ao copiar mensagem:', erro);
+      // Fallback pra navegadores que negam a Clipboard API: seleciona o
+      // texto no campo pra pelo menos deixar o Ctrl+C/copiar manual pronto.
+      whatsappTextoRelatorio.select();
+      btnWhatsAppCopiar.textContent = 'Selecionado — copie manualmente';
+    } finally {
+      setTimeout(() => { btnWhatsAppCopiar.textContent = textoOriginalBotao; }, 2000);
     }
   });
 }

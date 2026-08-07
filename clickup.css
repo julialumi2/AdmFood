@@ -155,37 +155,9 @@
 .badge.priority-baixa { background-color: var(--success-soft); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.25); }
 
 /* === MODAIS === */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: var(--card-bg);
-  color: var(--text-dark);
-  padding: var(--space-6);
-  border-radius: var(--radius-md);
-  width: 100%;
-  max-width: 480px;
-  box-shadow: var(--shadow-lg);
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content.modal-large { max-width: 600px; }
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-5);
-}
-
+/* O sistema genérico de modal (overlay, moldura, cabeçalho, botões) está
+   em theme.css, compartilhado com outras páginas — aqui só o que é
+   específico do modal de detalhe/edição de tarefa do ClickUp. */
 .modal-title-status {
   display: flex;
   align-items: center;
@@ -199,36 +171,6 @@
   color: var(--text-dark);
   padding: 4px 10px;
   border-radius: var(--radius-pill);
-}
-
-.modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.btn-icon {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.btn-icon.danger:hover { background-color: var(--danger-soft); color: var(--danger); }
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  line-height: 1;
 }
 
 .form-group-row {
@@ -411,61 +353,7 @@
   font-size: 0.85rem;
 }
 
-/* Botões do modal */
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-5);
-}
-
-.modal-actions.border-top {
-  border-top: 1px solid var(--surface-muted-border);
-  padding-top: var(--space-4);
-}
-
-.btn-secondary-sm {
-  background: var(--surface-muted);
-  color: var(--text-dark);
-  border: 1px solid var(--border-color);
-  padding: 8px var(--space-3);
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-secondary-sm:hover { background: var(--surface-muted-border); }
-
-.btn-primary-sm {
-  background: var(--primary);
-  color: white;
-  border: none;
-  padding: 8px var(--space-3);
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-primary-sm:hover { background: var(--primary-hover); }
-
 @media (max-width: 768px) {
   .kanban-board { grid-template-columns: 1fr; }
-
-  .modal-content {
-    padding: 18px;
-    max-width: 95vw;
-    border-radius: var(--radius-lg);
-  }
-
   .task-info-grid { grid-template-columns: 1fr; }
-  .modal-actions { flex-wrap: wrap; }
-
-  .btn-primary,
-  .btn-secondary,
-  .btn-primary-sm,
-  .btn-secondary-sm {
-    min-height: 44px;
-  }
 }

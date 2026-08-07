@@ -334,6 +334,24 @@
       </a>
     </nav>
 
+    <!-- MODAL: PRÉ-VISUALIZAÇÃO DO RELATÓRIO DO WHATSAPP -->
+    <div class="modal-overlay" id="modal-whatsapp" style="display: none;">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 class="panel-title">Relatório pronto</h3>
+          <button type="button" class="btn-close" id="btn-whatsapp-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Copie a mensagem abaixo e cole no WhatsApp — assim os emojis chegam certinho, sem depender do link abrir o app.
+        </p>
+        <textarea id="whatsapp-texto-relatorio" class="whatsapp-preview-textarea" readonly rows="14"></textarea>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-whatsapp-abrir">Abrir WhatsApp</button>
+          <button type="button" class="btn-primary-sm" id="btn-whatsapp-copiar">Copiar mensagem</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </body>
 </html>
