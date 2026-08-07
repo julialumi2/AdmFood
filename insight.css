@@ -15,42 +15,6 @@
   resize: vertical;
 }
 
-/* INSIGHTS AUTOMÁTICOS (ONTEM VS MÉDIA DOS ÚLTIMOS 7 DIAS) */
-.insights-automaticos-lista {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.insight-automatico-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background-color: var(--surface-muted);
-  font-size: 0.85rem;
-  color: var(--text-dark);
-  line-height: 1.4;
-}
-
-.insight-automatico-icone {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.insight-automatico-icone i { width: 16px; height: 16px; }
-
-.insight-automatico-item.alta .insight-automatico-icone { background-color: var(--success-soft); color: var(--success); }
-.insight-automatico-item.baixa .insight-automatico-icone { background-color: var(--danger-soft); color: var(--danger); }
-.insight-automatico-item.alta strong { color: var(--success); }
-.insight-automatico-item.baixa strong { color: var(--danger); }
-
 /* SELETOR DE PERÍODO (CALENDÁRIO, DATA INÍCIO - FIM) */
 .date-range-picker {
   display: flex;

@@ -57,6 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarStatusSincronizacaoHome();
   }
 
+  // 4.07 INSIGHTS AUTOMÁTICOS (Home)
+  if (document.getElementById('insights-automaticos-lista')) {
+    carregarInsightsAutomaticos();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -986,8 +991,6 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
       if (painel) painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
-
-  carregarInsightsAutomaticos();
 
   [dataInicioInput, dataFimInput].forEach((input) => {
     if (!input) return;
