@@ -533,6 +533,32 @@ body {
   background-color: var(--primary-hover);
 }
 
+.title-row-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Indicador de "atualizado às HH:MM" — mostrado na Home e no Insights,
+   preenchido via JS toda vez que a atualização automática busca de novo. */
+.atualizado-em {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.atualizado-em::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--success);
+  flex-shrink: 0;
+}
+
 .content-header {
   display: flex;
   flex-wrap: wrap;

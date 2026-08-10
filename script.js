@@ -62,6 +62,19 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarInsightsAutomaticos();
   }
 
+  // 4.08 ATUALIZAÇÃO AUTOMÁTICA DA HOME (quase em tempo real)
+  if (document.getElementById('container-lojas')) {
+    marcarAtualizadoAgora('home-atualizado-em');
+    iniciarAtualizacaoAutomatica(() => {
+      carregarDadosLojas();
+      carregarGraficoRede();
+      carregarCanalRedeHome();
+      carregarStatusSincronizacaoHome();
+      carregarInsightsAutomaticos();
+      marcarAtualizadoAgora('home-atualizado-em');
+    });
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -753,6 +766,7 @@ async function carregarInsights(inicio, fim) {
     }
     dashboardData = await resposta.json();
     updateDashboard(dashboardData[currentTab] ? currentTab : 'geral');
+    marcarAtualizadoAgora('insight-atualizado-em');
   } catch (erro) {
     console.error('Falha ao carregar insights:', erro);
     if (canalTableBody) {
@@ -992,6 +1006,15 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
     }
   });
 
+  iniciarAtualizacaoAutomatica(() => {
+    // Se o usuário estiver com um dia específico aberto (clicou no Histórico
+    // Diário), não atualiza sozinho — isso resetaria a visão de volta pro
+    // período padrão no meio da leitura. Volta a atualizar quando ele sair.
+    if (canalSelecionado) return;
+    const periodo = periodoInsightsSelecionado();
+    carregarInsights(periodo.inicio, periodo.fim);
+  });
+
   [dataInicioInput, dataFimInput].forEach((input) => {
     if (!input) return;
     input.addEventListener('change', () => {
@@ -1152,6 +1175,26 @@ async function carregarCanalRedeHome() {
     console.error('Falha ao carregar gráfico de canais da rede:', erro);
     if (legenda) legenda.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar os canais.</p>`;
   }
+}
+
+// Atualização "quase em tempo real": chama de novo em intervalos, pausando
+// quando a aba não está visível (economiza chamadas à toa em segundo plano
+// — o usuário não tá olhando mesmo). O backend sincroniza com a Cardápio
+// Web a cada 15 min; aqui a tela busca de novo com mais frequência porque é
+// só ler do banco local do Flask, sem custo de API externa.
+function iniciarAtualizacaoAutomatica(callback, intervaloMs = 2 * 60 * 1000) {
+  setInterval(() => {
+    if (document.visibilityState === 'visible') callback();
+  }, intervaloMs);
+}
+
+function marcarAtualizadoAgora(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const agora = new Date();
+  const hh = String(agora.getHours()).padStart(2, '0');
+  const mm = String(agora.getMinutes()).padStart(2, '0');
+  el.textContent = `Atualizado às ${hh}:${mm}`;
 }
 
 // Considera "em dia" se a última sincronização foi hoje ou ontem — regra

@@ -1,5 +1,5 @@
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from flask import Flask, abort, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -23,10 +23,16 @@ CORS(app)  # Permite requisições do JS mesmo se rodar direto do arquivo local
 
 inicializar_banco()
 
-# Sincronização diária automática com a Cardápio Web. Localmente isso já é
-# feito pelo Agendador de Tarefas do Windows (fora do processo do Flask),
-# mas em produção (Dokploy) não existe esse agendador — o próprio processo
-# da aplicação precisa disparar a sincronização todo dia.
+# Sincronização automática com a Cardápio Web. Localmente isso já é feito
+# pelo Agendador de Tarefas do Windows (fora do processo do Flask), mas em
+# produção (Dokploy) não existe esse agendador — o próprio processo da
+# aplicação precisa disparar a sincronização.
+#
+# Dois jobs, propósitos diferentes:
+# - Diário às 3h: fecha o dia anterior com calma, depois que ele já acabou.
+# - A cada 15 min: sincroniza HOJE (o dia em andamento), pra quem estiver
+#   olhando o sistema durante o dia ver os números indo perto do tempo real,
+#   em vez de só descobrir o resultado do dia no dia seguinte.
 if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
     # Evita agendar duas vezes por causa do reloader do modo debug.
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
@@ -35,8 +41,14 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
         def _rodar_sincronizacao_diaria():
             sincronizar_dia(date.today() - timedelta(days=1))
 
+        def _rodar_sincronizacao_hoje():
+            sincronizar_dia(date.today())
+
         _scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
         _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=3, minute=0)
+        _scheduler.add_job(
+            _rodar_sincronizacao_hoje, "interval", minutes=15, next_run_time=datetime.now()
+        )
         _scheduler.start()
 
 # Lojas que registram vendas presenciais (não passam pela Cardápio Web e
