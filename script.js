@@ -264,7 +264,7 @@ function renderHistoricoDiario(diario) {
             data-chave="${chave}" data-dia-iso="${item.diaIso}" data-unidade="${item.unidade}"
             title="Ver análise de canal desse dia">
             <td class="font-bold dia-com-semana">
-              <span class="dia-data">${item.dia}</span>
+              <span class="dia-data">${item.dia.slice(0, 5)}</span>
               <span class="dia-semana-badge">${item.diaSemana}</span>
             </td>
             <td>${item.unidade}</td>
@@ -511,9 +511,9 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
           ${c.canal}
         </span>
       </td>
-      <td>${c.pedidos}</td>
-      <td>R$ ${c.ticket}</td>
       <td class="font-bold">R$ ${c.faturamento}</td>
+      <td>R$ ${c.ticket}</td>
+      <td>${c.pedidos}</td>
       <td>${c.percentual}%</td>
     </tr>
   `).join('');
