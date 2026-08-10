@@ -235,6 +235,7 @@ const tabButtons = document.querySelectorAll('.tab-btn');
 const btnWhatsApp = document.getElementById('btn-whatsapp');
 const dataInicioInput = document.getElementById('insight-data-inicio');
 const dataFimInput = document.getElementById('insight-data-fim');
+const diaSemanaInput = document.getElementById('insight-dia-semana');
 const formPresencial = document.getElementById('form-presencial');
 const presencialDiaInput = document.getElementById('presencial-dia');
 const presencialValorInput = document.getElementById('presencial-valor');
@@ -750,17 +751,19 @@ function periodoInsightsSelecionado() {
 
   const inicio = (dataInicioInput && dataInicioInput.value) || inicioPadrao;
   const fim = (dataFimInput && dataFimInput.value) || fimPadrao;
-  return { inicio, fim };
+  const diaSemana = diaSemanaInput ? diaSemanaInput.value : '';
+  return { inicio, fim, diaSemana };
 }
 
-async function carregarInsights(inicio, fim) {
+async function carregarInsights(inicio, fim, diaSemana) {
   const canalTableBody = document.getElementById('canal-table-body');
   if (canalTableBody) {
     canalTableBody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Carregando dados...</td></tr>`;
   }
 
   try {
-    const resposta = await fetch(`/api/insights?inicio=${inicio}&fim=${fim}`);
+    const filtroDiaSemana = diaSemana ? `&diaSemana=${diaSemana}` : '';
+    const resposta = await fetch(`/api/insights?inicio=${inicio}&fim=${fim}${filtroDiaSemana}`);
     if (!resposta.ok) {
       throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     }
@@ -914,8 +917,8 @@ if (presencialTableBody) {
         if (presencialEditandoDiaOriginal === diaIso) cancelarEdicaoPresencial();
         await carregarPresencial(currentTab);
         {
-          const { inicio, fim } = periodoInsightsSelecionado();
-          await carregarInsights(inicio, fim);
+          const { inicio, fim, diaSemana } = periodoInsightsSelecionado();
+          await carregarInsights(inicio, fim, diaSemana);
         }
       } catch (erro) {
         console.error('Falha ao excluir venda presencial:', erro);
@@ -963,8 +966,8 @@ if (formPresencial) {
       cancelarEdicaoPresencial();
       await carregarPresencial(currentTab);
       {
-        const { inicio, fim } = periodoInsightsSelecionado();
-        await carregarInsights(inicio, fim);
+        const { inicio, fim, diaSemana } = periodoInsightsSelecionado();
+        await carregarInsights(inicio, fim, diaSemana);
       }
     } catch (erro) {
       console.error('Falha ao salvar venda presencial:', erro);
@@ -998,8 +1001,8 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
     }
   }
 
-  const { inicio, fim } = periodoInsightsSelecionado();
-  carregarInsights(inicio, fim).then(() => {
+  const { inicio, fim, diaSemana } = periodoInsightsSelecionado();
+  carregarInsights(inicio, fim, diaSemana).then(() => {
     if (window.location.hash === '#panel-vendas-presenciais') {
       const painel = document.getElementById('panel-vendas-presenciais');
       if (painel) painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1012,7 +1015,7 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
     // período padrão no meio da leitura. Volta a atualizar quando ele sair.
     if (canalSelecionado) return;
     const periodo = periodoInsightsSelecionado();
-    carregarInsights(periodo.inicio, periodo.fim);
+    carregarInsights(periodo.inicio, periodo.fim, periodo.diaSemana);
   });
 
   [dataInicioInput, dataFimInput].forEach((input) => {
@@ -1021,9 +1024,16 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
       validarIntervaloDatasInsights();
       if (!dataInicioInput.value || !dataFimInput.value) return;
       const periodo = periodoInsightsSelecionado();
-      carregarInsights(periodo.inicio, periodo.fim);
+      carregarInsights(periodo.inicio, periodo.fim, periodo.diaSemana);
     });
   });
+
+  if (diaSemanaInput) {
+    diaSemanaInput.addEventListener('change', () => {
+      const periodo = periodoInsightsSelecionado();
+      carregarInsights(periodo.inicio, periodo.fim, periodo.diaSemana);
+    });
+  }
 }
 
 

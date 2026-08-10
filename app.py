@@ -102,6 +102,15 @@ def _dia_semana_abrev(dia_iso):
     return DIAS_SEMANA_ABREV[date.fromisoformat(dia_iso).weekday()]
 
 
+def _nome_plural_dia_semana(indice):
+    # "segunda" -> "segundas-feiras", mas sábado/domingo não levam "-feira".
+    if indice == 5:
+        return "sábados"
+    if indice == 6:
+        return "domingos"
+    return f"{DIAS_SEMANA_COMPLETO[indice]}s-feiras"
+
+
 def _agregar_canais(linhas_canais, unidade_filtro):
     if unidade_filtro is not None:
         linhas_canais = [l for l in linhas_canais if l["unidade"] == unidade_filtro]
@@ -512,10 +521,31 @@ def api_insights():
     # período selecionado no filtro (início-fim) — antes ficavam travados no
     # dia anterior, independente do filtro.
     linhas_canais = _linhas_canais_com_presencial(inicio.isoformat(), fim.isoformat())
+
+    # Filtro opcional por dia da semana (ex: "só sextas-feiras") — restringe
+    # o período já buscado, em vez de mudar o que foi buscado; assim o
+    # usuário pode combinar "últimos 90 dias" + "sexta" pra ver as últimas
+    # ~13 sextas, por exemplo.
+    dia_semana_str = request.args.get('diaSemana')
+    dia_semana_idx = None
+    if dia_semana_str not in (None, ''):
+        try:
+            candidato = int(dia_semana_str)
+            if 0 <= candidato <= 6:
+                dia_semana_idx = candidato
+        except ValueError:
+            pass
+
+    if dia_semana_idx is not None:
+        linhas_periodo = [l for l in linhas_periodo if date.fromisoformat(l["dia"]).weekday() == dia_semana_idx]
+        linhas_canais = [l for l in linhas_canais if date.fromisoformat(l["dia"]).weekday() == dia_semana_idx]
+
     if inicio == fim:
         canal_data_label = _formatar_data_br(inicio.isoformat())
     else:
         canal_data_label = f"{_formatar_data_br(inicio.isoformat())} até {_formatar_data_br(fim.isoformat())}"
+    if dia_semana_idx is not None:
+        canal_data_label += f" — só {_nome_plural_dia_semana(dia_semana_idx)}"
 
     resposta = {
         "geral": _montar_bloco(
