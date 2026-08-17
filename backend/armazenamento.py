@@ -7,6 +7,7 @@ a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 import os
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 
 # Em produção (Dokploy), aponta pra um volume persistente (ex: /app/data/admfood.db)
 # via a variável DATABASE_PATH, senão perde os dados a cada novo deploy.
@@ -64,6 +65,44 @@ def inicializar_banco():
         colunas = {c["name"] for c in conn.execute("PRAGMA table_info(venda_presencial)").fetchall()}
         if "quantidade" not in colunas:
             conn.execute("ALTER TABLE venda_presencial ADD COLUMN quantidade INTEGER NOT NULL DEFAULT 0")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tarefa (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titulo TEXT NOT NULL,
+                descricao TEXT NOT NULL DEFAULT '',
+                categoria TEXT NOT NULL DEFAULT 'Geral',
+                prioridade TEXT NOT NULL DEFAULT 'media',
+                status TEXT NOT NULL DEFAULT 'todo',
+                data_limite TEXT,
+                criado_em TEXT NOT NULL,
+                atualizado_em TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tarefa_subtarefa (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tarefa_id INTEGER NOT NULL,
+                titulo TEXT NOT NULL,
+                concluida INTEGER NOT NULL DEFAULT 0,
+                ordem INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tarefa_comentario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tarefa_id INTEGER NOT NULL,
+                autor TEXT NOT NULL,
+                texto TEXT NOT NULL,
+                criado_em TEXT NOT NULL
+            )
+            """
+        )
 
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
@@ -254,3 +293,91 @@ def listar_unidades():
             "SELECT DISTINCT unidade FROM faturamento_diario ORDER BY unidade"
         ).fetchall()
         return [linha["unidade"] for linha in linhas]
+
+
+# --- TAREFAS (quadro do ClickUp) -------------------------------------------
+
+def listar_tarefas():
+    with conexao() as conn:
+        tarefas = [dict(t) for t in conn.execute("SELECT * FROM tarefa ORDER BY criado_em DESC").fetchall()]
+        for tarefa in tarefas:
+            tarefa["subtarefas"] = [
+                dict(s) for s in conn.execute(
+                    "SELECT * FROM tarefa_subtarefa WHERE tarefa_id = ? ORDER BY ordem, id",
+                    (tarefa["id"],),
+                ).fetchall()
+            ]
+            tarefa["comentarios"] = [
+                dict(c) for c in conn.execute(
+                    "SELECT * FROM tarefa_comentario WHERE tarefa_id = ? ORDER BY criado_em",
+                    (tarefa["id"],),
+                ).fetchall()
+            ]
+        return tarefas
+
+
+def criar_tarefa(titulo, descricao, categoria, prioridade, data_limite):
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, 'todo', ?, ?, ?)
+            """,
+            (titulo, descricao, categoria, prioridade, data_limite, agora, agora),
+        )
+        return cursor.lastrowid
+
+
+def atualizar_tarefa(tarefa_id, campos):
+    """campos: dict com as colunas a mudar (titulo, descricao, categoria,
+    prioridade, status, data_limite) — só atualiza o que vier no dict."""
+    if not campos:
+        return
+    campos = dict(campos)
+    campos["atualizado_em"] = datetime.now().isoformat()
+    colunas = ", ".join(f"{chave} = ?" for chave in campos)
+    valores = list(campos.values()) + [tarefa_id]
+    with conexao() as conn:
+        conn.execute(f"UPDATE tarefa SET {colunas} WHERE id = ?", valores)
+
+
+def excluir_tarefa(tarefa_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM tarefa_comentario WHERE tarefa_id = ?", (tarefa_id,))
+        conn.execute("DELETE FROM tarefa_subtarefa WHERE tarefa_id = ?", (tarefa_id,))
+        conn.execute("DELETE FROM tarefa WHERE id = ?", (tarefa_id,))
+
+
+def adicionar_subtarefa(tarefa_id, titulo):
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        proxima_ordem = conn.execute(
+            "SELECT COALESCE(MAX(ordem), -1) + 1 AS prox FROM tarefa_subtarefa WHERE tarefa_id = ?",
+            (tarefa_id,),
+        ).fetchone()["prox"]
+        cursor = conn.execute(
+            "INSERT INTO tarefa_subtarefa (tarefa_id, titulo, concluida, ordem) VALUES (?, ?, 0, ?)",
+            (tarefa_id, titulo, proxima_ordem),
+        )
+        conn.execute("UPDATE tarefa SET atualizado_em = ? WHERE id = ?", (agora, tarefa_id))
+        return cursor.lastrowid
+
+
+def alternar_subtarefa(subtarefa_id, concluida):
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE tarefa_subtarefa SET concluida = ? WHERE id = ?",
+            (1 if concluida else 0, subtarefa_id),
+        )
+
+
+def adicionar_comentario(tarefa_id, autor, texto):
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        cursor = conn.execute(
+            "INSERT INTO tarefa_comentario (tarefa_id, autor, texto, criado_em) VALUES (?, ?, ?, ?)",
+            (tarefa_id, autor, texto, agora),
+        )
+        conn.execute("UPDATE tarefa SET atualizado_em = ? WHERE id = ?", (agora, tarefa_id))
+        return cursor.lastrowid

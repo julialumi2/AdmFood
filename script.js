@@ -75,6 +75,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // 4.09 TELA DE CLICKUP
+  if (document.querySelector('.kanban-board')) {
+    carregarTarefas();
+    wireColumnDropEvents();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -1477,133 +1483,293 @@ function loginGoogle() {
   alert("Redirecionando para autenticação do Google...");
 }
 
-// Elementos do Kanban
-  const cards = document.querySelectorAll(".task-card");
-  const columns = document.querySelectorAll(".kanban-column");
+// --- CLICKUP: QUADRO DE TAREFAS ---
+// Antes esse quadro era só visual (nada salvava, e os botões de detalhe,
+// excluir, mover, comentar chamavam funções que nem existiam). Agora tudo
+// passa pelo banco de dados via /api/tarefas.
+let tarefasData = [];
+let tarefaSelecionadaId = null;
 
-  // 1. CONFIGURA OS CARDS PARA SEREM ARRASTÁVEIS
-  cards.forEach((card) => {
-    // Quando começa a arrastar
-    card.addEventListener("dragstart", (e) => {
-      card.classList.add("dragging");
-      e.dataTransfer.setData("text/plain", card.id);
-    });
+const PRIORIDADE_LABEL_TAREFA = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
+const STATUS_LABEL_TAREFA = { todo: 'A Fazer', doing: 'Em Andamento', done: 'Feito' };
 
-    // Quando termina de arrastar
-    card.addEventListener("dragend", () => {
-      card.classList.remove("dragging");
-      atualizarContadores(); // Atualiza a contagem dos cards
-    });
+async function carregarTarefas() {
+  const board = document.querySelector('.kanban-board');
+  if (!board) return;
+  try {
+    const resposta = await fetch('/api/tarefas');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    tarefasData = dados.tarefas || [];
+    renderKanban();
+  } catch (erro) {
+    console.error('Falha ao carregar tarefas:', erro);
+    board.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar as tarefas. Confira se o Flask está rodando.</p>`;
+  }
+}
+
+function renderKanban() {
+  ['todo', 'doing', 'done'].forEach(status => {
+    const coluna = document.querySelector(`.kanban-column[data-status="${status}"] .task-list`);
+    const contagem = document.querySelector(`.kanban-column[data-status="${status}"] .task-count`);
+    if (!coluna) return;
+
+    const tarefas = tarefasData.filter(t => t.status === status);
+    if (contagem) contagem.textContent = tarefas.length;
+
+    coluna.innerHTML = tarefas.length
+      ? tarefas.map(t => `
+          <div class="task-card" draggable="true" data-id="${t.id}">
+            <div class="card-top">
+              <h4 class="task-title">${t.titulo}</h4>
+              <span class="badge priority-${t.prioridade}">${PRIORIDADE_LABEL_TAREFA[t.prioridade] || t.prioridade}</span>
+            </div>
+            <p>${t.descricao || ''}</p>
+            <div class="card-bottom">
+              <span class="task-meta">${t.categoria}</span>
+              <span class="task-date">${t.dataLimiteFormatada || ''}</span>
+            </div>
+          </div>
+        `).join('')
+      : '';
   });
 
-  // 2. CONFIGURA AS COLUNAS PARA RECEBEREM OS CARDS
-  columns.forEach((column) => {
-    const taskList = column.querySelector(".task-list");
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  wireTaskCardEvents();
+}
 
-    // Permite que o elemento seja solto na coluna
-    column.addEventListener("dragover", (e) => {
-      e.preventDefault(); // Necessário para permitir o "drop"
-      column.classList.add("drag-over");
+function wireTaskCardEvents() {
+  document.querySelectorAll('.task-card').forEach(card => {
+    card.addEventListener('click', () => abrirDetalhesTarefa(card.dataset.id));
+    card.addEventListener('dragstart', (e) => {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', card.dataset.id);
     });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+}
 
-    // Quando o card sai da área da coluna
-    column.addEventListener("dragleave", () => {
-      column.classList.remove("drag-over");
-    });
-
-    // Quando o card é solto na coluna
-    column.addEventListener("drop", (e) => {
+function wireColumnDropEvents() {
+  document.querySelectorAll('.kanban-column').forEach(column => {
+    column.addEventListener('dragover', (e) => {
       e.preventDefault();
-      column.classList.remove("drag-over");
-
-      const cardId = e.dataTransfer.getData("text/plain");
-      const draggingCard = document.getElementById(cardId);
-
-      if (draggingCard && taskList) {
-        taskList.appendChild(draggingCard);
-        atualizarContadores();
-      }
+      column.classList.add('drag-over');
+    });
+    column.addEventListener('dragleave', () => column.classList.remove('drag-over'));
+    column.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      column.classList.remove('drag-over');
+      const tarefaId = e.dataTransfer.getData('text/plain');
+      if (!tarefaId) return;
+      await moverTarefa(tarefaId, column.dataset.status);
     });
   });
+}
 
-  // 3. FUNÇÃO PARA ATUALIZAR O NÚMERO DE TAREFAS EM CADA COLUNA
-  function atualizarContadores() {
-    columns.forEach((column) => {
-      const countSpan = column.querySelector(".task-count");
-      const taskCount = column.querySelectorAll(".task-card").length;
-      if (countSpan) {
-        countSpan.textContent = taskCount;
-      }
+async function moverTarefa(tarefaId, novoStatus) {
+  try {
+    const resposta = await fetch(`/api/tarefas/${tarefaId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: novoStatus }),
     });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    await carregarTarefas();
+  } catch (erro) {
+    console.error('Falha ao mover tarefa:', erro);
+    alert('Não foi possível mover a tarefa. Confira se o Flask está rodando.');
+  }
+}
+
+// --- MODAL: CRIAR TAREFA ---
+function criarNovaTarefa() {
+  const modal = document.getElementById('modalCriarTarefa');
+  if (modal) modal.style.display = 'flex';
+}
+
+function fecharModalCriar() {
+  const modal = document.getElementById('modalCriarTarefa');
+  if (modal) modal.style.display = 'none';
+  const form = document.getElementById('formNovaTarefa');
+  if (form) form.reset();
+}
+
+async function salvarNovaTarefa(event) {
+  event.preventDefault();
+  const titulo = document.getElementById('tituloTarefa').value.trim();
+  if (!titulo) return;
+
+  const corpo = {
+    titulo,
+    prioridade: document.getElementById('prioridadeTarefa').value,
+    categoria: document.getElementById('categoriaTarefa').value,
+    dataLimite: document.getElementById('dataLimiteTarefa').value,
+    descricao: document.getElementById('descricaoTarefa').value,
   };
 
-  // Contador global para gerar IDs únicos para as tarefas
-let taskIdCounter = 5;
-
-// Função chamada ao clicar no botão "+ Nova Tarefa"
-function criarNovaTarefa() {
-  const modal = document.getElementById("modalTarefa");
-  if (modal) modal.style.display = "flex";
-}
-
-// Função para fechar o modal
-function fecharModal() {
-  const modal = document.getElementById("modalTarefa");
-  if (modal) {
-    modal.style.display = "none";
-    document.getElementById("formNovaTarefa").reset();
+  try {
+    const resposta = await fetch('/api/tarefas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    fecharModalCriar();
+    await carregarTarefas();
+  } catch (erro) {
+    console.error('Falha ao criar tarefa:', erro);
+    alert('Não foi possível criar a tarefa. Confira se o Flask está rodando.');
   }
 }
 
-// Função enviada ao submeter o formulário
-function salvarNovaTarefa(event) {
-  event.preventDefault();
+// --- MODAL: DETALHES / EDITAR / EXCLUIR TAREFA ---
+function abrirDetalhesTarefa(id) {
+  const tarefa = tarefasData.find(t => String(t.id) === String(id));
+  if (!tarefa) return;
+  tarefaSelecionadaId = tarefa.id;
 
-  const titulo = document.getElementById("tituloTarefa").value;
-  const prioridade = document.getElementById("prioridadeTarefa").value;
-  const categoria = document.getElementById("categoriaTarefa").value; // 👈 Pega a categoria selecionada
-  const descricao = document.getElementById("descricaoTarefa").value;
-
-  // Encontra a primeira coluna ("A Fazer")
-  const colunaTodo = document.querySelector('.kanban-column[data-status="todo"] .task-list');
-
-  if (colunaTodo) {
-    const labelPrioridade = prioridade === 'alta' ? 'Alta' : prioridade === 'media' ? 'Média' : 'Baixa';
-
-    const newCard = document.createElement("div");
-    newCard.className = "task-card";
-    newCard.setAttribute("draggable", "true");
-    newCard.id = `task-${taskIdCounter++}`;
-
-    newCard.innerHTML = `
-      <div class="card-top">
-        <h4 class="task-title">${titulo}</h4>
-        <span class="badge priority-${prioridade}">${labelPrioridade}</span>
-      </div>
-      <p style="font-size: 0.8rem; color: #52525b;">${descricao}</p>
-      <div class="card-bottom">
-        <span class="task-meta">${categoria}</span> <!-- 👈 Usa a categoria inserida -->
-        <span class="task-date">Hoje</span>
-      </div>
-    `;
-
-    // Reativa o drag and drop no novo card
-    newCard.addEventListener("dragstart", (e) => {
-      newCard.classList.add("dragging");
-      e.dataTransfer.setData("text/plain", newCard.id);
-    });
-
-    newCard.addEventListener("dragend", () => {
-      newCard.classList.remove("dragging");
-      if (typeof atualizarContadores === "function") atualizarContadores();
-    });
-
-    colunaTodo.appendChild(newCard);
-
-    if (typeof atualizarContadores === "function") atualizarContadores();
+  const badge = document.getElementById('detalheBadge');
+  if (badge) {
+    badge.textContent = PRIORIDADE_LABEL_TAREFA[tarefa.prioridade] || tarefa.prioridade;
+    badge.className = `badge priority-${tarefa.prioridade}`;
   }
+  const status = document.getElementById('detalheStatus');
+  if (status) status.textContent = STATUS_LABEL_TAREFA[tarefa.status] || tarefa.status;
 
-  fecharModal();
+  document.getElementById('detalheTitulo').textContent = tarefa.titulo;
+  document.getElementById('detalheCategoria').textContent = tarefa.categoria;
+  document.getElementById('detalheData').textContent = tarefa.dataLimiteFormatada || '—';
+  document.getElementById('detalheDescricao').textContent = tarefa.descricao || 'Sem descrição.';
+
+  renderChecklist(tarefa);
+  renderComentarios(tarefa);
+
+  const modal = document.getElementById('modalDetalhesTarefa');
+  if (modal) modal.style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-  fecharModal();
+function fecharModalDetalhes() {
+  const modal = document.getElementById('modalDetalhesTarefa');
+  if (modal) modal.style.display = 'none';
+  tarefaSelecionadaId = null;
+}
+
+function renderChecklist(tarefa) {
+  const container = document.getElementById('checklistContainer');
+  const progressText = document.getElementById('checklistProgressText');
+  const progressBar = document.getElementById('checklistProgressBar');
+  if (!container) return;
+
+  const total = tarefa.subtarefas.length;
+  const concluidas = tarefa.subtarefas.filter(s => s.concluida).length;
+  if (progressText) progressText.textContent = `${concluidas}/${total}`;
+  if (progressBar) progressBar.style.width = total ? `${(concluidas / total) * 100}%` : '0%';
+
+  container.innerHTML = total
+    ? tarefa.subtarefas.map(s => `
+        <div class="subtask-item ${s.concluida ? 'completed' : ''}">
+          <input type="checkbox" ${s.concluida ? 'checked' : ''} onchange="alternarSubtarefa(${s.id}, this.checked)">
+          <span>${s.titulo}</span>
+        </div>
+      `).join('')
+    : '';
+}
+
+function renderComentarios(tarefa) {
+  const container = document.getElementById('commentsContainer');
+  if (!container) return;
+  container.innerHTML = tarefa.comentarios.length
+    ? tarefa.comentarios.map(c => `
+        <div class="comment-card">
+          <div class="comment-author">${c.autor}</div>
+          <div class="comment-text">${c.texto}</div>
+        </div>
+      `).join('')
+    : `<p class="panel-subtitle">Nenhum comentário ainda.</p>`;
+}
+
+async function recarregarTarefaSelecionada() {
+  const idAtual = tarefaSelecionadaId;
+  await carregarTarefas();
+  if (idAtual) abrirDetalhesTarefa(idAtual);
+}
+
+async function adicionarSubtarefa() {
+  const input = document.getElementById('novaSubtarefaInput');
+  const titulo = input.value.trim();
+  if (!titulo || !tarefaSelecionadaId) return;
+  try {
+    const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}/subtarefas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo }),
+    });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    input.value = '';
+    await recarregarTarefaSelecionada();
+  } catch (erro) {
+    console.error('Falha ao adicionar subtarefa:', erro);
+    alert('Não foi possível adicionar a subtarefa. Confira se o Flask está rodando.');
+  }
+}
+
+async function alternarSubtarefa(subtarefaId, concluida) {
+  if (!tarefaSelecionadaId) return;
+  try {
+    const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}/subtarefas/${subtarefaId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ concluida }),
+    });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    await recarregarTarefaSelecionada();
+  } catch (erro) {
+    console.error('Falha ao atualizar subtarefa:', erro);
+  }
+}
+
+async function enviarComentario() {
+  const input = document.getElementById('novoComentarioInput');
+  const texto = input.value.trim();
+  if (!texto || !tarefaSelecionadaId) return;
+  try {
+    const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}/comentarios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto }),
+    });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    input.value = '';
+    await recarregarTarefaSelecionada();
+  } catch (erro) {
+    console.error('Falha ao enviar comentário:', erro);
+    alert('Não foi possível enviar o comentário. Confira se o Flask está rodando.');
+  }
+}
+
+async function excluirTarefa() {
+  if (!tarefaSelecionadaId) return;
+  if (!confirm('Excluir essa tarefa? Essa ação não pode ser desfeita.')) return;
+  try {
+    const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, { method: 'DELETE' });
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    fecharModalDetalhes();
+    await carregarTarefas();
+  } catch (erro) {
+    console.error('Falha ao excluir tarefa:', erro);
+    alert('Não foi possível excluir a tarefa. Confira se o Flask está rodando.');
+  }
+}
+
+// Botão "Mover de Status" no modal de detalhes: avança pra próxima coluna
+// (A Fazer -> Em Andamento -> Feito -> volta pra A Fazer).
+async function alterarStatusModal() {
+  if (!tarefaSelecionadaId) return;
+  const tarefa = tarefasData.find(t => t.id === tarefaSelecionadaId);
+  if (!tarefa) return;
+  const ordem = ['todo', 'doing', 'done'];
+  const proximoStatus = ordem[(ordem.indexOf(tarefa.status) + 1) % ordem.length];
+  await moverTarefa(tarefaSelecionadaId, proximoStatus);
+  await recarregarTarefaSelecionada();
+}

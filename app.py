@@ -15,6 +15,13 @@ from backend.armazenamento import (
     buscar_presencial_por_unidade,
     buscar_ultima_sincronizacao,
     salvar_resumo_do_dia,
+    listar_tarefas,
+    criar_tarefa,
+    atualizar_tarefa,
+    excluir_tarefa,
+    adicionar_subtarefa,
+    alternar_subtarefa,
+    adicionar_comentario,
 )
 from backend.cardapio_web import buscar_resumo_do_dia
 from sincronizar import sincronizar_dia, DIA_FECHADO
@@ -646,6 +653,110 @@ def api_insights_automaticos():
         "periodoBaseLabel": f"{_formatar_data_br(base_inicio.isoformat())} a {_formatar_data_br(base_fim.isoformat())}",
         "insights": insights[:5],
     })
+
+
+# --- TAREFAS (quadro do ClickUp) --------------------------------------------
+
+def _formatar_tarefa(tarefa):
+    return {
+        "id": tarefa["id"],
+        "titulo": tarefa["titulo"],
+        "descricao": tarefa["descricao"],
+        "categoria": tarefa["categoria"],
+        "prioridade": tarefa["prioridade"],
+        "status": tarefa["status"],
+        "dataLimite": tarefa["data_limite"],
+        "dataLimiteFormatada": _formatar_data_br(tarefa["data_limite"]) if tarefa["data_limite"] else None,
+        "subtarefas": [
+            {"id": s["id"], "titulo": s["titulo"], "concluida": bool(s["concluida"])}
+            for s in tarefa["subtarefas"]
+        ],
+        "comentarios": [
+            {"id": c["id"], "autor": c["autor"], "texto": c["texto"], "criadoEm": c["criado_em"]}
+            for c in tarefa["comentarios"]
+        ],
+    }
+
+
+@app.route('/api/tarefas', methods=['GET'])
+def api_listar_tarefas():
+    return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas()]})
+
+
+@app.route('/api/tarefas', methods=['POST'])
+def api_criar_tarefa():
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    if not titulo:
+        return jsonify({"erro": "Título é obrigatório."}), 400
+    tarefa_id = criar_tarefa(
+        titulo,
+        dados.get('descricao') or '',
+        dados.get('categoria') or 'Geral',
+        dados.get('prioridade') or 'media',
+        dados.get('dataLimite') or None,
+    )
+    return jsonify({"id": tarefa_id})
+
+
+# Nomes que o frontend usa (camelCase) -> coluna real na tabela tarefa.
+CAMPOS_TAREFA_PERMITIDOS = {
+    'titulo': 'titulo',
+    'descricao': 'descricao',
+    'categoria': 'categoria',
+    'prioridade': 'prioridade',
+    'status': 'status',
+    'dataLimite': 'data_limite',
+}
+
+
+@app.route('/api/tarefas/<int:tarefa_id>', methods=['PUT'])
+def api_atualizar_tarefa(tarefa_id):
+    dados = request.get_json(silent=True) or {}
+    campos = {
+        coluna: dados[chave]
+        for chave, coluna in CAMPOS_TAREFA_PERMITIDOS.items()
+        if chave in dados
+    }
+    if not campos:
+        return jsonify({"erro": "Nada para atualizar."}), 400
+    atualizar_tarefa(tarefa_id, campos)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/tarefas/<int:tarefa_id>', methods=['DELETE'])
+def api_excluir_tarefa(tarefa_id):
+    excluir_tarefa(tarefa_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/tarefas/<int:tarefa_id>/subtarefas', methods=['POST'])
+def api_adicionar_subtarefa(tarefa_id):
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    if not titulo:
+        return jsonify({"erro": "Título é obrigatório."}), 400
+    subtarefa_id = adicionar_subtarefa(tarefa_id, titulo)
+    return jsonify({"id": subtarefa_id})
+
+
+@app.route('/api/tarefas/<int:tarefa_id>/subtarefas/<int:subtarefa_id>', methods=['PUT'])
+def api_alternar_subtarefa(tarefa_id, subtarefa_id):
+    dados = request.get_json(silent=True) or {}
+    alternar_subtarefa(subtarefa_id, bool(dados.get('concluida')))
+    return jsonify({"ok": True})
+
+
+@app.route('/api/tarefas/<int:tarefa_id>/comentarios', methods=['POST'])
+def api_adicionar_comentario(tarefa_id):
+    dados = request.get_json(silent=True) or {}
+    texto = (dados.get('texto') or '').strip()
+    if not texto:
+        return jsonify({"erro": "Comentário vazio."}), 400
+    # O sistema ainda não tem login individual por pessoa — todo comentário
+    # é registrado com o único usuário atual, igual ao resto do sistema hoje.
+    comentario_id = adicionar_comentario(tarefa_id, "Julia Suzuki", texto)
+    return jsonify({"id": comentario_id})
 
 
 if __name__ == '__main__':

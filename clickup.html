@@ -116,88 +116,34 @@
           </div>
         </div>
 
-        <!-- QUADRO KANBAN -->
+        <!-- QUADRO KANBAN — colunas renderizadas dinamicamente via JS (carregarTarefas) -->
         <div class="kanban-board">
-          
+
           <!-- Coluna: A Fazer -->
           <div class="kanban-column" data-status="todo">
             <div class="column-header">
               <h3><i data-lucide="circle"></i> A Fazer</h3>
-              <span class="task-count">2</span>
+              <span class="task-count">0</span>
             </div>
-            <div class="task-list">
-              
-              <div class="task-card" draggable="true" id="task-1" onclick="abrirDetalhesTarefa('1')">
-                <div class="card-top">
-                  <h4 class="task-title">Embalagens</h4>
-                  <span class="badge priority-alta">Alta</span>
-                </div>
-                <p>Fazer pedido de reposição de embalagens</p>
-                <div class="card-bottom">
-                  <span class="task-meta">Embalagens</span>
-                  <span class="task-date">03/08/2026</span>
-                </div>
-              </div>
-
-              <div class="task-card" draggable="true" id="task-2" onclick="abrirDetalhesTarefa('2')">
-                <div class="card-top">
-                  <h4 class="task-title">Atualização de Cardápio</h4>
-                  <span class="badge priority-media">Média</span>
-                </div>
-                <p>Cadastrar o novo Smash Burger duplo no cardápio digital e iFood.</p>
-                <div class="card-bottom">
-                  <span class="task-meta">Cardápio</span>
-                  <span class="task-date">05/08/2026</span>
-                </div>
-              </div>
-
-            </div>
+            <div class="task-list"></div>
           </div>
 
           <!-- Coluna: Em Andamento -->
           <div class="kanban-column" data-status="doing">
             <div class="column-header">
               <h3><i data-lucide="clock"></i> Em Andamento</h3>
-              <span class="task-count">1</span>
+              <span class="task-count">0</span>
             </div>
-            <div class="task-list">
-              
-              <div class="task-card" draggable="true" id="task-3" onclick="abrirDetalhesTarefa('3')">
-                <div class="card-top">
-                  <h4 class="task-title">Limpar chapa</h4>
-                  <span class="badge priority-alta">Urgente</span>
-                </div>
-                <p>Limpar chapa para o dia de burguer duplo.</p>
-                <div class="card-bottom">
-                  <span class="task-meta">Limpeza</span>
-                  <span class="task-date">03/08/2026</span>
-                </div>
-              </div>
-
-            </div>
+            <div class="task-list"></div>
           </div>
 
           <!-- Coluna: Feito -->
           <div class="kanban-column" data-status="done">
             <div class="column-header">
               <h3><i data-lucide="check-circle-2"></i> Feito</h3>
-              <span class="task-count">1</span>
+              <span class="task-count">0</span>
             </div>
-            <div class="task-list">
-              
-              <div class="task-card" draggable="true" id="task-4" onclick="abrirDetalhesTarefa('4')">
-                <div class="card-top">
-                  <h4 class="task-title">Varrer salão</h4>
-                  <span class="badge priority-baixa">Baixa</span>
-                </div>
-                <p>Varrer salão para iniciar operação.</p>
-                <div class="card-bottom">
-                  <span class="task-meta">Limpeza</span>
-                  <span class="task-date">02/08/2026</span>
-                </div>
-              </div>
-
-            </div>
+            <div class="task-list"></div>
           </div>
 
         </div> <!-- /kanban-board -->
