@@ -1,4 +1,5 @@
 import os
+import threading
 from datetime import date, datetime, timedelta
 from flask import Flask, abort, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -23,6 +24,23 @@ CORS(app)  # Permite requisições do JS mesmo se rodar direto do arquivo local
 
 inicializar_banco()
 
+def _sou_o_unico_worker_a_agendar():
+    """Em produção o Gunicorn roda vários workers (processos separados), e
+    cada um carrega esse arquivo do zero — sem essa trava, cada worker criaria
+    seu próprio agendador, multiplicando as sincronizações (e estourando o
+    limite de requisição da Cardápio Web, causando sincronizações incompletas
+    no meio do dia). O arquivo de trava é criado uma vez só por processo do
+    container (some no próximo deploy/restart, já que /tmp é recriado)."""
+    caminho_trava = "/tmp/admfood_scheduler.lock"
+    try:
+        descritor = os.open(caminho_trava, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(descritor, str(os.getpid()).encode())
+        os.close(descritor)
+        return True
+    except FileExistsError:
+        return False
+
+
 # Sincronização automática com a Cardápio Web. Localmente isso já é feito
 # pelo Agendador de Tarefas do Windows (fora do processo do Flask), mas em
 # produção (Dokploy) não existe esse agendador — o próprio processo da
@@ -34,8 +52,9 @@ inicializar_banco()
 #   olhando o sistema durante o dia ver os números indo perto do tempo real,
 #   em vez de só descobrir o resultado do dia no dia seguinte.
 if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
-    # Evita agendar duas vezes por causa do reloader do modo debug.
-    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    # Evita agendar duas vezes por causa do reloader do modo debug, e evita
+    # agendar em mais de um worker do Gunicorn ao mesmo tempo.
+    if (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true") and _sou_o_unico_worker_a_agendar():
         from apscheduler.schedulers.background import BackgroundScheduler
 
         def _rodar_sincronizacao_diaria():
@@ -330,39 +349,51 @@ def api_config_lojas():
     })
 
 
+def _sincronizar_lojas_em_segundo_plano(dia_alvo):
+    dia_iso = dia_alvo.isoformat()
+    for nome_unidade, config_loja in LOJAS.items():
+        token = config_loja.get("cardapio_web_token")
+        if not token:
+            continue
+        try:
+            resumo = buscar_resumo_do_dia(token, dia_alvo)
+            salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
+        except Exception as erro:
+            print(f"❌ Sincronização manual falhou para {nome_unidade} ({dia_iso}): {erro}")
+
+
 @app.route('/api/sincronizar-agora', methods=['POST'])
 def api_sincronizar_agora():
-    ontem = date.today() - timedelta(days=1)
+    # Sem ?dia=, sincroniza ontem (uso normal do botão). Com ?dia=AAAA-MM-DD,
+    # sincroniza um dia específico — útil pra corrigir um dia com dado
+    # incompleto/desatualizado sem esperar o próximo agendamento automático.
+    dia_str = request.args.get('dia')
+    if dia_str:
+        try:
+            dia_alvo = date.fromisoformat(dia_str)
+        except ValueError:
+            return jsonify({"erro": "Data inválida."}), 400
+    else:
+        dia_alvo = date.today() - timedelta(days=1)
 
-    if ontem.weekday() == DIA_FECHADO:
+    if dia_alvo.weekday() == DIA_FECHADO:
         return jsonify({
-            "diaLabel": _formatar_data_br(ontem.isoformat()),
+            "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
             "fechado": True,
             "resultados": [],
         })
 
-    resultados = []
-    for nome_unidade, config_loja in LOJAS.items():
-        token = config_loja.get("cardapio_web_token")
-        if not token:
-            resultados.append({"unidade": nome_unidade, "sucesso": False, "mensagem": "Token não configurado"})
-            continue
-        try:
-            resumo = buscar_resumo_do_dia(token, ontem)
-            salvar_resumo_do_dia(nome_unidade, ontem.isoformat(), resumo)
-            resultados.append({
-                "unidade": nome_unidade,
-                "sucesso": True,
-                "faturamento": _formatar_moeda(resumo["faturamento_dia"]),
-                "pedidos": resumo["quantidade_pedidos"],
-            })
-        except Exception as erro:
-            resultados.append({"unidade": nome_unidade, "sucesso": False, "mensagem": str(erro)})
+    # Roda em segundo plano e responde na hora — sincronizar as 4 lojas pedido
+    # por pedido pode passar do tempo que o proxy/gateway de produção espera
+    # por uma resposta, derrubando a conexão no meio do processo (e deixando
+    # dado só parcialmente atualizado). O resultado final aparece na tela de
+    # Configurações/Home assim que a atualização automática buscar de novo.
+    threading.Thread(target=_sincronizar_lojas_em_segundo_plano, args=(dia_alvo,), daemon=True).start()
 
     return jsonify({
-        "diaLabel": _formatar_data_br(ontem.isoformat()),
+        "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
         "fechado": False,
-        "resultados": resultados,
+        "iniciado": True,
     })
 
 

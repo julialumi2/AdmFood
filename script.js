@@ -1308,9 +1308,13 @@ async function carregarConfigLojas() {
 }
 
 /**
- * Dispara a sincronização com a Cardápio Web pro dia anterior, na hora,
- * pelo botão "Sincronizar agora" — mesma lógica do sincronizar.py, só que
- * disparada manualmente em vez de esperar o agendamento das 3h.
+ * Dispara a sincronização com a Cardápio Web pro dia anterior, pelo botão
+ * "Sincronizar agora" — mesma lógica do sincronizar.py, só que disparada
+ * manualmente em vez de esperar o agendamento das 3h. O backend roda a
+ * sincronização em segundo plano e responde na hora (sincronizar as 4 lojas
+ * pedido por pedido pode passar do tempo que o servidor de produção espera
+ * por uma resposta); os números atualizam sozinhos assim que terminar,
+ * graças à atualização automática já existente na tela.
  */
 async function sincronizarAgora() {
   const botao = document.getElementById('btn-sincronizar-agora');
@@ -1319,7 +1323,7 @@ async function sincronizarAgora() {
 
   const htmlOriginal = botao.innerHTML;
   botao.disabled = true;
-  botao.innerHTML = '<span>Sincronizando... isso pode levar alguns minutos</span>';
+  botao.innerHTML = '<span>Iniciando sincronização...</span>';
   if (resultadoElem) resultadoElem.innerHTML = '';
 
   try {
@@ -1331,12 +1335,7 @@ async function sincronizarAgora() {
       if (dados.fechado) {
         resultadoElem.innerHTML = `<div class="sync-resultado-item">${dados.diaLabel} é segunda-feira — lojas fechadas, nada a sincronizar.</div>`;
       } else {
-        resultadoElem.innerHTML = (dados.resultados || []).map(r => {
-          if (!r.sucesso) {
-            return `<div class="sync-resultado-item erro">${r.unidade}: ${r.mensagem}</div>`;
-          }
-          return `<div class="sync-resultado-item">${r.unidade}: R$ ${r.faturamento} (${r.pedidos} pedidos)</div>`;
-        }).join('');
+        resultadoElem.innerHTML = `<div class="sync-resultado-item">Sincronização de ${dados.diaLabel} iniciada em segundo plano — pode levar alguns minutos. Os números atualizam sozinhos aqui.</div>`;
       }
     }
 
