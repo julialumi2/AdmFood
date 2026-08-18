@@ -57,20 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarStatusSincronizacaoHome();
   }
 
-  // 4.07 INSIGHTS AUTOMÁTICOS (Home)
-  if (document.getElementById('insights-automaticos-lista')) {
-    carregarInsightsAutomaticos();
-  }
-
   // 4.08 ATUALIZAÇÃO AUTOMÁTICA DA HOME (quase em tempo real)
-  if (document.getElementById('container-lojas')) {
+  if (document.getElementById('container-periodo')) {
     marcarAtualizadoAgora('home-atualizado-em');
     iniciarAtualizacaoAutomatica(() => {
       carregarDadosLojas();
       carregarGraficoRede();
       carregarCanalRedeHome();
       carregarStatusSincronizacaoHome();
-      carregarInsightsAutomaticos();
       marcarAtualizadoAgora('home-atualizado-em');
     });
   }
@@ -784,45 +778,6 @@ async function carregarInsights(inicio, fim, diaSemana) {
   }
 }
 
-// Painel "Insights Automáticos": compara ontem com a média dos últimos 7
-// dias (sempre esse recorte fixo, independente do período selecionado no
-// filtro da tela — é uma checagem de "o que mudou recentemente").
-async function carregarInsightsAutomaticos() {
-  const lista = document.getElementById('insights-automaticos-lista');
-  const subtitulo = document.getElementById('insights-automaticos-subtitle');
-  if (!lista) return;
-
-  lista.innerHTML = `<p class="panel-subtitle">Analisando...</p>`;
-  try {
-    const resposta = await fetch('/api/insights-automaticos');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    const insights = dados.insights || [];
-
-    if (subtitulo) {
-      subtitulo.textContent = `Comparando ontem (${dados.dataLabel}) com a média de ${dados.periodoBaseLabel}`;
-    }
-
-    lista.innerHTML = insights.length
-      ? insights.map(i => {
-          const verbo = i.direcao === 'alta' ? 'aumentou' : 'caiu';
-          const icone = i.direcao === 'alta' ? 'trending-up' : 'trending-down';
-          return `
-            <div class="insight-automatico-item ${i.direcao}">
-              <div class="insight-automatico-icone"><i data-lucide="${icone}"></i></div>
-              <p>${i.rotulo} <strong>${verbo} ${i.percentual}%</strong> comparado à média dos últimos 7 dias.</p>
-            </div>
-          `;
-        }).join('')
-      : `<p class="panel-subtitle">Nada fora do padrão — ontem ficou parecido com a média dos últimos 7 dias.</p>`;
-
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  } catch (erro) {
-    console.error('Falha ao carregar insights automáticos:', erro);
-    lista.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar os insights automáticos.</p>`;
-  }
-}
-
 // --- VENDAS PRESENCIAIS (CRUD manual, fora da Cardápio Web) ---
 // Quando não-nulo, o formulário está editando esse dia (em vez de criar um
 // lançamento novo) — usado pra saber se precisa apagar o registro antigo
@@ -1358,11 +1313,20 @@ async function sincronizarAgora() {
   }
 }
 
+function _formatarMoedaBRL(valor) {
+  return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 /**
- * Consulta o backend Flask para obter o faturamento de ontem da rede
+ * Consulta o backend Flask e monta os cards de Diário/Semanal/Mensal da
+ * Home. "Diário" é ontem (o último dia já fechado, igual ao resto do
+ * sistema). "Semanal" e "Mensal" mostram sempre o último período FECHADO
+ * por calendário — nunca a semana/mês em andamento: se hoje é terça e a
+ * semana atual começou ontem/hoje, mostra a semana passada inteira
+ * (segunda a domingo); se agosto ainda não fechou, mostra julho inteiro.
  */
 async function carregarDadosLojas() {
-  const container = document.getElementById('container-lojas');
+  const container = document.getElementById('container-periodo');
   const totalRedeElem = document.getElementById('total-rede-valor');
 
   if (!container) return;
@@ -1370,51 +1334,74 @@ async function carregarDadosLojas() {
   container.innerHTML = `<p class="text-muted" style="padding: 12px;">Sincronizando com o Cardápio Web via Flask...</p>`;
 
   try {
-    const response = await fetch('/api/faturamento-ontem');
+    // dias=90 pra garantir que o mês passado inteiro sempre caiba na janela
+    // buscada, mesmo no pior caso (hoje é o último dia de um mês longo).
+    const [respOntem, respSerie] = await Promise.all([
+      fetch('/api/faturamento-ontem'),
+      fetch('/api/faturamento-rede-diario?dias=90'),
+    ]);
 
-    if (!response.ok) {
-      throw new Error(`Erro no servidor Flask: ${response.status}`);
-    }
+    if (!respOntem.ok) throw new Error(`Erro no servidor Flask: ${respOntem.status}`);
+    if (!respSerie.ok) throw new Error(`Erro no servidor Flask: ${respSerie.status}`);
 
-    const dados = await response.json();
+    const dadosOntem = await respOntem.json();
+    const dadosSerie = await respSerie.json();
+    const dias = dadosSerie.dias || [];
 
     if (totalRedeElem) {
-      totalRedeElem.textContent = dados.total_rede.toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-      });
+      totalRedeElem.textContent = _formatarMoedaBRL(dadosOntem.total_rede);
     }
 
-    container.innerHTML = dados.lojas.map(loja => {
-      if (!loja.sucesso) {
-        return `
-          <div class="store-card">
-            <span class="card-subtitle">UNIDADE</span>
-            <h4 class="store-name">${loja.nome}</h4>
-            <p style="color: #ef4444; font-size: 0.8rem; margin-top: 8px;">Erro ao carregar dados</p>
-          </div>
-        `;
-      }
+    // A lista `dias` traz a data já formatada "dd/mm/aaaa" — converte de
+    // volta pra Date pra poder comparar com os recortes de calendário.
+    const paraData = (dataBr) => {
+      const [d, m, y] = dataBr.split('/').map(Number);
+      return new Date(y, m - 1, d);
+    };
 
-      const valorFormatado = loja.total.toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-      });
+    const hoje = new Date();
+    const ontemDate = new Date(hoje);
+    ontemDate.setDate(hoje.getDate() - 1);
 
-      return `
-        <div class="store-card">
-          <span class="card-subtitle">UNIDADE</span>
-          <h4 class="store-name">${loja.nome}</h4>
-          <div class="store-value">${valorFormatado}</div>
-          <span class="badge-pill pos">
-            <i data-lucide="trending-up"></i>
-            Atualizado
-          </span>
-        </div>
-      `;
-    }).join('');
+    // Semana passada (segunda a domingo) — a semana em andamento nunca
+    // aparece aqui, só a última já fechada.
+    const diaSemanaHoje = (hoje.getDay() + 6) % 7; // 0 = segunda ... 6 = domingo
+    const segundaDestaSemana = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - diaSemanaHoje);
+    const semanaPassadaInicio = new Date(segundaDestaSemana.getFullYear(), segundaDestaSemana.getMonth(), segundaDestaSemana.getDate() - 7);
+    const semanaPassadaFim = new Date(segundaDestaSemana.getFullYear(), segundaDestaSemana.getMonth(), segundaDestaSemana.getDate() - 1);
 
-    renderRankingLojasHome(dados.lojas);
+    // Mês passado inteiro — o dia 0 de um mês em JS é o último dia do mês anterior.
+    const mesPassadoInicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const mesPassadoFim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+
+    const somarNoIntervalo = (inicio, fim) => dias
+      .filter(d => { const dt = paraData(d.dia); return dt >= inicio && dt <= fim; })
+      .reduce((soma, d) => soma + d.faturamento, 0);
+
+    const totalSemanal = somarNoIntervalo(semanaPassadaInicio, semanaPassadaFim);
+    const totalMensal = somarNoIntervalo(mesPassadoInicio, mesPassadoFim);
+
+    const fmtCurto = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+    container.innerHTML = `
+      <div class="store-card">
+        <span class="card-subtitle">DIÁRIO (ONTEM)</span>
+        <span class="min-label">${fmtCurto(ontemDate)}</span>
+        <div class="store-value">${_formatarMoedaBRL(dadosOntem.total_rede)}</div>
+      </div>
+      <div class="store-card">
+        <span class="card-subtitle">SEMANAL (SEMANA PASSADA)</span>
+        <span class="min-label">${fmtCurto(semanaPassadaInicio)} a ${fmtCurto(semanaPassadaFim)}</span>
+        <div class="store-value">${_formatarMoedaBRL(totalSemanal)}</div>
+      </div>
+      <div class="store-card">
+        <span class="card-subtitle">MENSAL (MÊS PASSADO)</span>
+        <span class="min-label">${fmtCurto(mesPassadoInicio)} a ${fmtCurto(mesPassadoFim)}</span>
+        <div class="store-value">${_formatarMoedaBRL(totalMensal)}</div>
+      </div>
+    `;
+
+    renderRankingLojasHome(dadosOntem.lojas);
 
     // Reativa os ícones da biblioteca Lucide nos novos elementos criados dinamicamente
     if (typeof lucide !== 'undefined') {
@@ -1423,7 +1410,7 @@ async function carregarDadosLojas() {
 
   } catch (error) {
     console.error('Falha ao conectar com o backend Flask:', error);
-    container.innerHTML = `<p style="color: #ef4444; padding: 12px;">Não foi possível carregar o status das lojas. Certifique-se de que o Flask está rodando.</p>`;
+    container.innerHTML = `<p style="color: #ef4444; padding: 12px;">Não foi possível carregar o faturamento. Certifique-se de que o Flask está rodando.</p>`;
   }
 }
 

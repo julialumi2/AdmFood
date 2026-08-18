@@ -8,6 +8,11 @@
    dela (ex: kanban do ClickUp, tabela de insumos do Estoque).
    ========================================================================== */
 
+/* Fonte utilitária pra valores em dinheiro/contagens — reforça a leitura
+   em coluna (dígitos monoespaçados) e dá o ar de "comanda impressa" que
+   guia o resto do redesign (ver .valor-mono, .hero-*, .store-card). */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
 /* ---------------------------------------------------------------------
    1. TOKENS DE DESIGN
    --------------------------------------------------------------------- */
@@ -17,33 +22,40 @@
   --primary-hover: #b92e21;
   --primary-soft: rgba(217, 56, 41, 0.08);
 
-  /* Neutros (modo claro) */
-  --bg-main: #f8f7f5;
+  /* Acentos complementares (mostarda de grelha e verde-picles) — usados
+     em pontos pontuais de destaque, nunca competindo com o vermelho. */
+  --ember: #c97a1f;
+  --ember-soft: #fbeed9;
+  --pickle: #4c7a4a;
+
+  /* Neutros (modo claro) — tom "papel kraft" bem sutil no lugar do
+     cinza-azulado genérico de dashboard SaaS. */
+  --bg-main: #faf7f2;
   --card-bg: #ffffff;
   --header-bg: #ffffff;
-  --sidebar-bg: #211714;
+  --sidebar-bg: #1c1310;
   --sidebar-hover: #362522;
   --sidebar-active-text: #ffffff;
   --sidebar-text: #ece7e5;
   --sidebar-text-muted: #a89490;
 
-  --text-dark: #0f172a;
-  --text-muted: #64748b;
-  --text-faint: #94a3b8;
+  --text-dark: #241a16;
+  --text-muted: #7a6f66;
+  --text-faint: #a89a8e;
 
-  --border-color: #ece8e4;
-  --surface-muted: #f8fafc;
-  --surface-muted-border: #f1f5f9;
+  --border-color: #ece3d6;
+  --surface-muted: #f7f2ea;
+  --surface-muted-border: #f0e9dc;
   --input-bg: #ffffff;
-  --input-border: #d8d2cc;
+  --input-border: #d8cfc0;
 
   /* Semânticas */
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
-  --danger: #e11d48;
-  --danger-soft: rgba(225, 29, 72, 0.08);
+  --success: #4c7a4a;
+  --success-soft: #e4efe0;
+  --warning: #c97a1f;
+  --warning-soft: #fbeed9;
+  --danger: #c62b2b;
+  --danger-soft: rgba(198, 43, 43, 0.09);
   --whatsapp: #25D366;
   --whatsapp-hover: #20bd5a;
 
@@ -58,14 +70,14 @@
 
   /* Raio de borda */
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
-  /* Sombras (camadas sutis, padrão de dashboards modernos) */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.04);
-  --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.08);
+  /* Sombras (mais quentes que cinza puro — combinam com o papel kraft) */
+  --shadow-sm: 0 1px 2px rgba(36, 26, 22, 0.05);
+  --shadow-md: 0 2px 8px rgba(36, 26, 22, 0.06), 0 10px 24px rgba(36, 26, 22, 0.05);
+  --shadow-lg: 0 10px 32px rgba(36, 26, 22, 0.16);
 
   --sidebar-width: 260px;
   /* A sidebar flutuante tem 16px de margem de cada lado (var(--space-4)) —
@@ -76,29 +88,34 @@
 }
 
 body.dark-mode {
-  --bg-main: #121214;
-  --card-bg: #1c1c20;
-  --header-bg: #18181b;
-  --sidebar-bg: #18110f;
+  --bg-main: #15100e;
+  --card-bg: #201812;
+  --header-bg: #1a130f;
+  --sidebar-bg: #100b09;
   --sidebar-hover: #2c201d;
 
-  --text-dark: #f1f5f9;
-  --text-muted: #a1a1aa;
-  --text-faint: #71717a;
+  --text-dark: #f2e9de;
+  --text-muted: #b3a297;
+  --text-faint: #7d6f65;
 
-  --border-color: #2c2c31;
-  --surface-muted: #232327;
-  --surface-muted-border: #2c2c31;
-  --input-bg: #1c1c20;
-  --input-border: #3a3a40;
+  --border-color: #33261e;
+  --surface-muted: #241b16;
+  --surface-muted-border: #33261e;
+  --input-bg: #201812;
+  --input-border: #3d2c22;
 
-  --success-soft: rgba(22, 163, 74, 0.16);
-  --warning-soft: rgba(217, 119, 6, 0.16);
-  --danger-soft: rgba(225, 29, 72, 0.16);
+  --success-soft: rgba(76, 122, 74, 0.16);
+  --warning-soft: rgba(201, 122, 31, 0.18);
+  --ember-soft: rgba(201, 122, 31, 0.18);
+  --danger-soft: rgba(198, 43, 43, 0.18);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+.valor-mono {
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
 }
 
 /* ---------------------------------------------------------------------
@@ -123,7 +140,10 @@ body {
   background-color: var(--bg-main);
   color: var(--text-dark);
   min-height: 100vh;
-  overflow-x: hidden;
+  /* Sem overflow-x aqui — só no html. overflow-x em qualquer valor além de
+     "visible" força overflow-y a virar "auto" (regra do CSS), o que faz o
+     body virar um contêiner de rolagem próprio e quebra o position:sticky
+     da sidebar (ela some ao rolar em vez de ficar fixa no topo). */
   transition: background-color 0.2s ease, color 0.2s ease;
   -webkit-font-smoothing: antialiased;
 }
@@ -209,6 +229,9 @@ body {
    pousado sobre o fundo da página. */
 .sidebar {
   background-color: var(--sidebar-bg);
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.035), transparent 40%),
+    radial-gradient(circle at 88% 82%, rgba(217, 56, 41, 0.07), transparent 45%);
   color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
@@ -235,13 +258,14 @@ body {
 .logo-icon {
   width: 36px;
   height: 36px;
-  background-color: var(--primary);
-  border-radius: var(--radius-sm);
+  background-image: linear-gradient(155deg, var(--primary), var(--primary-hover));
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(217, 56, 41, 0.35);
 }
 
 .brand-name {
@@ -607,6 +631,109 @@ select {
 }
 
 /* ---------------------------------------------------------------------
+   5b. FAIXA "QUADRO DE PEDIDOS" (hero da Home) — anuncia o número do dia
+   antes de qualquer outra coisa, como o quadro de comandas da cozinha.
+   --------------------------------------------------------------------- */
+.hero-band {
+  background-color: var(--sidebar-bg);
+  background-image: radial-gradient(circle at 88% 0%, rgba(217, 56, 41, 0.18), transparent 55%);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-8);
+  color: var(--sidebar-text);
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sidebar-text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.hero-eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--success);
+  box-shadow: 0 0 0 3px rgba(76, 122, 74, 0.3);
+  flex-shrink: 0;
+}
+
+.hero-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.hero-value {
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-weight: 700;
+  font-size: 2.75rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.hero-value .destaque { color: var(--primary); }
+
+.hero-sub {
+  font-size: 0.8rem;
+  color: var(--sidebar-text-muted);
+  margin-top: var(--space-2);
+}
+
+.hero-badge {
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--sidebar-text);
+  white-space: nowrap;
+}
+
+.hero-strip {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+}
+
+.hero-store .hero-store-nome {
+  font-size: 0.68rem;
+  color: var(--sidebar-text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.hero-store .hero-store-valor {
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f2e6d8;
+}
+
+@media (max-width: 768px) {
+  .hero-band { padding: var(--space-5); }
+  .hero-value { font-size: 2.1rem; }
+  .hero-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------------------------------------------------------------------
    6. BOTÕES E BADGES
    --------------------------------------------------------------------- */
 .btn-whatsapp {
@@ -697,23 +824,55 @@ select {
   gap: var(--space-4);
 }
 
+/* Cartões "comanda" — a borda tracejada no topo + o furo central imitam o
+   recibo de uma impressora térmica de pedido, o elemento assinatura do
+   redesign (ver DOCUMENTACAO.md). O furo é dois pseudo-elementos: uma
+   linha tracejada e um círculo vazado por cima, cor igual ao fundo da
+   página — como o furo de rasgar de um talão de comanda. */
 .store-card,
 .metric-card {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: var(--space-5);
+  padding-top: 22px;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
+  position: relative;
+}
+
+.store-card::before,
+.metric-card::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  border-top: 2px dashed var(--border-color);
+}
+
+.store-card::after,
+.metric-card::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-top: none;
 }
 
 .store-card:hover,
 .metric-card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .card-header {
@@ -749,8 +908,9 @@ select {
 
 .card-value,
 .store-value {
-  font-size: 1.5rem;
-  font-weight: 800;
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-size: 1.4rem;
+  font-weight: 700;
   color: var(--text-dark);
   letter-spacing: -0.01em;
 }

@@ -102,18 +102,15 @@
       <!-- CONTEÚDO DA PÁGINA -->
       <div class="page-content">
         
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="pin" class="icon-pin"></i>
-            <span>VISÃO GERAL DA REDE</span>
-          </div>
-
-          <div class="title-row">
-            <h1>Ontem — <span id="data-ontem">...</span></h1>
-            <div class="title-row-right">
-              <div class="total-rede-pill">Total da rede: <strong id="total-rede-valor">R$ 0,00</strong></div>
-              <span class="atualizado-em" id="home-atualizado-em"></span>
+        <!-- QUADRO DE PEDIDOS DO DIA — hero da Home -->
+        <div class="hero-band">
+          <div class="hero-eyebrow">VISÃO GERAL DA REDE — Ontem, <span id="data-ontem">...</span></div>
+          <div class="hero-main">
+            <div>
+              <div class="hero-value"><span id="total-rede-valor">R$ 0,00</span></div>
+              <div class="hero-sub">Faturamento total da rede</div>
             </div>
+            <span class="atualizado-em hero-badge" id="home-atualizado-em"></span>
           </div>
         </div>
 
@@ -137,26 +134,15 @@
           </a>
         </div>
 
-        <!-- SEÇÃO DESEMPENHO POR UNIDADE -->
+        <!-- SEÇÃO FATURAMENTO POR PERÍODO -->
         <div class="section-header">
-          <i data-lucide="store"></i>
-          <h3>Desempenho por Unidade</h3>
+          <i data-lucide="calendar-range"></i>
+          <h3>Faturamento por Período</h3>
         </div>
 
         <!-- CARDS INJETADOS PELO JS -->
-        <div class="cards-grid" id="container-lojas">
+        <div class="cards-grid" id="container-periodo">
           <p class="text-muted" style="padding: 12px;">Sincronizando dados com o Cardápio Web...</p>
-        </div>
-
-        <!-- INSIGHTS AUTOMÁTICOS: ONTEM VS MÉDIA DOS ÚLTIMOS 7 DIAS -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Insights Automáticos</h3>
-            <span class="panel-subtitle" id="insights-automaticos-subtitle">Comparando ontem com a média dos últimos 7 dias</span>
-          </div>
-          <div class="insights-automaticos-lista" id="insights-automaticos-lista">
-            <!-- Renderizado dinamicamente via JS -->
-          </div>
         </div>
 
         <!-- GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA -->
