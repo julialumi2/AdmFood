@@ -44,13 +44,14 @@ inicializa o que é relevante pra ela.
 | Arquivo | Tela |
 |---|---|
 | `index.html` | Resumo (Home) — faturamento da rede, gráfico diário, insights automáticos |
-| `estoque.html` | Estoque (integração VMarket — ver seção 8, pendente) |
+| `estoque.html` | Estoque (integração VMarket — ver seção 9, pendente) |
 | `preparo.html` | Preparo / KDS (em desenvolvimento pela Julia) |
 | `clickup.html` | Quadro de tarefas (Kanban) |
 | `insight.html` | Insights — faturamento por período, por loja, por canal, por dia da semana |
 | `configuracoes.html` | Configurações — status dos tokens da Cardápio Web, sincronização manual, lançamento de venda presencial |
-| `login.html`, `registro.html`, `esquecisenha.html` | Telas de autenticação (visual pronto, **sem lógica real ainda** — ver seção 8) |
-| `landing.html` | Landing page pública (ainda não publicada em produção) |
+| `login.html` | Login (e-mail + senha) — única página, além de `esquecisenha.html`, acessível sem estar logado |
+| `esquecisenha.html` | Orienta a falar com o admin pra redefinir a senha (não tem recuperação por e-mail) |
+| `registro.html`, `landing.html` | Cadastro público e landing page — hoje exigem login como qualquer outra tela (sistema é só interno por enquanto, ver seção 9) |
 
 ## 3. Rodando localmente
 
@@ -71,6 +72,10 @@ Variáveis usadas (ver `config.py` e `app.py`):
 | `MAKE_WEBHOOK_URL` | Webhook do Make.com (integração legada/reservada) |
 | `DATABASE_PATH` | Caminho do arquivo SQLite. Em produção aponta pra um volume persistente do Dokploy — sem isso, o banco se perde a cada deploy |
 | `SINCRONIZACAO_AUTOMATICA` | `"true"` liga o agendador automático dentro do próprio Flask (usado em produção; localmente a sincronização roda via Agendador de Tarefas do Windows chamando `sincronizar.py`, fora do processo do Flask) |
+| `SECRET_KEY` | Assina o cookie de sessão do login. Precisa ser o **mesmo valor em todos os workers** do Gunicorn — por isso vem de env var fixa, nunca gerada em runtime |
+| `SESSION_COOKIE_SECURE` | `"true"` em produção (HTTPS) — o cookie de sessão só é enviado em conexão segura |
+| `ADMIN_INICIAL_EMAIL`, `ADMIN_INICIAL_SENHA`, `ADMIN_INICIAL_NOME` | Cria/sincroniza esse usuário como admin a cada subida do app (ver seção 8.1) — só precisa ficar setado até o primeiro login funcionar |
+| `EQUIPE_INICIAL` | Mesma ideia, pra vários membros de uma vez — lista JSON `[{"nome","email","senha","papel"}]` (ver seção 8.1) |
 
 Sincronizar manualmente um dia específico, sem subir o servidor:
 
@@ -140,6 +145,7 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `tarefa` | Tarefas do quadro Kanban (ClickUp) |
 | `tarefa_subtarefa` | Itens de checklist de cada tarefa |
 | `tarefa_comentario` | Comentários de cada tarefa |
+| `usuario` | Login da equipe — `senha_hash` (nunca texto puro), `papel` (`admin`/`equipe`), `ativo` |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
@@ -169,24 +175,85 @@ Todos em `app.py`, prefixo `/api`.
 - `PUT|DELETE /api/tarefas/<id>` — atualizar campos (parcial) / excluir
 - `POST /api/tarefas/<id>/subtarefas` — adicionar item de checklist
 - `PUT /api/tarefas/<id>/subtarefas/<id>` — marcar concluída/pendente
-- `POST /api/tarefas/<id>/comentarios` — comentar (autor sempre `"Julia Suzuki"` — sistema ainda é de usuário único, ver seção 8)
+- `POST /api/tarefas/<id>/comentarios` — comentar (autor é o usuário logado)
 
 Campos de `PUT /api/tarefas/<id>` aceitos (camelCase na API → coluna no banco):
 `titulo`, `descricao`, `categoria`, `prioridade`, `status`, `dataLimite` → `data_limite`.
 
-## 8. Pendências conhecidas (roadmap em aberto)
+**Login**
+- `POST /api/login` — `{email, senha}` → seta cookie de sessão. Único endpoint de API acessível sem estar logado
+- `POST /api/logout` — limpa a sessão
+- `GET /api/me` — dados do usuário logado (nome, e-mail, papel)
+- `PUT /api/me/senha` — troca a própria senha (`{senhaAtual, senhaNova}`) — exige a senha atual, qualquer usuário logado pode usar
+
+**Gestão de equipe (só `papel=admin`)**
+- `GET|POST /api/usuarios` — listar / criar membro
+- `PUT /api/usuarios/<id>` — editar nome/papel/ativo, opcionalmente resetar senha
+- `DELETE /api/usuarios/<id>` — excluir
+- Admin não consegue se autodesativar, se rebaixar pra "equipe" nem se autoexcluir pela própria conta
+
+## 8. Login e controle de acesso
+
+Adicionado em 2026-08-19. Cada pessoa da equipe tem seu próprio usuário
+(e-mail + senha com hash PBKDF2, via `werkzeug.security`), com papel
+`admin` ou `equipe`. Sessão via cookie assinado (`HttpOnly` + `SameSite=Lax`,
+`Secure` em produção).
+
+**Toda rota exige login** — `@app.before_request` em `app.py` bloqueia
+qualquer página `.html` (redireciona pra `login.html`) e qualquer `/api/*`
+(401 JSON) pra quem não está logado, exceto `login.html`, `esquecisenha.html`
+e `POST /api/login`.
+
+Só admin acessa a gestão de equipe (`/api/usuarios*`) — qualquer outro
+usuário logado só troca a própria senha (`PUT /api/me/senha`).
+
+### 8.1 Bootstrap do admin inicial
+
+Não existe cadastro público (decisão tomada com a Julia: só admin cria
+acesso). O primeiro admin é criado automaticamente via variáveis de
+ambiente — `_criar_admin_inicial_se_necessario()` em `app.py`, chamada a
+cada subida do app:
+
+- Se `ADMIN_INICIAL_EMAIL`/`SENHA` estiverem definidas, **sincroniza** (cria
+  OU atualiza senha/papel) o usuário desse e-mail específico — não só "se a
+  tabela estiver vazia". Isso evita ficar trancado de fora se uma tentativa
+  anterior já tiver criado a conta com uma senha diferente.
+- `EQUIPE_INICIAL` faz o mesmo pra vários membros de uma vez (lista JSON),
+  pra não depender de conseguir logar primeiro pra cadastrar todo mundo pela
+  tela.
+- Como rede de segurança extra, `POST /api/login` também tenta esse mesmo
+  bootstrap **na hora**, sob demanda, se o e-mail não for encontrado —
+  cobre o caso (visto em produção, causa raiz não identificada) de o boot
+  não deixar o usuário persistido a tempo da primeira requisição real.
+- Depois que o login funcionar, essas variáveis podem ser removidas do
+  ambiente — enquanto estiverem definidas, todo redeploy volta a senha
+  dessas contas pro valor de lá, sobrescrevendo uma troca de senha feita
+  pela tela.
+
+**Problema conhecido, não resolvido:** em produção, a aba Environment do
+Dokploy não estava repassando `ADMIN_INICIAL_EMAIL`/`SENHA` pro container
+(confirmado com uma variável de controle direto no `Dockerfile`, que chegava
+normalmente, enquanto a mesma variável configurada no painel do Dokploy não
+chegava). Causa raiz não identificada — vale abrir chamado com o suporte do
+Dokploy. Como contorno, essas variáveis foram embutidas diretamente no
+`Dockerfile` (ver comentário `CONTORNO TEMPORÁRIO` lá) — isso deve ser
+removido assim que o mecanismo de Environment do Dokploy for confiável de
+novo, e a senha ali não deve ser reaproveitada em nenhuma conta (ficou
+exposta no histórico do Git).
+
+## 9. Pendências conhecidas (roadmap em aberto)
 
 Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 2026-08-17 com a Julia):
 
-1. **Estoque / VMarket** — varredura no código pra tela de Estoque funcionar. Aguardando a Julia esclarecer o que é/onde está o VMarket.
+1. **Estoque / VMarket** — varredura no código pra tela de Estoque funcionar. Aguardando a Julia esclarecer/obter token e documentação da API da VMarket.
 2. **Relatório via WhatsApp** — integração com a API do WhatsApp Business pra enviar relatórios. Aguardando confirmação de acesso/credenciais da API.
 3. **ClickUp** — ✅ concluído em 2026-08-17 (backend real + Kanban persistente, ver seção 7).
-4. **Acessos da equipe + landing page em produção** — sistema hoje é de usuário único (autor de comentário fixo em `"Julia Suzuki"`, sem tabela de usuários/login real). Decisão já tomada com a Julia: **login individual por pessoa, com senha** (não vai ser senha compartilhada). Ainda não iniciado — precisa de: tabela de usuários, hash de senha, sessão/login, proteção das rotas existentes. Falta também definir se a landing page sobe em produção como está ou só depois desse login existir.
+4. **Acessos da equipe** — ✅ concluído em 2026-08-19 (login individual por pessoa, com senha — ver seção 8). Landing page e cadastro público ficam **de propósito** atrás do login por enquanto (decisão da Julia: sistema é só interno, sem necessidade de porta pública ainda).
 5. **Documentação do sistema** — este arquivo.
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
 
-## 9. Padrões do projeto (pra manter consistência em mudanças futuras)
+## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 
 - Nomes de função, variável e comentário em **português**; nomes de campo na
   API voltada ao frontend em **camelCase** (`dataLimite`), colunas do banco
