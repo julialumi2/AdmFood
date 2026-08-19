@@ -207,6 +207,12 @@ e `POST /api/login`.
 Só admin acessa a gestão de equipe (`/api/usuarios*`) — qualquer outro
 usuário logado só troca a própria senha (`PUT /api/me/senha`).
 
+`POST /api/login` tem limite de 5 tentativas falhas por e-mail a cada 5
+minutos (em memória, em `app.py` — não é compartilhado entre workers do
+Gunicorn, mas já corta bastante a velocidade de um ataque de força bruta).
+Não há CORS configurado — frontend e backend são a mesma origem, nunca foi
+necessário em produção.
+
 ### 8.1 Bootstrap do admin inicial
 
 Não existe cadastro público (decisão tomada com a Julia: só admin cria
@@ -241,6 +247,19 @@ já foram removidas de lá assim que as contas ficaram criadas e funcionando
 — a causa raiz do Environment do Dokploy em si não foi investigada a fundo,
 só contornada. A senha usada nesse contorno ficou exposta no histórico do
 Git e não deve ser reaproveitada em nenhuma conta.
+
+### 8.2 Escapando texto do usuário no frontend
+
+Qualquer texto que uma pessoa logada digita (título/descrição de tarefa,
+comentário, nome de membro da equipe) passa por `escaparHtml()`
+(`script.js`) antes de entrar num `innerHTML` — sem isso, dava pra criar
+uma tarefa com HTML/JS no título que rodava no navegador de qualquer outro
+usuário que abrisse o quadro (achado numa revisão de segurança em
+2026-08-19, corrigido). **Qualquer novo `innerHTML` que insira dado vindo
+do banco precisa passar por `escaparHtml()`.** Campos com valores fechados
+(prioridade, status, papel) também são validados no backend contra uma
+lista fixa, não só no frontend — o `<select>` da tela não impede alguém de
+chamar a API direto com outro valor.
 
 ## 9. Pendências conhecidas (roadmap em aberto)
 
