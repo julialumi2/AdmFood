@@ -141,7 +141,7 @@ _criar_equipe_inicial_se_necessario()
 
 # --- LOGIN ------------------------------------------------------------------
 
-PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "landing.html", "registro.html"}
+PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html"}
 ROTAS_API_PUBLICAS = {"/api/login"}
 
 
