@@ -89,6 +89,17 @@ def _criar_admin_inicial_se_necessario():
     _sincronizar_usuario_inicial(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, 'admin', 'Usuário admin inicial')
 
 
+def _membros_equipe_inicial():
+    if not EQUIPE_INICIAL_JSON:
+        return []
+    import json
+    try:
+        return json.loads(EQUIPE_INICIAL_JSON)
+    except Exception:
+        print(f"❌ EQUIPE_INICIAL não é um JSON válido: {EQUIPE_INICIAL_JSON[:80]}")
+        return []
+
+
 def _criar_equipe_inicial_se_necessario():
     # Mesma ideia do admin inicial, mas pra vários membros de uma vez, via
     # uma lista JSON em EQUIPE_INICIAL — evita depender de conseguir logar
@@ -96,19 +107,32 @@ def _criar_equipe_inicial_se_necessario():
     # todo mundo estiver com acesso, pode remover essa variável do
     # ambiente (mesmo aviso do admin: enquanto estiver definida, um
     # redeploy volta a senha de cada um pro valor daqui).
-    if not EQUIPE_INICIAL_JSON:
-        return
-    import json
-    try:
-        membros = json.loads(EQUIPE_INICIAL_JSON)
-    except Exception:
-        print(f"❌ EQUIPE_INICIAL não é um JSON válido: {EQUIPE_INICIAL_JSON[:80]}")
-        return
-    for membro in membros:
+    for membro in _membros_equipe_inicial():
         papel = membro.get('papel') if membro.get('papel') in ('admin', 'equipe') else 'equipe'
         _sincronizar_usuario_inicial(
             membro.get('nome'), membro.get('email'), membro.get('senha'), papel, 'Usuário da equipe inicial'
         )
+
+
+def _tentar_bootstrap_sob_demanda(email):
+    # Rede de segurança: se por qualquer motivo o boot não deixou o
+    # usuário persistido (o que não deveria acontecer, mas está
+    # acontecendo em produção por uma razão ainda não identificada — ver
+    # conversa sobre o volume /app/data), tenta sincronizar de novo bem
+    # na hora do login, só pra esse e-mail específico, antes de desistir.
+    email_norm = (email or '').strip().lower()
+    if not email_norm:
+        return
+    if ADMIN_INICIAL_EMAIL and email_norm == ADMIN_INICIAL_EMAIL.strip().lower():
+        _sincronizar_usuario_inicial(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, 'admin', 'Usuário admin inicial (sob demanda)')
+        return
+    for membro in _membros_equipe_inicial():
+        if (membro.get('email') or '').strip().lower() == email_norm:
+            papel = membro.get('papel') if membro.get('papel') in ('admin', 'equipe') else 'equipe'
+            _sincronizar_usuario_inicial(
+                membro.get('nome'), membro.get('email'), membro.get('senha'), papel, 'Usuário da equipe inicial (sob demanda)'
+            )
+            return
 
 
 _criar_admin_inicial_se_necessario()
@@ -424,6 +448,10 @@ def api_login():
     _diag = f" [debug: banco={_caminho_banco_atual} existe={os.path.exists(_caminho_banco_atual)} usuarios={len(listar_usuarios())} pid={os.getpid()}]"
 
     usuario = buscar_usuario_por_email(email)
+    if not usuario:
+        # Rede de segurança temporária — ver _tentar_bootstrap_sob_demanda.
+        _tentar_bootstrap_sob_demanda(email)
+        usuario = buscar_usuario_por_email(email)
     if not usuario:
         print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}' (worker pid {os.getpid()}, {len(listar_usuarios())} usuários no banco)")
         return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=email_nao_encontrado"}), 401
