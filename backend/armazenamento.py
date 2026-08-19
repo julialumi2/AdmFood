@@ -403,14 +403,14 @@ def criar_usuario(nome, email, senha_hash, papel="equipe"):
     with conexao() as conn:
         cursor = conn.execute(
             "INSERT INTO usuario (nome, email, senha_hash, papel, ativo, criado_em) VALUES (?, ?, ?, ?, 1, ?)",
-            (nome, email.lower(), senha_hash, papel, agora),
+            (nome, email.strip().lower(), senha_hash, papel, agora),
         )
         return cursor.lastrowid
 
 
 def buscar_usuario_por_email(email):
     with conexao() as conn:
-        linha = conn.execute("SELECT * FROM usuario WHERE email = ?", (email.lower(),)).fetchone()
+        linha = conn.execute("SELECT * FROM usuario WHERE email = ?", (email.strip().lower(),)).fetchone()
         return dict(linha) if linha else None
 
 

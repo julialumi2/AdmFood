@@ -23,9 +23,18 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "")
 # Cria esse usuário como admin automaticamente na primeira subida do app,
 # se a tabela de usuários ainda estiver vazia (ver app.py). Só precisa
 # estar setado uma vez — depois pode remover do .env/Dokploy.
-ADMIN_INICIAL_NOME = os.environ.get("ADMIN_INICIAL_NOME", "Admin")
-ADMIN_INICIAL_EMAIL = os.environ.get("ADMIN_INICIAL_EMAIL", "")
-ADMIN_INICIAL_SENHA = os.environ.get("ADMIN_INICIAL_SENHA", "")
+# .strip() é importante aqui: um espaço ou quebra de linha colado por
+# engano no valor (comum ao copiar/colar num campo de ambiente) faria a
+# senha guardada nunca bater com a senha digitada de verdade no login.
+ADMIN_INICIAL_NOME = os.environ.get("ADMIN_INICIAL_NOME", "Admin").strip()
+ADMIN_INICIAL_EMAIL = os.environ.get("ADMIN_INICIAL_EMAIL", "").strip()
+ADMIN_INICIAL_SENHA = os.environ.get("ADMIN_INICIAL_SENHA", "").strip()
+
+# Mesma ideia do admin inicial, mas pra equipe toda de uma vez — evita
+# depender de conseguir logar primeiro pra cadastrar todo mundo pela tela.
+# Formato: uma lista JSON de objetos {nome, email, senha, papel}. Ver
+# exemplo em .env.example.
+EQUIPE_INICIAL_JSON = os.environ.get("EQUIPE_INICIAL", "").strip()
 
 # Dicionário com as configurações individuais de cada unidade/loja
 LOJAS = {

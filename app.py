@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 from flask_cors import CORS
 
-from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON
 from backend.armazenamento import (
     inicializar_banco,
     buscar_faturamento_periodo,
@@ -46,36 +46,73 @@ _caminho_banco_atual = os.environ.get("DATABASE_PATH", "admfood.db")
 print(f"🗄️  Banco de dados: {_caminho_banco_atual} (existe: {os.path.exists(_caminho_banco_atual)}, worker pid {os.getpid()})")
 inicializar_banco()
 print(f"👤 Usuários cadastrados no banco: {len(listar_usuarios())}")
+if ADMIN_INICIAL_EMAIL:
+    _email_bruto = os.environ.get("ADMIN_INICIAL_EMAIL", "")
+    _senha_bruta = os.environ.get("ADMIN_INICIAL_SENHA", "")
+    print(
+        f"🔎 ADMIN_INICIAL_EMAIL: {len(_email_bruto)} caracteres brutos, {len(ADMIN_INICIAL_EMAIL)} após limpar espaços"
+        f" | ADMIN_INICIAL_SENHA: {len(_senha_bruta)} caracteres brutos, {len(ADMIN_INICIAL_SENHA)} após limpar espaços"
+    )
 
 
-def _criar_admin_inicial_se_necessario():
-    # Sincroniza (cria OU atualiza a senha/papel) o usuário desse e-mail
-    # específico toda vez que o app sobe — não só "se a tabela estiver
-    # vazia". Isso evita ficar trancado de fora se uma tentativa anterior
-    # (senha digitada errado, etc.) já tiver criado essa conta: o próximo
-    # redeploy corrige sozinho, em vez de pular silenciosamente porque já
-    # existe *algum* usuário. Assim que o login funcionar, remova
-    # ADMIN_INICIAL_EMAIL/SENHA do ambiente — enquanto estiverem
-    # definidas, qualquer redeploy volta a senha dessa conta pro valor
-    # daqui, sobrescrevendo uma troca de senha feita pela tela de Equipe.
-    if not ADMIN_INICIAL_EMAIL or not ADMIN_INICIAL_SENHA:
+def _sincronizar_usuario_inicial(nome, email, senha, papel, rotulo):
+    # Cria OU atualiza (senha/papel) o usuário desse e-mail específico toda
+    # vez que o app sobe — não só "se a tabela estiver vazia". Isso evita
+    # ficar trancado de fora se uma tentativa anterior (senha digitada
+    # errado, redeploy no meio da configuração) já tiver criado essa conta:
+    # o próximo redeploy corrige sozinho, em vez de pular silenciosamente
+    # porque já existe *algum* usuário.
+    email = (email or '').strip()
+    senha = (senha or '').strip()
+    if not email or not senha:
         return
     try:
-        hash_senha = gerar_hash_senha(ADMIN_INICIAL_SENHA)
-        usuario_existente = buscar_usuario_por_email(ADMIN_INICIAL_EMAIL)
+        hash_senha = gerar_hash_senha(senha)
+        usuario_existente = buscar_usuario_por_email(email)
         if usuario_existente:
-            atualizar_usuario(usuario_existente['id'], {'senha_hash': hash_senha, 'papel': 'admin', 'ativo': 1})
-            print(f"✅ Usuário admin inicial sincronizado (senha/papel atualizados): {ADMIN_INICIAL_EMAIL}")
+            atualizar_usuario(usuario_existente['id'], {'senha_hash': hash_senha, 'papel': papel, 'ativo': 1})
+            print(f"✅ {rotulo} sincronizado (senha/papel atualizados): {email}")
         else:
-            criar_usuario(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, hash_senha, papel="admin")
-            print(f"✅ Usuário admin inicial criado: {ADMIN_INICIAL_EMAIL}")
+            criar_usuario(nome or email, email, hash_senha, papel=papel)
+            print(f"✅ {rotulo} criado: {email}")
     except Exception:
         import traceback
-        print("❌ Falha ao sincronizar admin inicial:")
+        print(f"❌ Falha ao sincronizar {rotulo.lower()} ({email}):")
         traceback.print_exc()
 
 
+def _criar_admin_inicial_se_necessario():
+    # Assim que o login funcionar, remova ADMIN_INICIAL_EMAIL/SENHA do
+    # ambiente — enquanto estiverem definidas, qualquer redeploy volta a
+    # senha dessa conta pro valor daqui, sobrescrevendo uma troca de senha
+    # feita pela tela de Equipe.
+    _sincronizar_usuario_inicial(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, 'admin', 'Usuário admin inicial')
+
+
+def _criar_equipe_inicial_se_necessario():
+    # Mesma ideia do admin inicial, mas pra vários membros de uma vez, via
+    # uma lista JSON em EQUIPE_INICIAL — evita depender de conseguir logar
+    # primeiro pra cadastrar todo mundo pela tela de Equipe. Depois que
+    # todo mundo estiver com acesso, pode remover essa variável do
+    # ambiente (mesmo aviso do admin: enquanto estiver definida, um
+    # redeploy volta a senha de cada um pro valor daqui).
+    if not EQUIPE_INICIAL_JSON:
+        return
+    import json
+    try:
+        membros = json.loads(EQUIPE_INICIAL_JSON)
+    except Exception:
+        print(f"❌ EQUIPE_INICIAL não é um JSON válido: {EQUIPE_INICIAL_JSON[:80]}")
+        return
+    for membro in membros:
+        papel = membro.get('papel') if membro.get('papel') in ('admin', 'equipe') else 'equipe'
+        _sincronizar_usuario_inicial(
+            membro.get('nome'), membro.get('email'), membro.get('senha'), papel, 'Usuário da equipe inicial'
+        )
+
+
 _criar_admin_inicial_se_necessario()
+_criar_equipe_inicial_se_necessario()
 
 
 # --- LOGIN ------------------------------------------------------------------
