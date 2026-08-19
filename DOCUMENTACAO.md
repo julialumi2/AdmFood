@@ -230,16 +230,17 @@ cada subida do app:
   dessas contas pro valor de lá, sobrescrevendo uma troca de senha feita
   pela tela.
 
-**Problema conhecido, não resolvido:** em produção, a aba Environment do
+**Problema conhecido, não resolvido:** em 2026-08-19, a aba Environment do
 Dokploy não estava repassando `ADMIN_INICIAL_EMAIL`/`SENHA` pro container
 (confirmado com uma variável de controle direto no `Dockerfile`, que chegava
 normalmente, enquanto a mesma variável configurada no painel do Dokploy não
 chegava). Causa raiz não identificada — vale abrir chamado com o suporte do
-Dokploy. Como contorno, essas variáveis foram embutidas diretamente no
-`Dockerfile` (ver comentário `CONTORNO TEMPORÁRIO` lá) — isso deve ser
-removido assim que o mecanismo de Environment do Dokploy for confiável de
-novo, e a senha ali não deve ser reaproveitada em nenhuma conta (ficou
-exposta no histórico do Git).
+Dokploy se voltar a acontecer. Como contorno temporário, essas variáveis
+foram embutidas diretamente no `Dockerfile` pra destravar o primeiro login;
+já foram removidas de lá assim que as contas ficaram criadas e funcionando
+— a causa raiz do Environment do Dokploy em si não foi investigada a fundo,
+só contornada. A senha usada nesse contorno ficou exposta no histórico do
+Git e não deve ser reaproveitada em nenhuma conta.
 
 ## 9. Pendências conhecidas (roadmap em aberto)
 

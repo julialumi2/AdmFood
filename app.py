@@ -42,17 +42,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
 
-_caminho_banco_atual = os.environ.get("DATABASE_PATH", "admfood.db")
-print(f"🗄️  Banco de dados: {_caminho_banco_atual} (existe: {os.path.exists(_caminho_banco_atual)}, worker pid {os.getpid()})")
 inicializar_banco()
-print(f"👤 Usuários cadastrados no banco: {len(listar_usuarios())}")
-if ADMIN_INICIAL_EMAIL:
-    _email_bruto = os.environ.get("ADMIN_INICIAL_EMAIL", "")
-    _senha_bruta = os.environ.get("ADMIN_INICIAL_SENHA", "")
-    print(
-        f"🔎 ADMIN_INICIAL_EMAIL: {len(_email_bruto)} caracteres brutos, {len(ADMIN_INICIAL_EMAIL)} após limpar espaços"
-        f" | ADMIN_INICIAL_SENHA: {len(_senha_bruta)} caracteres brutos, {len(ADMIN_INICIAL_SENHA)} após limpar espaços"
-    )
 
 
 def _sincronizar_usuario_inicial(nome, email, senha, papel, rotulo):
@@ -443,34 +433,23 @@ def api_login():
         return jsonify({"erro": "Informe e-mail e senha."}), 400
 
     usuario = buscar_usuario_por_email(email)
-    _bootstrap_tentado = False
     if not usuario:
-        # Rede de segurança temporária — ver _tentar_bootstrap_sob_demanda.
-        _bootstrap_tentado = True
+        # Rede de segurança: se o e-mail bate com o admin/equipe inicial
+        # (ADMIN_INICIAL_* / EQUIPE_INICIAL) mas a conta não foi encontrada
+        # por algum motivo, tenta sincronizar de novo na hora antes de
+        # desistir — ver _tentar_bootstrap_sob_demanda.
         _tentar_bootstrap_sob_demanda(email)
         usuario = buscar_usuario_por_email(email)
 
-    # DEBUG TEMPORÁRIO — mostra o motivo exato na própria tela de login,
-    # já que os logs do Dokploy não estavam revelando nada. Calculado
-    # DEPOIS da tentativa de bootstrap sob demanda, pra refletir o estado
-    # real no momento da resposta. Remover assim que o problema for
-    # resolvido (ver app.py, api_login).
-    _diag = (
-        f" [debug: banco={_caminho_banco_atual} existe={os.path.exists(_caminho_banco_atual)}"
-        f" usuarios={len(listar_usuarios())} pid={os.getpid()} bootstrap_tentado={_bootstrap_tentado}"
-        f" admin_inicial_email_configurado={bool(ADMIN_INICIAL_EMAIL)} admin_inicial_senha_configurada={bool(ADMIN_INICIAL_SENHA)}"
-        f" env_dockerfile={os.environ.get('DEBUG_ENV_DOCKERFILE', 'AUSENTE')}]"
-    )
-
     if not usuario:
-        print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}' (worker pid {os.getpid()}, {len(listar_usuarios())} usuários no banco)")
-        return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=email_nao_encontrado"}), 401
+        print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}'")
+        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
     if not usuario["ativo"]:
         print(f"🔑 Login falhou — usuário '{email}' está inativo")
-        return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=inativo"}), 401
+        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
     if not senha_confere(senha, usuario["senha_hash"]):
         print(f"🔑 Login falhou — senha não confere pro usuário '{email}'")
-        return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=senha_nao_confere"}), 401
+        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
 
     session.clear()
     session['usuario_id'] = usuario['id']
