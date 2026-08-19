@@ -13,6 +13,12 @@ from datetime import datetime
 # via a variável DATABASE_PATH, senão perde os dados a cada novo deploy.
 CAMINHO_BANCO = os.environ.get("DATABASE_PATH", "admfood.db")
 
+# Fotos dos produtos do Cardápio ficam no mesmo volume persistente do banco
+# (uma pasta "cardapio_fotos" do lado do admfood.db), pelo mesmo motivo:
+# sem isso, sumiriam a cada redeploy.
+PASTA_FOTOS_CARDAPIO = os.path.join(os.path.dirname(os.path.abspath(CAMINHO_BANCO)), "cardapio_fotos")
+os.makedirs(PASTA_FOTOS_CARDAPIO, exist_ok=True)
+
 
 @contextmanager
 def conexao():
@@ -127,9 +133,19 @@ def inicializar_banco():
                 food99 REAL,
                 beefood REAL,
                 cardapio_web REAL,
-                ordem INTEGER NOT NULL
+                ordem INTEGER NOT NULL,
+                foto_arquivo TEXT
             )
             """
+        )
+        colunas_preco = {c["name"] for c in conn.execute("PRAGMA table_info(preco_cardapio)").fetchall()}
+        if "foto_arquivo" not in colunas_preco:
+            conn.execute("ALTER TABLE preco_cardapio ADD COLUMN foto_arquivo TEXT")
+        # Índice único (não PK) pra sincronizar_precos_cardapio conseguir usar
+        # "ON CONFLICT(loja, produto)" — atualiza produto existente em vez de
+        # duplicar, preservando o id e a foto ao reimportar a planilha.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_preco_cardapio_loja_produto ON preco_cardapio(loja, produto)"
         )
 
 
@@ -455,25 +471,59 @@ def excluir_usuario(usuario_id):
         conn.execute("DELETE FROM usuario WHERE id = ?", (usuario_id,))
 
 
-# --- COMPARATIVO DE PREÇOS DO CARDÁPIO (referência, importado de planilha) --
+# --- COMPARATIVO DE PREÇOS DO CARDÁPIO (importado de planilha, editável) --
 
-def substituir_precos_cardapio(linhas):
-    """Apaga tudo e regrava do zero — usado pelo script de importação
-    (importar_precos_cardapio.py). Simples e seguro pra uma tabela de
-    referência que é sempre reimportada por inteiro, nunca editada aos
-    poucos."""
+def sincronizar_precos_cardapio(linhas):
+    """Atualiza a partir de uma planilha reimportada, SEM apagar tudo — um
+    produto que já existe (mesma loja + nome) tem categoria/preços/ordem
+    atualizados, mas mantém o id e a foto_arquivo (a planilha não tem foto).
+    Produto novo é inserido; produto que sumiu da planilha é removido.
+    Assim, uma foto ou preço editado à mão na tela não se perde só porque a
+    Julia importou uma planilha nova depois."""
     with conexao() as conn:
-        conn.execute("DELETE FROM preco_cardapio")
-        conn.executemany(
-            """
-            INSERT INTO preco_cardapio (loja, categoria, produto, ifood, food99, beefood, cardapio_web, ordem)
-            VALUES (:loja, :categoria, :produto, :ifood, :food99, :beefood, :cardapio_web, :ordem)
-            """,
-            linhas,
-        )
+        for linha in linhas:
+            conn.execute(
+                """
+                INSERT INTO preco_cardapio (loja, categoria, produto, ifood, food99, beefood, cardapio_web, ordem)
+                VALUES (:loja, :categoria, :produto, :ifood, :food99, :beefood, :cardapio_web, :ordem)
+                ON CONFLICT(loja, produto) DO UPDATE SET
+                    categoria = excluded.categoria,
+                    ifood = excluded.ifood,
+                    food99 = excluded.food99,
+                    beefood = excluded.beefood,
+                    cardapio_web = excluded.cardapio_web,
+                    ordem = excluded.ordem
+                """,
+                linha,
+            )
+
+        produtos_por_loja = {}
+        for linha in linhas:
+            produtos_por_loja.setdefault(linha['loja'], []).append(linha['produto'])
+        for loja, produtos in produtos_por_loja.items():
+            marcadores = ", ".join("?" * len(produtos))
+            conn.execute(
+                f"DELETE FROM preco_cardapio WHERE loja = ? AND produto NOT IN ({marcadores})",
+                [loja] + produtos,
+            )
 
 
 def listar_precos_cardapio():
     with conexao() as conn:
         linhas = conn.execute("SELECT * FROM preco_cardapio ORDER BY loja, ordem").fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def buscar_preco_cardapio_por_id(item_id):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM preco_cardapio WHERE id = ?", (item_id,)).fetchone()
+        return dict(linha) if linha else None
+
+
+def atualizar_preco_cardapio(item_id, campos):
+    if not campos:
+        return
+    colunas = ", ".join(f"{campo} = ?" for campo in campos)
+    valores = list(campos.values()) + [item_id]
+    with conexao() as conn:
+        conn.execute(f"UPDATE preco_cardapio SET {colunas} WHERE id = ?", valores)

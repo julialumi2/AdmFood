@@ -155,27 +155,40 @@ Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 
 ### 6.1 Comparativo de preços do cardápio
 
-Referência pra tela `cardapio.html` — mostra o preço de cada item do
-cardápio em cada canal de venda (iFood, 99Food, BeeFood, Cardápio Web),
-lado a lado, por loja. **Só leitura**: não tem tela de edição, a planilha
-continua sendo a fonte oficial.
+Tela `cardapio.html` — mostra o preço de cada item do cardápio em cada
+canal de venda (iFood, 99Food, BeeFood, Cardápio Web), lado a lado, por
+loja, num card por produto (com foto). Todo mundo logado vê; só admin edita
+preço e sobe foto.
 
-A leitura da planilha (`.xlsx` com uma aba por grupo de loja — Artesanos,
-Tradiças, Açaí Na Lata; a Tradiça ZN e a Tradiça Simus compartilham a mesma
-tabela de preços) vive em `backend/precos_cardapio.py`, usada por dois
-jeitos de reimportar a tabela `preco_cardapio` inteira:
+**Fonte dos preços é a planilha**, mas dá pra editar um valor específico
+direto na tela também (ex: corrigir um preço que mudou antes da próxima
+planilha chegar). A leitura da planilha (`.xlsx` com uma aba por grupo de
+loja — Artesanos, Tradiças, Açaí Na Lata; a Tradiça ZN e a Tradiça Simus
+compartilham a mesma tabela de preços) vive em `backend/precos_cardapio.py`,
+usada por dois jeitos de reimportar:
 
-- **Botão "Importar planilha"** na tela Cardápio (só aparece pra admin) —
-  sobe o arquivo direto pelo navegador, sem precisar de acesso ao servidor.
-  É o jeito normal de atualizar em produção.
+- **Botão "Importar planilha"** na tela Cardápio (só admin) — sobe o
+  arquivo direto pelo navegador, sem precisar de acesso ao servidor. É o
+  jeito normal de atualizar em produção.
 - **Linha de comando**, útil em desenvolvimento local:
   ```bash
   python importar_precos_cardapio.py "caminho/da/planilha.xlsx"
   ```
 
-Os dois substituem a tabela inteira (não fazem merge) — uma linha da
-planilha com o nome do produto mas nenhum preço em nenhum canal é tratada
-como cabeçalho de categoria (BEBIDAS, PORÇÕES etc.), não como um produto.
+`sincronizar_precos_cardapio()` (`backend/armazenamento.py`) faz um upsert
+por `(loja, produto)` — não apaga a tabela e recria: produto que já existe
+tem categoria/preço/ordem atualizados a partir da planilha (**sobrescreve
+uma edição manual de preço**, a planilha sempre vence), mas mantém o `id` e
+a **foto** (a planilha não tem foto — se apagasse e recriasse, a foto se
+perderia a cada reimportação). Produto novo é inserido; produto que sumiu
+da planilha é removido. Uma linha da planilha com o nome do produto mas
+nenhum preço em nenhum canal é tratada como cabeçalho de categoria
+(BEBIDAS, PORÇÕES etc.), não como um produto.
+
+Fotos ficam em `PASTA_FOTOS_CARDAPIO` (`backend/armazenamento.py`) — uma
+pasta `cardapio_fotos/` do lado do `admfood.db`, **no mesmo volume
+persistente** (mesmo motivo do banco: sem isso, some a cada redeploy).
+Servidas via `/cardapio-fotos/<arquivo>`, só extensões de imagem.
 
 ## 7. API — principais endpoints
 
@@ -198,7 +211,9 @@ Todos em `app.py`, prefixo `/api`.
 
 **Cardápio**
 - `GET /api/precos-cardapio` — comparativo de preços, agrupado por loja e categoria
-- `POST /api/precos-cardapio/importar` — reimporta a tabela inteira a partir de um `.xlsx` enviado (multipart, campo `planilha`) — só admin (ver seção 6.1)
+- `POST /api/precos-cardapio/importar` — sincroniza a partir de um `.xlsx` enviado (multipart, campo `planilha`) — só admin (ver seção 6.1)
+- `PUT /api/precos-cardapio/<id>` — edita o preço de um item num canal específico — só admin
+- `POST /api/precos-cardapio/<id>/foto` — sobe a foto de um item (multipart, campo `foto`, jpg/png/webp) — só admin
 
 **Tarefas (Kanban / ClickUp)**
 - `GET|POST /api/tarefas` — listar todas / criar

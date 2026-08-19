@@ -15,5 +15,9 @@ sincronizar.log
 completar_pedidos*.log
 flask_dev.log
 
+# Fotos de produtos do Cardápio, subidas pela tela — dado local/de produção,
+# não código (em produção fica no volume persistente, não aqui)
+cardapio_fotos/
+
 # Arquivos do VS Code
 .vscode/

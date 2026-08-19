@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+import uuid
 from datetime import date, datetime, timedelta
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 
@@ -29,7 +30,10 @@ from backend.armazenamento import (
     atualizar_usuario,
     excluir_usuario,
     listar_precos_cardapio,
-    substituir_precos_cardapio,
+    sincronizar_precos_cardapio,
+    buscar_preco_cardapio_por_id,
+    atualizar_preco_cardapio,
+    PASTA_FOTOS_CARDAPIO,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -635,7 +639,22 @@ def api_excluir_usuario(usuario_id):
     return jsonify({"sucesso": True})
 
 
-# --- COMPARATIVO DE PREÇOS DO CARDÁPIO (só leitura — ver importar_precos_cardapio.py) ---
+# --- COMPARATIVO DE PREÇOS DO CARDÁPIO ---
+
+EXTENSOES_FOTO_CARDAPIO = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _formatar_item_cardapio(linha):
+    return {
+        "id": linha['id'],
+        "produto": linha['produto'],
+        "ifood": linha['ifood'],
+        "food99": linha['food99'],
+        "beefood": linha['beefood'],
+        "cardapioWeb": linha['cardapio_web'],
+        "fotoUrl": f"/cardapio-fotos/{linha['foto_arquivo']}" if linha['foto_arquivo'] else None,
+    }
+
 
 @app.route('/api/precos-cardapio', methods=['GET'])
 def api_precos_cardapio():
@@ -643,13 +662,7 @@ def api_precos_cardapio():
     for linha in listar_precos_cardapio():
         loja = lojas.setdefault(linha['loja'], {})
         categoria = loja.setdefault(linha['categoria'], [])
-        categoria.append({
-            "produto": linha['produto'],
-            "ifood": linha['ifood'],
-            "food99": linha['food99'],
-            "beefood": linha['beefood'],
-            "cardapioWeb": linha['cardapio_web'],
-        })
+        categoria.append(_formatar_item_cardapio(linha))
 
     resposta = []
     for nome_loja, categorias in lojas.items():
@@ -662,9 +675,10 @@ def api_precos_cardapio():
 
 @app.route('/api/precos-cardapio/importar', methods=['POST'])
 def api_importar_precos_cardapio():
-    # Admin-only — reimporta a tabela inteira a partir de uma planilha nova,
-    # direto pelo navegador (sem precisar de acesso ao servidor). Mesma
-    # lógica do script importar_precos_cardapio.py.
+    # Admin-only — reimporta a partir de uma planilha nova, direto pelo
+    # navegador (sem precisar de acesso ao servidor). Mesma lógica do script
+    # importar_precos_cardapio.py. Não apaga foto nem preserva id — produto
+    # que já existia (mesma loja+nome) só atualiza preço/categoria/ordem.
     erro = _exigir_admin()
     if erro:
         return erro
@@ -680,8 +694,88 @@ def api_importar_precos_cardapio():
     except Exception as erro_leitura:
         return jsonify({"erro": f"Não foi possível ler a planilha: {erro_leitura}"}), 400
 
-    substituir_precos_cardapio(linhas)
+    sincronizar_precos_cardapio(linhas)
     return jsonify({"sucesso": True, "totalProdutos": len(linhas)})
+
+
+CAMPOS_PRECO_CARDAPIO_PERMITIDOS = {'ifood', 'food99', 'beefood', 'cardapioWeb'}
+CAMPO_PRECO_CARDAPIO_PARA_COLUNA = {'ifood': 'ifood', 'food99': 'food99', 'beefood': 'beefood', 'cardapioWeb': 'cardapio_web'}
+
+
+@app.route('/api/precos-cardapio/<int:item_id>', methods=['PUT'])
+def api_atualizar_preco_cardapio(item_id):
+    # Admin-only — edição manual de um item específico (preço em algum
+    # canal). Fica só até a próxima planilha reimportada trazer um valor
+    # novo pra esse mesmo produto.
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    item = buscar_preco_cardapio_por_id(item_id)
+    if not item:
+        return jsonify({"erro": "Item não encontrado."}), 404
+
+    dados = request.get_json(silent=True) or {}
+    campos = {}
+    for chave in CAMPOS_PRECO_CARDAPIO_PERMITIDOS:
+        if chave not in dados:
+            continue
+        valor = dados[chave]
+        if valor is not None:
+            try:
+                valor = float(valor)
+            except (TypeError, ValueError):
+                return jsonify({"erro": f"Valor inválido pra {chave}."}), 400
+        campos[CAMPO_PRECO_CARDAPIO_PARA_COLUNA[chave]] = valor
+
+    if not campos:
+        return jsonify({"erro": "Nada para atualizar."}), 400
+
+    atualizar_preco_cardapio(item_id, campos)
+    return jsonify(_formatar_item_cardapio(buscar_preco_cardapio_por_id(item_id)))
+
+
+@app.route('/api/precos-cardapio/<int:item_id>/foto', methods=['POST'])
+def api_upload_foto_cardapio(item_id):
+    # Admin-only — sobe uma foto pro produto, guardada no mesmo volume
+    # persistente do banco (ver PASTA_FOTOS_CARDAPIO em armazenamento.py).
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    item = buscar_preco_cardapio_por_id(item_id)
+    if not item:
+        return jsonify({"erro": "Item não encontrado."}), 404
+
+    arquivo = request.files.get('foto')
+    if not arquivo or not arquivo.filename:
+        return jsonify({"erro": "Selecione uma imagem."}), 400
+    _, extensao = os.path.splitext(arquivo.filename)
+    if extensao.lower() not in EXTENSOES_FOTO_CARDAPIO:
+        return jsonify({"erro": "Formato inválido. Use JPG, PNG ou WEBP."}), 400
+
+    nome_arquivo = f"{item_id}_{uuid.uuid4().hex}{extensao.lower()}"
+    arquivo.save(os.path.join(PASTA_FOTOS_CARDAPIO, nome_arquivo))
+
+    foto_antiga = item.get('foto_arquivo')
+    atualizar_preco_cardapio(item_id, {'foto_arquivo': nome_arquivo})
+    if foto_antiga:
+        try:
+            os.remove(os.path.join(PASTA_FOTOS_CARDAPIO, foto_antiga))
+        except OSError:
+            pass
+
+    return jsonify(_formatar_item_cardapio(buscar_preco_cardapio_por_id(item_id)))
+
+
+@app.route('/cardapio-fotos/<path:nome_arquivo>')
+def arquivo_foto_cardapio(nome_arquivo):
+    if '..' in nome_arquivo or nome_arquivo.startswith('/'):
+        abort(404)
+    _, extensao = os.path.splitext(nome_arquivo)
+    if extensao.lower() not in EXTENSOES_FOTO_CARDAPIO:
+        abort(404)
+    return send_from_directory(PASTA_FOTOS_CARDAPIO, nome_arquivo)
 
 
 @app.route('/api/faturamento-ontem', methods=['GET'])

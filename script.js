@@ -1570,11 +1570,15 @@ async function carregarUsuarioLogado() {
       carregarEquipe();
     }
 
-    // Tela de Cardápio: botão "Importar planilha" (só admin)
+    // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto
+    // (só admin). Os dois fetches (usuário logado + preços) rodam em
+    // paralelo — se os cards já tiverem renderizado como "só leitura" antes
+    // de saber que é admin, renderiza de novo agora com os controles de edição.
     const importarArea = document.getElementById('cardapio-importar-area');
     if (importarArea && usuario.papel === 'admin') {
       importarArea.style.display = '';
       if (typeof lucide !== 'undefined') lucide.createIcons();
+      if (cardapioLojaSelecionada) renderCardapioLoja(cardapioLojaSelecionada);
     }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);
@@ -2132,10 +2136,17 @@ async function carregarPrecosCardapio() {
   }
 }
 
+const CANAIS_CARDAPIO = [
+  { chave: 'ifood', label: 'iFood' },
+  { chave: 'food99', label: '99Food' },
+  { chave: 'beefood', label: 'BeeFood' },
+  { chave: 'cardapioWeb', label: 'Cardápio Web' },
+];
+
 function _formatarPrecoCardapio(valor) {
   return typeof valor === 'number'
     ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : '<span class="cardapio-preco-vazio">—</span>';
+    : null;
 }
 
 function renderCardapioLoja(nomeLoja) {
@@ -2145,41 +2156,108 @@ function renderCardapioLoja(nomeLoja) {
   const loja = cardapioData.find(l => l.loja === nomeLoja);
   if (!loja) return;
 
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
   const temBeefood = loja.categorias.some(cat => cat.produtos.some(p => p.beefood !== null));
+  const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
 
-  const linhasTabela = loja.categorias.map(cat => `
-    <tr><td colspan="${temBeefood ? 5 : 4}" class="cardapio-categoria-titulo">${escaparHtml(cat.nome)}</td></tr>
-    ${cat.produtos.map(p => `
-      <tr>
-        <td class="font-bold">${escaparHtml(p.produto)}</td>
-        <td>${_formatarPrecoCardapio(p.ifood)}</td>
-        <td>${_formatarPrecoCardapio(p.food99)}</td>
-        ${temBeefood ? `<td>${_formatarPrecoCardapio(p.beefood)}</td>` : ''}
-        <td>${_formatarPrecoCardapio(p.cardapioWeb)}</td>
-      </tr>
-    `).join('')}
+  const cardsPorCategoria = loja.categorias.map(cat => `
+    <div class="cardapio-categoria-titulo">${escaparHtml(cat.nome)}</div>
+    <div class="cardapio-lista">
+      ${cat.produtos.map(p => `
+        <div class="cardapio-card" data-id="${p.id}">
+          <div class="cardapio-card-foto">
+            ${p.fotoUrl
+              ? `<img src="${p.fotoUrl}" alt="${escaparHtml(p.produto)}">`
+              : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
+            ${isAdmin ? `
+              <button type="button" class="cardapio-btn-foto" data-acao="foto" title="Trocar foto">
+                <i data-lucide="camera"></i>
+              </button>
+              <input type="file" accept="image/*" class="cardapio-input-foto" style="display:none;">
+            ` : ''}
+          </div>
+          <div class="cardapio-card-corpo">
+            <div class="cardapio-card-nome">${escaparHtml(p.produto)}</div>
+            ${canais.map(c => `
+              <div class="cardapio-linha-preco">
+                <span class="cardapio-canal-label">${c.label}</span>
+                ${isAdmin
+                  ? `<input type="number" step="0.01" min="0" class="cardapio-input-preco" data-canal="${c.chave}" value="${p[c.chave] ?? ''}" placeholder="—">`
+                  : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(p[c.chave]) ?? '<span class=\"cardapio-preco-vazio\">—</span>'}</span>`}
+              </div>
+            `).join('')}
+            ${isAdmin ? `<button type="button" class="btn-primary-sm cardapio-btn-salvar" data-acao="salvar">Salvar</button>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
   `).join('');
 
-  conteudoEl.innerHTML = `
-    <div class="panel panel-table">
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Produto</th>
-              <th>iFood</th>
-              <th>99Food</th>
-              ${temBeefood ? '<th>BeeFood</th>' : ''}
-              <th>Cardápio Web</th>
-            </tr>
-          </thead>
-          <tbody>${linhasTabela}</tbody>
-        </table>
-      </div>
-    </div>
-  `;
+  conteudoEl.innerHTML = cardsPorCategoria;
 
+  if (isAdmin) wireCardapioCardEvents();
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function wireCardapioCardEvents() {
+  document.querySelectorAll('.cardapio-card').forEach(card => {
+    const itemId = card.dataset.id;
+
+    card.querySelector('[data-acao="salvar"]')?.addEventListener('click', async () => {
+      const btn = card.querySelector('[data-acao="salvar"]');
+      const corpo = {};
+      card.querySelectorAll('.cardapio-input-preco').forEach(input => {
+        corpo[input.dataset.canal] = input.value === '' ? null : input.value;
+      });
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      try {
+        const resposta = await fetch(`/api/precos-cardapio/${itemId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(corpo),
+        });
+        if (!resposta.ok) throw new Error('falha ao salvar');
+        btn.textContent = 'Salvo ✓';
+        btn.classList.add('salvo');
+        setTimeout(() => { btn.textContent = 'Salvar'; btn.classList.remove('salvo'); btn.disabled = false; }, 1500);
+      } catch (erro) {
+        console.error('Falha ao salvar preço do cardápio:', erro);
+        btn.textContent = 'Erro — tentar de novo';
+        btn.disabled = false;
+      }
+    });
+
+    const inputFoto = card.querySelector('.cardapio-input-foto');
+    card.querySelector('[data-acao="foto"]')?.addEventListener('click', () => inputFoto.click());
+    inputFoto?.addEventListener('change', async () => {
+      const arquivo = inputFoto.files[0];
+      inputFoto.value = '';
+      if (!arquivo) return;
+      try {
+        const formData = new FormData();
+        formData.append('foto', arquivo);
+        const resposta = await fetch(`/api/precos-cardapio/${itemId}/foto`, { method: 'POST', body: formData });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
+
+        const fotoContainer = card.querySelector('.cardapio-card-foto');
+        fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
+        fotoContainer.insertAdjacentHTML('afterbegin', `<img src="${dados.fotoUrl}" alt="">`);
+
+        // Atualiza o dado em memória também, pra não sumir se trocar de aba e voltar.
+        for (const loja of cardapioData) {
+          for (const cat of loja.categorias) {
+            const item = cat.produtos.find(p => String(p.id) === String(itemId));
+            if (item) item.fotoUrl = dados.fotoUrl;
+          }
+        }
+      } catch (erro) {
+        console.error('Falha ao subir foto do cardápio:', erro);
+        alert('Não foi possível subir a foto. Tenta de novo.');
+      }
+    });
+  });
 }
 
 async function importarPlanilhaCardapio(event) {

@@ -1,10 +1,11 @@
 """
 Importa o comparativo de preços do cardápio de uma planilha .xlsx pra tabela
 preco_cardapio (ver backend/precos_cardapio.py pro formato esperado da
-planilha) — usada pela tela Cardápio, só de referência/visualização (não
-tem edição pelo sistema).
+planilha) — usada pela tela Cardápio.
 
-Sempre apaga e reimporta a tabela inteira — rode de novo sempre que a
+Produto que já existe (mesma loja + nome) tem preço/categoria/ordem
+atualizados, mas mantém a foto e o id — só produto novo é inserido, e
+produto que sumiu da planilha é removido. Rode de novo sempre que a
 planilha for atualizada. Alternativa sem precisar rodar isso na mão: a
 tela Cardápio tem um botão "Importar planilha" (só admin) que faz a mesma
 coisa direto pelo navegador.
@@ -15,7 +16,7 @@ Uso:
 
 import sys
 
-from backend.armazenamento import inicializar_banco, substituir_precos_cardapio
+from backend.armazenamento import inicializar_banco, sincronizar_precos_cardapio
 from backend.precos_cardapio import ler_precos_da_planilha
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -29,7 +30,7 @@ if __name__ == "__main__":
 
     inicializar_banco()
     linhas = ler_precos_da_planilha(sys.argv[1])
-    substituir_precos_cardapio(linhas)
+    sincronizar_precos_cardapio(linhas)
 
     por_loja = {}
     for linha in linhas:
