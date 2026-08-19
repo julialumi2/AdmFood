@@ -46,17 +46,28 @@ inicializar_banco()
 
 
 def _criar_admin_inicial_se_necessario():
-    if listar_usuarios():
-        return
+    # Sincroniza (cria OU atualiza a senha/papel) o usuário desse e-mail
+    # específico toda vez que o app sobe — não só "se a tabela estiver
+    # vazia". Isso evita ficar trancado de fora se uma tentativa anterior
+    # (senha digitada errado, etc.) já tiver criado essa conta: o próximo
+    # redeploy corrige sozinho, em vez de pular silenciosamente porque já
+    # existe *algum* usuário. Assim que o login funcionar, remova
+    # ADMIN_INICIAL_EMAIL/SENHA do ambiente — enquanto estiverem
+    # definidas, qualquer redeploy volta a senha dessa conta pro valor
+    # daqui, sobrescrevendo uma troca de senha feita pela tela de Equipe.
     if not ADMIN_INICIAL_EMAIL or not ADMIN_INICIAL_SENHA:
         return
     try:
-        criar_usuario(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, gerar_hash_senha(ADMIN_INICIAL_SENHA), papel="admin")
-        print(f"✅ Usuário admin inicial criado: {ADMIN_INICIAL_EMAIL}")
+        hash_senha = gerar_hash_senha(ADMIN_INICIAL_SENHA)
+        usuario_existente = buscar_usuario_por_email(ADMIN_INICIAL_EMAIL)
+        if usuario_existente:
+            atualizar_usuario(usuario_existente['id'], {'senha_hash': hash_senha, 'papel': 'admin', 'ativo': 1})
+            print(f"✅ Usuário admin inicial sincronizado (senha/papel atualizados): {ADMIN_INICIAL_EMAIL}")
+        else:
+            criar_usuario(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, hash_senha, papel="admin")
+            print(f"✅ Usuário admin inicial criado: {ADMIN_INICIAL_EMAIL}")
     except Exception as erro:
-        # Provavelmente outro worker do Gunicorn já criou no mesmo instante
-        # (email é UNIQUE) — sem problema, só não duplica.
-        print(f"Aviso ao criar admin inicial (provavelmente já existe): {erro}")
+        print(f"Aviso ao sincronizar admin inicial: {erro}")
 
 
 _criar_admin_inicial_se_necessario()
