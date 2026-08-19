@@ -2149,6 +2149,53 @@ function _formatarPrecoCardapio(valor) {
     : null;
 }
 
+function _buscarItemCardapio(id) {
+  for (const loja of cardapioData) {
+    for (const cat of loja.categorias) {
+      const item = cat.produtos.find(p => String(p.id) === String(id));
+      if (item) return item;
+    }
+  }
+  return null;
+}
+
+// Corpo do card (nome + preços) — dois estados: leitura (padrão, todo mundo
+// vê) e edição (só depois de clicar no lápis, só admin). Refeito assim,
+// re-renderizando só o corpo, pra não precisar recarregar a lista inteira
+// nem religar eventos card por card a cada clique.
+function _cardapioCorpoHTML(p, canais, isAdmin, editando) {
+  const nome = `<div class="cardapio-card-nome">${escaparHtml(p.produto)}</div>`;
+
+  if (!editando) {
+    return `
+      <div class="cardapio-card-topo">
+        ${nome}
+        ${isAdmin ? `<button type="button" class="cardapio-btn-editar" data-acao="editar-preco" title="Editar preços"><i data-lucide="pencil"></i></button>` : ''}
+      </div>
+      ${canais.map(c => `
+        <div class="cardapio-linha-preco">
+          <span class="cardapio-canal-label">${c.label}</span>
+          <span class="cardapio-preco-valor">${_formatarPrecoCardapio(p[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  return `
+    <div class="cardapio-card-topo">${nome}</div>
+    ${canais.map(c => `
+      <div class="cardapio-linha-preco">
+        <span class="cardapio-canal-label">${c.label}</span>
+        <input type="number" step="0.01" min="0" class="cardapio-input-preco" data-canal="${c.chave}" value="${p[c.chave] ?? ''}" placeholder="—">
+      </div>
+    `).join('')}
+    <div class="cardapio-editar-acoes">
+      <button type="button" class="btn-secondary-sm" data-acao="cancelar-preco">Cancelar</button>
+      <button type="button" class="btn-primary-sm cardapio-btn-salvar" data-acao="salvar">Salvar</button>
+    </div>
+  `;
+}
+
 function renderCardapioLoja(nomeLoja) {
   const conteudoEl = document.getElementById('cardapio-conteudo');
   if (!conteudoEl) return;
@@ -2176,34 +2223,52 @@ function renderCardapioLoja(nomeLoja) {
               <input type="file" accept="image/*" class="cardapio-input-foto" style="display:none;">
             ` : ''}
           </div>
-          <div class="cardapio-card-corpo">
-            <div class="cardapio-card-nome">${escaparHtml(p.produto)}</div>
-            ${canais.map(c => `
-              <div class="cardapio-linha-preco">
-                <span class="cardapio-canal-label">${c.label}</span>
-                ${isAdmin
-                  ? `<input type="number" step="0.01" min="0" class="cardapio-input-preco" data-canal="${c.chave}" value="${p[c.chave] ?? ''}" placeholder="—">`
-                  : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(p[c.chave]) ?? '<span class=\"cardapio-preco-vazio\">—</span>'}</span>`}
-              </div>
-            `).join('')}
-            ${isAdmin ? `<button type="button" class="btn-primary-sm cardapio-btn-salvar" data-acao="salvar">Salvar</button>` : ''}
-          </div>
+          <div class="cardapio-card-corpo">${_cardapioCorpoHTML(p, canais, isAdmin, false)}</div>
         </div>
       `).join('')}
     </div>
   `).join('');
 
   conteudoEl.innerHTML = cardsPorCategoria;
+  conteudoEl.dataset.canais = JSON.stringify(canais);
 
-  if (isAdmin) wireCardapioCardEvents();
+  _wireCardapioEventosDelegados();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function wireCardapioCardEvents() {
-  document.querySelectorAll('.cardapio-card').forEach(card => {
+function _cardapioRerenderCorpo(card, editando) {
+  const itemId = card.dataset.id;
+  const item = _buscarItemCardapio(itemId);
+  if (!item) return;
+  const canais = JSON.parse(document.getElementById('cardapio-conteudo').dataset.canais || '[]');
+  card.querySelector('.cardapio-card-corpo').innerHTML = _cardapioCorpoHTML(item, canais, true, editando);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Um listener só, no container — os cards são recriados/re-renderizados o
+// tempo todo (entrar/sair do modo edição, trocar de loja), então delegar
+// no pai evita ter que religar eventos toda vez.
+function _wireCardapioEventosDelegados() {
+  const conteudoEl = document.getElementById('cardapio-conteudo');
+  if (!conteudoEl || conteudoEl.dataset.eventosLigados) return;
+  conteudoEl.dataset.eventosLigados = '1';
+
+  conteudoEl.addEventListener('click', async (e) => {
+    const card = e.target.closest('.cardapio-card');
+    if (!card) return;
     const itemId = card.dataset.id;
 
-    card.querySelector('[data-acao="salvar"]')?.addEventListener('click', async () => {
+    if (e.target.closest('[data-acao="editar-preco"]')) {
+      _cardapioRerenderCorpo(card, true);
+      return;
+    }
+
+    if (e.target.closest('[data-acao="cancelar-preco"]')) {
+      _cardapioRerenderCorpo(card, false);
+      return;
+    }
+
+    if (e.target.closest('[data-acao="salvar"]')) {
       const btn = card.querySelector('[data-acao="salvar"]');
       const corpo = {};
       card.querySelectorAll('.cardapio-input-preco').forEach(input => {
@@ -2217,46 +2282,51 @@ function wireCardapioCardEvents() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(corpo),
         });
-        if (!resposta.ok) throw new Error('falha ao salvar');
-        btn.textContent = 'Salvo ✓';
-        btn.classList.add('salvo');
-        setTimeout(() => { btn.textContent = 'Salvar'; btn.classList.remove('salvo'); btn.disabled = false; }, 1500);
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+
+        const item = _buscarItemCardapio(itemId);
+        if (item) Object.assign(item, { ifood: dados.ifood, food99: dados.food99, beefood: dados.beefood, cardapioWeb: dados.cardapioWeb });
+        _cardapioRerenderCorpo(card, false);
       } catch (erro) {
         console.error('Falha ao salvar preço do cardápio:', erro);
         btn.textContent = 'Erro — tentar de novo';
         btn.disabled = false;
       }
-    });
+      return;
+    }
 
-    const inputFoto = card.querySelector('.cardapio-input-foto');
-    card.querySelector('[data-acao="foto"]')?.addEventListener('click', () => inputFoto.click());
-    inputFoto?.addEventListener('change', async () => {
-      const arquivo = inputFoto.files[0];
-      inputFoto.value = '';
-      if (!arquivo) return;
-      try {
-        const formData = new FormData();
-        formData.append('foto', arquivo);
-        const resposta = await fetch(`/api/precos-cardapio/${itemId}/foto`, { method: 'POST', body: formData });
-        const dados = await resposta.json();
-        if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
+    if (e.target.closest('[data-acao="foto"]')) {
+      card.querySelector('.cardapio-input-foto')?.click();
+    }
+  });
 
-        const fotoContainer = card.querySelector('.cardapio-card-foto');
-        fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
-        fotoContainer.insertAdjacentHTML('afterbegin', `<img src="${dados.fotoUrl}" alt="">`);
+  conteudoEl.addEventListener('change', async (e) => {
+    const inputFoto = e.target.closest('.cardapio-input-foto');
+    if (!inputFoto) return;
+    const card = inputFoto.closest('.cardapio-card');
+    const itemId = card.dataset.id;
+    const arquivo = inputFoto.files[0];
+    inputFoto.value = '';
+    if (!arquivo) return;
 
-        // Atualiza o dado em memória também, pra não sumir se trocar de aba e voltar.
-        for (const loja of cardapioData) {
-          for (const cat of loja.categorias) {
-            const item = cat.produtos.find(p => String(p.id) === String(itemId));
-            if (item) item.fotoUrl = dados.fotoUrl;
-          }
-        }
-      } catch (erro) {
-        console.error('Falha ao subir foto do cardápio:', erro);
-        alert('Não foi possível subir a foto. Tenta de novo.');
-      }
-    });
+    try {
+      const formData = new FormData();
+      formData.append('foto', arquivo);
+      const resposta = await fetch(`/api/precos-cardapio/${itemId}/foto`, { method: 'POST', body: formData });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
+
+      const fotoContainer = card.querySelector('.cardapio-card-foto');
+      fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
+      fotoContainer.insertAdjacentHTML('afterbegin', `<img src="${dados.fotoUrl}" alt="">`);
+
+      const item = _buscarItemCardapio(itemId);
+      if (item) item.fotoUrl = dados.fotoUrl;
+    } catch (erro) {
+      console.error('Falha ao subir foto do cardápio:', erro);
+      alert('Não foi possível subir a foto. Tenta de novo.');
+    }
   });
 }
 

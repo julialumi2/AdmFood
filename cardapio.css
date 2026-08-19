@@ -13,7 +13,11 @@
   padding: var(--space-5) var(--space-1) var(--space-2);
 }
 
-.cardapio-lista { display: flex; flex-direction: column; gap: var(--space-3); }
+.cardapio-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
 
 .cardapio-card {
   background-color: var(--card-bg);
@@ -74,12 +78,36 @@
 
 .cardapio-card-corpo { flex: 1; min-width: 0; }
 
+.cardapio-card-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
 .cardapio-card-nome {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--text-dark);
-  margin-bottom: var(--space-2);
 }
+
+.cardapio-btn-editar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cardapio-btn-editar:hover { color: var(--primary); border-color: var(--primary); }
+.cardapio-btn-editar i { width: 13px; height: 13px; }
 
 .cardapio-linha-preco {
   display: flex;
@@ -117,10 +145,13 @@
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
-.cardapio-btn-salvar {
+.cardapio-editar-acoes {
+  display: flex;
+  gap: var(--space-2);
   margin-top: var(--space-3);
-  width: 100%;
 }
+
+.cardapio-editar-acoes button { flex: 1; }
 
 .cardapio-btn-salvar.salvo {
   background-color: var(--success);
