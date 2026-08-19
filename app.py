@@ -1,8 +1,8 @@
 import os
 import threading
+import time
 from datetime import date, datetime, timedelta
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
-from flask_cors import CORS
 
 from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON
 from backend.armazenamento import (
@@ -34,7 +34,9 @@ from backend.cardapio_web import buscar_resumo_do_dia
 from sincronizar import sincronizar_dia, DIA_FECHADO
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # supports_credentials: o cookie de sessão precisa viajar nas requisições do JS
+# Sem CORS: frontend e backend são servidos pelo mesmo Flask (mesma origem),
+# então cross-origin nunca foi necessário de verdade em produção — e com
+# login/sessão em jogo, quanto menos origens confiadas, melhor.
 if not SECRET_KEY:
     print("⚠️  SECRET_KEY não definida — sessões de login não vão sobreviver a um restart/redeploy. Defina no .env (local) ou nas variáveis de ambiente do Dokploy (produção).")
 app.secret_key = SECRET_KEY or "chave-insegura-so-para-dev-local"
@@ -423,6 +425,26 @@ def _formatar_usuario(usuario):
     }
 
 
+# Limite de tentativas de login por e-mail — em memória (por worker do
+# Gunicorn, não compartilhado entre eles), suficiente pra travar um script
+# tentando milhares de senhas contra uma conta específica, sem precisar de
+# Redis ou outra dependência nova pra um sistema desse tamanho.
+_TENTATIVAS_LOGIN_FALHAS = {}
+JANELA_RATE_LIMIT_LOGIN_SEGUNDOS = 5 * 60
+MAX_TENTATIVAS_LOGIN_NA_JANELA = 5
+
+
+def _login_bloqueado(email):
+    agora = time.time()
+    tentativas = [t for t in _TENTATIVAS_LOGIN_FALHAS.get(email, []) if agora - t < JANELA_RATE_LIMIT_LOGIN_SEGUNDOS]
+    _TENTATIVAS_LOGIN_FALHAS[email] = tentativas
+    return len(tentativas) >= MAX_TENTATIVAS_LOGIN_NA_JANELA
+
+
+def _registrar_falha_login(email):
+    _TENTATIVAS_LOGIN_FALHAS.setdefault(email, []).append(time.time())
+
+
 @app.route('/api/login', methods=['POST'])
 def api_login():
     dados = request.get_json(silent=True) or {}
@@ -431,6 +453,9 @@ def api_login():
 
     if not email or not senha:
         return jsonify({"erro": "Informe e-mail e senha."}), 400
+
+    if _login_bloqueado(email):
+        return jsonify({"erro": "Muitas tentativas. Aguarde alguns minutos antes de tentar de novo."}), 429
 
     usuario = buscar_usuario_por_email(email)
     if not usuario:
@@ -443,14 +468,18 @@ def api_login():
 
     if not usuario:
         print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}'")
+        _registrar_falha_login(email)
         return jsonify({"erro": "E-mail ou senha incorretos."}), 401
     if not usuario["ativo"]:
         print(f"🔑 Login falhou — usuário '{email}' está inativo")
+        _registrar_falha_login(email)
         return jsonify({"erro": "E-mail ou senha incorretos."}), 401
     if not senha_confere(senha, usuario["senha_hash"]):
         print(f"🔑 Login falhou — senha não confere pro usuário '{email}'")
+        _registrar_falha_login(email)
         return jsonify({"erro": "E-mail ou senha incorretos."}), 401
 
+    _TENTATIVAS_LOGIN_FALHAS.pop(email, None)
     session.clear()
     session['usuario_id'] = usuario['id']
     session.permanent = True
