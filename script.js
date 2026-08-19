@@ -1633,6 +1633,58 @@ function fecharModalUsuario() {
   document.getElementById('usuarioEmail').disabled = false;
 }
 
+// --- TROCAR A PRÓPRIA SENHA (Configurações) ---
+
+function abrirModalTrocarSenha() {
+  document.getElementById('formTrocarSenha').reset();
+  document.getElementById('trocarSenhaErro').style.display = 'none';
+  document.getElementById('trocarSenhaSucesso').style.display = 'none';
+  document.getElementById('modalTrocarSenha').style.display = 'flex';
+}
+
+function fecharModalTrocarSenha() {
+  document.getElementById('modalTrocarSenha').style.display = 'none';
+}
+
+async function salvarTrocaSenha(event) {
+  event.preventDefault();
+  const senhaAtual = document.getElementById('senhaAtualInput').value;
+  const senhaNova = document.getElementById('senhaNovaInput').value;
+  const senhaNovaConfirmar = document.getElementById('senhaNovaConfirmarInput').value;
+  const elErro = document.getElementById('trocarSenhaErro');
+  const elSucesso = document.getElementById('trocarSenhaSucesso');
+  elErro.style.display = 'none';
+  elSucesso.style.display = 'none';
+
+  if (senhaNova !== senhaNovaConfirmar) {
+    elErro.textContent = 'A confirmação não bate com a nova senha.';
+    elErro.style.display = 'block';
+    return;
+  }
+
+  try {
+    const resposta = await fetch('/api/me/senha', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senhaAtual, senhaNova }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      elErro.textContent = dados.erro || 'Não foi possível trocar a senha.';
+      elErro.style.display = 'block';
+      return;
+    }
+    elSucesso.textContent = 'Senha alterada com sucesso.';
+    elSucesso.style.display = 'block';
+    document.getElementById('formTrocarSenha').reset();
+    setTimeout(fecharModalTrocarSenha, 1500);
+  } catch (erro) {
+    console.error('Falha ao trocar senha:', erro);
+    elErro.textContent = 'Não foi possível conectar ao servidor.';
+    elErro.style.display = 'block';
+  }
+}
+
 async function salvarUsuario(event) {
   event.preventDefault();
   const id = document.getElementById('usuarioId').value;

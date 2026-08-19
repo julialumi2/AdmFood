@@ -400,6 +400,28 @@ def api_me():
     return jsonify({"usuario": _formatar_usuario(usuario)})
 
 
+@app.route('/api/me/senha', methods=['PUT'])
+def api_trocar_minha_senha():
+    # Autoatendimento — qualquer usuário logado troca a própria senha,
+    # sem precisar ser admin (diferente do reset de senha de terceiros,
+    # que só o admin faz pela tela de Equipe).
+    usuario = _usuario_logado()
+    if not usuario:
+        return jsonify({"erro": "Não autenticado."}), 401
+
+    dados = request.get_json(silent=True) or {}
+    senha_atual = dados.get('senhaAtual') or ''
+    senha_nova = dados.get('senhaNova') or ''
+
+    if not senha_confere(senha_atual, usuario['senha_hash']):
+        return jsonify({"erro": "Senha atual incorreta."}), 400
+    if len(senha_nova) < 6:
+        return jsonify({"erro": "A nova senha precisa ter pelo menos 6 caracteres."}), 400
+
+    atualizar_usuario(usuario['id'], {'senha_hash': gerar_hash_senha(senha_nova)})
+    return jsonify({"sucesso": True})
+
+
 # --- GESTÃO DE EQUIPE (só admin) --------------------------------------------
 
 def _exigir_admin():

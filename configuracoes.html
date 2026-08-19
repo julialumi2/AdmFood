@@ -132,6 +132,16 @@
             </div>
             <button type="button" class="btn-secondary" onclick="fazerLogout()">Sair da conta</button>
           </div>
+          <div class="toggle-tile">
+            <div class="toggle-tile-info">
+              <i data-lucide="key-round"></i>
+              <div>
+                <p class="toggle-tile-title">Senha</p>
+                <p class="toggle-tile-subtitle">Troque a senha da sua própria conta</p>
+              </div>
+            </div>
+            <button type="button" class="btn-secondary" onclick="abrirModalTrocarSenha()">Trocar senha</button>
+          </div>
         </div>
 
         <!-- APARÊNCIA + SINCRONIZAÇÃO -->
@@ -269,6 +279,36 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary" onclick="fecharModalUsuario()">Cancelar</button>
             <button type="submit" class="btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: TROCAR A PRÓPRIA SENHA -->
+    <div id="modalTrocarSenha" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Trocar senha</h2>
+          <button class="btn-close" onclick="fecharModalTrocarSenha()">&times;</button>
+        </div>
+        <form id="formTrocarSenha" onsubmit="salvarTrocaSenha(event)">
+          <div class="form-group">
+            <label for="senhaAtualInput">Senha atual</label>
+            <input type="password" id="senhaAtualInput" required placeholder="••••••">
+          </div>
+          <div class="form-group">
+            <label for="senhaNovaInput">Nova senha</label>
+            <input type="password" id="senhaNovaInput" required placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="form-group">
+            <label for="senhaNovaConfirmarInput">Confirmar nova senha</label>
+            <input type="password" id="senhaNovaConfirmarInput" required placeholder="Repita a nova senha">
+          </div>
+          <p id="trocarSenhaErro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
+          <p id="trocarSenhaSucesso" class="panel-subtitle" style="display:none; color: var(--success);"></p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="fecharModalTrocarSenha()">Cancelar</button>
+            <button type="submit" class="btn-primary">Salvar nova senha</button>
           </div>
         </form>
       </div>
