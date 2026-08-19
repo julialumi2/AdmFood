@@ -1,3 +1,13 @@
+// Escapa texto vindo do banco (título/descrição de tarefa, comentário, nome
+// de usuário etc.) antes de inserir via innerHTML — sem isso, qualquer
+// pessoa logada poderia criar uma tarefa com HTML/JS no título e rodar
+// script no navegador de quem mais abrir o quadro (XSS armazenado).
+function escaparHtml(texto) {
+  return String(texto ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
   // 1. INICIALIZA ÍCONES LUCIDE
@@ -1560,6 +1570,7 @@ async function carregarUsuarioLogado() {
 // --- GESTÃO DE EQUIPE (tela de Configurações, só admin) ---
 
 const PAPEL_LABEL_USUARIO = { admin: 'Admin', equipe: 'Equipe' };
+let equipeData = [];
 
 async function carregarEquipe() {
   const tbody = document.getElementById('equipe-tbody');
@@ -1569,27 +1580,31 @@ async function carregarEquipe() {
     const resposta = await fetch('/api/usuarios');
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
+    equipeData = dados.usuarios;
 
-    if (!dados.usuarios.length) {
+    if (!equipeData.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhum membro cadastrado ainda.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = dados.usuarios.map(u => `
-      <tr>
-        <td class="font-bold">${u.nome}</td>
-        <td class="text-muted">${u.email}</td>
+    // data-id + listeners depois (não onclick com dado embutido) — nome/e-mail
+    // são texto livre digitado pelo admin, embutir direto num atributo HTML
+    // abre brecha de injeção (e quebra com nomes que têm aspas, tipo "D'Angelo").
+    tbody.innerHTML = equipeData.map(u => `
+      <tr data-id="${u.id}">
+        <td class="font-bold">${escaparHtml(u.nome)}</td>
+        <td class="text-muted">${escaparHtml(u.email)}</td>
         <td>${PAPEL_LABEL_USUARIO[u.papel] || u.papel}</td>
         <td><span class="badge-pill ${u.ativo ? 'pos' : 'neg'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
         <td>
           <div class="acoes-linha" style="justify-content:flex-end;">
-            <button type="button" class="btn-acao-icone" title="Editar" onclick='abrirModalEditarUsuario(${JSON.stringify(u)})'>
+            <button type="button" class="btn-acao-icone" title="Editar" data-acao="editar">
               <i data-lucide="pencil"></i>
             </button>
-            <button type="button" class="btn-acao-icone" title="${u.ativo ? 'Desativar' : 'Ativar'}" onclick="alternarAtivoUsuario(${u.id}, ${!u.ativo})">
+            <button type="button" class="btn-acao-icone" title="${u.ativo ? 'Desativar' : 'Ativar'}" data-acao="alternar-ativo">
               <i data-lucide="${u.ativo ? 'user-x' : 'user-check'}"></i>
             </button>
-            <button type="button" class="btn-acao-icone btn-excluir" title="Excluir" onclick="excluirUsuarioEquipe(${u.id}, '${u.nome.replace(/'/g, "\\'")}')">
+            <button type="button" class="btn-acao-icone btn-excluir" title="Excluir" data-acao="excluir">
               <i data-lucide="trash-2"></i>
             </button>
           </div>
@@ -1598,10 +1613,21 @@ async function carregarEquipe() {
     `).join('');
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    wireEquipeRowEvents();
   } catch (erro) {
     console.error('Falha ao carregar equipe:', erro);
     tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar a equipe.</td></tr>`;
   }
+}
+
+function wireEquipeRowEvents() {
+  document.querySelectorAll('#equipe-tbody tr[data-id]').forEach(linha => {
+    const usuario = equipeData.find(u => String(u.id) === linha.dataset.id);
+    if (!usuario) return;
+    linha.querySelector('[data-acao="editar"]')?.addEventListener('click', () => abrirModalEditarUsuario(usuario));
+    linha.querySelector('[data-acao="alternar-ativo"]')?.addEventListener('click', () => alternarAtivoUsuario(usuario.id, !usuario.ativo));
+    linha.querySelector('[data-acao="excluir"]')?.addEventListener('click', () => excluirUsuarioEquipe(usuario.id, usuario.nome));
+  });
 }
 
 function abrirModalNovoUsuario() {
@@ -1791,12 +1817,12 @@ function renderKanban() {
       ? tarefas.map(t => `
           <div class="task-card" draggable="true" data-id="${t.id}">
             <div class="card-top">
-              <h4 class="task-title">${t.titulo}</h4>
+              <h4 class="task-title">${escaparHtml(t.titulo)}</h4>
               <span class="badge priority-${t.prioridade}">${PRIORIDADE_LABEL_TAREFA[t.prioridade] || t.prioridade}</span>
             </div>
-            <p>${t.descricao || ''}</p>
+            <p>${escaparHtml(t.descricao)}</p>
             <div class="card-bottom">
-              <span class="task-meta">${t.categoria}</span>
+              <span class="task-meta">${escaparHtml(t.categoria)}</span>
               <span class="task-date">${t.dataLimiteFormatada || ''}</span>
             </div>
           </div>
@@ -1940,7 +1966,7 @@ function renderChecklist(tarefa) {
     ? tarefa.subtarefas.map(s => `
         <div class="subtask-item ${s.concluida ? 'completed' : ''}">
           <input type="checkbox" ${s.concluida ? 'checked' : ''} onchange="alternarSubtarefa(${s.id}, this.checked)">
-          <span>${s.titulo}</span>
+          <span>${escaparHtml(s.titulo)}</span>
         </div>
       `).join('')
     : '';
@@ -1952,8 +1978,8 @@ function renderComentarios(tarefa) {
   container.innerHTML = tarefa.comentarios.length
     ? tarefa.comentarios.map(c => `
         <div class="comment-card">
-          <div class="comment-author">${c.autor}</div>
-          <div class="comment-text">${c.texto}</div>
+          <div class="comment-author">${escaparHtml(c.autor)}</div>
+          <div class="comment-text">${escaparHtml(c.texto)}</div>
         </div>
       `).join('')
     : `<p class="panel-subtitle">Nenhum comentário ainda.</p>`;

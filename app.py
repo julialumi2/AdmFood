@@ -1014,17 +1014,24 @@ def api_listar_tarefas():
     return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas()]})
 
 
+PRIORIDADES_TAREFA_VALIDAS = {'alta', 'media', 'baixa'}
+STATUS_TAREFA_VALIDOS = {'todo', 'doing', 'done'}
+
+
 @app.route('/api/tarefas', methods=['POST'])
 def api_criar_tarefa():
     dados = request.get_json(silent=True) or {}
     titulo = (dados.get('titulo') or '').strip()
     if not titulo:
         return jsonify({"erro": "Título é obrigatório."}), 400
+    prioridade = dados.get('prioridade') or 'media'
+    if prioridade not in PRIORIDADES_TAREFA_VALIDAS:
+        return jsonify({"erro": "Prioridade inválida."}), 400
     tarefa_id = criar_tarefa(
         titulo,
         dados.get('descricao') or '',
         dados.get('categoria') or 'Geral',
-        dados.get('prioridade') or 'media',
+        prioridade,
         dados.get('dataLimite') or None,
     )
     return jsonify({"id": tarefa_id})
@@ -1051,6 +1058,10 @@ def api_atualizar_tarefa(tarefa_id):
     }
     if not campos:
         return jsonify({"erro": "Nada para atualizar."}), 400
+    if 'prioridade' in campos and campos['prioridade'] not in PRIORIDADES_TAREFA_VALIDAS:
+        return jsonify({"erro": "Prioridade inválida."}), 400
+    if 'status' in campos and campos['status'] not in STATUS_TAREFA_VALIDOS:
+        return jsonify({"erro": "Status inválido."}), 400
     atualizar_tarefa(tarefa_id, campos)
     return jsonify({"ok": True})
 
