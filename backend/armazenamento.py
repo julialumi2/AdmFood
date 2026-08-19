@@ -116,6 +116,21 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS preco_cardapio (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loja TEXT NOT NULL,
+                categoria TEXT NOT NULL,
+                produto TEXT NOT NULL,
+                ifood REAL,
+                food99 REAL,
+                beefood REAL,
+                cardapio_web REAL,
+                ordem INTEGER NOT NULL
+            )
+            """
+        )
 
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
@@ -438,3 +453,27 @@ def atualizar_usuario(usuario_id, campos):
 def excluir_usuario(usuario_id):
     with conexao() as conn:
         conn.execute("DELETE FROM usuario WHERE id = ?", (usuario_id,))
+
+
+# --- COMPARATIVO DE PREÇOS DO CARDÁPIO (referência, importado de planilha) --
+
+def substituir_precos_cardapio(linhas):
+    """Apaga tudo e regrava do zero — usado pelo script de importação
+    (importar_precos_cardapio.py). Simples e seguro pra uma tabela de
+    referência que é sempre reimportada por inteiro, nunca editada aos
+    poucos."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM preco_cardapio")
+        conn.executemany(
+            """
+            INSERT INTO preco_cardapio (loja, categoria, produto, ifood, food99, beefood, cardapio_web, ordem)
+            VALUES (:loja, :categoria, :produto, :ifood, :food99, :beefood, :cardapio_web, :ordem)
+            """,
+            linhas,
+        )
+
+
+def listar_precos_cardapio():
+    with conexao() as conn:
+        linhas = conn.execute("SELECT * FROM preco_cardapio ORDER BY loja, ordem").fetchall()
+        return [dict(linha) for linha in linhas]

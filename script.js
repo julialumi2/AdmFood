@@ -88,6 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
     wireColumnDropEvents();
   }
 
+  // 4.095 TELA DE CARDÁPIO
+  if (document.getElementById('cardapio-tabs')) {
+    carregarPrecosCardapio();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -2068,4 +2073,102 @@ async function alterarStatusModal() {
   const proximoStatus = ordem[(ordem.indexOf(tarefa.status) + 1) % ordem.length];
   await moverTarefa(tarefaSelecionadaId, proximoStatus);
   await recarregarTarefaSelecionada();
+}
+
+// --- TELA DE CARDÁPIO (comparativo de preços, só leitura) ---
+
+let cardapioData = [];
+let cardapioLojaSelecionada = null;
+
+async function carregarPrecosCardapio() {
+  const tabsEl = document.getElementById('cardapio-tabs');
+  const conteudoEl = document.getElementById('cardapio-conteudo');
+  if (!tabsEl || !conteudoEl) return;
+
+  try {
+    const resposta = await fetch('/api/precos-cardapio');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    cardapioData = dados.lojas;
+
+    if (!cardapioData.length) {
+      tabsEl.innerHTML = '';
+      conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum preço importado ainda.</p>`;
+      return;
+    }
+
+    // Ordem fixa das abas, independente da ordem que veio da API.
+    const ORDEM_LOJAS = ['Hamburgueria Artesanos', 'Tradiças', 'Açaí Na Lata'];
+    cardapioData.sort((a, b) => ORDEM_LOJAS.indexOf(a.loja) - ORDEM_LOJAS.indexOf(b.loja));
+
+    tabsEl.innerHTML = cardapioData.map((loja, i) => `
+      <button class="tab-btn ${i === 0 ? 'active' : ''}" data-loja="${escaparHtml(loja.loja)}">
+        ${escaparHtml(loja.loja)}
+      </button>
+    `).join('');
+
+    tabsEl.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabsEl.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderCardapioLoja(btn.dataset.loja);
+      });
+    });
+
+    cardapioLojaSelecionada = cardapioData[0].loja;
+    renderCardapioLoja(cardapioLojaSelecionada);
+  } catch (erro) {
+    console.error('Falha ao carregar preços do cardápio:', erro);
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os preços. Confira se o Flask está rodando.</p>`;
+  }
+}
+
+function _formatarPrecoCardapio(valor) {
+  return typeof valor === 'number'
+    ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : '<span class="cardapio-preco-vazio">—</span>';
+}
+
+function renderCardapioLoja(nomeLoja) {
+  const conteudoEl = document.getElementById('cardapio-conteudo');
+  if (!conteudoEl) return;
+
+  const loja = cardapioData.find(l => l.loja === nomeLoja);
+  if (!loja) return;
+
+  const temBeefood = loja.categorias.some(cat => cat.produtos.some(p => p.beefood !== null));
+
+  const linhasTabela = loja.categorias.map(cat => `
+    <tr><td colspan="${temBeefood ? 5 : 4}" class="cardapio-categoria-titulo">${escaparHtml(cat.nome)}</td></tr>
+    ${cat.produtos.map(p => `
+      <tr>
+        <td class="font-bold">${escaparHtml(p.produto)}</td>
+        <td>${_formatarPrecoCardapio(p.ifood)}</td>
+        <td>${_formatarPrecoCardapio(p.food99)}</td>
+        ${temBeefood ? `<td>${_formatarPrecoCardapio(p.beefood)}</td>` : ''}
+        <td>${_formatarPrecoCardapio(p.cardapioWeb)}</td>
+      </tr>
+    `).join('')}
+  `).join('');
+
+  conteudoEl.innerHTML = `
+    <div class="panel panel-table">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>iFood</th>
+              <th>99Food</th>
+              ${temBeefood ? '<th>BeeFood</th>' : ''}
+              <th>Cardápio Web</th>
+            </tr>
+          </thead>
+          <tbody>${linhasTabela}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }

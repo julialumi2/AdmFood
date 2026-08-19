@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - Cardápio</title>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="cardapio.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <a href="cardapio.html" class="menu-item active">
+          <i data-lucide="book-open"></i>
+          <span>Cardápio</span>
+        </a>
+        <a href="#" class="menu-item">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="insight.html" class="menu-item">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="configuracoes.html" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+
+      <a href="configuracoes.html" class="sidebar-user-card">
+        <div class="avatar sidebar-user-avatar">JS</div>
+        <div class="user-info">
+          <span class="user-name sidebar-user-name">Julia Suzuki</span>
+          <span class="user-role sidebar-user-role">Admin</span>
+        </div>
+        <i data-lucide="chevron-right" class="sidebar-user-card-icon"></i>
+      </a>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">CARDÁPIO</span>
+        </div>
+
+        <div class="header-right">
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+        </div>
+      </header>
+
+      <!-- PÁGINA DE CARDÁPIO -->
+      <div class="page-content">
+
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="book-open" class="icon-pin"></i>
+            <span>COMPARATIVO DE PREÇOS</span>
+          </div>
+          <div class="title-row">
+            <h1>Cardápio</h1>
+          </div>
+        </div>
+
+        <!-- ABAS POR LOJA -->
+        <div class="tabs-bar" id="cardapio-tabs">
+          <!-- Renderizado dinamicamente via JS, conforme as lojas que vierem da API -->
+        </div>
+
+        <p class="panel-subtitle" style="margin-top: -8px;">
+          Preço de cada item por canal de venda — pra visualização, atualizado a partir de uma planilha (não editável aqui).
+        </p>
+
+        <!-- CONTEÚDO DA LOJA SELECIONADA -->
+        <div id="cardapio-conteudo">
+          <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+        </div>
+
+      </div> <!-- /page-content -->
+    </main> <!-- /main-wrapper -->
+
+    <!-- NAVEGAÇÃO INFERIOR (SÓ NO CELULAR) -->
+    <nav class="mobile-bottom-nav">
+      <a href="index.html" class="mobile-nav-item">
+        <i data-lucide="bar-chart-2"></i>
+        <span>Resumo</span>
+      </a>
+      <a href="estoque.html" class="mobile-nav-item">
+        <i data-lucide="box"></i>
+        <span>Estoque</span>
+      </a>
+      <a href="clickup.html" class="mobile-nav-item">
+        <i data-lucide="check-square"></i>
+        <span>ClickUp</span>
+      </a>
+      <a href="insight.html" class="mobile-nav-item">
+        <i data-lucide="lightbulb"></i>
+        <span>Insights</span>
+      </a>
+    </nav>
+  </div> <!-- /dashboard-wrapper -->
+
+</body>
+</html>

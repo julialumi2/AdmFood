@@ -28,6 +28,7 @@ from backend.armazenamento import (
     listar_usuarios,
     atualizar_usuario,
     excluir_usuario,
+    listar_precos_cardapio,
 )
 from backend.auth import gerar_hash_senha, senha_confere
 from backend.cardapio_web import buscar_resumo_do_dia
@@ -630,6 +631,31 @@ def api_excluir_usuario(usuario_id):
 
     excluir_usuario(usuario_id)
     return jsonify({"sucesso": True})
+
+
+# --- COMPARATIVO DE PREÇOS DO CARDÁPIO (só leitura — ver importar_precos_cardapio.py) ---
+
+@app.route('/api/precos-cardapio', methods=['GET'])
+def api_precos_cardapio():
+    lojas = {}
+    for linha in listar_precos_cardapio():
+        loja = lojas.setdefault(linha['loja'], {})
+        categoria = loja.setdefault(linha['categoria'], [])
+        categoria.append({
+            "produto": linha['produto'],
+            "ifood": linha['ifood'],
+            "food99": linha['food99'],
+            "beefood": linha['beefood'],
+            "cardapioWeb": linha['cardapio_web'],
+        })
+
+    resposta = []
+    for nome_loja, categorias in lojas.items():
+        resposta.append({
+            "loja": nome_loja,
+            "categorias": [{"nome": nome, "produtos": produtos} for nome, produtos in categorias.items()],
+        })
+    return jsonify({"lojas": resposta})
 
 
 @app.route('/api/faturamento-ontem', methods=['GET'])

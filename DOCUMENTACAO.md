@@ -45,6 +45,7 @@ inicializa o que é relevante pra ela.
 |---|---|
 | `index.html` | Resumo (Home) — faturamento da rede, gráfico diário, insights automáticos |
 | `estoque.html` | Estoque (integração VMarket — ver seção 9, pendente) |
+| `cardapio.html` | Cardápio — comparativo de preços por canal de venda (iFood/99Food/BeeFood/Cardápio Web), só leitura, importado de planilha (ver seção 6.1) |
 | `preparo.html` | Preparo / KDS (em desenvolvimento pela Julia) |
 | `clickup.html` | Quadro de tarefas (Kanban) |
 | `insight.html` | Insights — faturamento por período, por loja, por canal, por dia da semana |
@@ -146,10 +147,32 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `tarefa_subtarefa` | Itens de checklist de cada tarefa |
 | `tarefa_comentario` | Comentários de cada tarefa |
 | `usuario` | Login da equipe — `senha_hash` (nunca texto puro), `papel` (`admin`/`equipe`), `ativo` |
+| `preco_cardapio` | Comparativo de preços do cardápio, só leitura (ver 6.1) |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
 `tarefa_subtarefa` e `tarefa_comentario` antes de apagar a tarefa.
+
+### 6.1 Comparativo de preços do cardápio
+
+Referência pra tela `cardapio.html` — mostra o preço de cada item do
+cardápio em cada canal de venda (iFood, 99Food, BeeFood, Cardápio Web),
+lado a lado, por loja. **Só leitura**: não tem tela de edição, a planilha
+continua sendo a fonte oficial.
+
+Importado via `importar_precos_cardapio.py`, que lê um `.xlsx` com uma aba
+por grupo de loja (Artesanos, Tradiças, Açaí Na Lata — a Tradiça ZN e a
+Tradiça Simus compartilham a mesma tabela de preços) e substitui a tabela
+`preco_cardapio` inteira a cada execução:
+
+```bash
+python importar_precos_cardapio.py "caminho/da/planilha.xlsx"
+```
+
+Rode de novo sempre que a planilha for atualizada (a Julia manda o arquivo
+novo, é só reimportar). Uma linha da planilha com o nome do produto mas
+nenhum preço em nenhum canal é tratada como cabeçalho de categoria
+(BEBIDAS, PORÇÕES etc.), não como um produto.
 
 ## 7. API — principais endpoints
 
@@ -169,6 +192,9 @@ Todos em `app.py`, prefixo `/api`.
 
 **Venda presencial**
 - `GET|POST|DELETE /api/venda-presencial` — listar/lançar/excluir (só unidades em `UNIDADES_COM_PRESENCIAL`)
+
+**Cardápio**
+- `GET /api/precos-cardapio` — comparativo de preços, agrupado por loja e categoria (só leitura — ver seção 6.1)
 
 **Tarefas (Kanban / ClickUp)**
 - `GET|POST /api/tarefas` — listar todas / criar

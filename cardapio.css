@@ -1,0 +1,18 @@
+/* Estilos específicos da tela de Cardápio — a base compartilhada (sidebar,
+   cabeçalho, painéis, tabelas, abas) está em theme.css */
+
+.cardapio-categoria-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--space-4) var(--space-6) var(--space-2);
+}
+
+.cardapio-preco-vazio {
+  color: var(--text-faint);
+}
