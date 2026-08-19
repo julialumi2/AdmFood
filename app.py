@@ -418,16 +418,21 @@ def api_login():
     if not email or not senha:
         return jsonify({"erro": "Informe e-mail e senha."}), 400
 
+    # DEBUG TEMPORÁRIO — mostra o motivo exato na própria tela de login,
+    # já que os logs do Dokploy não estavam revelando nada. Remover assim
+    # que o problema for resolvido (ver app.py, api_login).
+    _diag = f" [debug: banco={_caminho_banco_atual} existe={os.path.exists(_caminho_banco_atual)} usuarios={len(listar_usuarios())} pid={os.getpid()}]"
+
     usuario = buscar_usuario_por_email(email)
     if not usuario:
         print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}' (worker pid {os.getpid()}, {len(listar_usuarios())} usuários no banco)")
-        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
+        return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=email_nao_encontrado"}), 401
     if not usuario["ativo"]:
         print(f"🔑 Login falhou — usuário '{email}' está inativo")
-        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
+        return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=inativo"}), 401
     if not senha_confere(senha, usuario["senha_hash"]):
         print(f"🔑 Login falhou — senha não confere pro usuário '{email}'")
-        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
+        return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=senha_nao_confere"}), 401
 
     session.clear()
     session['usuario_id'] = usuario['id']
