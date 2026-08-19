@@ -173,36 +173,8 @@
   border-radius: var(--radius-pill);
 }
 
-.form-group-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: var(--space-4);
-}
-
-.form-group label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-dark);
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  padding: 10px;
-  border: 1px solid var(--input-border);
-  background-color: var(--input-bg);
-  color: var(--text-dark);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: 0.9rem;
-}
+/* .form-group / .form-group-row agora vivem em theme.css (compartilhado
+   com os modais de Configurações). */
 
 .detalhe-titulo {
   font-size: 1.3rem;
