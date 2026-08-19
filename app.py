@@ -442,16 +442,25 @@ def api_login():
     if not email or not senha:
         return jsonify({"erro": "Informe e-mail e senha."}), 400
 
-    # DEBUG TEMPORÁRIO — mostra o motivo exato na própria tela de login,
-    # já que os logs do Dokploy não estavam revelando nada. Remover assim
-    # que o problema for resolvido (ver app.py, api_login).
-    _diag = f" [debug: banco={_caminho_banco_atual} existe={os.path.exists(_caminho_banco_atual)} usuarios={len(listar_usuarios())} pid={os.getpid()}]"
-
     usuario = buscar_usuario_por_email(email)
+    _bootstrap_tentado = False
     if not usuario:
         # Rede de segurança temporária — ver _tentar_bootstrap_sob_demanda.
+        _bootstrap_tentado = True
         _tentar_bootstrap_sob_demanda(email)
         usuario = buscar_usuario_por_email(email)
+
+    # DEBUG TEMPORÁRIO — mostra o motivo exato na própria tela de login,
+    # já que os logs do Dokploy não estavam revelando nada. Calculado
+    # DEPOIS da tentativa de bootstrap sob demanda, pra refletir o estado
+    # real no momento da resposta. Remover assim que o problema for
+    # resolvido (ver app.py, api_login).
+    _diag = (
+        f" [debug: banco={_caminho_banco_atual} existe={os.path.exists(_caminho_banco_atual)}"
+        f" usuarios={len(listar_usuarios())} pid={os.getpid()} bootstrap_tentado={_bootstrap_tentado}"
+        f" admin_inicial_email_configurado={bool(ADMIN_INICIAL_EMAIL)} admin_inicial_senha_configurada={bool(ADMIN_INICIAL_SENHA)}]"
+    )
+
     if not usuario:
         print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}' (worker pid {os.getpid()}, {len(listar_usuarios())} usuários no banco)")
         return jsonify({"erro": "E-mail ou senha incorretos." + _diag + " motivo=email_nao_encontrado"}), 401
