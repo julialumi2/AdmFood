@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# Sem isso, a saída do Python fica em buffer dentro do container e os
+# print() (inclusive avisos de erro) podem nunca aparecer nos logs do
+# Dokploy, mesmo rodando normalmente — só apareceriam se/quando o buffer
+# enchesse, o que pode nunca acontecer num processo de longa duração.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 COPY requirements.txt .

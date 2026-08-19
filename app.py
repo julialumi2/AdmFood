@@ -42,7 +42,10 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
 
+_caminho_banco_atual = os.environ.get("DATABASE_PATH", "admfood.db")
+print(f"🗄️  Banco de dados: {_caminho_banco_atual} (existe: {os.path.exists(_caminho_banco_atual)}, worker pid {os.getpid()})")
 inicializar_banco()
+print(f"👤 Usuários cadastrados no banco: {len(listar_usuarios())}")
 
 
 def _criar_admin_inicial_se_necessario():
@@ -66,8 +69,10 @@ def _criar_admin_inicial_se_necessario():
         else:
             criar_usuario(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, hash_senha, papel="admin")
             print(f"✅ Usuário admin inicial criado: {ADMIN_INICIAL_EMAIL}")
-    except Exception as erro:
-        print(f"Aviso ao sincronizar admin inicial: {erro}")
+    except Exception:
+        import traceback
+        print("❌ Falha ao sincronizar admin inicial:")
+        traceback.print_exc()
 
 
 _criar_admin_inicial_se_necessario()
@@ -377,7 +382,14 @@ def api_login():
         return jsonify({"erro": "Informe e-mail e senha."}), 400
 
     usuario = buscar_usuario_por_email(email)
-    if not usuario or not usuario["ativo"] or not senha_confere(senha, usuario["senha_hash"]):
+    if not usuario:
+        print(f"🔑 Login falhou — nenhum usuário com o e-mail '{email}' (worker pid {os.getpid()}, {len(listar_usuarios())} usuários no banco)")
+        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
+    if not usuario["ativo"]:
+        print(f"🔑 Login falhou — usuário '{email}' está inativo")
+        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
+    if not senha_confere(senha, usuario["senha_hash"]):
+        print(f"🔑 Login falhou — senha não confere pro usuário '{email}'")
         return jsonify({"erro": "E-mail ou senha incorretos."}), 401
 
     session.clear()
