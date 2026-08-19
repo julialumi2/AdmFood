@@ -458,7 +458,8 @@ def api_login():
     _diag = (
         f" [debug: banco={_caminho_banco_atual} existe={os.path.exists(_caminho_banco_atual)}"
         f" usuarios={len(listar_usuarios())} pid={os.getpid()} bootstrap_tentado={_bootstrap_tentado}"
-        f" admin_inicial_email_configurado={bool(ADMIN_INICIAL_EMAIL)} admin_inicial_senha_configurada={bool(ADMIN_INICIAL_SENHA)}]"
+        f" admin_inicial_email_configurado={bool(ADMIN_INICIAL_EMAIL)} admin_inicial_senha_configurada={bool(ADMIN_INICIAL_SENHA)}"
+        f" env_dockerfile={os.environ.get('DEBUG_ENV_DOCKERFILE', 'AUSENTE')}]"
     )
 
     if not usuario:

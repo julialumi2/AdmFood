@@ -18,6 +18,12 @@ COPY . .
 RUN mkdir -p /app/data
 ENV DATABASE_PATH=/app/data/admfood.db
 
+# DEBUG TEMPORÁRIO — teste de controle pra descobrir se as variáveis
+# definidas no painel do Dokploy estão mesmo chegando no container, sem
+# depender de nada configurado lá (essa vem de dentro da própria imagem).
+# Remover depois que o problema de login for resolvido.
+ENV DEBUG_ENV_DOCKERFILE=presente-no-dockerfile
+
 EXPOSE 5000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "60", "app:app"]
