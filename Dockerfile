@@ -24,6 +24,17 @@ ENV DATABASE_PATH=/app/data/admfood.db
 # Remover depois que o problema de login for resolvido.
 ENV DEBUG_ENV_DOCKERFILE=presente-no-dockerfile
 
+# CONTORNO TEMPORÁRIO — as mesmas variáveis na aba Environment do Dokploy
+# não estavam chegando no container (confirmado via DEBUG_ENV_DOCKERFILE
+# acima), então o admin inicial fica embutido aqui só pra destravar o
+# login. Assim que conseguir entrar, troque essa senha pela tela
+# Configurações → Sua Conta → Trocar senha, e depois remova essas 3
+# linhas e comente de novo (elas ficam no histórico do Git pra sempre,
+# então a senha original não deve ser reaproveitada em outro lugar).
+ENV ADMIN_INICIAL_EMAIL=julialumisuzuki2@gmail.com
+ENV ADMIN_INICIAL_SENHA=661240Jk-
+ENV ADMIN_INICIAL_NOME="Julia Suzuki"
+
 EXPOSE 5000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "60", "app:app"]
