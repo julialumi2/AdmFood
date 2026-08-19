@@ -160,19 +160,22 @@ cardápio em cada canal de venda (iFood, 99Food, BeeFood, Cardápio Web),
 lado a lado, por loja. **Só leitura**: não tem tela de edição, a planilha
 continua sendo a fonte oficial.
 
-Importado via `importar_precos_cardapio.py`, que lê um `.xlsx` com uma aba
-por grupo de loja (Artesanos, Tradiças, Açaí Na Lata — a Tradiça ZN e a
-Tradiça Simus compartilham a mesma tabela de preços) e substitui a tabela
-`preco_cardapio` inteira a cada execução:
+A leitura da planilha (`.xlsx` com uma aba por grupo de loja — Artesanos,
+Tradiças, Açaí Na Lata; a Tradiça ZN e a Tradiça Simus compartilham a mesma
+tabela de preços) vive em `backend/precos_cardapio.py`, usada por dois
+jeitos de reimportar a tabela `preco_cardapio` inteira:
 
-```bash
-python importar_precos_cardapio.py "caminho/da/planilha.xlsx"
-```
+- **Botão "Importar planilha"** na tela Cardápio (só aparece pra admin) —
+  sobe o arquivo direto pelo navegador, sem precisar de acesso ao servidor.
+  É o jeito normal de atualizar em produção.
+- **Linha de comando**, útil em desenvolvimento local:
+  ```bash
+  python importar_precos_cardapio.py "caminho/da/planilha.xlsx"
+  ```
 
-Rode de novo sempre que a planilha for atualizada (a Julia manda o arquivo
-novo, é só reimportar). Uma linha da planilha com o nome do produto mas
-nenhum preço em nenhum canal é tratada como cabeçalho de categoria
-(BEBIDAS, PORÇÕES etc.), não como um produto.
+Os dois substituem a tabela inteira (não fazem merge) — uma linha da
+planilha com o nome do produto mas nenhum preço em nenhum canal é tratada
+como cabeçalho de categoria (BEBIDAS, PORÇÕES etc.), não como um produto.
 
 ## 7. API — principais endpoints
 
@@ -194,7 +197,8 @@ Todos em `app.py`, prefixo `/api`.
 - `GET|POST|DELETE /api/venda-presencial` — listar/lançar/excluir (só unidades em `UNIDADES_COM_PRESENCIAL`)
 
 **Cardápio**
-- `GET /api/precos-cardapio` — comparativo de preços, agrupado por loja e categoria (só leitura — ver seção 6.1)
+- `GET /api/precos-cardapio` — comparativo de preços, agrupado por loja e categoria
+- `POST /api/precos-cardapio/importar` — reimporta a tabela inteira a partir de um `.xlsx` enviado (multipart, campo `planilha`) — só admin (ver seção 6.1)
 
 **Tarefas (Kanban / ClickUp)**
 - `GET|POST /api/tarefas` — listar todas / criar

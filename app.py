@@ -29,7 +29,9 @@ from backend.armazenamento import (
     atualizar_usuario,
     excluir_usuario,
     listar_precos_cardapio,
+    substituir_precos_cardapio,
 )
+from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
 from backend.cardapio_web import buscar_resumo_do_dia
 from sincronizar import sincronizar_dia, DIA_FECHADO
@@ -656,6 +658,30 @@ def api_precos_cardapio():
             "categorias": [{"nome": nome, "produtos": produtos} for nome, produtos in categorias.items()],
         })
     return jsonify({"lojas": resposta})
+
+
+@app.route('/api/precos-cardapio/importar', methods=['POST'])
+def api_importar_precos_cardapio():
+    # Admin-only — reimporta a tabela inteira a partir de uma planilha nova,
+    # direto pelo navegador (sem precisar de acesso ao servidor). Mesma
+    # lógica do script importar_precos_cardapio.py.
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    arquivo = request.files.get('planilha')
+    if not arquivo or not arquivo.filename:
+        return jsonify({"erro": "Selecione um arquivo .xlsx."}), 400
+    if not arquivo.filename.lower().endswith('.xlsx'):
+        return jsonify({"erro": "O arquivo precisa ser .xlsx."}), 400
+
+    try:
+        linhas = ler_precos_da_planilha(arquivo.stream)
+    except Exception as erro_leitura:
+        return jsonify({"erro": f"Não foi possível ler a planilha: {erro_leitura}"}), 400
+
+    substituir_precos_cardapio(linhas)
+    return jsonify({"sucesso": True, "totalProdutos": len(linhas)})
 
 
 @app.route('/api/faturamento-ontem', methods=['GET'])

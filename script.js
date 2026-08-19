@@ -91,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4.095 TELA DE CARDÁPIO
   if (document.getElementById('cardapio-tabs')) {
     carregarPrecosCardapio();
+    const inputArquivo = document.getElementById('cardapio-importar-arquivo');
+    if (inputArquivo) inputArquivo.addEventListener('change', importarPlanilhaCardapio);
   }
 
   // 4.1 TELA DE CONFIGURAÇÕES
@@ -1567,6 +1569,13 @@ async function carregarUsuarioLogado() {
       painelEquipe.style.display = '';
       carregarEquipe();
     }
+
+    // Tela de Cardápio: botão "Importar planilha" (só admin)
+    const importarArea = document.getElementById('cardapio-importar-area');
+    if (importarArea && usuario.papel === 'admin') {
+      importarArea.style.display = '';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);
   }
@@ -2171,4 +2180,36 @@ function renderCardapioLoja(nomeLoja) {
   `;
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function importarPlanilhaCardapio(event) {
+  const arquivo = event.target.files[0];
+  event.target.value = ''; // permite escolher o mesmo arquivo de novo depois, se precisar
+  if (!arquivo) return;
+
+  const statusEl = document.getElementById('cardapio-importar-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '';
+  statusEl.textContent = `Importando "${arquivo.name}"...`;
+
+  try {
+    const formData = new FormData();
+    formData.append('planilha', arquivo);
+    const resposta = await fetch('/api/precos-cardapio/importar', { method: 'POST', body: formData });
+    const dados = await resposta.json();
+
+    if (!resposta.ok) {
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = dados.erro || 'Não foi possível importar a planilha.';
+      return;
+    }
+
+    statusEl.style.color = 'var(--success)';
+    statusEl.textContent = `Importado com sucesso: ${dados.totalProdutos} produtos.`;
+    await carregarPrecosCardapio();
+  } catch (erro) {
+    console.error('Falha ao importar planilha do cardápio:', erro);
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = 'Não foi possível conectar ao servidor.';
+  }
 }
