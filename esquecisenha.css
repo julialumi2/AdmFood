@@ -1,4 +1,13 @@
-/* --- RESET E ESTILOS GERAIS --- */
+/* Mesma identidade visual da tela de login (fundo carvão + acento chama). */
+
+:root {
+  --flame: #d93829;
+  --char-2: #150f0d;
+  --kraft-text: #f0e5d2;
+  --ink-muted: #b3a297;
+  --border-claro: rgba(255, 255, 255, 0.12);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -7,16 +16,15 @@
 }
 
 body {
-  background-color: #f7f5f0; /* Fundo off-white da imagem */
+  background-color: var(--char-2);
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  overflow: hidden;
 }
 
-/* --- CONTAINER CENTRALIZADO --- */
 .recovery-container {
   width: 100%;
   max-width: 440px;
@@ -26,7 +34,6 @@ body {
   gap: 24px;
 }
 
-/* --- BRAND / LOGO --- */
 .brand {
   display: flex;
   align-items: center;
@@ -35,7 +42,7 @@ body {
 }
 
 .brand-logo-icon {
-  height: 40px;
+  height: 36px;
   width: auto;
   object-fit: contain;
 }
@@ -43,130 +50,43 @@ body {
 .brand-name {
   font-family: 'Montserrat', sans-serif;
   font-weight: 800;
-  font-size: 25px;
-  letter-spacing: -0.5px;
+  font-size: 22px;
+  letter-spacing: -0.02em;
 }
 
-.brand-dark {
-  color: #1a1a1a;
-}
+.brand-dark { color: var(--kraft-text); }
+.brand-red { color: var(--flame); }
 
-.brand-red {
-  color: #d93829;
-}
-
-/* --- CARD --- */
 .recovery-card {
-  background-color: #ffffff;
-  width: 100%;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-claro);
   border-radius: 16px;
   padding: 36px 32px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eae6df;
+  width: 100%;
   text-align: center;
 }
 
-/* Borda superior vermelha idêntica à referência */
-.recovery-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 5px;
-  background-color: #d93829;
-}
-
 .card-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #111111;
-  margin-bottom: 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 1.4rem;
+  color: #ffffff;
+  margin-bottom: 12px;
 }
 
 .card-subtitle {
   font-size: 14px;
-  color: #666666;
-  line-height: 1.5;
-  margin-bottom: 28px;
+  line-height: 1.6;
+  color: var(--ink-muted);
 }
 
-/* --- FORMULÁRIO --- */
-.recovery-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  text-align: left;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #222222;
-}
-
-.form-input {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid #dcd6cd;
-  border-radius: 10px;
-  font-size: 14px;
-  color: #333333;
-  outline: none;
-  background-color: #ffffff;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-input::placeholder {
-  color: #aaaaaa;
-}
-
-.form-input:focus {
-  border-color: #d93829;
-  box-shadow: 0 0 0 3px rgba(214, 73, 40, 0.15);
-}
-
-/* --- BOTÃO --- */
-.btn-primary {
-  width: 100%;
-  background-color: #d93829;
-  color: #ffffff;
-  border: none;
-  border-radius: 10px;
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  margin-top: 4px;
-}
-
-.btn-primary:hover {
-  background-color: #aa2b20;
-}
-
-/* --- FOOTER / LINK VOLTAR --- */
-.card-footer {
-  margin-top: 24px;
-}
+.card-footer { margin-top: 24px; }
 
 .link-back {
-  color: #d93829;
+  color: var(--flame);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
-  transition: color 0.2s ease;
 }
 
-.link-back:hover {
-  text-decoration: underline;
-  color: #aa2b20;
-}
+.link-back:hover { text-decoration: underline; }

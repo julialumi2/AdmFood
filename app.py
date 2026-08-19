@@ -1,10 +1,10 @@
 import os
 import threading
 from datetime import date, datetime, timedelta
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 from flask_cors import CORS
 
-from config import LOJAS
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA
 from backend.armazenamento import (
     inicializar_banco,
     buscar_faturamento_periodo,
@@ -22,14 +22,76 @@ from backend.armazenamento import (
     adicionar_subtarefa,
     alternar_subtarefa,
     adicionar_comentario,
+    criar_usuario,
+    buscar_usuario_por_email,
+    buscar_usuario_por_id,
+    listar_usuarios,
+    atualizar_usuario,
+    excluir_usuario,
 )
+from backend.auth import gerar_hash_senha, senha_confere
 from backend.cardapio_web import buscar_resumo_do_dia
 from sincronizar import sincronizar_dia, DIA_FECHADO
 
 app = Flask(__name__)
-CORS(app)  # Permite requisições do JS mesmo se rodar direto do arquivo local
+CORS(app, supports_credentials=True)  # supports_credentials: o cookie de sessão precisa viajar nas requisições do JS
+if not SECRET_KEY:
+    print("⚠️  SECRET_KEY não definida — sessões de login não vão sobreviver a um restart/redeploy. Defina no .env (local) ou nas variáveis de ambiente do Dokploy (produção).")
+app.secret_key = SECRET_KEY or "chave-insegura-so-para-dev-local"
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
 
 inicializar_banco()
+
+
+def _criar_admin_inicial_se_necessario():
+    if listar_usuarios():
+        return
+    if not ADMIN_INICIAL_EMAIL or not ADMIN_INICIAL_SENHA:
+        return
+    try:
+        criar_usuario(ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, gerar_hash_senha(ADMIN_INICIAL_SENHA), papel="admin")
+        print(f"✅ Usuário admin inicial criado: {ADMIN_INICIAL_EMAIL}")
+    except Exception as erro:
+        # Provavelmente outro worker do Gunicorn já criou no mesmo instante
+        # (email é UNIQUE) — sem problema, só não duplica.
+        print(f"Aviso ao criar admin inicial (provavelmente já existe): {erro}")
+
+
+_criar_admin_inicial_se_necessario()
+
+
+# --- LOGIN ------------------------------------------------------------------
+
+PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "landing.html", "registro.html"}
+ROTAS_API_PUBLICAS = {"/api/login"}
+
+
+def _usuario_logado():
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        return None
+    return buscar_usuario_por_id(usuario_id)
+
+
+@app.before_request
+def _exigir_login():
+    caminho = request.path
+
+    if caminho.startswith('/api/'):
+        if caminho in ROTAS_API_PUBLICAS:
+            return
+        if not _usuario_logado():
+            return jsonify({"erro": "Não autenticado."}), 401
+        return
+
+    if caminho == '/' or caminho.endswith('.html'):
+        nome_pagina = 'index.html' if caminho == '/' else caminho.lstrip('/')
+        if nome_pagina in PAGINAS_PUBLICAS:
+            return
+        if not _usuario_logado():
+            return redirect('/login.html')
 
 def _sou_o_unico_worker_a_agendar():
     """Em produção o Gunicorn roda vários workers (processos separados), e
@@ -251,6 +313,7 @@ def _montar_bloco(unidade_filtro, linhas_periodo, titulo, linhas_canais, canal_d
 
 DIRETORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 EXTENSOES_PUBLICAS = {".html", ".css", ".js"}
+EXTENSOES_IMAGEM_PUBLICAS = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif", ".ico"}
 
 
 @app.route('/')
@@ -270,6 +333,170 @@ def arquivo_estatico(nome_arquivo):
     if extensao.lower() not in EXTENSOES_PUBLICAS:
         abort(404)
     return send_from_directory(DIRETORIO_BASE, nome_arquivo)
+
+
+@app.route('/imgs/<path:nome_arquivo>')
+def arquivo_imagem(nome_arquivo):
+    # Único subdiretório liberado, e só pra extensões de imagem — mesma
+    # lógica de allowlist da rota acima, restrita à pasta imgs/.
+    if '..' in nome_arquivo or nome_arquivo.startswith('/'):
+        abort(404)
+    _, extensao = os.path.splitext(nome_arquivo)
+    if extensao.lower() not in EXTENSOES_IMAGEM_PUBLICAS:
+        abort(404)
+    return send_from_directory(os.path.join(DIRETORIO_BASE, 'imgs'), nome_arquivo)
+
+
+def _formatar_usuario(usuario):
+    return {
+        "id": usuario["id"],
+        "nome": usuario["nome"],
+        "email": usuario["email"],
+        "papel": usuario["papel"],
+    }
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    dados = request.get_json(silent=True) or {}
+    email = (dados.get('email') or '').strip()
+    senha = dados.get('senha') or ''
+
+    if not email or not senha:
+        return jsonify({"erro": "Informe e-mail e senha."}), 400
+
+    usuario = buscar_usuario_por_email(email)
+    if not usuario or not usuario["ativo"] or not senha_confere(senha, usuario["senha_hash"]):
+        return jsonify({"erro": "E-mail ou senha incorretos."}), 401
+
+    session.clear()
+    session['usuario_id'] = usuario['id']
+    session.permanent = True
+    return jsonify({"usuario": _formatar_usuario(usuario)})
+
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.clear()
+    return jsonify({"sucesso": True})
+
+
+@app.route('/api/me', methods=['GET'])
+def api_me():
+    usuario = _usuario_logado()
+    if not usuario:
+        return jsonify({"erro": "Não autenticado."}), 401
+    return jsonify({"usuario": _formatar_usuario(usuario)})
+
+
+# --- GESTÃO DE EQUIPE (só admin) --------------------------------------------
+
+def _exigir_admin():
+    usuario = _usuario_logado()
+    if not usuario or usuario['papel'] != 'admin':
+        return jsonify({"erro": "Só administradores podem fazer isso."}), 403
+    return None
+
+
+def _formatar_membro_equipe(usuario):
+    return {
+        "id": usuario["id"],
+        "nome": usuario["nome"],
+        "email": usuario["email"],
+        "papel": usuario["papel"],
+        "ativo": bool(usuario["ativo"]),
+        "criadoEm": usuario["criado_em"],
+    }
+
+
+@app.route('/api/usuarios', methods=['GET'])
+def api_listar_usuarios():
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    return jsonify({"usuarios": [_formatar_membro_equipe(u) for u in listar_usuarios()]})
+
+
+@app.route('/api/usuarios', methods=['POST'])
+def api_criar_usuario():
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    email = (dados.get('email') or '').strip()
+    senha = dados.get('senha') or ''
+    papel = dados.get('papel') if dados.get('papel') in ('admin', 'equipe') else 'equipe'
+
+    if not nome or not email:
+        return jsonify({"erro": "Informe nome e e-mail."}), 400
+    if len(senha) < 6:
+        return jsonify({"erro": "A senha precisa ter pelo menos 6 caracteres."}), 400
+    if buscar_usuario_por_email(email):
+        return jsonify({"erro": "Já existe um usuário com esse e-mail."}), 400
+
+    usuario_id = criar_usuario(nome, email, gerar_hash_senha(senha), papel)
+    return jsonify({"usuario": _formatar_membro_equipe(buscar_usuario_por_id(usuario_id))})
+
+
+@app.route('/api/usuarios/<int:usuario_id>', methods=['PUT'])
+def api_atualizar_usuario(usuario_id):
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    if not buscar_usuario_por_id(usuario_id):
+        return jsonify({"erro": "Usuário não encontrado."}), 404
+
+    dados = request.get_json(silent=True) or {}
+    campos = {}
+    if 'nome' in dados:
+        if not (dados.get('nome') or '').strip():
+            return jsonify({"erro": "Nome não pode ficar vazio."}), 400
+        campos['nome'] = dados['nome'].strip()
+    if 'papel' in dados:
+        if dados['papel'] not in ('admin', 'equipe'):
+            return jsonify({"erro": "Papel inválido."}), 400
+        campos['papel'] = dados['papel']
+    if 'ativo' in dados:
+        campos['ativo'] = 1 if dados['ativo'] else 0
+    if 'senha' in dados and dados['senha']:
+        if len(dados['senha']) < 6:
+            return jsonify({"erro": "A senha precisa ter pelo menos 6 caracteres."}), 400
+        campos['senha_hash'] = gerar_hash_senha(dados['senha'])
+
+    if not campos:
+        return jsonify({"erro": "Nada pra atualizar."}), 400
+
+    # Impede o admin de se autodesativar/rebaixar por engano e ficar trancado
+    # pra fora da própria gestão de equipe.
+    usuario_logado = _usuario_logado()
+    if usuario_logado['id'] == usuario_id:
+        if campos.get('ativo') == 0:
+            return jsonify({"erro": "Você não pode desativar a si mesmo."}), 400
+        if campos.get('papel') == 'equipe':
+            return jsonify({"erro": "Você não pode remover seu próprio acesso de admin."}), 400
+
+    atualizar_usuario(usuario_id, campos)
+    return jsonify({"usuario": _formatar_membro_equipe(buscar_usuario_por_id(usuario_id))})
+
+
+@app.route('/api/usuarios/<int:usuario_id>', methods=['DELETE'])
+def api_excluir_usuario(usuario_id):
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    if not buscar_usuario_por_id(usuario_id):
+        return jsonify({"erro": "Usuário não encontrado."}), 404
+
+    usuario_logado = _usuario_logado()
+    if usuario_logado['id'] == usuario_id:
+        return jsonify({"erro": "Você não pode excluir a si mesmo."}), 400
+
+    excluir_usuario(usuario_id)
+    return jsonify({"sucesso": True})
 
 
 @app.route('/api/faturamento-ontem', methods=['GET'])
@@ -755,7 +982,7 @@ def api_adicionar_comentario(tarefa_id):
         return jsonify({"erro": "Comentário vazio."}), 400
     # O sistema ainda não tem login individual por pessoa — todo comentário
     # é registrado com o único usuário atual, igual ao resto do sistema hoje.
-    comentario_id = adicionar_comentario(tarefa_id, "Julia Suzuki", texto)
+    comentario_id = adicionar_comentario(tarefa_id, _usuario_logado()['nome'], texto)
     return jsonify({"id": comentario_id})
 
 

@@ -14,6 +14,19 @@ load_dotenv()
 
 MAKE_WEBHOOK_URL = os.environ.get("MAKE_WEBHOOK_URL", "")
 
+# Assina o cookie de sessão (login). Precisa ser o MESMO valor em todos os
+# workers do Gunicorn em produção — por isso vem de env var fixa, nunca
+# gerada em runtime (um valor aleatório por worker invalidaria a sessão
+# sempre que a requisição caísse num worker diferente do que fez o login).
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
+
+# Cria esse usuário como admin automaticamente na primeira subida do app,
+# se a tabela de usuários ainda estiver vazia (ver app.py). Só precisa
+# estar setado uma vez — depois pode remover do .env/Dokploy.
+ADMIN_INICIAL_NOME = os.environ.get("ADMIN_INICIAL_NOME", "Admin")
+ADMIN_INICIAL_EMAIL = os.environ.get("ADMIN_INICIAL_EMAIL", "")
+ADMIN_INICIAL_SENHA = os.environ.get("ADMIN_INICIAL_SENHA", "")
+
 # Dicionário com as configurações individuais de cada unidade/loja
 LOJAS = {
     "Hamburgueria Artesanos": {

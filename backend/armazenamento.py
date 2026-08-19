@@ -103,6 +103,19 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS usuario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                senha_hash TEXT NOT NULL,
+                papel TEXT NOT NULL DEFAULT 'equipe',
+                ativo INTEGER NOT NULL DEFAULT 1,
+                criado_em TEXT NOT NULL
+            )
+            """
+        )
 
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
@@ -381,3 +394,47 @@ def adicionar_comentario(tarefa_id, autor, texto):
         )
         conn.execute("UPDATE tarefa SET atualizado_em = ? WHERE id = ?", (agora, tarefa_id))
         return cursor.lastrowid
+
+
+# --- USUÁRIOS (login da equipe) ---------------------------------------------
+
+def criar_usuario(nome, email, senha_hash, papel="equipe"):
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        cursor = conn.execute(
+            "INSERT INTO usuario (nome, email, senha_hash, papel, ativo, criado_em) VALUES (?, ?, ?, ?, 1, ?)",
+            (nome, email.lower(), senha_hash, papel, agora),
+        )
+        return cursor.lastrowid
+
+
+def buscar_usuario_por_email(email):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM usuario WHERE email = ?", (email.lower(),)).fetchone()
+        return dict(linha) if linha else None
+
+
+def buscar_usuario_por_id(usuario_id):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM usuario WHERE id = ?", (usuario_id,)).fetchone()
+        return dict(linha) if linha else None
+
+
+def listar_usuarios():
+    with conexao() as conn:
+        linhas = conn.execute("SELECT * FROM usuario ORDER BY criado_em").fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def atualizar_usuario(usuario_id, campos):
+    if not campos:
+        return
+    colunas = ", ".join(f"{campo} = ?" for campo in campos)
+    valores = list(campos.values()) + [usuario_id]
+    with conexao() as conn:
+        conn.execute(f"UPDATE usuario SET {colunas} WHERE id = ?", valores)
+
+
+def excluir_usuario(usuario_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM usuario WHERE id = ?", (usuario_id,))

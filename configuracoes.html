@@ -60,10 +60,10 @@
       </nav>
 
       <a href="configuracoes.html" class="sidebar-user-card">
-        <div class="avatar">JS</div>
+        <div class="avatar sidebar-user-avatar">JS</div>
         <div class="user-info">
-          <span class="user-name">Julia Suzuki</span>
-          <span class="user-role">Admin</span>
+          <span class="user-name sidebar-user-name">Julia Suzuki</span>
+          <span class="user-role sidebar-user-role">Admin</span>
         </div>
         <i data-lucide="chevron-right" class="sidebar-user-card-icon"></i>
       </a>
@@ -111,6 +111,26 @@
               <span class="badge-pill" id="config-status-lojas">-- lojas conectadas</span>
               <span class="badge-pill" id="config-status-sync">Verificando sincronização...</span>
             </div>
+          </div>
+        </div>
+
+        <!-- SUA CONTA -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Sua Conta</h3>
+              <span class="panel-subtitle" id="conta-email-label">—</span>
+            </div>
+          </div>
+          <div class="toggle-tile">
+            <div class="toggle-tile-info">
+              <i data-lucide="user-circle"></i>
+              <div>
+                <p class="toggle-tile-title" id="conta-nome-label">—</p>
+                <p class="toggle-tile-subtitle" id="conta-papel-label">—</p>
+              </div>
+            </div>
+            <button type="button" class="btn-secondary" onclick="fazerLogout()">Sair da conta</button>
           </div>
         </div>
 
@@ -187,8 +207,72 @@
           </div>
         </div>
 
+        <!-- EQUIPE (só visível/habilitado pra quem é admin) -->
+        <div class="panel panel-table" id="painel-equipe" style="display:none;">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Equipe</h3>
+              <span class="panel-subtitle">Quem tem acesso ao sistema</span>
+            </div>
+            <button type="button" class="btn-primary" onclick="abrirModalNovoUsuario()">+ Adicionar Membro</button>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Papel</th>
+                  <th>Status</th>
+                  <th style="text-align:right;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="equipe-tbody">
+                <tr><td colspan="5" class="panel-subtitle">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </main>
+
+    <!-- MODAL: CRIAR/EDITAR MEMBRO DA EQUIPE -->
+    <div id="modalUsuario" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalUsuarioTitulo">Novo Membro</h2>
+          <button class="btn-close" onclick="fecharModalUsuario()">&times;</button>
+        </div>
+        <form id="formUsuario" onsubmit="salvarUsuario(event)">
+          <input type="hidden" id="usuarioId">
+          <div class="form-group">
+            <label for="usuarioNome">Nome</label>
+            <input type="text" id="usuarioNome" required placeholder="Nome completo">
+          </div>
+          <div class="form-group">
+            <label for="usuarioEmail">E-mail</label>
+            <input type="email" id="usuarioEmail" required placeholder="pessoa@artesanos.adm.br">
+          </div>
+          <div class="form-group">
+            <label for="usuarioSenha">Senha <span id="usuarioSenhaOpcional" style="display:none; font-weight:400; text-transform:none; letter-spacing:normal;">(deixe em branco pra manter a atual)</span></label>
+            <input type="password" id="usuarioSenha" placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="form-group">
+            <label for="usuarioPapel">Papel</label>
+            <select id="usuarioPapel">
+              <option value="equipe">Equipe</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <p id="usuarioErro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="fecharModalUsuario()">Cancelar</button>
+            <button type="submit" class="btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- NAVEGAÇÃO INFERIOR (SÓ NO CELULAR) -->
     <nav class="mobile-bottom-nav">

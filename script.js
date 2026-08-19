@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
 
+  // 1.1 USUÁRIO LOGADO (nome/iniciais na sidebar de todas as telas do painel)
+  carregarUsuarioLogado();
+
   // 2. TOGGLE MODO NOTURNO (a tela de Configurações tem 2 interruptores na
   // mesma página — cabeçalho + painel de Aparência — mantidos sincronizados)
   const togglesTema = document.querySelectorAll('#theme-toggle-checkbox, #theme-toggle-checkbox-config');
@@ -1450,24 +1453,252 @@ function renderRankingLojasHome(lojas) {
   }).join('');
 }
 
-// REDIRECIONAMENTOS E LOGIN
-function redirecionarLogin() {
-  window.location.href = "login.html";
-}
+// --- LOGIN / LOGOUT ---
 
-function redirecionarRegistro() {
-  window.location.href = "registro.html";
-}
-
-function realizarLogin(event) {
+async function fazerLogin(event) {
   event.preventDefault();
-  const email = document.getElementById("email")?.value;
-  console.log("Tentando logar com:", email);
-  window.location.href = "index.html";
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  const btn = document.getElementById('btn-login');
+  const elErro = document.getElementById('login-erro');
+
+  elErro.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+
+  try {
+    const resposta = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha }),
+    });
+    const dados = await resposta.json();
+
+    if (!resposta.ok) {
+      elErro.textContent = dados.erro || 'Não foi possível entrar.';
+      elErro.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      return;
+    }
+
+    window.location.href = 'index.html';
+  } catch (erro) {
+    console.error('Falha ao fazer login:', erro);
+    elErro.textContent = 'Não foi possível conectar ao servidor.';
+    elErro.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
 }
 
-function loginGoogle() {
-  alert("Redirecionando para autenticação do Google...");
+function alternarVisibilidadeSenha() {
+  const input = document.getElementById('senha');
+  const iconeMostrar = document.getElementById('icone-olho-mostrar');
+  const iconeOcultar = document.getElementById('icone-olho-ocultar');
+  const visivel = input.type === 'text';
+  input.type = visivel ? 'password' : 'text';
+  iconeMostrar.style.display = visivel ? '' : 'none';
+  iconeOcultar.style.display = visivel ? 'none' : '';
+}
+
+async function fazerLogout() {
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+  } finally {
+    window.location.href = 'login.html';
+  }
+}
+
+/**
+ * Preenche o nome/iniciais do usuário logado na sidebar (todas as telas do
+ * painel) e o formulário de comentário do ClickUp usa esse mesmo nome como
+ * autor — busca uma vez só via /api/me.
+ */
+async function carregarUsuarioLogado() {
+  const elNome = document.querySelectorAll('.sidebar-user-name');
+  const elPapel = document.querySelectorAll('.sidebar-user-role');
+  const elAvatar = document.querySelectorAll('.sidebar-user-avatar');
+  if (!elNome.length) return;
+
+  try {
+    const resposta = await fetch('/api/me');
+    if (!resposta.ok) return; // o before_request do Flask já redireciona pro login se não estiver logado
+    const dados = await resposta.json();
+    const usuario = dados.usuario;
+
+    const iniciais = usuario.nome
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(p => p[0].toUpperCase())
+      .join('');
+
+    elNome.forEach(el => { el.textContent = usuario.nome; });
+    elPapel.forEach(el => { el.textContent = usuario.papel === 'admin' ? 'Admin' : 'Equipe'; });
+    elAvatar.forEach(el => { el.textContent = iniciais; });
+
+    window.usuarioLogado = usuario;
+
+    // Tela de Configurações: painel "Sua Conta" + seção "Equipe" (só admin)
+    const contaNome = document.getElementById('conta-nome-label');
+    if (contaNome) {
+      contaNome.textContent = usuario.nome;
+      document.getElementById('conta-email-label').textContent = usuario.email;
+      document.getElementById('conta-papel-label').textContent = usuario.papel === 'admin' ? 'Administrador' : 'Equipe';
+    }
+    const painelEquipe = document.getElementById('painel-equipe');
+    if (painelEquipe && usuario.papel === 'admin') {
+      painelEquipe.style.display = '';
+      carregarEquipe();
+    }
+  } catch (erro) {
+    console.error('Falha ao carregar usuário logado:', erro);
+  }
+}
+
+// --- GESTÃO DE EQUIPE (tela de Configurações, só admin) ---
+
+const PAPEL_LABEL_USUARIO = { admin: 'Admin', equipe: 'Equipe' };
+
+async function carregarEquipe() {
+  const tbody = document.getElementById('equipe-tbody');
+  if (!tbody) return;
+
+  try {
+    const resposta = await fetch('/api/usuarios');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+
+    if (!dados.usuarios.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhum membro cadastrado ainda.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = dados.usuarios.map(u => `
+      <tr>
+        <td class="font-bold">${u.nome}</td>
+        <td class="text-muted">${u.email}</td>
+        <td>${PAPEL_LABEL_USUARIO[u.papel] || u.papel}</td>
+        <td><span class="badge-pill ${u.ativo ? 'pos' : 'neg'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td>
+          <div class="acoes-linha" style="justify-content:flex-end;">
+            <button type="button" class="btn-acao-icone" title="Editar" onclick='abrirModalEditarUsuario(${JSON.stringify(u)})'>
+              <i data-lucide="pencil"></i>
+            </button>
+            <button type="button" class="btn-acao-icone" title="${u.ativo ? 'Desativar' : 'Ativar'}" onclick="alternarAtivoUsuario(${u.id}, ${!u.ativo})">
+              <i data-lucide="${u.ativo ? 'user-x' : 'user-check'}"></i>
+            </button>
+            <button type="button" class="btn-acao-icone btn-excluir" title="Excluir" onclick="excluirUsuarioEquipe(${u.id}, '${u.nome.replace(/'/g, "\\'")}')">
+              <i data-lucide="trash-2"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('Falha ao carregar equipe:', erro);
+    tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar a equipe.</td></tr>`;
+  }
+}
+
+function abrirModalNovoUsuario() {
+  document.getElementById('modalUsuarioTitulo').textContent = 'Novo Membro';
+  document.getElementById('formUsuario').reset();
+  document.getElementById('usuarioId').value = '';
+  document.getElementById('usuarioSenha').required = true;
+  document.getElementById('usuarioSenhaOpcional').style.display = 'none';
+  document.getElementById('usuarioErro').style.display = 'none';
+  document.getElementById('modalUsuario').style.display = 'flex';
+}
+
+function abrirModalEditarUsuario(usuario) {
+  document.getElementById('modalUsuarioTitulo').textContent = 'Editar Membro';
+  document.getElementById('formUsuario').reset();
+  document.getElementById('usuarioId').value = usuario.id;
+  document.getElementById('usuarioNome').value = usuario.nome;
+  document.getElementById('usuarioEmail').value = usuario.email;
+  document.getElementById('usuarioEmail').disabled = true;
+  document.getElementById('usuarioPapel').value = usuario.papel;
+  document.getElementById('usuarioSenha').required = false;
+  document.getElementById('usuarioSenhaOpcional').style.display = 'inline';
+  document.getElementById('usuarioErro').style.display = 'none';
+  document.getElementById('modalUsuario').style.display = 'flex';
+}
+
+function fecharModalUsuario() {
+  document.getElementById('modalUsuario').style.display = 'none';
+  document.getElementById('usuarioEmail').disabled = false;
+}
+
+async function salvarUsuario(event) {
+  event.preventDefault();
+  const id = document.getElementById('usuarioId').value;
+  const elErro = document.getElementById('usuarioErro');
+  elErro.style.display = 'none';
+
+  const corpo = {
+    nome: document.getElementById('usuarioNome').value.trim(),
+    papel: document.getElementById('usuarioPapel').value,
+  };
+  const senha = document.getElementById('usuarioSenha').value;
+  if (senha) corpo.senha = senha;
+  if (!id) corpo.email = document.getElementById('usuarioEmail').value.trim();
+
+  try {
+    const resposta = await fetch(id ? `/api/usuarios/${id}` : '/api/usuarios', {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      elErro.textContent = dados.erro || 'Não foi possível salvar.';
+      elErro.style.display = 'block';
+      return;
+    }
+    fecharModalUsuario();
+    carregarEquipe();
+  } catch (erro) {
+    console.error('Falha ao salvar usuário:', erro);
+    elErro.textContent = 'Não foi possível conectar ao servidor.';
+    elErro.style.display = 'block';
+  }
+}
+
+async function alternarAtivoUsuario(id, novoAtivo) {
+  try {
+    const resposta = await fetch(`/api/usuarios/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ativo: novoAtivo }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      alert(dados.erro || 'Não foi possível atualizar o status.');
+      return;
+    }
+    carregarEquipe();
+  } catch (erro) {
+    console.error('Falha ao alternar status do usuário:', erro);
+  }
+}
+
+async function excluirUsuarioEquipe(id, nome) {
+  if (!confirm(`Excluir o acesso de "${nome}"? Essa ação não pode ser desfeita.`)) return;
+  try {
+    const resposta = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      alert(dados.erro || 'Não foi possível excluir.');
+      return;
+    }
+    carregarEquipe();
+  } catch (erro) {
+    console.error('Falha ao excluir usuário:', erro);
+  }
 }
 
 // --- CLICKUP: QUADRO DE TAREFAS ---
