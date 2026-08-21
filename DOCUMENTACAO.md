@@ -317,6 +317,8 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 4. **Acessos da equipe** — ✅ concluído em 2026-08-19 (login individual por pessoa, com senha — ver seção 8). Landing page e cadastro público ficam **de propósito** atrás do login por enquanto (decisão da Julia: sistema é só interno, sem necessidade de porta pública ainda).
 5. **Documentação do sistema** — este arquivo.
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
+7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
+8. **Preparo / KDS** — em desenvolvimento pela própria Julia, fora do escopo deste histórico (ver `preparo.html`/`preparo.css`).
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 

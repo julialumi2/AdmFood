@@ -411,6 +411,13 @@ def arquivo_estatico(nome_arquivo):
     return send_from_directory(DIRETORIO_BASE, nome_arquivo)
 
 
+@app.route('/favicon.ico')
+def favicon():
+    # Navegadores pedem esse caminho direto na raiz, além do <link rel="icon">
+    # de cada página — sem essa rota, esse pedido implícito cairia no 404.
+    return send_from_directory(os.path.join(DIRETORIO_BASE, 'imgs'), 'favicon.ico')
+
+
 @app.route('/imgs/<path:nome_arquivo>')
 def arquivo_imagem(nome_arquivo):
     # Único subdiretório liberado, e só pra extensões de imagem — mesma
