@@ -95,6 +95,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inputArquivo) inputArquivo.addEventListener('change', importarPlanilhaCardapio);
   }
 
+  // 4.096 TELA DE PREPARO
+  if (document.getElementById('preparo-tabs')) {
+    const preparoInicioInput = document.getElementById('preparo-data-inicio');
+    const preparoFimInput = document.getElementById('preparo-data-fim');
+    if (preparoInicioInput && preparoFimInput && !preparoInicioInput.value && !preparoFimInput.value) {
+      const padrao = periodoPreparoSelecionado();
+      preparoInicioInput.value = padrao.inicio;
+      preparoFimInput.value = padrao.fim;
+    }
+    [preparoInicioInput, preparoFimInput].forEach((input) => {
+      input?.addEventListener('change', () => {
+        if (preparoInicioInput.value && preparoFimInput.value) carregarPreparo();
+      });
+    });
+    document.querySelectorAll('#preparo-tabs .tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#preparo-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderPreparoTab(btn.dataset.tab);
+      });
+    });
+    carregarPreparo();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -926,6 +950,120 @@ async function carregarInsights(inicio, fim, diaSemana) {
       canalTableBody.innerHTML = `<tr><td colspan="5" style="color: #ef4444;">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
     }
   }
+}
+
+// --- PREPARO (indicadores operacionais da cozinha) ---
+let preparoData = {};
+let preparoTabAtual = 'geral';
+let preparoHorarioChartInstance = null;
+
+function periodoPreparoSelecionado() {
+  const hoje = new Date();
+  const fimPadrao = hoje.toISOString().slice(0, 10);
+  const inicioPadraoData = new Date();
+  inicioPadraoData.setDate(hoje.getDate() - 29);
+  const inicioPadrao = inicioPadraoData.toISOString().slice(0, 10);
+
+  const inicioInput = document.getElementById('preparo-data-inicio');
+  const fimInput = document.getElementById('preparo-data-fim');
+  const inicio = (inicioInput && inicioInput.value) || inicioPadrao;
+  const fim = (fimInput && fimInput.value) || fimPadrao;
+  return { inicio, fim };
+}
+
+function _formatarMinutos(valor) {
+  if (valor === null || valor === undefined) return '—';
+  const horas = Math.floor(valor / 60);
+  const minutos = Math.round(valor % 60);
+  return horas > 0 ? `${horas}h ${minutos}min` : `${minutos} min`;
+}
+
+async function carregarPreparo() {
+  const { inicio, fim } = periodoPreparoSelecionado();
+  try {
+    const resposta = await fetch(`/api/preparo?inicio=${inicio}&fim=${fim}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    preparoData = await resposta.json();
+    renderPreparoTab(preparoTabAtual);
+    marcarAtualizadoAgora('preparo-atualizado-em');
+  } catch (erro) {
+    console.error('Falha ao carregar Preparo:', erro);
+  }
+}
+
+function renderPreparoTab(tab) {
+  const dados = preparoData[tab];
+  if (!dados) return;
+  preparoTabAtual = tab;
+
+  document.getElementById('preparo-val-tempo-medio').textContent = _formatarMinutos(dados.tempoMedioMinutos);
+  document.getElementById('preparo-val-pedidos').textContent = (dados.totalPedidos || 0).toLocaleString('pt-BR');
+
+  const picoEl = document.getElementById('preparo-val-pico');
+  const picoSubEl = document.getElementById('preparo-pico-sub');
+  if (dados.horarioPico) {
+    picoEl.textContent = `${String(dados.horarioPico.hora).padStart(2, '0')}h`;
+    picoSubEl.textContent = `${dados.horarioPico.totalPedidos} pedidos nesse horário`;
+  } else {
+    picoEl.textContent = '—';
+    picoSubEl.textContent = '';
+  }
+
+  const canvas = document.getElementById('preparoHorarioChart');
+  if (preparoHorarioChartInstance) {
+    preparoHorarioChartInstance.destroy();
+    preparoHorarioChartInstance = null;
+  }
+  if (canvas && typeof Chart !== 'undefined' && dados.porHorario) {
+    preparoHorarioChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: dados.porHorario.map(h => `${String(h.hora).padStart(2, '0')}h`),
+        datasets: [{
+          label: 'Pedidos',
+          data: dados.porHorario.map(h => h.totalPedidos),
+          backgroundColor: 'rgba(220, 38, 38, 0.7)',
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+      },
+    });
+  }
+
+  // "Tempo médio por loja" só faz sentido comparando lojas — na Visão Geral.
+  const painelPorLoja = document.getElementById('preparo-panel-por-loja');
+  const corpoPorLoja = document.getElementById('preparo-por-loja-body');
+  if (tab === 'geral' && dados.porLoja && dados.porLoja.length) {
+    painelPorLoja.classList.remove('oculto');
+    corpoPorLoja.innerHTML = dados.porLoja.map(l => `
+      <tr>
+        <td>${escaparHtml(l.loja)}</td>
+        <td>${l.totalPedidos}</td>
+        <td>${_formatarMinutos(l.tempoMedioMinutos)}</td>
+      </tr>
+    `).join('');
+  } else {
+    painelPorLoja.classList.add('oculto');
+  }
+
+  const corpoGargalos = document.getElementById('preparo-gargalos-body');
+  corpoGargalos.innerHTML = (dados.gargalos && dados.gargalos.length)
+    ? dados.gargalos.map(g => `
+        <tr>
+          <td>${g.dia.split('-').reverse().join('/')}</td>
+          <td>${escaparHtml(g.loja)}</td>
+          <td>${g.totalPedidos}</td>
+          <td>${_formatarMinutos(g.tempoMedioMinutos)}</td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="4" class="panel-subtitle">Sem dados suficientes nesse período.</td></tr>`;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // --- VENDAS PRESENCIAIS (CRUD manual, fora da Cardápio Web) ---

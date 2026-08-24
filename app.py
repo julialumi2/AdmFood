@@ -16,6 +16,8 @@ from backend.armazenamento import (
     buscar_presencial_por_unidade,
     buscar_ultima_sincronizacao,
     salvar_resumo_do_dia,
+    salvar_pedidos_do_dia,
+    buscar_pedidos_preparo_periodo,
     salvar_ajuste_canal,
     excluir_ajuste_canal,
     buscar_ajustes_canal_periodo,
@@ -947,6 +949,7 @@ def _sincronizar_lojas_em_segundo_plano(dia_alvo):
         try:
             resumo = buscar_resumo_do_dia(token, dia_alvo)
             salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
+            salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
         except Exception as erro:
             print(f"❌ Sincronização manual falhou para {nome_unidade} ({dia_iso}): {erro}")
 
@@ -1293,6 +1296,98 @@ def api_insights_automaticos():
         "periodoBaseLabel": f"{_formatar_data_br(base_inicio.isoformat())} a {_formatar_data_br(base_fim.isoformat())}",
         "insights": insights[:5],
     })
+
+
+# --- PREPARO (indicadores operacionais da cozinha) --------------------------
+# "Tempo de preparo" aqui é o tempo do PEDIDO INTEIRO — do recebido ao
+# fechado/entregue na Cardápio Web —, não só o tempo de cozinha, porque a
+# API não marca separadamente quando a comida ficou pronta (ver
+# backend/cardapio_web.py:_duracao_minutos e seção 6.2 da documentação).
+
+def _agregar_duracoes(pedidos):
+    if not pedidos:
+        return {"tempoMedioMinutos": None, "totalPedidos": 0}
+    total = len(pedidos)
+    media = sum(p["duracao_minutos"] for p in pedidos) / total
+    return {"tempoMedioMinutos": round(media, 1), "totalPedidos": total}
+
+
+def _montar_bloco_preparo(pedidos):
+    bloco = _agregar_duracoes(pedidos)
+
+    por_hora = {h: [] for h in range(24)}
+    for p in pedidos:
+        por_hora[int(p["criado_em"][11:13])].append(p["duracao_minutos"])
+    por_horario = [
+        {
+            "hora": hora,
+            "totalPedidos": len(duracoes),
+            "tempoMedioMinutos": round(sum(duracoes) / len(duracoes), 1) if duracoes else None,
+        }
+        for hora, duracoes in sorted(por_hora.items())
+    ]
+    pico = max(por_horario, key=lambda h: h["totalPedidos"])
+    bloco["horarioPico"] = pico if pico["totalPedidos"] > 0 else None
+    bloco["porHorario"] = por_horario
+
+    # Agrupado por loja+dia (não só dia) — na visão Geral, os pedidos vêm de
+    # lojas diferentes, e misturar "Artesanos lento" com "Simus rápido" no
+    # mesmo dia calendário não diz nada de útil.
+    por_loja_dia = {}
+    for p in pedidos:
+        por_loja_dia.setdefault((p["unidade"], p["dia"]), []).append(p["duracao_minutos"])
+    bloco["gargalos"] = sorted(
+        [
+            {
+                "loja": chave[0],
+                "dia": chave[1],
+                "totalPedidos": len(duracoes),
+                "tempoMedioMinutos": round(sum(duracoes) / len(duracoes), 1),
+            }
+            for chave, duracoes in por_loja_dia.items()
+            if len(duracoes) >= 3  # dia com 1-2 pedidos não é "lento", é ruído
+        ],
+        key=lambda g: g["tempoMedioMinutos"],
+        reverse=True,
+    )[:10]
+
+    return bloco
+
+
+@app.route('/api/preparo', methods=['GET'])
+def api_preparo():
+    inicio_str = request.args.get('inicio')
+    fim_str = request.args.get('fim')
+
+    if inicio_str and fim_str:
+        try:
+            inicio = date.fromisoformat(inicio_str)
+            fim = date.fromisoformat(fim_str)
+        except ValueError:
+            return jsonify({"erro": "Datas inválidas."}), 400
+        if inicio > fim:
+            inicio, fim = fim, inicio
+    else:
+        fim = date.today()
+        inicio = fim - timedelta(days=29)
+
+    pedidos = buscar_pedidos_preparo_periodo(inicio.isoformat(), fim.isoformat())
+
+    resposta = {"geral": _montar_bloco_preparo(pedidos)}
+    resposta["geral"]["porLoja"] = sorted(
+        [
+            {"loja": unidade, **_agregar_duracoes([p for p in pedidos if p["unidade"] == unidade])}
+            for unidade in LOJAS.keys()
+            if any(p["unidade"] == unidade for p in pedidos)
+        ],
+        key=lambda l: l["tempoMedioMinutos"],
+        reverse=True,
+    )
+
+    for nome_unidade in LOJAS.keys():
+        resposta[nome_unidade] = _montar_bloco_preparo([p for p in pedidos if p["unidade"] == nome_unidade])
+
+    return jsonify(resposta)
 
 
 # --- TAREFAS (quadro do ClickUp) --------------------------------------------

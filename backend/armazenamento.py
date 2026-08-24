@@ -162,6 +162,24 @@ def inicializar_banco():
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_preco_cardapio_loja_produto ON preco_cardapio(loja, produto)"
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedido_preparo (
+                unidade TEXT NOT NULL,
+                pedido_id INTEGER NOT NULL,
+                dia TEXT NOT NULL,
+                canal TEXT NOT NULL,
+                criado_em TEXT NOT NULL,
+                atualizado_em TEXT NOT NULL,
+                duracao_minutos REAL NOT NULL,
+                PRIMARY KEY (unidade, pedido_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pedido_preparo_dia ON pedido_preparo(dia)"
+        )
+
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
     ticket_medio = (
@@ -585,3 +603,72 @@ def atualizar_preco_cardapio(item_id, campos):
     valores = list(campos.values()) + [item_id]
     with conexao() as conn:
         conn.execute(f"UPDATE preco_cardapio SET {colunas} WHERE id = ?", valores)
+
+
+def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):
+    """Grava o tempo de cada pedido concluído do dia (usado pela tela de
+    Preparo). Substitui os registros anteriores desse dia/unidade — o dia
+    inteiro é resincronizado de uma vez, nunca parcialmente."""
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM pedido_preparo WHERE unidade = ? AND dia = ?",
+            (unidade, dia_iso),
+        )
+        for pedido in pedidos_detalhados:
+            conn.execute(
+                """
+                INSERT INTO pedido_preparo
+                    (unidade, pedido_id, dia, canal, criado_em, atualizado_em, duracao_minutos)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    unidade,
+                    pedido["id"],
+                    dia_iso,
+                    pedido["canal"],
+                    pedido["criado_em"],
+                    pedido["atualizado_em"],
+                    pedido["duracao_minutos"],
+                ),
+            )
+
+
+def buscar_pedidos_preparo_periodo(inicio_iso, fim_iso, unidade=None):
+    with conexao() as conn:
+        if unidade:
+            linhas = conn.execute(
+                """
+                SELECT unidade, dia, canal, criado_em, duracao_minutos
+                FROM pedido_preparo
+                WHERE dia >= ? AND dia <= ? AND unidade = ?
+                """,
+                (inicio_iso, fim_iso, unidade),
+            ).fetchall()
+        else:
+            linhas = conn.execute(
+                """
+                SELECT unidade, dia, canal, criado_em, duracao_minutos
+                FROM pedido_preparo
+                WHERE dia >= ? AND dia <= ?
+                """,
+                (inicio_iso, fim_iso),
+            ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def dias_sem_pedidos_preparo():
+    """Dias com faturamento sincronizado (pedidos > 0) mas que ainda não têm
+    o detalhe de tempo por pedido — usado pelo backfill histórico pra saber
+    o que falta processar."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT f.unidade, f.dia
+            FROM faturamento_diario f
+            LEFT JOIN (SELECT DISTINCT unidade, dia FROM pedido_preparo) p
+                ON p.unidade = f.unidade AND p.dia = f.dia
+            WHERE p.dia IS NULL AND f.quantidade_pedidos > 0
+            ORDER BY f.unidade, f.dia
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]

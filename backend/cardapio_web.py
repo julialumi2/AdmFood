@@ -9,6 +9,8 @@ detalhes pra pegar o campo "total". Limites de requisição documentados:
 """
 
 import time
+from datetime import datetime
+
 import requests
 
 BASE_URL = "https://integracao.cardapioweb.com/api/partner/v1"
@@ -60,7 +62,13 @@ def buscar_pedidos_do_dia(token, dia):
 
         dados = resposta.json()
         pedidos.extend(
-            {"id": p["id"], "sales_channel": p["sales_channel"], "status": p["status"]}
+            {
+                "id": p["id"],
+                "sales_channel": p["sales_channel"],
+                "status": p["status"],
+                "created_at": p["created_at"],
+                "updated_at": p["updated_at"],
+            }
             for p in dados.get("orders", [])
         )
         total_paginas = dados.get("pagination", {}).get("total_pages", 1)
@@ -99,16 +107,28 @@ def _total_com_desconto_ifood(detalhes, sales_channel):
     return total + desconto_ifood
 
 
+def _duracao_minutos(criado_em, atualizado_em):
+    """Tempo do pedido inteiro, do recebido ao fechado/entregue — a API não
+    marca separadamente quando a cozinha terminou de preparar, só quando o
+    pedido é finalizado (que já inclui o tempo de entrega quando houver).
+    Usado na tela de Preparo (ver seção 6.2 da documentação)."""
+    inicio = datetime.fromisoformat(criado_em)
+    fim = datetime.fromisoformat(atualizado_em)
+    return max((fim - inicio).total_seconds() / 60, 0.0)
+
+
 def buscar_resumo_do_dia(token, dia):
     """
     Retorna {"faturamento_dia": float, "quantidade_pedidos": int,
-    "canais": [{"canal": str, "quantidade_pedidos": int, "faturamento": float}]}
+    "canais": [{"canal": str, "quantidade_pedidos": int, "faturamento": float}],
+    "pedidos_detalhados": [{"id", "canal", "criado_em", "atualizado_em", "duracao_minutos"}]}
     """
     todos_pedidos = buscar_pedidos_do_dia(token, dia)
     pedidos = [p for p in todos_pedidos if p["status"] in STATUS_CONCLUIDOS]
 
     canais = {}
     faturamento_dia = 0.0
+    pedidos_detalhados = []
 
     for pedido in pedidos:
         detalhes = buscar_detalhes_pedido(token, pedido["id"])
@@ -122,10 +142,19 @@ def buscar_resumo_do_dia(token, dia):
         canal["quantidade_pedidos"] += 1
         canal["faturamento"] += total
 
+        pedidos_detalhados.append({
+            "id": pedido["id"],
+            "canal": pedido["sales_channel"],
+            "criado_em": pedido["created_at"],
+            "atualizado_em": pedido["updated_at"],
+            "duracao_minutos": _duracao_minutos(pedido["created_at"], pedido["updated_at"]),
+        })
+
         time.sleep(ESPERA_ENTRE_CHAMADAS_SEGUNDOS)
 
     return {
         "faturamento_dia": faturamento_dia,
         "quantidade_pedidos": len(pedidos),
         "canais": list(canais.values()),
+        "pedidos_detalhados": pedidos_detalhados,
     }

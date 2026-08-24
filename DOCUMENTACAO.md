@@ -46,7 +46,7 @@ inicializa o que é relevante pra ela.
 | `index.html` | Resumo (Home) — faturamento da rede, gráfico diário, insights automáticos |
 | `estoque.html` | Estoque (integração VMarket — ver seção 9, pendente) |
 | `cardapio.html` | Cardápio — comparativo de preços por canal de venda (iFood/99Food/BeeFood/Cardápio Web), só leitura, importado de planilha (ver seção 6.1) |
-| `preparo.html` | Preparo / KDS (em desenvolvimento pela Julia) |
+| `preparo.html` | Preparo — indicadores operacionais da cozinha (tempo médio do pedido, volume por horário, gargalos; ver seção 6.2) |
 | `clickup.html` | Quadro de tarefas (Kanban) |
 | `insight.html` | Insights — faturamento por período, por loja, por canal, por dia da semana |
 | `configuracoes.html` | Configurações — status dos tokens da Cardápio Web, sincronização manual, lançamento de venda presencial |
@@ -163,6 +163,8 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `tarefa_comentario` | Comentários de cada tarefa |
 | `usuario` | Login da equipe — `senha_hash` (nunca texto puro), `papel` (`admin`/`equipe`), `ativo` |
 | `preco_cardapio` | Comparativo de preços do cardápio, só leitura (ver 6.1) |
+| `pedido_preparo` | Tempo de cada pedido concluído (ver 6.2) |
+| `ajuste_faturamento_canal` | Correção manual de faturamento/pedidos por canal (ver 6.3) |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
@@ -204,6 +206,54 @@ Fotos ficam em `PASTA_FOTOS_CARDAPIO` (`backend/armazenamento.py`) — uma
 pasta `cardapio_fotos/` do lado do `admfood.db`, **no mesmo volume
 persistente** (mesmo motivo do banco: sem isso, some a cada redeploy).
 Servidas via `/cardapio-fotos/<arquivo>`, só extensões de imagem.
+
+### 6.2 Preparo (indicadores operacionais da cozinha)
+
+Tela `preparo.html` — nasceu de um pedido de KDS (Kitchen Display System)
+em tempo real, mas virou uma tela de indicadores/relatório depois de
+investigar a API da Cardápio Web: não dá pra saber o momento exato em que
+um pedido fica "pronto" (só o momento em que fecha/é entregue), então uma
+tela ao vivo tipo Kanban não teria como mostrar "em preparo" de forma
+confiável. **"Tempo de preparo" aqui é o tempo do PEDIDO INTEIRO** — do
+recebido ao fechado/entregue —, o que já inclui o tempo de entrega quando
+houver (ver `backend/cardapio_web.py:_duracao_minutos`).
+
+Sem chamada extra à API: os mesmos dados que já buscamos pra calcular o
+faturamento (`buscar_resumo_do_dia`) já trazem `created_at`/`updated_at`
+de cada pedido — só passamos a guardar isso também, em
+`pedido_preparo`, junto da sincronização normal (`salvar_pedidos_do_dia`).
+
+`GET /api/preparo?inicio=&fim=` retorna, por loja e um bloco `"geral"`:
+tempo médio, total de pedidos, horário de pico, volume por horário (24
+posições) e os 10 "gargalos" (loja+dia com maior tempo médio, mínimo 3
+pedidos pra não contar ruído — um dia com 1 pedido não é "lento", é pouco
+dado). O bloco `"geral"` também traz `porLoja`, pra comparar as 4 unidades.
+
+**Backfill histórico**: dias sincronizados antes dessa tabela existir não
+têm o detalhe por pedido. `python preencher_pedidos_preparo_historico.py`
+busca isso retroativamente (mesmo limite de 5 req/min do
+`/orders/history` do `completar_pedidos_historico.py`, que faz a mesma
+coisa pra contagem de pedidos).
+
+### 6.3 Ajuste manual de faturamento por canal
+
+Achado em produção (2026-08-24): o **painel da própria Cardápio Web** às
+vezes mostra um valor de faturamento/pedidos diferente do que a API de
+parceiro retorna pro mesmo canal/dia — conferido pedido por pedido, a
+API está certa (bate exatamente com a soma dos pedidos reais), então a
+divergência é do lado do painel deles, não nosso. Sem forma de descobrir
+a causa raiz por fora, a solução foi permitir corrigir manualmente.
+
+Na tela de Insights, ao abrir a análise de canal de **um dia específico
+de uma loja específica** (nunca no período agregado nem na Visão Geral —
+não faria sentido editar um número que já é soma de vários dias/lojas),
+admin vê um botão de editar por canal. O ajuste salvo em
+`ajuste_faturamento_canal` **substitui** o valor sincronizado sempre que
+aparecer (`_aplicar_ajustes_canal` em `app.py`) — numa sincronização
+futura (automática ou manual), o valor da API é recalculado normalmente,
+mas o ajuste continua "vencendo" até alguém removê-lo pela tela. A
+diferença entre o valor ajustado e o original também é somada ao total do
+dia (cards de topo, Histórico Diário), não só na tabela de canal.
 
 ## 7. API — principais endpoints
 
@@ -333,7 +383,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 5. **Documentação do sistema** — este arquivo.
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
 7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
-8. **Preparo / KDS** — em desenvolvimento pela própria Julia, fora do escopo deste histórico (ver `preparo.html`/`preparo.css`).
+8. **Preparo** — ✅ concluído em 2026-08-24 (indicadores operacionais da cozinha — ver seção 6.2). Pivotou de KDS em tempo real (pedido do rascunho original da Julia) pra tela de relatório, depois de investigar e confirmar que a API da Cardápio Web não expõe o momento em que a cozinha termina de preparar.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 

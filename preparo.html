@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AdmFood - Preparo</title>
+  <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
+  <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="preparo.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,6 +45,10 @@
           <i data-lucide="box"></i>
           <span>Estoque</span>
         </a>
+        <a href="cardapio.html" class="menu-item">
+          <i data-lucide="book-open"></i>
+          <span>Cardápio</span>
+        </a>
         <a href="preparo.html" class="menu-item active">
           <i data-lucide="timer"></i>
           <span>Preparo</span>
@@ -61,10 +68,10 @@
       </nav>
 
       <a href="configuracoes.html" class="sidebar-user-card">
-        <div class="avatar">JS</div>
+        <div class="avatar sidebar-user-avatar">JS</div>
         <div class="user-info">
-          <span class="user-name">Julia Suzuki</span>
-          <span class="user-role">Admin</span>
+          <span class="user-name sidebar-user-name">Julia Suzuki</span>
+          <span class="user-role sidebar-user-role">Admin</span>
         </div>
         <i data-lucide="chevron-right" class="sidebar-user-card-icon"></i>
       </a>
@@ -72,7 +79,7 @@
 
     <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
     <main class="main-wrapper">
-      
+
       <!-- HEADER SUPERIOR -->
       <header class="top-header">
         <div class="header-left">
@@ -82,33 +89,173 @@
           <span class="header-page-title">PREPARO</span>
         </div>
 
-        <div class="header-right"></div>
+        <div class="header-right">
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+        </div>
       </header>
 
-      <!-- PÁGINA DE INSIGHT -->
-    <div class="page-content">
-      
-      <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
-      <div class="dashboard-title-area">
-        <div class="title-top">
-          <i data-lucide="box" class="icon-pin"></i>
-          <span>ANÁLISE DE PREPARO</span>
+      <!-- PÁGINA DE PREPARO -->
+      <div class="page-content">
+
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="timer" class="icon-pin"></i>
+            <span>INDICADORES OPERACIONAIS DA COZINHA</span>
+          </div>
+          <div class="title-row">
+            <h1>Preparo</h1>
+          </div>
         </div>
 
-        <!-- HEADER INTERNO / TÍTULO E CONTROLES -->
+        <p class="panel-subtitle" style="margin-top: -8px;">
+          Tempo do pedido inteiro (do recebido ao fechado/entregue) — a Cardápio Web não marca separadamente
+          quando a cozinha termina de preparar, só quando o pedido é finalizado.
+        </p>
+
+        <!-- FILTRO DE PERÍODO -->
         <div class="content-header">
-  
-        <!-- Lado Esquerdo: Categoria e Título -->
-        <div class="header-titles">
-        <h1 class="page-title">Relatório de vendas</h1>
-    </div>
-        </div> <!-- /content-header -->
-      </div> <!-- /dashboard-title-area -->
+          <div class="header-titles">
+            <span class="atualizado-em" id="preparo-atualizado-em"></span>
+          </div>
+          <div class="action-controls">
+            <div class="date-range-picker">
+              <div class="date-range-field">
+                <label for="preparo-data-inicio">De</label>
+                <input type="date" id="preparo-data-inicio">
+              </div>
+              <span class="date-range-sep">–</span>
+              <div class="date-range-field">
+                <label for="preparo-data-fim">Até</label>
+                <input type="date" id="preparo-data-fim">
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <p class="text-muted" style="padding: 24px 0;">Essa página ainda está em construção.</p>
+        <!-- ABAS POR LOJA -->
+        <div class="tabs-bar" id="preparo-tabs">
+          <button class="tab-btn active" data-tab="geral">
+            <i data-lucide="store"></i>
+            <span>Visão Geral (Todas)</span>
+            <span class="tab-badge">4 Unidades</span>
+          </button>
+          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
+            <i data-lucide="store"></i>
+            <span>Hamburgueria Artesanos</span>
+          </button>
+          <button class="tab-btn" data-tab="Açaí Na Lata">
+            <i data-lucide="store"></i>
+            <span>Açaí Na Lata</span>
+          </button>
+          <button class="tab-btn" data-tab="Tradiça ZN">
+            <i data-lucide="store"></i>
+            <span>Tradiça ZN</span>
+          </button>
+          <button class="tab-btn" data-tab="Tradiça Simus">
+            <i data-lucide="store"></i>
+            <span>Tradiça Simus</span>
+          </button>
+        </div>
 
-    </div> <!-- /page-content -->
-    </main>
+        <!-- CARDS DE MÉTRICAS -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Tempo Médio do Pedido</span>
+              <div class="card-icon"><i data-lucide="timer"></i></div>
+            </div>
+            <div class="card-value" id="preparo-val-tempo-medio">—</div>
+            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label"></span></div>
+          </div>
+
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Total de Pedidos</span>
+              <div class="card-icon"><i data-lucide="shopping-bag"></i></div>
+            </div>
+            <div class="card-value" id="preparo-val-pedidos">—</div>
+            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label-2"></span></div>
+          </div>
+
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Horário de Pico</span>
+              <div class="card-icon"><i data-lucide="flame"></i></div>
+            </div>
+            <div class="card-value" id="preparo-val-pico">—</div>
+            <div class="card-trend"><span class="trend-sub" id="preparo-pico-sub"></span></div>
+          </div>
+        </div>
+
+        <!-- VOLUME POR HORÁRIO -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Volume de pedidos por horário do dia</h3>
+            <span class="panel-subtitle">Quando os pedidos mais chegam — ajuda a prever picos de movimento</span>
+          </div>
+          <div class="preparo-chart-wrapper">
+            <canvas id="preparoHorarioChart"></canvas>
+          </div>
+        </div>
+
+        <!-- TEMPO MÉDIO POR LOJA (só na Visão Geral) -->
+        <div class="panel" id="preparo-panel-por-loja">
+          <div class="panel-header">
+            <h3 class="panel-title">Tempo médio por loja</h3>
+            <span class="panel-subtitle">Comparativo entre as 4 unidades no período selecionado</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Loja</th>
+                  <th>Pedidos</th>
+                  <th>Tempo médio</th>
+                </tr>
+              </thead>
+              <tbody id="preparo-por-loja-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- GARGALOS -->
+        <div class="panel panel-table">
+          <div class="panel-header">
+            <h3 class="panel-title">Dias mais lentos do período</h3>
+            <span class="panel-subtitle">Loja + dia com maior tempo médio (mínimo 3 pedidos, pra não contar ruído)</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Dia</th>
+                  <th>Loja</th>
+                  <th>Pedidos</th>
+                  <th>Tempo médio</th>
+                </tr>
+              </thead>
+              <tbody id="preparo-gargalos-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div> <!-- /page-content -->
+    </main> <!-- /main-wrapper -->
 
     <!-- NAVEGAÇÃO INFERIOR (SÓ NO CELULAR) -->
     <nav class="mobile-bottom-nav">
@@ -120,6 +267,14 @@
         <i data-lucide="box"></i>
         <span>Estoque</span>
       </a>
+      <a href="cardapio.html" class="mobile-nav-item">
+        <i data-lucide="book-open"></i>
+        <span>Cardápio</span>
+      </a>
+      <a href="preparo.html" class="mobile-nav-item active">
+        <i data-lucide="timer"></i>
+        <span>Preparo</span>
+      </a>
       <a href="clickup.html" class="mobile-nav-item">
         <i data-lucide="check-square"></i>
         <span>ClickUp</span>
@@ -130,5 +285,6 @@
       </a>
     </nav>
   </div> <!-- /dashboard-wrapper -->
+
 </body>
 </html>
