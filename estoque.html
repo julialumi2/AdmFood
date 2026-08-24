@@ -110,7 +110,7 @@
       <!-- PÁGINA DE ESTOQUE -->
       <div class="page-content">
         
-        <!-- TÍTULO E BOTÃO REGISTRAR ENTRADA -->
+        <!-- TÍTULO E BOTÕES -->
         <div class="dashboard-title-area">
           <div class="title-top">
             <i data-lucide="box" class="icon-pin"></i>
@@ -118,17 +118,48 @@
           </div>
           <div class="title-row">
             <h1>Insumos da Rede</h1>
-            <button class="btn-registrar-entrada">Registrar entrada</button>
+            <div class="estoque-acoes-topo" id="estoque-acoes-admin" style="display:none;">
+              <button type="button" class="btn-secondary" id="btn-novo-insumo">
+                <i data-lucide="plus"></i>
+                Novo insumo
+              </button>
+              <button class="btn-registrar-entrada" id="btn-registrar-entrada">Registrar entrada</button>
+            </div>
           </div>
         </div>
 
+        <!-- ABAS POR LOJA -->
+        <div class="tabs-bar" id="estoque-tabs">
+          <button class="tab-btn active" data-tab="geral">
+            <i data-lucide="store"></i>
+            <span>Visão Geral (Todas)</span>
+            <span class="tab-badge">4 Unidades</span>
+          </button>
+          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
+            <i data-lucide="store"></i>
+            <span>Hamburgueria Artesanos</span>
+          </button>
+          <button class="tab-btn" data-tab="Açaí Na Lata">
+            <i data-lucide="store"></i>
+            <span>Açaí Na Lata</span>
+          </button>
+          <button class="tab-btn" data-tab="Tradiça ZN">
+            <i data-lucide="store"></i>
+            <span>Tradiça ZN</span>
+          </button>
+          <button class="tab-btn" data-tab="Tradiça Simus">
+            <i data-lucide="store"></i>
+            <span>Tradiça Simus</span>
+          </button>
+        </div>
+
         <!-- CARDS DE RESUMO DO ESTOQUE -->
-        <div class="cards-grid">
+        <div class="cards-grid cards-grid-2x2-mobile">
           <div class="store-card">
             <span class="card-subtitle">ITENS CADASTRADOS</span>
             <div class="metric-card-content">
               <i data-lucide="box" class="metric-icon icon-red"></i>
-              <span class="store-value">8</span>
+              <span class="store-value" id="estoque-val-cadastrados">0</span>
             </div>
           </div>
 
@@ -136,7 +167,7 @@
             <span class="card-subtitle">EM NÍVEL IDEAL</span>
             <div class="metric-card-content">
               <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
-              <span class="store-value">4</span>
+              <span class="store-value" id="estoque-val-ok">0</span>
             </div>
           </div>
 
@@ -144,7 +175,7 @@
             <span class="card-subtitle">ESTOQUE BAIXO</span>
             <div class="metric-card-content">
               <i data-lucide="trending-down" class="metric-icon icon-dark"></i>
-              <span class="store-value">2</span>
+              <span class="store-value" id="estoque-val-baixo">0</span>
             </div>
           </div>
 
@@ -152,7 +183,7 @@
             <span class="card-subtitle">NÍVEL CRÍTICO</span>
             <div class="metric-card-content">
               <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
-              <span class="store-value">2</span>
+              <span class="store-value" id="estoque-val-critico">0</span>
             </div>
           </div>
         </div>
@@ -162,12 +193,12 @@
           <div class="table-header-row">
             <div>
               <h3 class="table-title">Itens em estoque</h3>
-              <p class="table-subtitle">Consolidado de todas as unidades</p>
+              <p class="table-subtitle" id="estoque-tabela-subtitulo">Consolidado de todas as unidades</p>
             </div>
 
             <div class="search-box">
               <i data-lucide="search"></i>
-              <input type="text" placeholder="Buscar insumo...">
+              <input type="text" placeholder="Buscar insumo..." id="estoque-busca">
             </div>
           </div>
 
@@ -180,69 +211,12 @@
                 <th>Categoria</th>
                 <th>Atual</th>
                 <th>Nível</th>
-                <th style="text-align: right;">Status</th>
+                <th>Status</th>
+                <th id="estoque-th-acoes" style="display:none;">Ações</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td class="font-bold">Farinha de trigo</td>
-                <td class="text-muted">Secos</td>
-                <td class="font-bold">48 kg</td>
-                <td>
-                  <div class="progress-container">
-                    <div class="progress-bar bar-red" style="width: 85%;"></div>
-                  </div>
-                  <span class="min-label">mínimo 20 kg</span>
-                </td>
-                <td style="text-align: right;">
-                  <span class="badge-pill pos">OK</span>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="font-bold">Queijo mussarela</td>
-                <td class="text-muted">Laticínios</td>
-                <td class="font-bold">6 kg</td>
-                <td>
-                  <div class="progress-container">
-                    <div class="progress-bar bar-red" style="width: 25%;"></div>
-                  </div>
-                  <span class="min-label">mínimo 10 kg</span>
-                </td>
-                <td style="text-align: right;">
-                  <span class="badge-pill neu-orange">Baixo</span>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="font-bold">Molho de tomate</td>
-                <td class="text-muted">Molhos</td>
-                <td class="font-bold">22 L</td>
-                <td>
-                  <div class="progress-container">
-                    <div class="progress-bar bar-red" style="width: 65%;"></div>
-                  </div>
-                  <span class="min-label">mínimo 15 L</span>
-                </td>
-                <td style="text-align: right;">
-                  <span class="badge-pill pos">OK</span>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="font-bold">Azeitona preta</td>
-                <td class="text-muted">Conservas</td>
-                <td class="font-bold">1.2 kg</td>
-                <td>
-                  <div class="progress-container">
-                    <div class="progress-bar bar-red" style="width: 12%;"></div>
-                  </div>
-                  <span class="min-label">mínimo 4 kg</span>
-                </td>
-                <td style="text-align: right;">
-                  <span class="badge-pill neg">Crítico</span>
-                </td>
-              </tr>
+            <tbody id="estoque-tabela-body">
+              <!-- Renderizado dinamicamente via JS -->
             </tbody>
           </table>
           </div>
@@ -278,6 +252,92 @@
         <span>Insights</span>
       </a>
     </nav>
+
+    <!-- MODAL: NOVO INSUMO -->
+    <div class="modal-overlay" id="modal-novo-insumo" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Novo insumo</h3>
+          <button type="button" class="btn-close" id="btn-novo-insumo-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-novo-insumo">
+          <div class="form-group">
+            <label for="novo-insumo-nome">Nome</label>
+            <input type="text" id="novo-insumo-nome" required placeholder="Ex: Farinha de trigo">
+          </div>
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="novo-insumo-categoria">Categoria</label>
+              <input type="text" id="novo-insumo-categoria" placeholder="Ex: Secos">
+            </div>
+            <div class="form-group">
+              <label for="novo-insumo-unidade">Unidade de medida</label>
+              <input type="text" id="novo-insumo-unidade" placeholder="kg, L, un..." value="un">
+            </div>
+          </div>
+          <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+            Cadastra pra rede toda — depois é só distribuir a quantidade recebida entre as lojas em "Registrar entrada".
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-novo-insumo-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Cadastrar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: EDITAR ESTOQUE (correção manual de quantidade/mínimo numa loja) -->
+    <div class="modal-overlay" id="modal-editar-estoque" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Editar estoque</h3>
+          <button type="button" class="btn-close" id="btn-editar-estoque-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" id="editar-estoque-subtitulo" style="margin-bottom: var(--space-3);">—</p>
+        <form id="form-editar-estoque">
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="editar-estoque-quantidade">Quantidade atual</label>
+              <input type="number" step="0.01" min="0" id="editar-estoque-quantidade" required>
+            </div>
+            <div class="form-group">
+              <label for="editar-estoque-minimo">Estoque mínimo</label>
+              <input type="number" step="0.01" min="0" id="editar-estoque-minimo" required>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-editar-estoque-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: REGISTRAR ENTRADA (distribuição entre lojas) -->
+    <div class="modal-overlay" id="modal-entrada-insumo" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Registrar entrada</h3>
+          <button type="button" class="btn-close" id="btn-entrada-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-entrada-insumo">
+          <div class="form-group">
+            <label for="entrada-insumo-select">Insumo</label>
+            <select id="entrada-insumo-select" required></select>
+          </div>
+          <p class="panel-subtitle" style="margin-bottom: var(--space-2);">
+            Quanto chegou pra cada loja (deixe 0 quem não recebeu):
+          </p>
+          <div id="entrada-distribuicao-lojas" class="estoque-entrada-lojas">
+            <!-- Renderizado dinamicamente via JS, uma linha por loja -->
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-entrada-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Registrar entrada</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div> <!-- /dashboard-wrapper -->
 
 </body>

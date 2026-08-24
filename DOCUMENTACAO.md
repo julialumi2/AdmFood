@@ -44,7 +44,7 @@ inicializa o que é relevante pra ela.
 | Arquivo | Tela |
 |---|---|
 | `index.html` | Resumo (Home) — faturamento da rede, gráfico diário, insights automáticos |
-| `estoque.html` | Estoque (integração VMarket — ver seção 9, pendente) |
+| `estoque.html` | Estoque — controle nativo de insumos por loja, sem depender de terceiro (ver seção 6.4) |
 | `cardapio.html` | Cardápio — comparativo de preços por canal de venda (iFood/99Food/BeeFood/Cardápio Web), só leitura, importado de planilha (ver seção 6.1) |
 | `preparo.html` | Preparo — indicadores operacionais da cozinha (tempo médio do pedido, volume por horário, gargalos; ver seção 6.2) |
 | `clickup.html` | Quadro de tarefas (Kanban) |
@@ -165,6 +165,8 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `preco_cardapio` | Comparativo de preços do cardápio, só leitura (ver 6.1) |
 | `pedido_preparo` | Tempo de cada pedido concluído (ver 6.2) |
 | `ajuste_faturamento_canal` | Correção manual de faturamento/pedidos por canal (ver 6.3) |
+| `insumo` | Catálogo único de insumos da rede (ver 6.4) |
+| `estoque_insumo` | Quantidade atual e mínimo de cada insumo, por loja (ver 6.4) |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
@@ -254,6 +256,51 @@ futura (automática ou manual), o valor da API é recalculado normalmente,
 mas o ajuste continua "vencendo" até alguém removê-lo pela tela. A
 diferença entre o valor ajustado e o original também é somada ao total do
 dia (cards de topo, Histórico Diário), não só na tabela de canal.
+
+### 6.4 Estoque (insumos nativos, por loja)
+
+Tela `estoque.html` — antes era só uma maquete estática (dado inventado),
+com a ideia original de integrar com a VMarket. Investigado e descartado:
+a VMarket não tem API de parceiro (só exportação manual de planilha), e
+depois disso o próprio dono do negócio decidiu (2026-08-24) parar de usar
+a VMarket no futuro e manter o controle de estoque só no nosso sistema —
+essa tela é a implementação nativa disso, sem depender de terceiro.
+
+**Catálogo único, quantidade por loja**: `insumo` guarda nome/categoria/
+unidade de medida uma vez só pra rede toda; `estoque_insumo` guarda
+quantidade atual e estoque mínimo **separados por loja** (chave
+`insumo_id + loja`) — cada unidade consome num ritmo diferente, e uma
+compra chega em quantidade única mas é fisicamente dividida entre lojas
+na entrega.
+
+- **Cadastrar insumo** (`POST /api/insumos`, admin) já cria a linha de
+  estoque zerada nas 4 lojas de uma vez (`criar_insumo` em
+  `backend/armazenamento.py`), pra toda loja já aparecer pronta pra
+  receber quantidade sem passo extra.
+- **"Registrar entrada"** (`POST /api/insumos/<id>/entrada`, admin) — soma
+  (não substitui) a quantidade informada pra cada loja escolhida, de uma
+  vez só. Pensado pro caso real: comprou-se um total X de um insumo, mas
+  ele chega dividido entre lojas.
+- **Editar estoque de uma loja** (`PUT /api/insumos/<id>/estoque/<loja>`,
+  admin) — correção direta (contagem manual, ajuste de mínimo),
+  diferente de "entrada": aqui *substitui* o valor, não soma.
+- **Status** (`ok`/`baixo`/`critico`, calculado em `_status_estoque` no
+  `app.py`, não fica salvo): quantidade zerada ou abaixo do mínimo é
+  `critico`; até 30% acima do mínimo é `baixo`; daí pra cima é `ok`. Sem
+  mínimo cadastrado (`0`), não dá pra avaliar — considera `ok` a não ser
+  que a quantidade também esteja zerada.
+- **Excluir insumo** (`DELETE /api/insumos/<id>`, admin) remove de
+  **todas** as lojas de uma vez (apaga o catálogo, não só uma loja).
+
+Tela com abas por loja (mesmo padrão do Insights/Preparo/Cardápio). A aba
+"Visão Geral" **não** mostra uma linha por loja — soma quantidade e
+mínimo das 4 lojas num único valor consolidado por insumo (cálculo em
+`_linhasEstoqueParaTab` no `script.js`, o backend continua guardando por
+loja normalmente). Por isso editar quantidade/mínimo só aparece numa aba
+de loja específica (não faria sentido editar uma soma); excluir o insumo
+aparece em qualquer aba, já que remove de todas as lojas de qualquer
+jeito. Leitura liberada pra todo mundo logado; cadastrar/editar/excluir é
+só admin.
 
 ## 7. API — principais endpoints
 
@@ -376,7 +423,7 @@ chamar a API direto com outro valor.
 Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 2026-08-17 com a Julia):
 
-1. **Estoque / VMarket** — varredura no código pra tela de Estoque funcionar. Aguardando a Julia esclarecer/obter token e documentação da API da VMarket.
+1. **Estoque / VMarket** — ✅ resolvido em 2026-08-24, mas não do jeito planejado originalmente: investigado e confirmado que a VMarket não tem API de parceiro (só exportação manual de planilha). O dono do negócio decidiu parar de usar a VMarket no futuro, então em vez de integrar, foi construído um controle de estoque **nativo** no próprio sistema (catálogo de insumos + quantidade por loja — ver seção 6.4).
 2. **Relatório via WhatsApp** — integração com a API do WhatsApp Business pra enviar relatórios. Aguardando confirmação de acesso/credenciais da API.
 3. **ClickUp** — ✅ concluído em 2026-08-17 (backend real + Kanban persistente, ver seção 7).
 4. **Acessos da equipe** — ✅ concluído em 2026-08-19 (login individual por pessoa, com senha — ver seção 8). Landing page e cadastro público ficam **de propósito** atrás do login por enquanto (decisão da Julia: sistema é só interno, sem necessidade de porta pública ainda).

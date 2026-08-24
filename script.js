@@ -119,6 +119,20 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarPreparo();
   }
 
+  // 4.097 TELA DE ESTOQUE
+  if (document.getElementById('estoque-tabs')) {
+    document.querySelectorAll('#estoque-tabs .tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#estoque-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        estoqueTabAtual = btn.dataset.tab;
+        renderEstoqueTab();
+      });
+    });
+    document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
+    carregarInsumos();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -1066,6 +1080,298 @@ function renderPreparoTab(tab) {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// --- ESTOQUE (insumos nativos, catálogo único + quantidade por loja) ---
+const LOJAS_ESTOQUE = ['Hamburgueria Artesanos', 'Açaí Na Lata', 'Tradiça ZN', 'Tradiça Simus'];
+const STATUS_LABEL_ESTOQUE = { ok: 'OK', baixo: 'Baixo', critico: 'Crítico' };
+const STATUS_CLASSE_BADGE_ESTOQUE = { ok: 'pos', baixo: 'neu-orange', critico: 'neg' };
+const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', critico: 'bar-red' };
+
+let estoqueInsumos = [];
+let estoqueTabAtual = 'geral';
+let estoqueEditandoContexto = null; // { insumoId, loja }
+
+async function carregarInsumos() {
+  try {
+    const resposta = await fetch('/api/insumos');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    estoqueInsumos = dados.insumos || [];
+    renderEstoqueTab();
+  } catch (erro) {
+    console.error('Falha ao carregar insumos:', erro);
+    const tbody = document.getElementById('estoque-tabela-body');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444;">Não foi possível carregar o estoque. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
+  if (quantidadeAtual <= 0) return 'critico';
+  if (estoqueMinimo <= 0) return 'ok';
+  if (quantidadeAtual < estoqueMinimo) return 'critico';
+  if (quantidadeAtual < estoqueMinimo * 1.3) return 'baixo';
+  return 'ok';
+}
+
+// "geral" traz uma linha por insumo, SOMANDO quantidade e mínimo das 4
+// lojas (visão consolidada da rede) — não separa por loja. Uma loja
+// específica traz a linha real daquela loja.
+function _linhasEstoqueParaTab(tab) {
+  if (tab === 'geral') {
+    return estoqueInsumos.map((insumo) => {
+      let quantidadeAtual = 0;
+      let estoqueMinimo = 0;
+      LOJAS_ESTOQUE.forEach((loja) => {
+        const dadosLoja = insumo.porLoja[loja];
+        if (dadosLoja) {
+          quantidadeAtual += dadosLoja.quantidadeAtual;
+          estoqueMinimo += dadosLoja.estoqueMinimo;
+        }
+      });
+      return {
+        insumo,
+        loja: null,
+        dados: { quantidadeAtual, estoqueMinimo, status: _statusEstoqueClient(quantidadeAtual, estoqueMinimo) },
+      };
+    });
+  }
+
+  return estoqueInsumos
+    .filter((insumo) => insumo.porLoja[tab])
+    .map((insumo) => ({ insumo, loja: tab, dados: insumo.porLoja[tab] }));
+}
+
+function renderEstoqueTab() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const tbody = document.getElementById('estoque-tabela-body');
+  if (!tbody) return;
+
+  const thAcoes = document.getElementById('estoque-th-acoes');
+  const subtitulo = document.getElementById('estoque-tabela-subtitulo');
+  const acoesTopo = document.getElementById('estoque-acoes-admin');
+  const ehGeral = estoqueTabAtual === 'geral';
+
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+  if (subtitulo) subtitulo.textContent = ehGeral ? 'Consolidado de todas as unidades' : estoqueTabAtual;
+  if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
+
+  let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
+
+  const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
+  if (termoBusca) {
+    linhas = linhas.filter(l => l.insumo.nome.toLowerCase().includes(termoBusca));
+  }
+
+  const contagem = { ok: 0, baixo: 0, critico: 0 };
+  linhas.forEach(l => { contagem[l.dados.status] = (contagem[l.dados.status] || 0) + 1; });
+  document.getElementById('estoque-val-cadastrados').textContent = linhas.length;
+  document.getElementById('estoque-val-ok').textContent = contagem.ok;
+  document.getElementById('estoque-val-baixo').textContent = contagem.baixo;
+  document.getElementById('estoque-val-critico').textContent = contagem.critico;
+
+  if (!linhas.length) {
+    const colspan = 5 + (isAdmin ? 1 : 0);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum insumo encontrado.</td></tr>`;
+    return;
+  }
+
+  linhas.sort((a, b) => a.insumo.nome.localeCompare(b.insumo.nome));
+
+  tbody.innerHTML = linhas.map(({ insumo, loja, dados }) => {
+    const percentual = dados.estoqueMinimo > 0
+      ? Math.min(100, Math.round((dados.quantidadeAtual / (dados.estoqueMinimo * 1.5)) * 100))
+      : 100;
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(insumo.nome)}</td>
+        <td class="text-muted">${escaparHtml(insumo.categoria)}</td>
+        <td class="font-bold">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
+        <td>
+          <div class="progress-container">
+            <div class="progress-bar ${STATUS_CLASSE_BARRA_ESTOQUE[dados.status]}" style="width: ${percentual}%;"></div>
+          </div>
+          <span class="min-label">mínimo ${dados.estoqueMinimo} ${escaparHtml(insumo.unidadeMedida)}</span>
+        </td>
+        <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}">${STATUS_LABEL_ESTOQUE[dados.status]}</span></td>
+        ${isAdmin ? `
+          <td class="acoes-linha">
+            ${loja ? `
+              <button type="button" class="btn-acao-icone" data-acao="editar-estoque" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" title="Editar estoque">
+                <i data-lucide="pencil"></i>
+              </button>
+            ` : ''}
+            <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)">
+              <i data-lucide="trash-2"></i>
+            </button>
+          </td>
+        ` : ''}
+      </tr>
+    `;
+  }).join('');
+
+  if (isAdmin) wireEstoqueTableEvents();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function wireEstoqueTableEvents() {
+  document.querySelectorAll('[data-acao="editar-estoque"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const insumoId = parseInt(btn.dataset.insumoId, 10);
+      const loja = btn.dataset.loja;
+      const insumo = estoqueInsumos.find(i => i.id === insumoId);
+      const dadosLoja = insumo?.porLoja[loja];
+      if (!insumo || !dadosLoja) return;
+      abrirModalEditarEstoque(insumoId, loja, insumo.nome, dadosLoja);
+    });
+  });
+
+  document.querySelectorAll('[data-acao="excluir-insumo"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const insumoId = parseInt(btn.dataset.insumoId, 10);
+      const nome = btn.dataset.nome;
+      if (!confirm(`Excluir "${nome}" de TODAS as lojas? Essa ação não pode ser desfeita.`)) return;
+      try {
+        const resposta = await fetch(`/api/insumos/${insumoId}`, { method: 'DELETE' });
+        if (!resposta.ok) throw new Error('falha ao excluir');
+        await carregarInsumos();
+      } catch (erro) {
+        console.error('Falha ao excluir insumo:', erro);
+        alert('Não foi possível excluir o insumo.');
+      }
+    });
+  });
+}
+
+// --- Modal: Editar estoque (correção manual de quantidade/mínimo) ---
+function abrirModalEditarEstoque(insumoId, loja, nomeInsumo, dadosLoja) {
+  estoqueEditandoContexto = { insumoId, loja };
+  document.getElementById('editar-estoque-subtitulo').textContent = `${nomeInsumo} — ${loja}`;
+  document.getElementById('editar-estoque-quantidade').value = dadosLoja.quantidadeAtual;
+  document.getElementById('editar-estoque-minimo').value = dadosLoja.estoqueMinimo;
+  document.getElementById('modal-editar-estoque').style.display = 'flex';
+}
+
+function fecharModalEditarEstoque() {
+  document.getElementById('modal-editar-estoque').style.display = 'none';
+  estoqueEditandoContexto = null;
+}
+
+document.getElementById('btn-editar-estoque-fechar')?.addEventListener('click', fecharModalEditarEstoque);
+document.getElementById('btn-editar-estoque-cancelar')?.addEventListener('click', fecharModalEditarEstoque);
+
+document.getElementById('form-editar-estoque')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!estoqueEditandoContexto) return;
+  const { insumoId, loja } = estoqueEditandoContexto;
+  const corpo = {
+    quantidadeAtual: document.getElementById('editar-estoque-quantidade').value,
+    estoqueMinimo: document.getElementById('editar-estoque-minimo').value,
+  };
+  try {
+    const resposta = await fetch(`/api/insumos/${insumoId}/estoque/${encodeURIComponent(loja)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    fecharModalEditarEstoque();
+    await carregarInsumos();
+  } catch (erro) {
+    console.error('Falha ao salvar estoque:', erro);
+    alert(erro.message || 'Não foi possível salvar.');
+  }
+});
+
+// --- Modal: Novo insumo ---
+function abrirModalNovoInsumo() {
+  document.getElementById('form-novo-insumo').reset();
+  document.getElementById('novo-insumo-unidade').value = 'un';
+  document.getElementById('modal-novo-insumo').style.display = 'flex';
+}
+
+function fecharModalNovoInsumo() {
+  document.getElementById('modal-novo-insumo').style.display = 'none';
+}
+
+document.getElementById('btn-novo-insumo')?.addEventListener('click', abrirModalNovoInsumo);
+document.getElementById('btn-novo-insumo-fechar')?.addEventListener('click', fecharModalNovoInsumo);
+document.getElementById('btn-novo-insumo-cancelar')?.addEventListener('click', fecharModalNovoInsumo);
+
+document.getElementById('form-novo-insumo')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const corpo = {
+    nome: document.getElementById('novo-insumo-nome').value,
+    categoria: document.getElementById('novo-insumo-categoria').value,
+    unidadeMedida: document.getElementById('novo-insumo-unidade').value,
+  };
+  try {
+    const resposta = await fetch('/api/insumos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
+    fecharModalNovoInsumo();
+    await carregarInsumos();
+  } catch (erro) {
+    console.error('Falha ao cadastrar insumo:', erro);
+    alert(erro.message || 'Não foi possível cadastrar o insumo.');
+  }
+});
+
+// --- Modal: Registrar entrada (distribuição entre lojas) ---
+function abrirModalEntradaInsumo() {
+  const select = document.getElementById('entrada-insumo-select');
+  select.innerHTML = estoqueInsumos.map(i => `<option value="${i.id}">${escaparHtml(i.nome)}</option>`).join('');
+
+  const container = document.getElementById('entrada-distribuicao-lojas');
+  container.innerHTML = LOJAS_ESTOQUE.map(loja => `
+    <div class="estoque-entrada-linha">
+      <label for="entrada-loja-${escaparHtml(loja)}">${escaparHtml(loja)}</label>
+      <input type="number" step="0.01" min="0" id="entrada-loja-${escaparHtml(loja)}" data-loja="${escaparHtml(loja)}" value="0">
+    </div>
+  `).join('');
+
+  document.getElementById('modal-entrada-insumo').style.display = 'flex';
+}
+
+function fecharModalEntradaInsumo() {
+  document.getElementById('modal-entrada-insumo').style.display = 'none';
+}
+
+document.getElementById('btn-registrar-entrada')?.addEventListener('click', abrirModalEntradaInsumo);
+document.getElementById('btn-entrada-fechar')?.addEventListener('click', fecharModalEntradaInsumo);
+document.getElementById('btn-entrada-cancelar')?.addEventListener('click', fecharModalEntradaInsumo);
+
+document.getElementById('form-entrada-insumo')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const insumoId = document.getElementById('entrada-insumo-select').value;
+  const distribuicao = {};
+  document.querySelectorAll('#entrada-distribuicao-lojas input').forEach(input => {
+    const valor = parseFloat(input.value);
+    if (valor > 0) distribuicao[input.dataset.loja] = valor;
+  });
+  if (!Object.keys(distribuicao).length) {
+    alert('Informe a quantidade recebida em pelo menos uma loja.');
+    return;
+  }
+  try {
+    const resposta = await fetch(`/api/insumos/${insumoId}/entrada`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ distribuicao }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao registrar entrada');
+    fecharModalEntradaInsumo();
+    await carregarInsumos();
+  } catch (erro) {
+    console.error('Falha ao registrar entrada:', erro);
+    alert(erro.message || 'Não foi possível registrar a entrada.');
+  }
+});
+
 // --- VENDAS PRESENCIAIS (CRUD manual, fora da Cardápio Web) ---
 // Quando não-nulo, o formulário está editando esse dia (em vez de criar um
 // lançamento novo) — usado pra saber se precisa apagar o registro antigo
@@ -1854,6 +2160,12 @@ async function carregarUsuarioLogado() {
     // de saber que é admin, re-renderiza agora com os controles de edição.
     if (usuario.papel === 'admin' && canalSelecionado) {
       exibirCanalDoDia(canalSelecionado.unidade, canalSelecionado.diaIso);
+    }
+
+    // Tela de Estoque: botões "Novo insumo"/"Registrar entrada" e coluna de
+    // Ações (só admin) — mesma correção de corrida entre os dois fetches.
+    if (usuario.papel === 'admin' && document.getElementById('estoque-tabs') && estoqueInsumos.length) {
+      renderEstoqueTab();
     }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);

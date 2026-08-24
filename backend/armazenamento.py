@@ -180,6 +180,29 @@ def inicializar_banco():
             "CREATE INDEX IF NOT EXISTS idx_pedido_preparo_dia ON pedido_preparo(dia)"
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS insumo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                categoria TEXT NOT NULL DEFAULT 'Geral',
+                unidade_medida TEXT NOT NULL DEFAULT 'un'
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS estoque_insumo (
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                quantidade_atual REAL NOT NULL DEFAULT 0,
+                estoque_minimo REAL NOT NULL DEFAULT 0,
+                atualizado_em TEXT NOT NULL,
+                PRIMARY KEY (insumo_id, loja)
+            )
+            """
+        )
+
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
     ticket_medio = (
@@ -672,3 +695,91 @@ def dias_sem_pedidos_preparo():
             """
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def criar_insumo(nome, categoria, unidade_medida, lojas):
+    """Cadastra o insumo uma vez só (catálogo único da rede) e já cria a
+    linha de estoque (zerada) em cada loja informada — assim toda loja
+    aparece pra distribuir/editar quantidade desde o cadastro, sem precisar
+    de um passo extra."""
+    with conexao() as conn:
+        cursor = conn.execute(
+            "INSERT INTO insumo (nome, categoria, unidade_medida) VALUES (?, ?, ?)",
+            (nome, categoria, unidade_medida),
+        )
+        insumo_id = cursor.lastrowid
+        agora = datetime.now().isoformat()
+        for loja in lojas:
+            conn.execute(
+                """
+                INSERT INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em)
+                VALUES (?, ?, 0, 0, ?)
+                """,
+                (insumo_id, loja, agora),
+            )
+        return insumo_id
+
+
+def listar_insumos():
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida,
+                   e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em
+            FROM insumo i
+            JOIN estoque_insumo e ON e.insumo_id = i.id
+            ORDER BY i.categoria, i.nome, e.loja
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def atualizar_insumo(insumo_id, campos):
+    if not campos:
+        return
+    colunas = ", ".join(f"{campo} = ?" for campo in campos)
+    valores = list(campos.values()) + [insumo_id]
+    with conexao() as conn:
+        conn.execute(f"UPDATE insumo SET {colunas} WHERE id = ?", valores)
+
+
+def excluir_insumo(insumo_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM estoque_insumo WHERE insumo_id = ?", (insumo_id,))
+        conn.execute("DELETE FROM insumo WHERE id = ?", (insumo_id,))
+
+
+def atualizar_estoque_loja(insumo_id, loja, campos):
+    """Edição direta (correção manual/contagem) da quantidade e/ou do
+    mínimo de UM insumo em UMA loja — diferente de distribuir_entrada_insumo,
+    que soma uma entrada nova em vez de sobrescrever."""
+    if not campos:
+        return
+    campos = dict(campos)
+    campos["atualizado_em"] = datetime.now().isoformat()
+    colunas = ", ".join(f"{campo} = ?" for campo in campos)
+    valores = list(campos.values()) + [insumo_id, loja]
+    with conexao() as conn:
+        conn.execute(
+            f"UPDATE estoque_insumo SET {colunas} WHERE insumo_id = ? AND loja = ?",
+            valores,
+        )
+
+
+def distribuir_entrada_insumo(insumo_id, distribuicao):
+    """distribuicao: {loja: quantidade_recebida}. Soma ao estoque atual de
+    cada loja informada — usado quando uma compra única (ex: 100
+    refrigerantes) chega e é dividida entre lojas."""
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        for loja, quantidade in distribuicao.items():
+            if not quantidade:
+                continue
+            conn.execute(
+                """
+                UPDATE estoque_insumo
+                SET quantidade_atual = quantidade_atual + ?, atualizado_em = ?
+                WHERE insumo_id = ? AND loja = ?
+                """,
+                (quantidade, agora, insumo_id, loja),
+            )

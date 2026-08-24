@@ -39,6 +39,12 @@ from backend.armazenamento import (
     buscar_preco_cardapio_por_id,
     atualizar_preco_cardapio,
     PASTA_FOTOS_CARDAPIO,
+    criar_insumo,
+    listar_insumos,
+    atualizar_insumo,
+    excluir_insumo,
+    atualizar_estoque_loja,
+    distribuir_entrada_insumo,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -854,6 +860,148 @@ def arquivo_foto_cardapio(nome_arquivo):
     if extensao.lower() not in EXTENSOES_FOTO_CARDAPIO:
         abort(404)
     return send_from_directory(PASTA_FOTOS_CARDAPIO, nome_arquivo)
+
+
+# --- ESTOQUE (insumos nativos, por loja) ------------------------------------
+# Catálogo único de insumo pra rede toda (nome/categoria/unidade), com
+# quantidade atual e mínimo separados por loja — cada unidade consome num
+# ritmo diferente. Ver seção 6.4 da documentação.
+
+def _status_estoque(quantidade_atual, estoque_minimo):
+    if quantidade_atual <= 0:
+        return 'critico'
+    if estoque_minimo <= 0:
+        return 'ok'
+    if quantidade_atual < estoque_minimo:
+        return 'critico'
+    if quantidade_atual < estoque_minimo * 1.3:
+        return 'baixo'
+    return 'ok'
+
+
+def _formatar_insumos(linhas):
+    por_insumo = {}
+    for linha in linhas:
+        insumo = por_insumo.setdefault(linha['insumo_id'], {
+            "id": linha['insumo_id'],
+            "nome": linha['nome'],
+            "categoria": linha['categoria'],
+            "unidadeMedida": linha['unidade_medida'],
+            "porLoja": {},
+        })
+        insumo["porLoja"][linha['loja']] = {
+            "quantidadeAtual": linha['quantidade_atual'],
+            "estoqueMinimo": linha['estoque_minimo'],
+            "status": _status_estoque(linha['quantidade_atual'], linha['estoque_minimo']),
+            "atualizadoEm": linha['atualizado_em'],
+        }
+    return list(por_insumo.values())
+
+
+@app.route('/api/insumos', methods=['GET'])
+def api_listar_insumos():
+    return jsonify({"insumos": _formatar_insumos(listar_insumos())})
+
+
+@app.route('/api/insumos', methods=['POST'])
+def api_criar_insumo():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    categoria = (dados.get('categoria') or 'Geral').strip() or 'Geral'
+    unidade_medida = (dados.get('unidadeMedida') or 'un').strip() or 'un'
+    if not nome:
+        return jsonify({"erro": "Informe o nome do insumo."}), 400
+
+    insumo_id = criar_insumo(nome, categoria, unidade_medida, list(LOJAS.keys()))
+    return jsonify({"id": insumo_id})
+
+
+@app.route('/api/insumos/<int:insumo_id>', methods=['PUT'])
+def api_atualizar_insumo(insumo_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    campos = {}
+    if 'nome' in dados:
+        nome = (dados['nome'] or '').strip()
+        if not nome:
+            return jsonify({"erro": "Nome não pode ficar vazio."}), 400
+        campos['nome'] = nome
+    if 'categoria' in dados:
+        campos['categoria'] = (dados['categoria'] or 'Geral').strip() or 'Geral'
+    if 'unidadeMedida' in dados:
+        campos['unidade_medida'] = (dados['unidadeMedida'] or 'un').strip() or 'un'
+
+    atualizar_insumo(insumo_id, campos)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/<int:insumo_id>', methods=['DELETE'])
+def api_excluir_insumo(insumo_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    excluir_insumo(insumo_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/<int:insumo_id>/estoque/<loja>', methods=['PUT'])
+def api_atualizar_estoque_loja(insumo_id, loja):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    campos = {}
+    try:
+        if 'quantidadeAtual' in dados:
+            campos['quantidade_atual'] = float(dados['quantidadeAtual'])
+        if 'estoqueMinimo' in dados:
+            campos['estoque_minimo'] = float(dados['estoqueMinimo'])
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Valores inválidos."}), 400
+    if any(v < 0 for v in campos.values()):
+        return jsonify({"erro": "Valores não podem ser negativos."}), 400
+
+    atualizar_estoque_loja(insumo_id, loja, campos)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/<int:insumo_id>/entrada', methods=['POST'])
+def api_entrada_insumo(insumo_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    distribuicao_bruta = dados.get('distribuicao') or {}
+    distribuicao = {}
+    for loja, quantidade in distribuicao_bruta.items():
+        if loja not in LOJAS:
+            return jsonify({"erro": f"Loja inválida: {loja}"}), 400
+        try:
+            valor = float(quantidade)
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Quantidade inválida."}), 400
+        if valor < 0:
+            return jsonify({"erro": "Quantidade não pode ser negativa."}), 400
+        if valor > 0:
+            distribuicao[loja] = valor
+
+    if not distribuicao:
+        return jsonify({"erro": "Informe ao menos uma loja com quantidade recebida."}), 400
+
+    distribuir_entrada_insumo(insumo_id, distribuicao)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/faturamento-ontem', methods=['GET'])

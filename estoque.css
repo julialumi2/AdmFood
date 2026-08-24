@@ -6,3 +6,75 @@
   border-collapse: collapse;
   text-align: left;
 }
+
+.estoque-acoes-topo {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.estoque-entrada-lojas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.estoque-entrada-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.estoque-entrada-linha label {
+  font-size: 0.875rem;
+  color: var(--text-dark);
+}
+
+.estoque-entrada-linha input {
+  width: 110px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: 8px var(--space-3);
+  font-size: 0.875rem;
+  color: var(--text-dark);
+  text-align: right;
+  outline: none;
+}
+
+.estoque-entrada-linha input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.estoque-input-inline {
+  width: 90px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  color: var(--text-dark);
+  text-align: right;
+  outline: none;
+  font-family: inherit;
+}
+
+.estoque-input-inline:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+@media (max-width: 768px) {
+  .estoque-acoes-topo {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  /* Só os 4 cards de resumo do Estoque — 2x2 em vez da coluna única padrão
+     do .cards-grid, porque aqui são 4 cards curtos que cabem bem em par. */
+  .cards-grid-2x2-mobile {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -1123,6 +1123,8 @@ tr:hover { background-color: var(--surface-muted); }
 
 .progress-bar { height: 100%; border-radius: var(--radius-pill); transition: width 0.3s ease; }
 .bar-red { background-color: var(--danger); }
+.bar-orange { background-color: var(--warning); }
+.bar-green { background-color: var(--success); }
 .min-label { font-size: 0.7rem; color: var(--text-muted); display: block; }
 
 /* ---------------------------------------------------------------------
