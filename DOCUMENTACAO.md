@@ -106,8 +106,19 @@ desse cache, nunca chama a Cardápio Web ao vivo numa requisição de página.
 
 **Em produção**, dois jobs do APScheduler rodam dentro do processo do Flask
 (`app.py`, gatilhados só se `SINCRONIZACAO_AUTOMATICA=true`):
-- Diário às 3h — fecha o dia anterior com calma
+- Diário às 3h — reconfere os **últimos 3 dias** (não só ontem), com calma
 - A cada 15 min — resincroniza o dia de hoje, pra tela ir se atualizando quase em tempo real
+
+A reconferência dos últimos 3 dias existe porque um pedido que ainda
+estava "em andamento" (não `closed`/`delivered`) no momento de uma
+sincronização anterior fica de fora daquela vez — comum em dias de mais
+movimento, tipo sábado, onde vários pedidos só fecham depois da meia-noite.
+Sem reconferir, esse pedido nunca mais seria contado. Isso também cobre uma
+sincronização que falhou por completo (rede, deploy no meio da madrugada
+etc.), que senão deixaria aquele dia incompleto pra sempre. Achado e
+corrigido em 2026-08-24, depois de detectar (comparando com o painel da
+própria Cardápio Web) que os 4 lojas tinham pedidos de sábado faltando —
+em alguns casos, quase metade dos pedidos do dia.
 
 Como o Gunicorn roda múltiplos workers (processos separados) e cada um
 executaria esse código de novo, há uma trava em `/tmp/admfood_scheduler.lock`
@@ -116,6 +127,10 @@ executaria esse código de novo, há uma trava em `/tmp/admfood_scheduler.lock`
 Botão "Sincronizar agora" (tela de Configurações) dispara
 `POST /api/sincronizar-agora` — roda em thread separada e responde na hora,
 pra não estourar o timeout do proxy de produção enquanto sincroniza as 4 lojas.
+Sem `?dia=`, sincroniza só ontem (o botão da tela não expõe essa opção); com
+`?dia=AAAA-MM-DD` sincroniza um dia específico — útil pra corrigir um dia
+manualmente sem esperar a reconferência automática (dá pra chamar direto do
+console do navegador: `fetch('/api/sincronizar-agora?dia=2026-08-22', {method:'POST'})`).
 
 **Segundas-feiras são dia de loja fechada** (`DIA_FECHADO = 0` em
 `sincronizar.py`) — a sincronização pula sem chamar a API.

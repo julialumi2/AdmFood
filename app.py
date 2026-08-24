@@ -192,7 +192,9 @@ def _sou_o_unico_worker_a_agendar():
 # aplicação precisa disparar a sincronização.
 #
 # Dois jobs, propósitos diferentes:
-# - Diário às 3h: fecha o dia anterior com calma, depois que ele já acabou.
+# - Diário às 3h: reconfere os últimos 3 dias (não só ontem) com calma —
+#   pedido que fechou tarde demais pra entrar numa sincronização anterior
+#   é pego na próxima. Ver DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA abaixo.
 # - A cada 15 min: sincroniza HOJE (o dia em andamento), pra quem estiver
 #   olhando o sistema durante o dia ver os números indo perto do tempo real,
 #   em vez de só descobrir o resultado do dia no dia seguinte.
@@ -202,8 +204,17 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
     if (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true") and _sou_o_unico_worker_a_agendar():
         from apscheduler.schedulers.background import BackgroundScheduler
 
+        # Reconfere os últimos 3 dias (não só ontem) — pedido que ainda estava
+        # "em andamento" na hora de uma sincronização anterior (comum em dias
+        # de mais movimento) fica de fora daquela vez, mas é pego na
+        # reconferência do dia seguinte. Também cobre uma sincronização que
+        # falhou por completo (rede, deploy no meio da madrugada, etc.), que
+        # senão deixaria aquele dia incompleto pra sempre.
+        DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA = 3
+
         def _rodar_sincronizacao_diaria():
-            sincronizar_dia(date.today() - timedelta(days=1))
+            for dias_atras in range(1, DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA + 1):
+                sincronizar_dia(date.today() - timedelta(days=dias_atras))
 
         def _rodar_sincronizacao_hoje():
             sincronizar_dia(date.today())
