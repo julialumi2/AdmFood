@@ -255,6 +255,7 @@
                       <th>Ticket médio</th>
                       <th>Pedidos</th>
                       <th>%</th>
+                      <th id="canal-th-acoes" style="display:none;">Ações</th>
                     </tr>
                   </thead>
                   <tbody id="canal-table-body">
@@ -376,6 +377,33 @@
           <button type="button" class="btn-secondary-sm" id="btn-whatsapp-abrir">Abrir WhatsApp</button>
           <button type="button" class="btn-primary-sm" id="btn-whatsapp-copiar">Copiar mensagem</button>
         </div>
+      </div>
+    </div>
+
+    <!-- MODAL: AJUSTE MANUAL DE UM CANAL (quando o painel da Cardápio Web diverge da API) -->
+    <div class="modal-overlay" id="modal-ajuste-canal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Ajustar valor do canal</h3>
+          <button type="button" class="btn-close" id="btn-ajuste-canal-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" id="ajuste-canal-subtitulo" style="margin-bottom: var(--space-3);">—</p>
+        <form id="form-ajuste-canal">
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="ajuste-canal-faturamento">Faturamento (R$)</label>
+              <input type="number" step="0.01" min="0" id="ajuste-canal-faturamento" required>
+            </div>
+            <div class="form-group">
+              <label for="ajuste-canal-pedidos">Pedidos</label>
+              <input type="number" step="1" min="0" id="ajuste-canal-pedidos" required>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-ajuste-canal-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm" id="btn-ajuste-canal-salvar">Salvar ajuste</button>
+          </div>
+        </form>
       </div>
     </div>
 

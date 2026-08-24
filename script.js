@@ -422,7 +422,7 @@ async function exibirCanalDoDia(unidade, diaIso) {
     if (btnVoltar) btnVoltar.style.display = '';
 
     destacarLinhaHistoricoSelecionada(diaIso + '|' + unidade);
-    renderCanalAnalysis(dados.canais || [], unidade);
+    renderCanalAnalysis(dados.canais || [], unidade, dados.editavel ? { unidade, diaIso } : null);
 
     const diarioAtual = (dashboardData[currentTab] || {}).diario || [];
     const linhaDoDia = diarioAtual.find(item => item.diaIso === diaIso && item.unidade === unidade);
@@ -485,17 +485,21 @@ function mesclarCanaisPorNomeExibicao(canais, unidadeParaLabels, resolverNome) {
 
   canais.forEach(c => {
     const nome = resolver(c.canal);
-    const pedidosNumero = parseInt(String(c.pedidos).replace(/\./g, ''), 10) || 0;
-    const atual = grupos.get(nome) || { canal: nome, faturamentoNumero: 0, pedidosNumero: 0 };
+    const pedidosNumero = c.pedidosNumero ?? (parseInt(String(c.pedidos).replace(/\./g, ''), 10) || 0);
+    const atual = grupos.get(nome) || { canal: nome, canalBruto: c.canal, faturamentoNumero: 0, pedidosNumero: 0, ajustado: false };
     atual.faturamentoNumero += c.faturamentoNumero;
     atual.pedidosNumero += pedidosNumero;
+    atual.ajustado = atual.ajustado || !!c.ajustado;
     grupos.set(nome, atual);
   });
 
   const mesclados = Array.from(grupos.values()).map(g => ({
     canal: g.canal,
+    canalBruto: g.canalBruto,
+    ajustado: g.ajustado,
     faturamentoNumero: g.faturamentoNumero,
     faturamento: _formatarMoedaBR(g.faturamentoNumero),
+    pedidosNumero: g.pedidosNumero,
     pedidos: _formatarNumeroBR(g.pedidosNumero),
     ticket: _formatarMoedaBR(g.pedidosNumero ? g.faturamentoNumero / g.pedidosNumero : 0),
     percentual: Math.round((g.faturamentoNumero / totalFaturamento) * 1000) / 10,
@@ -505,11 +509,17 @@ function mesclarCanaisPorNomeExibicao(canais, unidadeParaLabels, resolverNome) {
   return mesclados;
 }
 
-// Gráfico de rosca + tabela de canais, no mesmo formato do painel da Cardápio Web
-function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
+// Gráfico de rosca + tabela de canais, no mesmo formato do painel da Cardápio Web.
+// contextoEdicao = { unidade, diaIso } quando é a visão de UM dia específico
+// (só aí faz sentido editar um canal) — null na visão de período agregado.
+function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
   const canalTableBody = document.getElementById('canal-table-body');
   const canvas = document.getElementById('canalChart');
+  const thAcoes = document.getElementById('canal-th-acoes');
   if (!canalTableBody || !canvas) return;
+
+  const podeEditar = !!(contextoEdicao && window.usuarioLogado?.papel === 'admin');
+  if (thAcoes) thAcoes.style.display = podeEditar ? '' : 'none';
 
   if (canalChartInstance) {
     canalChartInstance.destroy();
@@ -517,7 +527,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
   }
 
   if (!canaisBrutos.length) {
-    canalTableBody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhum dado de canal nesse período.</td></tr>`;
+    canalTableBody.innerHTML = `<tr><td colspan="${podeEditar ? 6 : 5}" class="panel-subtitle">Nenhum dado de canal nesse período.</td></tr>`;
     return;
   }
 
@@ -529,14 +539,48 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
         <span class="canal-nome">
           <span class="canal-dot" style="background-color: ${CORES_CANAL[i % CORES_CANAL.length]};"></span>
           ${c.canal}
+          ${c.ajustado ? '<span class="badge-canal-ajustado" title="Valor ajustado manualmente">ajustado</span>' : ''}
         </span>
       </td>
       <td class="font-bold">R$ ${c.faturamento}</td>
       <td>R$ ${c.ticket}</td>
       <td>${c.pedidos}</td>
       <td>${c.percentual}%</td>
+      ${podeEditar ? `
+        <td class="acoes-linha">
+          <button type="button" class="btn-acao-icone" data-acao="editar-ajuste-canal"
+            data-canal-bruto="${c.canalBruto}" data-canal-label="${escaparHtml(c.canal)}"
+            data-faturamento="${c.faturamentoNumero}" data-pedidos="${c.pedidosNumero}"
+            title="Ajustar valores">
+            <i data-lucide="pencil"></i>
+          </button>
+          ${c.ajustado ? `
+            <button type="button" class="btn-acao-icone btn-excluir" data-acao="remover-ajuste-canal"
+              data-canal-bruto="${c.canalBruto}" data-canal-label="${escaparHtml(c.canal)}"
+              title="Remover ajuste (voltar ao valor sincronizado)">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+          ` : ''}
+        </td>
+      ` : ''}
     </tr>
   `).join('');
+
+  if (podeEditar) {
+    canalTableBody.querySelectorAll('[data-acao="editar-ajuste-canal"]').forEach(btn => {
+      btn.addEventListener('click', () => abrirModalAjusteCanal(
+        contextoEdicao.unidade, contextoEdicao.diaIso,
+        btn.dataset.canalBruto, btn.dataset.canalLabel,
+        parseFloat(btn.dataset.faturamento), parseInt(btn.dataset.pedidos, 10)
+      ));
+    });
+    canalTableBody.querySelectorAll('[data-acao="remover-ajuste-canal"]').forEach(btn => {
+      btn.addEventListener('click', () => removerAjusteCanal(
+        contextoEdicao.unidade, contextoEdicao.diaIso, btn.dataset.canalBruto, btn.dataset.canalLabel
+      ));
+    });
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 
   if (typeof Chart !== 'undefined') {
     canalChartInstance = new Chart(canvas.getContext('2d'), {
@@ -563,6 +607,92 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels) {
         },
       },
     });
+  }
+}
+
+// --- AJUSTE MANUAL DE CANAL (quando o painel da Cardápio Web diverge da API) ---
+let ajusteCanalContexto = null;
+
+function abrirModalAjusteCanal(unidade, diaIso, canalBruto, canalLabel, faturamentoAtual, pedidosAtual) {
+  ajusteCanalContexto = { unidade, diaIso, canalBruto, canalLabel };
+  document.getElementById('ajuste-canal-subtitulo').textContent =
+    `${unidade} — ${canalLabel} — ${diaIso.split('-').reverse().join('/')}`;
+  document.getElementById('ajuste-canal-faturamento').value = faturamentoAtual.toFixed(2);
+  document.getElementById('ajuste-canal-pedidos').value = pedidosAtual;
+  document.getElementById('modal-ajuste-canal').style.display = 'flex';
+}
+
+function fecharModalAjusteCanal() {
+  document.getElementById('modal-ajuste-canal').style.display = 'none';
+  ajusteCanalContexto = null;
+}
+
+document.getElementById('btn-ajuste-canal-fechar')?.addEventListener('click', fecharModalAjusteCanal);
+document.getElementById('btn-ajuste-canal-cancelar')?.addEventListener('click', fecharModalAjusteCanal);
+
+// Recarrega tudo depois de salvar/remover um ajuste: primeiro o período
+// inteiro (carregarInsights), pra "Histórico Diário" e os totais agregados
+// também refletirem o ajuste — senão só a tabela de canais do dia mudaria,
+// e os cards de topo (que vêm do "diario" já carregado antes) ficariam
+// mostrando o valor antigo. Depois, reabre a visão do dia específico.
+async function _recarregarAposAjusteCanal() {
+  if (!canalSelecionado) return;
+  // Guarda antes de chamar carregarInsights: ele reseta canalSelecionado
+  // pra null ao voltar pra visão padrão do período (exibirCanalPadrao).
+  const { unidade, diaIso } = canalSelecionado;
+  const { inicio, fim, diaSemana } = periodoInsightsSelecionado();
+  await carregarInsights(inicio, fim, diaSemana);
+  await exibirCanalDoDia(unidade, diaIso);
+}
+
+document.getElementById('form-ajuste-canal')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!ajusteCanalContexto) return;
+
+  const botaoSalvar = document.getElementById('btn-ajuste-canal-salvar');
+  const corpo = {
+    unidade: ajusteCanalContexto.unidade,
+    dia: ajusteCanalContexto.diaIso,
+    canal: ajusteCanalContexto.canalBruto,
+    faturamento: document.getElementById('ajuste-canal-faturamento').value,
+    quantidadePedidos: document.getElementById('ajuste-canal-pedidos').value,
+  };
+
+  botaoSalvar.disabled = true;
+  botaoSalvar.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch('/api/ajuste-canal', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar ajuste');
+
+    fecharModalAjusteCanal();
+    await _recarregarAposAjusteCanal();
+  } catch (erro) {
+    console.error('Falha ao salvar ajuste de canal:', erro);
+    alert(erro.message || 'Não foi possível salvar o ajuste.');
+  } finally {
+    botaoSalvar.disabled = false;
+    botaoSalvar.textContent = 'Salvar ajuste';
+  }
+});
+
+async function removerAjusteCanal(unidade, diaIso, canalBruto, canalLabel) {
+  if (!confirm(`Remover o ajuste manual de "${canalLabel}"? Volta a mostrar o valor sincronizado automaticamente.`)) return;
+  try {
+    const resposta = await fetch(
+      `/api/ajuste-canal?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}&canal=${encodeURIComponent(canalBruto)}`,
+      { method: 'DELETE' }
+    );
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao remover ajuste');
+    await _recarregarAposAjusteCanal();
+  } catch (erro) {
+    console.error('Falha ao remover ajuste de canal:', erro);
+    alert(erro.message || 'Não foi possível remover o ajuste.');
   }
 }
 
@@ -1579,6 +1709,13 @@ async function carregarUsuarioLogado() {
       importarArea.style.display = '';
       if (typeof lucide !== 'undefined') lucide.createIcons();
       if (cardapioLojaSelecionada) renderCardapioLoja(cardapioLojaSelecionada);
+    }
+
+    // Tela de Insights: botão de ajustar canal (só admin) — se a tabela de
+    // canal de um dia específico já tiver renderizado como só-leitura antes
+    // de saber que é admin, re-renderiza agora com os controles de edição.
+    if (usuario.papel === 'admin' && canalSelecionado) {
+      exibirCanalDoDia(canalSelecionado.unidade, canalSelecionado.diaIso);
     }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);

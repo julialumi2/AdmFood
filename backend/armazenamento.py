@@ -74,6 +74,20 @@ def inicializar_banco():
 
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS ajuste_faturamento_canal (
+                unidade TEXT NOT NULL,
+                dia TEXT NOT NULL,
+                canal TEXT NOT NULL,
+                faturamento REAL NOT NULL,
+                quantidade_pedidos INTEGER NOT NULL,
+                criado_em TEXT NOT NULL,
+                PRIMARY KEY (unidade, dia, canal)
+            )
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS tarefa (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 titulo TEXT NOT NULL,
@@ -257,6 +271,50 @@ def buscar_canais_periodo(inicio_iso, fim_iso):
             """
             SELECT unidade, dia, canal, quantidade_pedidos, faturamento
             FROM faturamento_canal
+            WHERE dia >= ? AND dia <= ?
+            """,
+            (inicio_iso, fim_iso),
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def salvar_ajuste_canal(unidade, dia_iso, canal, faturamento, quantidade_pedidos):
+    """Corrige manualmente o faturamento/pedidos de UM canal, em UM dia, de
+    UMA loja — usado quando o painel da própria Cardápio Web diverge do que
+    a API retorna (já investigado e confirmado que não dá pra confiar
+    automaticamente num dos dois). Esse ajuste "vence" o valor sincronizado
+    até ser removido (ver excluir_ajuste_canal) — uma sincronização futura
+    não apaga nem sobrescreve essa linha, ela mora numa tabela separada."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO ajuste_faturamento_canal
+                (unidade, dia, canal, faturamento, quantidade_pedidos, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(unidade, dia, canal) DO UPDATE SET
+                faturamento = excluded.faturamento,
+                quantidade_pedidos = excluded.quantidade_pedidos,
+                criado_em = excluded.criado_em
+            """,
+            (unidade, dia_iso, canal, faturamento, quantidade_pedidos, datetime.now().isoformat()),
+        )
+
+
+def excluir_ajuste_canal(unidade, dia_iso, canal):
+    """Remove o ajuste manual — volta a mostrar o valor sincronizado normal."""
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM ajuste_faturamento_canal WHERE unidade = ? AND dia = ? AND canal = ?",
+            (unidade, dia_iso, canal),
+        )
+
+
+def buscar_ajustes_canal_periodo(inicio_iso, fim_iso):
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT unidade, dia, canal, faturamento, quantidade_pedidos
+            FROM ajuste_faturamento_canal
             WHERE dia >= ? AND dia <= ?
             """,
             (inicio_iso, fim_iso),

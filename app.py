@@ -16,6 +16,9 @@ from backend.armazenamento import (
     buscar_presencial_por_unidade,
     buscar_ultima_sincronizacao,
     salvar_resumo_do_dia,
+    salvar_ajuste_canal,
+    excluir_ajuste_canal,
+    buscar_ajustes_canal_periodo,
     listar_tarefas,
     criar_tarefa,
     atualizar_tarefa,
@@ -255,6 +258,58 @@ def _aplicar_presencial(linhas, linhas_presencial):
     return list(por_chave.values())
 
 
+def _aplicar_ajustes_canal(linhas_canais, linhas_periodo, ajustes):
+    """Sobrescreve o valor de um canal, num dia/loja específico, com o ajuste
+    manual (ver salvar_ajuste_canal) — usado quando o painel da própria
+    Cardápio Web diverge do que a API retorna. A diferença entre o valor
+    ajustado e o original também é propagada pro total do dia
+    (linhas_periodo), pra tudo continuar consistente: cards, gráfico,
+    tabela por canal e Histórico Diário."""
+    if not ajustes:
+        return linhas_canais, linhas_periodo
+
+    linhas_canais_por_chave = {(l["unidade"], l["dia"], l["canal"]): l for l in linhas_canais}
+    deltas_por_dia = {}
+
+    for ajuste in ajustes:
+        chave = (ajuste["unidade"], ajuste["dia"], ajuste["canal"])
+        original = linhas_canais_por_chave.get(chave)
+        faturamento_original = original["faturamento"] if original else 0.0
+        pedidos_original = original["quantidade_pedidos"] if original else 0
+
+        chave_dia = (ajuste["unidade"], ajuste["dia"])
+        delta_fat, delta_ped = deltas_por_dia.setdefault(chave_dia, [0.0, 0])
+        deltas_por_dia[chave_dia][0] = delta_fat + (ajuste["faturamento"] - faturamento_original)
+        deltas_por_dia[chave_dia][1] = delta_ped + (ajuste["quantidade_pedidos"] - pedidos_original)
+
+        if original:
+            original["faturamento"] = ajuste["faturamento"]
+            original["quantidade_pedidos"] = ajuste["quantidade_pedidos"]
+        else:
+            nova_linha = {
+                "unidade": ajuste["unidade"],
+                "dia": ajuste["dia"],
+                "canal": ajuste["canal"],
+                "faturamento": ajuste["faturamento"],
+                "quantidade_pedidos": ajuste["quantidade_pedidos"],
+            }
+            linhas_canais.append(nova_linha)
+            linhas_canais_por_chave[chave] = nova_linha
+
+    for linha in linhas_periodo:
+        chave_dia = (linha["unidade"], linha["dia"])
+        if chave_dia in deltas_por_dia:
+            delta_fat, delta_ped = deltas_por_dia[chave_dia]
+            linha["faturamento_dia"] += delta_fat
+            linha["quantidade_pedidos"] += delta_ped
+            linha["ticket_medio"] = (
+                linha["faturamento_dia"] / linha["quantidade_pedidos"]
+                if linha["quantidade_pedidos"] else 0.0
+            )
+
+    return linhas_canais, linhas_periodo
+
+
 def _formatar_moeda(valor):
     texto = f"{valor:,.2f}"
     return texto.replace(",", "@").replace(".", ",").replace("@", ".")
@@ -332,15 +387,18 @@ def _linhas_canais_com_presencial(inicio_iso, fim_iso=None):
     return linhas_canais
 
 
-def _formatar_canais(canais):
+def _formatar_canais(canais, canais_ajustados=None):
+    canais_ajustados = canais_ajustados or set()
     return [
         {
             "canal": c["canal"],
             "faturamento": _formatar_moeda(c["faturamento"]),
             "faturamentoNumero": round(c["faturamento"], 2),
             "pedidos": _formatar_numero(c["pedidos"]),
+            "pedidosNumero": c["pedidos"],
             "ticket": _formatar_moeda(c["ticket_medio"]),
             "percentual": round(c["percentual"], 1),
+            "ajustado": c["canal"] in canais_ajustados,
         }
         for c in canais
     ]
@@ -1005,13 +1063,65 @@ def api_canal_analise():
         return jsonify({"erro": "Data inválida."}), 400
 
     linhas_canais = _linhas_canais_com_presencial(dia)
+    ajustes = buscar_ajustes_canal_periodo(dia, dia)
+    canais_ajustados = {a["canal"] for a in ajustes if unidade != 'geral' and a["unidade"] == unidade}
+    linhas_canais, _ = _aplicar_ajustes_canal(linhas_canais, [], ajustes)
+
     unidade_filtro = None if unidade == 'geral' else unidade
     canais = _agregar_canais(linhas_canais, unidade_filtro)
 
     return jsonify({
         "dataLabel": _formatar_data_br(dia),
-        "canais": _formatar_canais(canais),
+        "canais": _formatar_canais(canais, canais_ajustados),
+        "editavel": unidade != 'geral',
     })
+
+
+@app.route('/api/ajuste-canal', methods=['PUT'])
+def api_salvar_ajuste_canal():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    unidade = dados.get('unidade')
+    dia = dados.get('dia')
+    canal = dados.get('canal')
+
+    if unidade not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        date.fromisoformat(dia)
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Data inválida."}), 400
+    if not canal:
+        return jsonify({"erro": "Informe o canal."}), 400
+    try:
+        faturamento = float(dados.get('faturamento'))
+        quantidade_pedidos = int(dados.get('quantidadePedidos'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Faturamento/quantidade de pedidos inválidos."}), 400
+    if faturamento < 0 or quantidade_pedidos < 0:
+        return jsonify({"erro": "Valores não podem ser negativos."}), 400
+
+    salvar_ajuste_canal(unidade, dia, canal, faturamento, quantidade_pedidos)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/ajuste-canal', methods=['DELETE'])
+def api_excluir_ajuste_canal():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    unidade = request.args.get('unidade')
+    dia = request.args.get('dia')
+    canal = request.args.get('canal')
+    if not unidade or not dia or not canal:
+        return jsonify({"erro": "Informe loja, dia e canal."}), 400
+
+    excluir_ajuste_canal(unidade, dia, canal)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/faturamento-mesmo-dia-semana', methods=['GET'])
@@ -1083,6 +1193,12 @@ def api_insights():
     # período selecionado no filtro (início-fim) — antes ficavam travados no
     # dia anterior, independente do filtro.
     linhas_canais = _linhas_canais_com_presencial(inicio.isoformat(), fim.isoformat())
+
+    # Ajuste manual de canal (ver seção 6.3 da documentação) — "vence" o
+    # valor sincronizado quando o painel da própria Cardápio Web diverge do
+    # que a API retorna.
+    ajustes = buscar_ajustes_canal_periodo(inicio.isoformat(), fim.isoformat())
+    linhas_canais, linhas_periodo = _aplicar_ajustes_canal(linhas_canais, linhas_periodo, ajustes)
 
     # Filtro opcional por dia da semana (ex: "só sextas-feiras") — restringe
     # o período já buscado, em vez de mudar o que foi buscado; assim o
