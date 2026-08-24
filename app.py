@@ -45,6 +45,11 @@ from backend.armazenamento import (
     excluir_insumo,
     atualizar_estoque_loja,
     distribuir_entrada_insumo,
+    criar_item_cardapio,
+    listar_itens_cardapio,
+    excluir_item_cardapio,
+    definir_ficha_tecnica,
+    buscar_ficha_tecnica_completa,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1001,6 +1006,107 @@ def api_entrada_insumo(insumo_id):
         return jsonify({"erro": "Informe ao menos uma loja com quantidade recebida."}), 400
 
     distribuir_entrada_insumo(insumo_id, distribuicao)
+    return jsonify({"ok": True})
+
+
+# --- FICHA TÉCNICA (insumos que cada item do cardápio consome) -------------
+# Item aqui é o PRATO (ex: "BIG ART"), independente de loja/canal — é uma
+# receita, não muda por onde é vendido. Ver seção 6.5 da documentação.
+
+@app.route('/api/ficha-tecnica', methods=['GET'])
+def api_listar_ficha_tecnica():
+    itens = listar_itens_cardapio()
+    links = buscar_ficha_tecnica_completa()
+
+    links_por_item = {}
+    for link in links:
+        links_por_item.setdefault(link['item_id'], []).append({
+            "insumoId": link['insumo_id'],
+            "nome": link['insumo_nome'],
+            "unidadeMedida": link['unidade_medida'],
+            "quantidade": link['quantidade'],
+        })
+
+    itens_formatados = [
+        {
+            "id": item['id'],
+            "nome": item['nome'],
+            "categoria": item['categoria'],
+            "insumos": links_por_item.get(item['id'], []),
+        }
+        for item in itens
+    ]
+
+    insumos_disponiveis = [
+        {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida']}
+        for i in _insumos_unicos(listar_insumos())
+    ]
+
+    return jsonify({"itens": itens_formatados, "insumosDisponiveis": insumos_disponiveis})
+
+
+def _insumos_unicos(linhas_estoque):
+    vistos = {}
+    for linha in linhas_estoque:
+        vistos.setdefault(linha['insumo_id'], {
+            "id": linha['insumo_id'],
+            "nome": linha['nome'],
+            "unidade_medida": linha['unidade_medida'],
+        })
+    return sorted(vistos.values(), key=lambda i: i['nome'])
+
+
+@app.route('/api/itens-cardapio', methods=['POST'])
+def api_criar_item_cardapio():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    categoria = (dados.get('categoria') or 'Geral').strip() or 'Geral'
+    if not nome:
+        return jsonify({"erro": "Informe o nome do item."}), 400
+
+    item_id = criar_item_cardapio(nome, categoria)
+    return jsonify({"id": item_id})
+
+
+@app.route('/api/itens-cardapio/<int:item_id>', methods=['DELETE'])
+def api_excluir_item_cardapio(item_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    excluir_item_cardapio(item_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['PUT'])
+def api_definir_ficha_tecnica(item_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    links_brutos = dados.get('insumos') or []
+    links = []
+    for link in links_brutos:
+        try:
+            insumo_id = int(link['insumoId'])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"erro": "Insumo inválido na lista."}), 400
+        quantidade = link.get('quantidade')
+        if quantidade not in (None, ''):
+            try:
+                quantidade = float(quantidade)
+            except (TypeError, ValueError):
+                return jsonify({"erro": "Quantidade inválida."}), 400
+        else:
+            quantidade = None
+        links.append({"insumoId": insumo_id, "quantidade": quantidade})
+
+    definir_ficha_tecnica(item_id, links)
     return jsonify({"ok": True})
 
 

@@ -1,6 +1,100 @@
 /* Estilos específicos da tela de Cardápio — a base compartilhada (sidebar,
    cabeçalho, painéis, tabelas, abas) está em theme.css */
 
+/* SUB-ABAS: PREÇOS x FICHA TÉCNICA — mais simples que .tabs-bar (só 2
+   opções, sem ícone/badge), pra não confundir com as abas de loja. */
+.cardapio-subabas {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.cardapio-subaba {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  background-color: var(--card-bg);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cardapio-subaba.active {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* FICHA TÉCNICA */
+.ficha-tecnica-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ficha-tecnica-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.ficha-tecnica-card-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.ficha-tecnica-card-nome { font-weight: 700; font-size: 0.9rem; color: var(--text-dark); }
+.ficha-tecnica-card-categoria { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+
+.ficha-tecnica-ingredientes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ficha-tecnica-chip {
+  font-size: 0.78rem;
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.ficha-tecnica-chip .qtd { color: var(--text-muted); }
+
+.ficha-tecnica-vazio { font-size: 0.8rem; color: var(--text-faint); font-style: italic; }
+
+.ficha-tecnica-linhas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ficha-tecnica-linha {
+  display: grid;
+  grid-template-columns: 1fr 110px auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.ficha-tecnica-linha select,
+.ficha-tecnica-linha input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: 7px var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-dark);
+  font-family: inherit;
+}
+
 .cardapio-categoria-titulo {
   display: flex;
   align-items: center;

@@ -167,6 +167,8 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `ajuste_faturamento_canal` | Correção manual de faturamento/pedidos por canal (ver 6.3) |
 | `insumo` | Catálogo único de insumos da rede (ver 6.4) |
 | `estoque_insumo` | Quantidade atual e mínimo de cada insumo, por loja (ver 6.4) |
+| `item_cardapio` | Catálogo de pratos/itens do cardápio, pra ficha técnica (ver 6.5) |
+| `ficha_tecnica` | Quais insumos (e quanto de cada) um item do cardápio usa (ver 6.5) |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
@@ -301,6 +303,40 @@ de loja específica (não faria sentido editar uma soma); excluir o insumo
 aparece em qualquer aba, já que remove de todas as lojas de qualquer
 jeito. Leitura liberada pra todo mundo logado; cadastrar/editar/excluir é
 só admin.
+
+### 6.5 Ficha técnica (quais insumos cada item do cardápio usa)
+
+Sub-aba dentro de `cardapio.html` (botões "Preços" / "Ficha Técnica" no
+topo, ver `.cardapio-subaba` em `script.js`) — não é uma aba de loja nova,
+é um segundo modo de visualização da mesma página. Existe pra alimentar
+o cálculo de "quantidade ideal" do Estoque a partir do histórico de
+vendas: pra saber quanto de um insumo se gasta, precisa saber quais
+pratos o usam e quanto de cada um entra na receita.
+
+`item_cardapio` é o catálogo do prato em si (ex: "BIG ART") — **não** é
+por loja nem por canal, é a receita, que não muda dependendo de onde é
+vendida. `ficha_tecnica` liga um item a um ou mais insumos, com
+quantidade **opcional** (`NULL` quando não sabemos a gramatura exata).
+
+**Carga inicial** (2026-08-24): os primeiros 20 itens (lanches, porções e
+uma salada) foram montados a partir da descrição de cada produto no
+painel da Cardápio Web (`portal.cardapioweb.com/cardapio/produtos`), que
+a Julia passou por print — não temos acesso automatizado a essa página
+(fora do domínio permitido pra navegação automática). A maioria das
+descrições só lista os ingredientes, sem gramatura (só o hambúrguer tem
+peso, "110g") — por isso a maior parte das quantidades está em branco,
+exceto o Smash Bowl (salada) e as porções de batata, que vieram com peso
+certo. Sobremesas ficaram de fora: a descrição delas no cardápio nem
+lista os ingredientes. Script `preencher_ficha_tecnica_inicial.py` — cria
+o insumo automaticamente se ainda não existir no Estoque (mesmo catálogo
+único da seção 6.4), idempotente por nome, então dá pra rodar de novo
+depois pra adicionar categorias novas (combos, por exemplo) sem duplicar
+o que já existe.
+
+Editar a ficha técnica de um item (`PUT /api/itens-cardapio/<id>/ficha-tecnica`,
+admin) sempre manda a lista inteira de insumos (substitui, não faz diff)
+— mais simples de implementar tanto no back quanto na tela. Leitura
+liberada pra todo mundo logado.
 
 ## 7. API — principais endpoints
 

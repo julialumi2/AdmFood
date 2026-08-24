@@ -2167,6 +2167,12 @@ async function carregarUsuarioLogado() {
     if (usuario.papel === 'admin' && document.getElementById('estoque-tabs') && estoqueInsumos.length) {
       renderEstoqueTab();
     }
+
+    // Tela de Cardápio → sub-aba Ficha Técnica: botão "Novo item" e ícones
+    // de editar/excluir (só admin) — mesma correção de corrida.
+    if (usuario.papel === 'admin' && fichaTecnicaData.itens.length) {
+      renderFichaTecnica();
+    }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);
   }
@@ -2948,3 +2954,230 @@ async function importarPlanilhaCardapio(event) {
     statusEl.textContent = 'Não foi possível conectar ao servidor.';
   }
 }
+
+// --- FICHA TÉCNICA (insumos que cada item do cardápio consome) ---
+let fichaTecnicaData = { itens: [], insumosDisponiveis: [] };
+let fichaTecnicaEditandoItemId = null;
+
+async function carregarFichaTecnica() {
+  const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
+  if (!conteudoEl) return;
+  try {
+    const resposta = await fetch('/api/ficha-tecnica');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    fichaTecnicaData = await resposta.json();
+    renderFichaTecnica();
+  } catch (erro) {
+    console.error('Falha ao carregar ficha técnica:', erro);
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar a ficha técnica.</p>`;
+  }
+}
+
+function renderFichaTecnica() {
+  const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
+  const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
+  if (!conteudoEl) return;
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
+
+  const itens = fichaTecnicaData.itens || [];
+  if (!itens.length) {
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum item cadastrado ainda.</p>`;
+    return;
+  }
+
+  // Agrupa por categoria, preservando a ordem que já veio da API (categoria, nome).
+  const categorias = [];
+  const porCategoria = new Map();
+  itens.forEach(item => {
+    if (!porCategoria.has(item.categoria)) {
+      porCategoria.set(item.categoria, []);
+      categorias.push(item.categoria);
+    }
+    porCategoria.get(item.categoria).push(item);
+  });
+
+  conteudoEl.innerHTML = categorias.map(categoria => `
+    <div class="cardapio-categoria-titulo">${escaparHtml(categoria)}</div>
+    <div class="ficha-tecnica-lista">
+      ${porCategoria.get(categoria).map(item => `
+        <div class="ficha-tecnica-card">
+          <div class="ficha-tecnica-card-topo">
+            <div class="ficha-tecnica-card-nome">${escaparHtml(item.nome)}</div>
+            ${isAdmin ? `
+              <div class="acoes-linha">
+                <button type="button" class="btn-acao-icone" data-acao="editar-ficha-tecnica" data-item-id="${item.id}" title="Editar insumos">
+                  <i data-lucide="pencil"></i>
+                </button>
+                <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-item-cardapio" data-item-id="${item.id}" data-nome="${escaparHtml(item.nome)}" title="Excluir item">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </div>
+            ` : ''}
+          </div>
+          <div class="ficha-tecnica-ingredientes">
+            ${item.insumos.length ? item.insumos.map(ins => `
+              <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
+            `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda.</span>`}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  if (isAdmin) {
+    conteudoEl.querySelectorAll('[data-acao="editar-ficha-tecnica"]').forEach(btn => {
+      btn.addEventListener('click', () => abrirModalFichaTecnicaItem(parseInt(btn.dataset.itemId, 10)));
+    });
+    conteudoEl.querySelectorAll('[data-acao="excluir-item-cardapio"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Excluir "${btn.dataset.nome}" e sua ficha técnica?`)) return;
+        try {
+          const resposta = await fetch(`/api/itens-cardapio/${btn.dataset.itemId}`, { method: 'DELETE' });
+          if (!resposta.ok) throw new Error('falha ao excluir');
+          await carregarFichaTecnica();
+        } catch (erro) {
+          console.error('Falha ao excluir item do cardápio:', erro);
+          alert('Não foi possível excluir.');
+        }
+      });
+    });
+  }
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// --- Modal: Novo item do cardápio ---
+function abrirModalNovoItemCardapio() {
+  document.getElementById('form-novo-item-cardapio').reset();
+  document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
+}
+function fecharModalNovoItemCardapio() {
+  document.getElementById('modal-novo-item-cardapio').style.display = 'none';
+}
+document.getElementById('btn-novo-item-cardapio')?.addEventListener('click', abrirModalNovoItemCardapio);
+document.getElementById('btn-novo-item-cardapio-fechar')?.addEventListener('click', fecharModalNovoItemCardapio);
+document.getElementById('btn-novo-item-cardapio-cancelar')?.addEventListener('click', fecharModalNovoItemCardapio);
+
+document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const corpo = {
+    nome: document.getElementById('novo-item-nome').value,
+    categoria: document.getElementById('novo-item-categoria').value,
+  };
+  try {
+    const resposta = await fetch('/api/itens-cardapio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
+    fecharModalNovoItemCardapio();
+    await carregarFichaTecnica();
+  } catch (erro) {
+    console.error('Falha ao cadastrar item do cardápio:', erro);
+    alert(erro.message || 'Não foi possível cadastrar.');
+  }
+});
+
+// --- Modal: Editar ficha técnica de um item ---
+function _linhaFichaTecnicaHTML(insumoId, quantidade) {
+  const opcoes = fichaTecnicaData.insumosDisponiveis.map(i =>
+    `<option value="${i.id}" ${i.id === insumoId ? 'selected' : ''}>${escaparHtml(i.nome)} (${escaparHtml(i.unidadeMedida)})</option>`
+  ).join('');
+  return `
+    <div class="ficha-tecnica-linha">
+      <select class="ficha-tecnica-select-insumo">${opcoes}</select>
+      <input type="number" step="0.01" min="0" class="ficha-tecnica-input-quantidade" placeholder="Qtd." value="${quantidade ?? ''}">
+      <button type="button" class="btn-acao-icone btn-excluir" data-acao="remover-linha-ficha-tecnica" title="Remover">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+  `;
+}
+
+function _wireLinhasFichaTecnica() {
+  document.querySelectorAll('[data-acao="remover-linha-ficha-tecnica"]').forEach(btn => {
+    btn.addEventListener('click', () => btn.closest('.ficha-tecnica-linha').remove());
+  });
+}
+
+function abrirModalFichaTecnicaItem(itemId) {
+  const item = fichaTecnicaData.itens.find(i => i.id === itemId);
+  if (!item || !fichaTecnicaData.insumosDisponiveis.length) {
+    if (!fichaTecnicaData.insumosDisponiveis.length) alert('Cadastre pelo menos um insumo no Estoque antes de montar a ficha técnica.');
+    return;
+  }
+  fichaTecnicaEditandoItemId = itemId;
+  document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${item.nome}`;
+
+  const container = document.getElementById('ficha-tecnica-item-linhas');
+  const linhasIniciais = item.insumos.length
+    ? item.insumos
+    : [{ insumoId: fichaTecnicaData.insumosDisponiveis[0].id, quantidade: null }];
+  container.innerHTML = linhasIniciais.map(ins => _linhaFichaTecnicaHTML(ins.insumoId, ins.quantidade)).join('');
+  _wireLinhasFichaTecnica();
+
+  document.getElementById('modal-ficha-tecnica-item').style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function fecharModalFichaTecnicaItem() {
+  document.getElementById('modal-ficha-tecnica-item').style.display = 'none';
+  fichaTecnicaEditandoItemId = null;
+}
+
+document.getElementById('btn-ficha-tecnica-item-fechar')?.addEventListener('click', fecharModalFichaTecnicaItem);
+document.getElementById('btn-ficha-tecnica-item-cancelar')?.addEventListener('click', fecharModalFichaTecnicaItem);
+
+document.getElementById('btn-ficha-tecnica-add-linha')?.addEventListener('click', () => {
+  if (!fichaTecnicaData.insumosDisponiveis.length) return;
+  const container = document.getElementById('ficha-tecnica-item-linhas');
+  container.insertAdjacentHTML('beforeend', _linhaFichaTecnicaHTML(fichaTecnicaData.insumosDisponiveis[0].id, null));
+  _wireLinhasFichaTecnica();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+
+document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!fichaTecnicaEditandoItemId) return;
+
+  const insumos = [...document.querySelectorAll('#ficha-tecnica-item-linhas .ficha-tecnica-linha')].map(linha => ({
+    insumoId: parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10),
+    quantidade: linha.querySelector('.ficha-tecnica-input-quantidade').value || null,
+  }));
+
+  try {
+    const resposta = await fetch(`/api/itens-cardapio/${fichaTecnicaEditandoItemId}/ficha-tecnica`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ insumos }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    fecharModalFichaTecnicaItem();
+    await carregarFichaTecnica();
+  } catch (erro) {
+    console.error('Falha ao salvar ficha técnica:', erro);
+    alert(erro.message || 'Não foi possível salvar.');
+  }
+});
+
+// --- Sub-abas Preços x Ficha Técnica ---
+document.querySelectorAll('.cardapio-subaba').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cardapio-subaba').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const modoPrecos = document.getElementById('cardapio-modo-precos');
+    const modoFicha = document.getElementById('cardapio-modo-ficha-tecnica');
+    if (btn.dataset.subaba === 'precos') {
+      modoPrecos.style.display = '';
+      modoFicha.style.display = 'none';
+    } else {
+      modoPrecos.style.display = 'none';
+      modoFicha.style.display = '';
+      if (!fichaTecnicaData.itens.length) carregarFichaTecnica();
+    }
+  });
+});

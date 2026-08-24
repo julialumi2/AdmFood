@@ -203,6 +203,26 @@ def inicializar_banco():
             """
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS item_cardapio (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL UNIQUE,
+                categoria TEXT NOT NULL DEFAULT 'Geral'
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ficha_tecnica (
+                item_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                quantidade REAL,
+                PRIMARY KEY (item_id, insumo_id)
+            )
+            """
+        )
+
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
     ticket_medio = (
@@ -783,3 +803,56 @@ def distribuir_entrada_insumo(insumo_id, distribuicao):
                 """,
                 (quantidade, agora, insumo_id, loja),
             )
+
+
+def buscar_insumo_por_nome(nome):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM insumo WHERE nome = ?", (nome,)).fetchone()
+        return dict(linha) if linha else None
+
+
+def criar_item_cardapio(nome, categoria):
+    with conexao() as conn:
+        conn.execute(
+            "INSERT INTO item_cardapio (nome, categoria) VALUES (?, ?) ON CONFLICT(nome) DO UPDATE SET categoria = excluded.categoria",
+            (nome, categoria),
+        )
+        return conn.execute("SELECT id FROM item_cardapio WHERE nome = ?", (nome,)).fetchone()["id"]
+
+
+def listar_itens_cardapio():
+    with conexao() as conn:
+        linhas = conn.execute("SELECT * FROM item_cardapio ORDER BY categoria, nome").fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def excluir_item_cardapio(item_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ?", (item_id,))
+        conn.execute("DELETE FROM item_cardapio WHERE id = ?", (item_id,))
+
+
+def definir_ficha_tecnica(item_id, links):
+    """Substitui a lista inteira de insumos do item por `links`
+    (`[{"insumoId": int, "quantidade": float|None}, ...]`) — mais simples
+    que fazer diff, e a tela sempre manda a lista completa mesmo."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ?", (item_id,))
+        for link in links:
+            conn.execute(
+                "INSERT INTO ficha_tecnica (item_id, insumo_id, quantidade) VALUES (?, ?, ?)",
+                (item_id, link["insumoId"], link.get("quantidade")),
+            )
+
+
+def buscar_ficha_tecnica_completa():
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT f.item_id, f.insumo_id, f.quantidade,
+                   i.nome AS insumo_nome, i.unidade_medida
+            FROM ficha_tecnica f
+            JOIN insumo i ON i.id = f.insumo_id
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
