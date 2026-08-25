@@ -485,6 +485,24 @@ CSS excluído de `theme.css`, o padding reservado pra ela no rodapé de
 `.page-content` (88px) voltou ao normal, e o bloco `<nav class="mobile-
 bottom-nav">` foi removido das 9 páginas.
 
+**Bug encontrado logo após subir pro ar** (2026-08-25, relatado por um
+usuário vendo o layout quebrado no desktop): o `<div id="mobile-menu-
+backdrop">`, novo, só tinha `display:none` **dentro** do media query
+mobile — no desktop ficava sem nenhum `display` definido, caindo no
+padrão do navegador (`block`). Isso o transformava num 3º item dentro do
+grid de 2 colunas do `.dashboard-wrapper` (sidebar + main): com só 2
+colunas explícitas, o `.main-wrapper` (3º item) quebrava linha e caía de
+volta na 1ª coluna (a largura da sidebar), ficando espremido/sobreposto
+atrás dela. Só acontecia com a sidebar em modo "recolhido" (ícone só),
+por isso passou despercebido no teste antes de subir — o teste cobriu a
+gaveta mobile e o desktop "normal" (sidebar expandida), mas não a
+combinação desktop + recolhido. Corrigido adicionando `.mobile-menu-
+backdrop { display: none; }` como regra base (fora do media query), pra
+nunca participar do grid fora do celular. **Lição**: ao adicionar um
+elemento novo que só deve aparecer num media query, sempre garantir um
+`display: none` base fora dele — não basta só estilizar o estado
+"visível" lá dentro.
+
 **Carga inicial de fornecedores** (2026-08-25): 69 fornecedores trazidos
 da VMarket via export CSV ("Cotações" → "Meus Fornecedores" → "Exportar
 Lista de Fornecedores"), com `importar_fornecedores_vmarket.py`.
