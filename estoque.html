@@ -277,10 +277,11 @@
     <div class="modal-overlay" id="modal-novo-insumo" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="panel-title">Novo insumo</h3>
+          <h3 class="panel-title" id="novo-insumo-titulo">Novo insumo</h3>
           <button type="button" class="btn-close" id="btn-novo-insumo-fechar" aria-label="Fechar">&times;</button>
         </div>
         <form id="form-novo-insumo">
+          <input type="hidden" id="novo-insumo-id" value="">
           <div class="form-group">
             <label for="novo-insumo-nome">Nome</label>
             <input type="text" id="novo-insumo-nome" required placeholder="Ex: Farinha de trigo">
@@ -295,12 +296,22 @@
               <input type="text" id="novo-insumo-unidade" placeholder="kg, L, un..." value="un">
             </div>
           </div>
+          <div class="form-group">
+            <label for="novo-insumo-marca">Marca homologada (opcional)</label>
+            <input type="text" id="novo-insumo-marca" placeholder="Ex: Cargill — deixe em branco se aceita qualquer marca">
+          </div>
+          <div class="form-group">
+            <label>Fornecedores que cotam esse insumo</label>
+            <div class="checklist-fornecedores" id="novo-insumo-fornecedores">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+          </div>
           <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
             Cadastra pra rede toda — depois é só distribuir a quantidade recebida entre as lojas em "Registrar entrada".
           </p>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-novo-insumo-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Cadastrar</button>
+            <button type="submit" class="btn-primary-sm" id="novo-insumo-btn-salvar">Cadastrar</button>
           </div>
         </form>
       </div>

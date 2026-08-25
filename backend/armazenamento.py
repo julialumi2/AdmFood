@@ -193,6 +193,8 @@ def inicializar_banco():
         colunas_insumo = {c["name"] for c in conn.execute("PRAGMA table_info(insumo)").fetchall()}
         if "favorito" not in colunas_insumo:
             conn.execute("ALTER TABLE insumo ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
+        if "marca_homologada" not in colunas_insumo:
+            conn.execute("ALTER TABLE insumo ADD COLUMN marca_homologada TEXT NOT NULL DEFAULT ''")
 
         conn.execute(
             """
@@ -304,6 +306,20 @@ def inicializar_banco():
                 observacoes TEXT NOT NULL DEFAULT '',
                 ativo INTEGER NOT NULL DEFAULT 1,
                 criado_em TEXT NOT NULL
+            )
+            """
+        )
+
+        # Quais fornecedores cotam cada insumo — declarado de antemão (não
+        # inferido de cotação passada), pra quando for gerar uma cotação já
+        # saber pra quem mandar pedir preço de cada item. Ver processo real
+        # descrito na seção 9 da documentação (fluxo da VMarket via Kethllyn).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS insumo_fornecedor (
+                insumo_id INTEGER NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                PRIMARY KEY (insumo_id, fornecedor_id)
             )
             """
         )
@@ -906,6 +922,7 @@ def listar_insumos():
         linhas = conn.execute(
             """
             SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
+                   i.marca_homologada,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em
             FROM insumo i
             JOIN estoque_insumo e ON e.insumo_id = i.id
@@ -1144,6 +1161,30 @@ def atualizar_fornecedor(fornecedor_id, campos):
     valores = list(campos.values()) + [fornecedor_id]
     with conexao() as conn:
         conn.execute(f"UPDATE fornecedor SET {colunas} WHERE id = ?", valores)
+
+
+def definir_fornecedores_insumo(insumo_id, fornecedor_ids):
+    """Substitui a lista inteira de fornecedores que cotam esse insumo
+    (mesmo padrão de definir_ficha_tecnica — sempre manda a lista toda,
+    substitui em vez de fazer diff)."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM insumo_fornecedor WHERE insumo_id = ?", (insumo_id,))
+        for fornecedor_id in fornecedor_ids:
+            conn.execute(
+                "INSERT INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
+                (insumo_id, fornecedor_id),
+            )
+
+
+def mapa_insumo_fornecedores():
+    """{insumo_id: [fornecedor_id, ...]} pra todo mundo de uma vez — evita
+    N+1 ao formatar a lista inteira de insumos."""
+    with conexao() as conn:
+        linhas = conn.execute("SELECT insumo_id, fornecedor_id FROM insumo_fornecedor").fetchall()
+    mapa = {}
+    for linha in linhas:
+        mapa.setdefault(linha["insumo_id"], []).append(linha["fornecedor_id"])
+    return mapa
 
 
 # --- COTAÇÃO (RFQ manual, fase 2 do módulo de Compras) ----------------------

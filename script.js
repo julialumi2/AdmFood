@@ -177,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
     carregarLotesVencendo();
+    carregarFornecedores();
   }
 
   // 4.098 TELA DE FORNECEDORES
@@ -1305,6 +1306,9 @@ function renderEstoqueTab() {
                 <i data-lucide="pencil"></i>
               </button>
             ` : ''}
+            <button type="button" class="btn-acao-icone" data-acao="editar-insumo" data-insumo-id="${insumo.id}" title="Editar cadastro do insumo (fornecedores, marca)">
+              <i data-lucide="settings-2"></i>
+            </button>
             <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)">
               <i data-lucide="trash-2"></i>
             </button>
@@ -1327,6 +1331,15 @@ function wireEstoqueTableEvents() {
       const dadosLoja = insumo?.porLoja[loja];
       if (!insumo || !dadosLoja) return;
       abrirModalEditarEstoque(insumoId, loja, insumo.nome, dadosLoja);
+    });
+  });
+
+  document.querySelectorAll('[data-acao="editar-insumo"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const insumoId = parseInt(btn.dataset.insumoId, 10);
+      const insumo = estoqueInsumos.find(i => i.id === insumoId);
+      if (!insumo) return;
+      abrirModalNovoInsumo(insumo);
     });
   });
 
@@ -1452,16 +1465,15 @@ let fornecedorEditandoId = null;
 
 async function carregarFornecedores() {
   const tbody = document.getElementById('fornecedores-tabela-body');
-  if (!tbody) return;
   try {
     const resposta = await fetch('/api/fornecedores');
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
     fornecedoresLista = dados.fornecedores || [];
-    renderFornecedoresTabela();
+    if (tbody) renderFornecedoresTabela();
   } catch (erro) {
     console.error('Falha ao carregar fornecedores:', erro);
-    tbody.innerHTML = `<tr><td colspan="8" style="color:#ef4444;">Não foi possível carregar os fornecedores. Confira se o Flask está rodando.</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#ef4444;">Não foi possível carregar os fornecedores. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -1896,10 +1908,34 @@ document.getElementById('form-editar-estoque')?.addEventListener('submit', async
   }
 });
 
-// --- Modal: Novo insumo ---
-function abrirModalNovoInsumo() {
+// --- Modal: Novo insumo / Editar insumo ---
+function _renderChecklistFornecedores(idsSelecionados) {
+  const container = document.getElementById('novo-insumo-fornecedores');
+  if (!container) return;
+  const ativos = fornecedoresLista.filter(f => f.ativo);
+  if (!ativos.length) {
+    container.innerHTML = '<p class="panel-subtitle">Nenhum fornecedor cadastrado ainda.</p>';
+    return;
+  }
+  const selecionados = new Set(idsSelecionados || []);
+  container.innerHTML = ativos.map(f => `
+    <label class="checklist-item">
+      <input type="checkbox" value="${f.id}" ${selecionados.has(f.id) ? 'checked' : ''}>
+      ${escaparHtml(f.nome)}
+    </label>
+  `).join('');
+}
+
+function abrirModalNovoInsumo(insumo) {
   document.getElementById('form-novo-insumo').reset();
-  document.getElementById('novo-insumo-unidade').value = 'un';
+  document.getElementById('novo-insumo-id').value = insumo ? insumo.id : '';
+  document.getElementById('novo-insumo-titulo').textContent = insumo ? 'Editar insumo' : 'Novo insumo';
+  document.getElementById('novo-insumo-btn-salvar').textContent = insumo ? 'Salvar' : 'Cadastrar';
+  document.getElementById('novo-insumo-nome').value = insumo ? insumo.nome : '';
+  document.getElementById('novo-insumo-categoria').value = insumo ? insumo.categoria : '';
+  document.getElementById('novo-insumo-unidade').value = insumo ? insumo.unidadeMedida : 'un';
+  document.getElementById('novo-insumo-marca').value = insumo ? (insumo.marcaHomologada || '') : '';
+  _renderChecklistFornecedores(insumo ? insumo.fornecedorIds : []);
   document.getElementById('modal-novo-insumo').style.display = 'flex';
 }
 
@@ -1907,30 +1943,34 @@ function fecharModalNovoInsumo() {
   document.getElementById('modal-novo-insumo').style.display = 'none';
 }
 
-document.getElementById('btn-novo-insumo')?.addEventListener('click', abrirModalNovoInsumo);
+document.getElementById('btn-novo-insumo')?.addEventListener('click', () => abrirModalNovoInsumo());
 document.getElementById('btn-novo-insumo-fechar')?.addEventListener('click', fecharModalNovoInsumo);
 document.getElementById('btn-novo-insumo-cancelar')?.addEventListener('click', fecharModalNovoInsumo);
 
 document.getElementById('form-novo-insumo')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
+  const insumoId = document.getElementById('novo-insumo-id').value;
+  const fornecedorIds = Array.from(document.querySelectorAll('#novo-insumo-fornecedores input:checked')).map(el => parseInt(el.value, 10));
   const corpo = {
     nome: document.getElementById('novo-insumo-nome').value,
     categoria: document.getElementById('novo-insumo-categoria').value,
     unidadeMedida: document.getElementById('novo-insumo-unidade').value,
+    marcaHomologada: document.getElementById('novo-insumo-marca').value,
+    fornecedorIds,
   };
   try {
-    const resposta = await fetch('/api/insumos', {
-      method: 'POST',
+    const resposta = await fetch(insumoId ? `/api/insumos/${insumoId}` : '/api/insumos', {
+      method: insumoId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corpo),
     });
     const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
     fecharModalNovoInsumo();
     await carregarInsumos();
   } catch (erro) {
-    console.error('Falha ao cadastrar insumo:', erro);
-    alert(erro.message || 'Não foi possível cadastrar o insumo.');
+    console.error('Falha ao salvar insumo:', erro);
+    alert(erro.message || 'Não foi possível salvar o insumo.');
   }
 });
 

@@ -1486,6 +1486,32 @@ tr:hover { background-color: var(--surface-muted); }
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
+.checklist-fornecedores {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background-color: var(--input-bg);
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  cursor: pointer;
+}
+
+.checklist-item input {
+  width: auto;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

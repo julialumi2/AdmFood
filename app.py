@@ -57,6 +57,8 @@ from backend.armazenamento import (
     criar_fornecedor,
     listar_fornecedores,
     atualizar_fornecedor,
+    definir_fornecedores_insumo,
+    mapa_insumo_fornecedores,
     criar_cotacao,
     listar_cotacoes,
     buscar_cotacao,
@@ -901,6 +903,7 @@ def _status_estoque(quantidade_atual, estoque_minimo):
 
 
 def _formatar_insumos(linhas):
+    mapa_fornecedores = mapa_insumo_fornecedores()
     por_insumo = {}
     for linha in linhas:
         insumo = por_insumo.setdefault(linha['insumo_id'], {
@@ -909,6 +912,8 @@ def _formatar_insumos(linhas):
             "categoria": linha['categoria'],
             "unidadeMedida": linha['unidade_medida'],
             "favorito": bool(linha['favorito']),
+            "marcaHomologada": linha['marca_homologada'],
+            "fornecedorIds": mapa_fornecedores.get(linha['insumo_id'], []),
             "porLoja": {},
         })
         insumo["porLoja"][linha['loja']] = {
@@ -939,6 +944,14 @@ def api_criar_insumo():
         return jsonify({"erro": "Informe o nome do insumo."}), 400
 
     insumo_id = criar_insumo(nome, categoria, unidade_medida, list(LOJAS.keys()))
+
+    marca_homologada = dados.get('marcaHomologada')
+    if marca_homologada is not None:
+        atualizar_insumo(insumo_id, {"marca_homologada": marca_homologada.strip()})
+    fornecedor_ids = dados.get('fornecedorIds')
+    if fornecedor_ids is not None:
+        definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
+
     return jsonify({"id": insumo_id})
 
 
@@ -961,8 +974,18 @@ def api_atualizar_insumo(insumo_id):
         campos['unidade_medida'] = (dados['unidadeMedida'] or 'un').strip() or 'un'
     if 'favorito' in dados:
         campos['favorito'] = 1 if dados['favorito'] else 0
+    if 'marcaHomologada' in dados:
+        campos['marca_homologada'] = (dados['marcaHomologada'] or '').strip()
 
     atualizar_insumo(insumo_id, campos)
+
+    if 'fornecedorIds' in dados:
+        try:
+            fornecedor_ids = [int(f) for f in (dados['fornecedorIds'] or [])]
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Lista de fornecedores inválida."}), 400
+        definir_fornecedores_insumo(insumo_id, fornecedor_ids)
+
     return jsonify({"ok": True})
 
 
