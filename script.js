@@ -1158,6 +1158,9 @@ function renderPreparoTab(tab) {
 
 // --- ESTOQUE (insumos nativos, catálogo único + quantidade por loja) ---
 const LOJAS_ESTOQUE = ['Hamburgueria Artesanos', 'Açaí Na Lata', 'Tradiça ZN', 'Tradiça Simus'];
+// Cotação é semanal (ver processo real da VMarket na documentação, seção 9)
+// — quantidade ideal cobre 7 dias de consumo médio a partir daqui.
+const DIAS_COBERTURA_IDEAL = 7;
 const STATUS_LABEL_ESTOQUE = { ok: 'OK', baixo: 'Baixo', critico: 'Crítico' };
 const STATUS_CLASSE_BADGE_ESTOQUE = { ok: 'pos', baixo: 'neu-orange', critico: 'neg' };
 const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', critico: 'bar-red' };
@@ -1278,7 +1281,7 @@ function renderEstoqueTab() {
   document.getElementById('estoque-val-critico').textContent = contagem.critico;
 
   if (!linhas.length) {
-    const colspan = 6 + (isAdmin ? 1 : 0);
+    const colspan = 7 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum insumo encontrado.</td></tr>`;
     return;
   }
@@ -1289,6 +1292,8 @@ function renderEstoqueTab() {
     const percentual = dados.estoqueMinimo > 0
       ? Math.min(100, Math.round((dados.quantidadeAtual / (dados.estoqueMinimo * 1.5)) * 100))
       : 100;
+    const quantidadeIdeal = dados.consumoMedio === null ? null : Math.round(dados.consumoMedio * DIAS_COBERTURA_IDEAL * 100) / 100;
+    const sugestaoCompra = quantidadeIdeal === null ? null : Math.max(0, Math.round((quantidadeIdeal - dados.quantidadeAtual) * 100) / 100);
     const estrela = isAdmin
       ? `<button type="button" class="btn-favorito ${insumo.favorito ? 'ativo' : ''}" data-acao="favoritar" data-insumo-id="${insumo.id}" data-favorito="${insumo.favorito ? '1' : '0'}" title="${insumo.favorito ? 'Remover dos favoritos' : 'Marcar como favorito'}">
           <i data-lucide="star" ${insumo.favorito ? 'fill="currentColor"' : ''}></i>
@@ -1309,6 +1314,14 @@ function renderEstoqueTab() {
         <td class="font-bold col-atual-destaque">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
         <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
           ${dados.consumoMedio === null ? '—' : `${Math.round(dados.consumoMedio * 100) / 100} ${escaparHtml(insumo.unidadeMedida)}/dia`}
+        </td>
+        <td ${quantidadeIdeal === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
+          ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
+            <div class="qtd-ideal-cell">
+              <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
+              ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${sugestaoCompra} ${escaparHtml(insumo.unidadeMedida)}</span>` : ''}
+            </div>
+          `}
         </td>
         <td>
           <div class="progress-container">

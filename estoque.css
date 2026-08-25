@@ -77,6 +77,13 @@
 
 .loja-select-item .tab-badge { margin-left: auto; }
 
+.qtd-ideal-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .inventory-table {
   width: 100%;
   border-collapse: collapse;
