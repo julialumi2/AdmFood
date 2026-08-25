@@ -148,29 +148,37 @@
           </div>
         </div>
 
-        <!-- ABAS POR LOJA -->
-        <div class="tabs-bar" id="estoque-tabs">
-          <button class="tab-btn active" data-tab="geral">
+        <!-- SELETOR DE LOJA (dropdown) -->
+        <div class="loja-select" id="estoque-loja-select">
+          <button type="button" class="loja-select-trigger" id="estoque-loja-trigger">
             <i data-lucide="store"></i>
-            <span>Visão Geral (Todas)</span>
-            <span class="tab-badge">4 Unidades</span>
+            <span class="loja-select-label">Visão Geral (Todas)</span>
+            <span class="tab-badge" id="estoque-loja-trigger-badge">4 Unidades</span>
+            <i data-lucide="chevron-down" class="loja-select-chevron"></i>
           </button>
-          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
-            <i data-lucide="store"></i>
-            <span>Hamburgueria Artesanos</span>
-          </button>
-          <button class="tab-btn" data-tab="Açaí Na Lata">
-            <i data-lucide="store"></i>
-            <span>Açaí Na Lata</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça ZN">
-            <i data-lucide="store"></i>
-            <span>Tradiça ZN</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça Simus">
-            <i data-lucide="store"></i>
-            <span>Tradiça Simus</span>
-          </button>
+          <div class="loja-select-menu" id="estoque-loja-menu">
+            <button type="button" class="loja-select-item active" data-tab="geral">
+              <i data-lucide="store"></i>
+              <span>Visão Geral (Todas)</span>
+              <span class="tab-badge">4 Unidades</span>
+            </button>
+            <button type="button" class="loja-select-item" data-tab="Hamburgueria Artesanos">
+              <i data-lucide="store"></i>
+              <span>Hamburgueria Artesanos</span>
+            </button>
+            <button type="button" class="loja-select-item" data-tab="Açaí Na Lata">
+              <i data-lucide="store"></i>
+              <span>Açaí Na Lata</span>
+            </button>
+            <button type="button" class="loja-select-item" data-tab="Tradiça ZN">
+              <i data-lucide="store"></i>
+              <span>Tradiça ZN</span>
+            </button>
+            <button type="button" class="loja-select-item" data-tab="Tradiça Simus">
+              <i data-lucide="store"></i>
+              <span>Tradiça Simus</span>
+            </button>
+          </div>
         </div>
 
         <!-- CARDS DE RESUMO DO ESTOQUE -->

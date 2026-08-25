@@ -165,15 +165,33 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 4.097 TELA DE ESTOQUE
-  if (document.getElementById('estoque-tabs')) {
-    document.querySelectorAll('#estoque-tabs .tab-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#estoque-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        estoqueTabAtual = btn.dataset.tab;
+  if (document.getElementById('estoque-loja-select')) {
+    const seletorLoja = document.getElementById('estoque-loja-select');
+    const trigger = document.getElementById('estoque-loja-trigger');
+    const menu = document.getElementById('estoque-loja-menu');
+
+    trigger.addEventListener('click', () => {
+      seletorLoja.classList.toggle('aberto');
+    });
+    document.addEventListener('click', (evento) => {
+      if (!seletorLoja.contains(evento.target)) seletorLoja.classList.remove('aberto');
+    });
+
+    menu.querySelectorAll('.loja-select-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        menu.querySelectorAll('.loja-select-item').forEach((i) => i.classList.remove('active'));
+        item.classList.add('active');
+        trigger.querySelector('.loja-select-label').textContent = item.querySelector('span').textContent;
+        const badgeItem = item.querySelector('.tab-badge');
+        const badgeTrigger = document.getElementById('estoque-loja-trigger-badge');
+        badgeTrigger.style.display = badgeItem ? '' : 'none';
+        if (badgeItem) badgeTrigger.textContent = badgeItem.textContent;
+        estoqueTabAtual = item.dataset.tab;
+        seletorLoja.classList.remove('aberto');
         renderEstoqueTab();
       });
     });
+
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
     carregarLotesVencendo();
@@ -2828,7 +2846,7 @@ async function carregarUsuarioLogado() {
 
     // Tela de Estoque: botões "Novo insumo"/"Registrar entrada" e coluna de
     // Ações (só admin) — mesma correção de corrida entre os dois fetches.
-    if (usuario.papel === 'admin' && document.getElementById('estoque-tabs') && estoqueInsumos.length) {
+    if (usuario.papel === 'admin' && document.getElementById('estoque-loja-select') && estoqueInsumos.length) {
       renderEstoqueTab();
     }
 
