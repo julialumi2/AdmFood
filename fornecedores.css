@@ -1,0 +1,6 @@
+/* Estilos específicos da tela de Fornecedores — a base compartilhada
+   (sidebar, cabeçalho, cards, tabelas, botões, steppers) está em theme.css */
+
+.fornecedor-contato-cell span {
+  display: block;
+}

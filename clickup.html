@@ -45,6 +45,23 @@
           <i data-lucide="box"></i>
           <span>Estoque</span>
         </a>
+        <div class="menu-group">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="shopping-cart"></i>
+            <span>Compras</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="fornecedores.html" class="menu-subitem">
+              <i data-lucide="truck"></i>
+              <span>Fornecedores</span>
+            </a>
+            <a href="cotacoes.html" class="menu-subitem">
+              <i data-lucide="list-checks"></i>
+              <span>Cotações</span>
+            </a>
+          </div>
+        </div>
         <a href="cardapio.html" class="menu-item">
           <i data-lucide="book-open"></i>
           <span>Cardápio</span>
@@ -76,6 +93,9 @@
         <i data-lucide="chevron-right" class="sidebar-user-card-icon"></i>
       </a>
     </aside>
+
+    <!-- Fecha a gaveta de menu ao tocar fora, só no celular -->
+    <div class="mobile-menu-backdrop" id="mobile-menu-backdrop"></div>
 
     <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
     <main class="main-wrapper">
@@ -157,33 +177,6 @@
       </div> <!-- /page-content -->
     </main>
 
-    <!-- NAVEGAÇÃO INFERIOR (SÓ NO CELULAR) -->
-    <nav class="mobile-bottom-nav">
-      <a href="index.html" class="mobile-nav-item">
-        <i data-lucide="bar-chart-2"></i>
-        <span>Resumo</span>
-      </a>
-      <a href="estoque.html" class="mobile-nav-item">
-        <i data-lucide="box"></i>
-        <span>Estoque</span>
-      </a>
-      <a href="cardapio.html" class="mobile-nav-item">
-        <i data-lucide="book-open"></i>
-        <span>Cardápio</span>
-      </a>
-      <a href="preparo.html" class="mobile-nav-item">
-        <i data-lucide="timer"></i>
-        <span>Preparo</span>
-      </a>
-      <a href="clickup.html" class="mobile-nav-item active">
-        <i data-lucide="check-square"></i>
-        <span>ClickUp</span>
-      </a>
-      <a href="insight.html" class="mobile-nav-item">
-        <i data-lucide="lightbulb"></i>
-        <span>Insights</span>
-      </a>
-    </nav>
   </div> <!-- /dashboard-wrapper -->
 
   <!-- MODAL DE CRIAR NOVA TAREFA -->

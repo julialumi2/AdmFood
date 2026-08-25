@@ -36,23 +36,68 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 3. LÓGICA DE RECOLHER A SIDEBAR (TOGGLE MENU)
+  // 2.05 GRUPOS DE MENU RECOLHÍVEIS NA SIDEBAR (ex: "Compras" — Fornecedores,
+  // e o que vier depois: Cotações, Pedidos). Auto-expande se a página atual
+  // for uma das que estão dentro do grupo.
+  document.querySelectorAll('.menu-group').forEach((grupo) => {
+    if (grupo.querySelector('.menu-subitem.active')) {
+      grupo.classList.add('expandido');
+    }
+    grupo.querySelector('.menu-group-toggle')?.addEventListener('click', () => {
+      grupo.classList.toggle('expandido');
+    });
+  });
+
+  // 2.1 STEPPERS -/+ DOS CAMPOS DE QUANTIDADE (Estoque, Fornecedores) —
+  // delegado no documento porque vários desses campos são recriados
+  // dinamicamente (ex: modal de entrada). Anda sempre de 1 em 1 unidade
+  // (não usa o "step" do input, que é 0.01 pra permitir digitar valor
+  // fracionário — de 0.01 em 0.01 o clique seria inútil pra ajuste rápido).
+  document.addEventListener('click', (evento) => {
+    const botao = evento.target.closest('.stepper-btn');
+    if (!botao) return;
+    const input = document.getElementById(botao.dataset.target);
+    if (!input) return;
+    const delta = botao.dataset.delta === '-1' ? -1 : 1;
+    const atual = parseFloat(input.value) || 0;
+    const novoValor = Math.max(0, atual + delta);
+    input.value = Math.round(novoValor * 100) / 100;
+  });
+
+  // 3. LÓGICA DE RECOLHER A SIDEBAR (TOGGLE MENU) — no desktop, recolhe pra
+  // ícone só (preferência salva); no celular, o mesmo botão abre/fecha a
+  // sidebar inteira como uma gaveta por cima do conteúdo (a sidebar não
+  // existe mais escondida sem alternativa no celular — sem isso,
+  // Configurações/Fornecedores/Cotações, que não estão na barra inferior
+  // fixa, ficariam inalcançáveis por toque).
   // Suporta tanto 'btnToggleMenu' quanto 'toggleMenuBtn' para evitar conflito entre telas
   const toggleBtn = document.getElementById('btnToggleMenu') || document.getElementById('toggleMenuBtn');
   const container = document.getElementById('dashboardWrapper');
+  const ehMobile = () => window.innerWidth <= 768;
 
   if (container) {
-    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    if (!ehMobile() && localStorage.getItem('sidebar-collapsed') === 'true') {
       container.classList.add('collapsed');
     }
 
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
-        container.classList.toggle('collapsed');
-        const isCollapsed = container.classList.contains('collapsed');
-        localStorage.setItem('sidebar-collapsed', isCollapsed);
+        if (ehMobile()) {
+          container.classList.toggle('mobile-menu-aberto');
+        } else {
+          container.classList.toggle('collapsed');
+          const isCollapsed = container.classList.contains('collapsed');
+          localStorage.setItem('sidebar-collapsed', isCollapsed);
+        }
       });
     }
+
+    document.getElementById('mobile-menu-backdrop')?.addEventListener('click', () => {
+      container.classList.remove('mobile-menu-aberto');
+    });
+    document.querySelectorAll('.sidebar a').forEach((link) => {
+      link.addEventListener('click', () => container.classList.remove('mobile-menu-aberto'));
+    });
   }
 
   // 4. GRÁFICO DE FATURAMENTO DA REDE (dados reais, ver carregarGraficoRede)
@@ -132,22 +177,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
     carregarLotesVencendo();
+  }
 
-    // Steppers -/+ dos campos de quantidade — delegado no documento porque
-    // vários desses campos são recriados dinamicamente (modal de entrada).
-    // Anda sempre de 1 em 1 unidade (não usa o "step" do input, que é 0.01
-    // pra permitir digitar peso fracionário — de 0.01 em 0.01 o clique
-    // seria inútil pra ajuste rápido).
-    document.addEventListener('click', (evento) => {
-      const botao = evento.target.closest('.stepper-btn');
-      if (!botao) return;
-      const input = document.getElementById(botao.dataset.target);
-      if (!input) return;
-      const delta = botao.dataset.delta === '-1' ? -1 : 1;
-      const atual = parseFloat(input.value) || 0;
-      const novoValor = Math.max(0, atual + delta);
-      input.value = Math.round(novoValor * 100) / 100;
-    });
+  // 4.098 TELA DE FORNECEDORES
+  if (document.getElementById('fornecedores-tabela-body')) {
+    document.getElementById('fornecedores-busca')?.addEventListener('input', () => renderFornecedoresTabela());
+    carregarFornecedores();
+  }
+
+  // 4.099 TELA DE COTAÇÕES
+  if (document.getElementById('cotacoes-tabela-body')) {
+    carregarCotacoes();
   }
 
   // 4.1 TELA DE CONFIGURAÇÕES
@@ -1405,6 +1445,415 @@ function renderLotesVencendo() {
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// --- FORNECEDORES (diretório da rede, semente do módulo de Compras) ---
+let fornecedoresLista = [];
+let fornecedorEditandoId = null;
+
+async function carregarFornecedores() {
+  const tbody = document.getElementById('fornecedores-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/fornecedores');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    fornecedoresLista = dados.fornecedores || [];
+    renderFornecedoresTabela();
+  } catch (erro) {
+    console.error('Falha ao carregar fornecedores:', erro);
+    tbody.innerHTML = `<tr><td colspan="8" style="color:#ef4444;">Não foi possível carregar os fornecedores. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+function renderFornecedoresTabela() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const tbody = document.getElementById('fornecedores-tabela-body');
+  if (!tbody) return;
+
+  const thAcoes = document.getElementById('fornecedores-th-acoes');
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+  const acoesTopo = document.getElementById('fornecedores-acoes-admin');
+  if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
+
+  document.getElementById('fornecedores-val-total').textContent = fornecedoresLista.length;
+  document.getElementById('fornecedores-val-ativos').textContent = fornecedoresLista.filter(f => f.ativo).length;
+
+  const termoBusca = (document.getElementById('fornecedores-busca')?.value || '').trim().toLowerCase();
+  let linhas = fornecedoresLista;
+  if (termoBusca) {
+    linhas = linhas.filter(f => f.nome.toLowerCase().includes(termoBusca) || f.categoria.toLowerCase().includes(termoBusca));
+  }
+
+  if (!linhas.length) {
+    const colspan = 7 + (isAdmin ? 1 : 0);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum fornecedor encontrado.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = linhas.map((f) => `
+    <tr>
+      <td>
+        <span class="font-bold">${escaparHtml(f.nome)}</span>
+        ${f.cnpj ? `<span class="insumo-unidade">${escaparHtml(f.cnpj)}</span>` : ''}
+      </td>
+      <td class="text-muted">${escaparHtml(f.categoria)}</td>
+      <td class="fornecedor-contato-cell">
+        ${f.contatoNome ? `<span>${escaparHtml(f.contatoNome)}</span>` : ''}
+        ${f.contatoTelefone ? `<span class="text-muted">${escaparHtml(f.contatoTelefone)}</span>` : ''}
+        ${f.contatoEmail ? `<span class="text-muted">${escaparHtml(f.contatoEmail)}</span>` : ''}
+      </td>
+      <td class="text-muted">${escaparHtml(f.prazoPagamento) || '—'}</td>
+      <td class="text-muted">${escaparHtml(f.diasEntrega) || '—'}</td>
+      <td>${f.pedidoMinimo ? `R$ ${f.pedidoMinimo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</td>
+      <td><span class="badge-pill ${f.ativo ? 'pos' : 'neg'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      ${isAdmin ? `
+        <td class="acoes-linha">
+          <button type="button" class="btn-acao-icone" data-acao="editar-fornecedor" data-id="${f.id}" title="Editar fornecedor">
+            <i data-lucide="pencil"></i>
+          </button>
+          <button type="button" class="btn-acao-icone" data-acao="alternar-ativo-fornecedor" data-id="${f.id}" data-ativo="${f.ativo ? '1' : '0'}" title="${f.ativo ? 'Desativar' : 'Ativar'}">
+            <i data-lucide="${f.ativo ? 'ban' : 'check-circle-2'}"></i>
+          </button>
+        </td>
+      ` : ''}
+    </tr>
+  `).join('');
+
+  if (isAdmin) wireFornecedoresTableEvents();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function wireFornecedoresTableEvents() {
+  document.querySelectorAll('[data-acao="editar-fornecedor"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.id, 10);
+      const fornecedor = fornecedoresLista.find(f => f.id === id);
+      if (fornecedor) abrirModalFornecedor(fornecedor);
+    });
+  });
+
+  document.querySelectorAll('[data-acao="alternar-ativo-fornecedor"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.id, 10);
+      const novoValor = btn.dataset.ativo !== '1';
+      try {
+        const resposta = await fetch(`/api/fornecedores/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ativo: novoValor }),
+        });
+        if (!resposta.ok) throw new Error('falha ao atualizar status');
+        await carregarFornecedores();
+      } catch (erro) {
+        console.error('Falha ao atualizar status do fornecedor:', erro);
+        alert('Não foi possível atualizar o status do fornecedor.');
+      }
+    });
+  });
+}
+
+// --- Modal: Novo/Editar fornecedor ---
+function abrirModalFornecedor(fornecedor) {
+  fornecedorEditandoId = fornecedor ? fornecedor.id : null;
+  document.getElementById('modal-fornecedor-titulo').textContent = fornecedor ? 'Editar fornecedor' : 'Novo fornecedor';
+  document.getElementById('fornecedor-nome').value = fornecedor?.nome || '';
+  document.getElementById('fornecedor-cnpj').value = fornecedor?.cnpj || '';
+  document.getElementById('fornecedor-categoria').value = fornecedor?.categoria || 'Geral';
+  document.getElementById('fornecedor-contato-nome').value = fornecedor?.contatoNome || '';
+  document.getElementById('fornecedor-contato-telefone').value = fornecedor?.contatoTelefone || '';
+  document.getElementById('fornecedor-contato-email').value = fornecedor?.contatoEmail || '';
+  document.getElementById('fornecedor-prazo-pagamento').value = fornecedor?.prazoPagamento || '';
+  document.getElementById('fornecedor-dias-entrega').value = fornecedor?.diasEntrega || '';
+  document.getElementById('fornecedor-pedido-minimo').value = fornecedor?.pedidoMinimo || 0;
+  document.getElementById('fornecedor-observacoes').value = fornecedor?.observacoes || '';
+  document.getElementById('modal-fornecedor').style.display = 'flex';
+}
+
+function fecharModalFornecedor() {
+  document.getElementById('modal-fornecedor').style.display = 'none';
+  fornecedorEditandoId = null;
+}
+
+document.getElementById('btn-novo-fornecedor')?.addEventListener('click', () => abrirModalFornecedor(null));
+document.getElementById('btn-fornecedor-fechar')?.addEventListener('click', fecharModalFornecedor);
+document.getElementById('btn-fornecedor-cancelar')?.addEventListener('click', fecharModalFornecedor);
+
+document.getElementById('form-fornecedor')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const corpo = {
+    nome: document.getElementById('fornecedor-nome').value,
+    cnpj: document.getElementById('fornecedor-cnpj').value,
+    categoria: document.getElementById('fornecedor-categoria').value,
+    contatoNome: document.getElementById('fornecedor-contato-nome').value,
+    contatoTelefone: document.getElementById('fornecedor-contato-telefone').value,
+    contatoEmail: document.getElementById('fornecedor-contato-email').value,
+    prazoPagamento: document.getElementById('fornecedor-prazo-pagamento').value,
+    diasEntrega: document.getElementById('fornecedor-dias-entrega').value,
+    pedidoMinimo: document.getElementById('fornecedor-pedido-minimo').value,
+    observacoes: document.getElementById('fornecedor-observacoes').value,
+  };
+  try {
+    const url = fornecedorEditandoId ? `/api/fornecedores/${fornecedorEditandoId}` : '/api/fornecedores';
+    const metodo = fornecedorEditandoId ? 'PUT' : 'POST';
+    const resposta = await fetch(url, {
+      method: metodo,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar fornecedor');
+    fecharModalFornecedor();
+    await carregarFornecedores();
+  } catch (erro) {
+    console.error('Falha ao salvar fornecedor:', erro);
+    alert(erro.message || 'Não foi possível salvar o fornecedor.');
+  }
+});
+
+// --- COTAÇÕES (RFQ manual, fase 2 do módulo de Compras) ---
+const STATUS_LABEL_COTACAO = { aberta: 'Aberta', fechada: 'Fechada' };
+const STATUS_CLASSE_BADGE_COTACAO = { aberta: 'pos', fechada: 'neu-orange' };
+
+let cotacoesLista = [];
+let cotacaoAtualId = null;
+
+async function carregarCotacoes() {
+  const tbody = document.getElementById('cotacoes-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/cotacoes');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    cotacoesLista = dados.cotacoes || [];
+    renderCotacoesLista();
+  } catch (erro) {
+    console.error('Falha ao carregar cotações:', erro);
+    tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444;">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+function renderCotacoesLista() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const tbody = document.getElementById('cotacoes-tabela-body');
+  if (!tbody) return;
+
+  const thAcoes = document.getElementById('cotacoes-th-acoes');
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+  const acoesTopo = document.getElementById('cotacoes-acoes-admin');
+  if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
+
+  if (!cotacoesLista.length) {
+    const colspan = 5 + (isAdmin ? 1 : 0);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma cotação registrada ainda.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = cotacoesLista.map((c) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(c.titulo)}</td>
+      <td><span class="badge-pill ${STATUS_CLASSE_BADGE_COTACAO[c.status]}">${STATUS_LABEL_COTACAO[c.status]}</span></td>
+      <td>${c.totalInsumos}</td>
+      <td>${c.totalFornecedores}</td>
+      <td class="text-muted">${new Date(c.criadoEm).toLocaleDateString('pt-BR')}</td>
+      ${isAdmin ? `
+        <td class="acoes-linha">
+          <button type="button" class="btn-acao-icone" data-acao="abrir-cotacao" data-id="${c.id}" title="Ver/editar preços">
+            <i data-lucide="arrow-right"></i>
+          </button>
+          <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-cotacao" data-id="${c.id}" data-titulo="${escaparHtml(c.titulo)}" title="Excluir cotação">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </td>
+      ` : ''}
+    </tr>
+  `).join('');
+
+  document.querySelectorAll('[data-acao="abrir-cotacao"]').forEach(btn => {
+    btn.addEventListener('click', () => abrirCotacaoDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+  document.querySelectorAll('[data-acao="excluir-cotacao"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Excluir a cotação "${btn.dataset.titulo}"? Essa ação não pode ser desfeita.`)) return;
+      try {
+        const resposta = await fetch(`/api/cotacoes/${btn.dataset.id}`, { method: 'DELETE' });
+        if (!resposta.ok) throw new Error('falha ao excluir');
+        await carregarCotacoes();
+      } catch (erro) {
+        console.error('Falha ao excluir cotação:', erro);
+        alert('Não foi possível excluir a cotação.');
+      }
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.getElementById('btn-nova-cotacao')?.addEventListener('click', () => {
+  document.getElementById('form-nova-cotacao').reset();
+  document.getElementById('modal-nova-cotacao').style.display = 'flex';
+});
+document.getElementById('btn-nova-cotacao-fechar')?.addEventListener('click', () => {
+  document.getElementById('modal-nova-cotacao').style.display = 'none';
+});
+document.getElementById('btn-nova-cotacao-cancelar')?.addEventListener('click', () => {
+  document.getElementById('modal-nova-cotacao').style.display = 'none';
+});
+
+document.getElementById('form-nova-cotacao')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const titulo = document.getElementById('nova-cotacao-titulo').value;
+  try {
+    const resposta = await fetch('/api/cotacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao criar cotação');
+    document.getElementById('modal-nova-cotacao').style.display = 'none';
+    await carregarCotacoes();
+    abrirCotacaoDetalhe(dados.id);
+  } catch (erro) {
+    console.error('Falha ao criar cotação:', erro);
+    alert(erro.message || 'Não foi possível criar a cotação.');
+  }
+});
+
+document.getElementById('btn-cotacao-voltar')?.addEventListener('click', async () => {
+  document.getElementById('cotacoes-detalhe-view').style.display = 'none';
+  document.getElementById('cotacoes-lista-view').style.display = '';
+  cotacaoAtualId = null;
+  await carregarCotacoes();
+});
+
+async function abrirCotacaoDetalhe(cotacaoId) {
+  cotacaoAtualId = cotacaoId;
+  document.getElementById('cotacoes-lista-view').style.display = 'none';
+  document.getElementById('cotacoes-detalhe-view').style.display = '';
+
+  const [insumosResp, fornecedoresResp] = await Promise.all([
+    fetch('/api/insumos'),
+    fetch('/api/fornecedores'),
+  ]);
+  const insumosDados = await insumosResp.json();
+  const fornecedoresDados = await fornecedoresResp.json();
+
+  const selectInsumo = document.getElementById('cotacao-preco-insumo');
+  selectInsumo.innerHTML = (insumosDados.insumos || [])
+    .map(i => `<option value="${i.id}">${escaparHtml(i.nome)}</option>`).join('');
+
+  const selectFornecedor = document.getElementById('cotacao-preco-fornecedor');
+  selectFornecedor.innerHTML = (fornecedoresDados.fornecedores || [])
+    .filter(f => f.ativo)
+    .map(f => `<option value="${f.id}">${escaparHtml(f.nome)}</option>`).join('');
+
+  await recarregarCotacaoDetalhe();
+}
+
+async function recarregarCotacaoDetalhe() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+
+    document.getElementById('cotacao-detalhe-titulo').textContent = dados.cotacao.titulo;
+
+    const acoesAdmin = document.getElementById('cotacao-detalhe-acoes-admin');
+    if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
+    const formCard = document.getElementById('cotacao-form-preco-card');
+    if (formCard) formCard.style.display = isAdmin && dados.cotacao.status === 'aberta' ? '' : 'none';
+
+    const btnStatus = document.getElementById('btn-cotacao-alternar-status');
+    if (btnStatus) {
+      btnStatus.textContent = dados.cotacao.status === 'aberta' ? 'Fechar cotação' : 'Reabrir cotação';
+      btnStatus.onclick = async () => {
+        await fetch(`/api/cotacoes/${cotacaoAtualId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: dados.cotacao.status === 'aberta' ? 'fechada' : 'aberta' }),
+        });
+        await recarregarCotacaoDetalhe();
+      };
+    }
+
+    renderCotacaoComparacao(dados.grupos, isAdmin);
+  } catch (erro) {
+    console.error('Falha ao carregar cotação:', erro);
+    alert('Não foi possível carregar a cotação.');
+  }
+}
+
+function renderCotacaoComparacao(grupos, isAdmin) {
+  const container = document.getElementById('cotacao-comparacao-lista');
+  if (!grupos.length) {
+    container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
+    return;
+  }
+
+  container.innerHTML = grupos.map((grupo) => `
+    <div class="chart-card cotacao-grupo">
+      <div class="cotacao-grupo-header">
+        <h4>${escaparHtml(grupo.insumoNome)}</h4>
+        <span class="text-muted">${escaparHtml(grupo.categoria)}</span>
+      </div>
+      ${grupo.precos.map((preco, indice) => `
+        <div class="cotacao-preco-linha ${indice === 0 ? 'melhor-preco' : ''} ${preco.selecionado ? 'selecionado' : ''}">
+          <span class="cotacao-preco-fornecedor">${escaparHtml(preco.fornecedorNome)}</span>
+          <span class="cotacao-preco-valor">R$ ${preco.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          ${indice === 0 ? '<span class="badge-pill pos">Melhor preço</span>' : ''}
+          ${isAdmin ? `
+            <button type="button" class="btn-acao-icone" data-acao="selecionar-preco" data-id="${preco.id}" title="Marcar como vencedor">
+              <i data-lucide="check"></i>
+            </button>
+            <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-preco" data-id="${preco.id}" title="Remover">
+              <i data-lucide="trash-2"></i>
+            </button>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  if (isAdmin) {
+    document.querySelectorAll('[data-acao="selecionar-preco"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${btn.dataset.id}/selecionar`, { method: 'PUT' });
+        await recarregarCotacaoDetalhe();
+      });
+    });
+    document.querySelectorAll('[data-acao="excluir-preco"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${btn.dataset.id}`, { method: 'DELETE' });
+        await recarregarCotacaoDetalhe();
+      });
+    });
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.getElementById('form-cotacao-preco')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const corpo = {
+    insumoId: document.getElementById('cotacao-preco-insumo').value,
+    fornecedorId: document.getElementById('cotacao-preco-fornecedor').value,
+    preco: document.getElementById('cotacao-preco-valor').value,
+  };
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/precos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao lançar preço');
+    document.getElementById('cotacao-preco-valor').value = '';
+    await recarregarCotacaoDetalhe();
+  } catch (erro) {
+    console.error('Falha ao lançar preço:', erro);
+    alert(erro.message || 'Não foi possível lançar o preço.');
+  }
+});
 
 // --- Modal: Editar estoque (correção manual de quantidade/mínimo) ---
 function abrirModalEditarEstoque(insumoId, loja, nomeInsumo, dadosLoja) {

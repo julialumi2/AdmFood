@@ -54,6 +54,18 @@ from backend.armazenamento import (
     consumo_medio_insumo,
     listar_lotes_vencendo,
     marcar_lote_resolvido,
+    criar_fornecedor,
+    listar_fornecedores,
+    atualizar_fornecedor,
+    criar_cotacao,
+    listar_cotacoes,
+    buscar_cotacao,
+    atualizar_cotacao,
+    excluir_cotacao,
+    adicionar_preco_cotacao,
+    listar_precos_cotacao,
+    excluir_preco_cotacao,
+    selecionar_preco_cotacao,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1186,6 +1198,245 @@ def api_definir_ficha_tecnica(item_id):
         links.append({"insumoId": insumo_id, "quantidade": quantidade})
 
     definir_ficha_tecnica(item_id, links)
+    return jsonify({"ok": True})
+
+
+# --- FORNECEDORES (diretório da rede, semente do módulo de Compras) --------
+# Cadastro simples pra começar — sem fluxo de cotação ainda (ver seção 9 da
+# documentação). De rede toda, não por loja: um fornecedor atende a rede
+# inteira. "ativo" em vez de excluir de verdade, pra não quebrar cotação/
+# pedido de compra que vierem a referenciar fornecedor_id nas próximas fases.
+
+def _formatar_fornecedor(linha):
+    return {
+        "id": linha["id"],
+        "nome": linha["nome"],
+        "cnpj": linha["cnpj"],
+        "categoria": linha["categoria"],
+        "contatoNome": linha["contato_nome"],
+        "contatoTelefone": linha["contato_telefone"],
+        "contatoEmail": linha["contato_email"],
+        "prazoPagamento": linha["prazo_pagamento"],
+        "diasEntrega": linha["dias_entrega"],
+        "pedidoMinimo": linha["pedido_minimo"],
+        "observacoes": linha["observacoes"],
+        "ativo": bool(linha["ativo"]),
+    }
+
+
+def _campos_fornecedor_do_corpo(dados, exigir_nome=True):
+    campos = {}
+    if 'nome' in dados or exigir_nome:
+        nome = (dados.get('nome') or '').strip()
+        if not nome:
+            return None, jsonify({"erro": "Informe o nome do fornecedor."}), 400
+        campos['nome'] = nome
+    if 'cnpj' in dados:
+        campos['cnpj'] = (dados['cnpj'] or '').strip()
+    if 'categoria' in dados:
+        campos['categoria'] = (dados['categoria'] or 'Geral').strip() or 'Geral'
+    if 'contatoNome' in dados:
+        campos['contato_nome'] = (dados['contatoNome'] or '').strip()
+    if 'contatoTelefone' in dados:
+        campos['contato_telefone'] = (dados['contatoTelefone'] or '').strip()
+    if 'contatoEmail' in dados:
+        campos['contato_email'] = (dados['contatoEmail'] or '').strip()
+    if 'prazoPagamento' in dados:
+        campos['prazo_pagamento'] = (dados['prazoPagamento'] or '').strip()
+    if 'diasEntrega' in dados:
+        campos['dias_entrega'] = (dados['diasEntrega'] or '').strip()
+    if 'observacoes' in dados:
+        campos['observacoes'] = (dados['observacoes'] or '').strip()
+    if 'pedidoMinimo' in dados:
+        try:
+            campos['pedido_minimo'] = float(dados['pedidoMinimo'] or 0)
+        except (TypeError, ValueError):
+            return None, jsonify({"erro": "Pedido mínimo inválido."}), 400
+        if campos['pedido_minimo'] < 0:
+            return None, jsonify({"erro": "Pedido mínimo não pode ser negativo."}), 400
+    if 'ativo' in dados:
+        campos['ativo'] = 1 if dados['ativo'] else 0
+    return campos, None, None
+
+
+@app.route('/api/fornecedores', methods=['GET'])
+def api_listar_fornecedores():
+    return jsonify({"fornecedores": [_formatar_fornecedor(f) for f in listar_fornecedores()]})
+
+
+@app.route('/api/fornecedores', methods=['POST'])
+def api_criar_fornecedor():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    campos, erro_resposta, status = _campos_fornecedor_do_corpo(dados)
+    if erro_resposta:
+        return erro_resposta, status
+
+    fornecedor_id = criar_fornecedor(campos)
+    return jsonify({"id": fornecedor_id})
+
+
+@app.route('/api/fornecedores/<int:fornecedor_id>', methods=['PUT'])
+def api_atualizar_fornecedor(fornecedor_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    campos, erro_resposta, status = _campos_fornecedor_do_corpo(dados, exigir_nome=False)
+    if erro_resposta:
+        return erro_resposta, status
+
+    atualizar_fornecedor(fornecedor_id, campos)
+    return jsonify({"ok": True})
+
+
+# --- COTAÇÃO (RFQ manual, fase 2 do módulo de Compras) ----------------------
+# Sem coleta automática de preço (WhatsApp) ainda — aqui só se registra o
+# preço que cada fornecedor já passou por fora, pra comparar lado a lado e
+# marcar o vencedor por insumo. Ver seção 6.7/9 da documentação.
+
+def _formatar_cotacao(linha):
+    return {
+        "id": linha["id"],
+        "titulo": linha["titulo"],
+        "status": linha["status"],
+        "criadoEm": linha["criado_em"],
+        "totalInsumos": linha["total_insumos"],
+        "totalFornecedores": linha["total_fornecedores"],
+    }
+
+
+def _agrupar_precos_por_insumo(precos):
+    grupos = {}
+    for preco in precos:
+        grupo = grupos.setdefault(preco["insumo_id"], {
+            "insumoId": preco["insumo_id"],
+            "insumoNome": preco["insumo_nome"],
+            "categoria": preco["insumo_categoria"],
+            "unidadeMedida": preco["unidade_medida"],
+            "precos": [],
+        })
+        grupo["precos"].append({
+            "id": preco["id"],
+            "fornecedorId": preco["fornecedor_id"],
+            "fornecedorNome": preco["fornecedor_nome"],
+            "preco": preco["preco"],
+            "selecionado": bool(preco["selecionado"]),
+        })
+    return sorted(grupos.values(), key=lambda g: g["insumoNome"])
+
+
+@app.route('/api/cotacoes', methods=['GET'])
+def api_listar_cotacoes():
+    return jsonify({"cotacoes": [_formatar_cotacao(c) for c in listar_cotacoes()]})
+
+
+@app.route('/api/cotacoes', methods=['POST'])
+def api_criar_cotacao():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    if not titulo:
+        return jsonify({"erro": "Informe um título pra cotação."}), 400
+
+    cotacao_id = criar_cotacao(titulo)
+    return jsonify({"id": cotacao_id})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>', methods=['GET'])
+def api_detalhe_cotacao(cotacao_id):
+    cotacao = buscar_cotacao(cotacao_id)
+    if not cotacao:
+        return jsonify({"erro": "Cotação não encontrada."}), 404
+
+    grupos = _agrupar_precos_por_insumo(listar_precos_cotacao(cotacao_id))
+    return jsonify({
+        "cotacao": {
+            "id": cotacao["id"],
+            "titulo": cotacao["titulo"],
+            "status": cotacao["status"],
+            "criadoEm": cotacao["criado_em"],
+        },
+        "grupos": grupos,
+    })
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>', methods=['PUT'])
+def api_atualizar_cotacao(cotacao_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    campos = {}
+    if 'titulo' in dados:
+        titulo = (dados['titulo'] or '').strip()
+        if not titulo:
+            return jsonify({"erro": "Título não pode ficar vazio."}), 400
+        campos['titulo'] = titulo
+    if 'status' in dados:
+        if dados['status'] not in ('aberta', 'fechada'):
+            return jsonify({"erro": "Status inválido."}), 400
+        campos['status'] = dados['status']
+
+    atualizar_cotacao(cotacao_id, campos)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>', methods=['DELETE'])
+def api_excluir_cotacao(cotacao_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    excluir_cotacao(cotacao_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/precos', methods=['POST'])
+def api_adicionar_preco_cotacao(cotacao_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    try:
+        insumo_id = int(dados['insumoId'])
+        fornecedor_id = int(dados['fornecedorId'])
+        preco = float(dados['preco'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"erro": "Insumo, fornecedor e preço são obrigatórios."}), 400
+    if preco <= 0:
+        return jsonify({"erro": "Preço precisa ser maior que zero."}), 400
+
+    adicionar_preco_cotacao(cotacao_id, insumo_id, fornecedor_id, preco)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/precos/<int:preco_id>', methods=['DELETE'])
+def api_excluir_preco_cotacao(cotacao_id, preco_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    excluir_preco_cotacao(preco_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/precos/<int:preco_id>/selecionar', methods=['PUT'])
+def api_selecionar_preco_cotacao(cotacao_id, preco_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    selecionar_preco_cotacao(preco_id)
     return jsonify({"ok": True})
 
 

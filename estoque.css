@@ -7,11 +7,6 @@
   text-align: left;
 }
 
-.estoque-acoes-topo {
-  display: flex;
-  gap: var(--space-3);
-}
-
 .estoque-entrada-lojas {
   display: flex;
   flex-direction: column;
@@ -66,39 +61,6 @@
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
-/* Steppers -/+ nos campos de quantidade (padrão inspirado no VMarket,
-   com as cores do sistema) */
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.stepper input {
-  flex: 1;
-}
-
-.stepper-btn {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--input-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--surface-muted);
-  color: var(--text-dark);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.stepper-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
 /* Nome do insumo na tabela: favorito (estrela) + unidade de medida junto */
 .insumo-nome-cell {
   display: flex;
@@ -143,17 +105,4 @@
 /* Coluna "Atual", destacada como o Saldo nas telas de estoque de referência */
 .col-atual-destaque {
   background-color: var(--primary-soft);
-}
-
-@media (max-width: 768px) {
-  .estoque-acoes-topo {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  /* Só os 4 cards de resumo do Estoque — 2x2 em vez da coluna única padrão
-     do .cards-grid, porque aqui são 4 cards curtos que cabem bem em par. */
-  .cards-grid-2x2-mobile {
-    grid-template-columns: 1fr 1fr;
-  }
 }

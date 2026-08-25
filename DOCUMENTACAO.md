@@ -45,6 +45,8 @@ inicializa o que é relevante pra ela.
 |---|---|
 | `index.html` | Resumo (Home) — faturamento da rede, gráfico diário, insights automáticos |
 | `estoque.html` | Estoque — controle nativo de insumos por loja, sem depender de terceiro (ver seção 6.4) |
+| `fornecedores.html` | Fornecedores — diretório da rede, semente do módulo de Compras (ver seção 6.7) |
+| `cotacoes.html` | Cotações — comparação manual de preço por insumo entre fornecedores (ver seção 6.8) |
 | `cardapio.html` | Cardápio — comparativo de preços por canal de venda (iFood/99Food/BeeFood/Cardápio Web), só leitura, importado de planilha (ver seção 6.1) |
 | `preparo.html` | Preparo — indicadores operacionais da cozinha (tempo médio do pedido, volume por horário, gargalos; ver seção 6.2) |
 | `clickup.html` | Quadro de tarefas (Kanban) |
@@ -171,6 +173,9 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `item_cardapio` | Catálogo de pratos/itens do cardápio, pra ficha técnica (ver 6.5) |
 | `ficha_tecnica` | Quais insumos (e quanto de cada) um item do cardápio usa (ver 6.5) |
 | `venda_item` | Itens vendidos por pedido, casados com `item_cardapio` (ver 6.6) |
+| `fornecedor` | Diretório de fornecedores da rede, semente do módulo de Compras (ver 6.7) |
+| `cotacao` | Envelope de uma cotação de preço (título, status) (ver 6.8) |
+| `cotacao_preco` | Preço lançado por insumo/fornecedor numa cotação, com vencedor marcado (ver 6.8) |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
@@ -424,6 +429,107 @@ estoque mínimo automaticamente, só mostra o número — depende de a Ficha
 Técnica estar bem mais completa (hoje só 20 itens da Hamburgueria
 Artesanos, a maioria sem gramatura) pra virar sugestão confiável.
 
+### 6.7 Fornecedores (semente do módulo de Compras)
+
+Tela `fornecedores.html` — diretório de fornecedores da rede, **sem**
+fluxo de cotação ainda (isso é uma fase futura, ver seção 9). Adicionado
+em 2026-08-25, depois de mapear o fluxo completo da VMarket (Contagem →
+Requisição/Pré-cotação → Cotação enviada a fornecedores → matriz de
+comparação de preço → Pedido de compra) — a decisão foi construir só o
+cadastro por enquanto, o resto fica pra quando o fluxo de cotação em si
+for priorizado.
+
+`fornecedor` é de rede toda (não por loja, diferente de insumo): nome,
+CNPJ, categoria, contato (nome/telefone/e-mail), prazo de pagamento, dias
+de entrega, pedido mínimo, observações, `ativo`. **Sem exclusão de
+verdade** — só `ativo` (mesmo raciocínio de `usuario.ativo`): quando as
+próximas fases (cotação, pedido de compra) passarem a referenciar
+`fornecedor_id`, apagar quebraria esse histórico. Toggle ativo/inativo é
+um botão dedicado na tabela (ícone `ban`/`check-circle-2`), mesmo padrão
+já usado pra ativar/desativar membro da equipe — não um campo dentro do
+modal de edição.
+
+Nova página no menu lateral (não só uma sub-aba) porque é a semente de um
+módulo novo (Compras), separado do Estoque. Os componentes de UI que
+também aparecem aqui (steppers `.stepper-btn`, `.page-acoes-topo`) foram
+promovidos de `estoque.css` pra `theme.css` nessa mudança, por já serem
+usados em duas páginas.
+
+**Menu recolhível "Compras"** (`.menu-group`/`.menu-subgroup`, ver
+`theme.css`/`script.js`) — replicando o padrão de menu da VMarket (grupos
+que expandem/recolhem), mantendo as cores do sistema. "Compras" é o grupo,
+com "Fornecedores" dentro — pronto pra crescer com Cotações/Pedidos nas
+próximas fases, sem precisar de outro nível de reestruturação. Auto-expande
+se a página atual estiver dentro do grupo; clique no botão alterna
+manualmente. "Estoque" continua fora do grupo, como item direto — é um
+domínio maduro e já separado, diferente de Compras que ainda está nascendo.
+
+**Sidebar no celular vira gaveta** (2026-08-25) — antes, a sidebar
+simplesmente sumia (`display:none`) no celular, sem alternativa, e só a
+barra inferior fixa (6 itens: Resumo, Estoque, Cardápio, Preparo, ClickUp,
+Insights) dava acesso por toque. Configurações, Fornecedores e Cotações
+(fora da barra) ficavam **inalcançáveis** por toque — só digitando a URL
+direto. Corrigido reaproveitando o mesmo botão que no desktop recolhe a
+sidebar pra ícone só (`#toggleMenuBtn`/`#btnToggleMenu`): no celular, o
+clique alterna `.mobile-menu-aberto` no `#dashboardWrapper`, fazendo a
+sidebar deslizar por cima do conteúdo (`position:fixed` + `translateX`),
+com um backdrop escurecido (`#mobile-menu-backdrop`) que fecha a gaveta ao
+tocar fora; tocar num link do menu também fecha. A preferência de sidebar
+recolhida do desktop (`localStorage sidebar-collapsed`) **não** é aplicada
+no celular (checagem `window.innerWidth <= 768` antes de ler o
+`localStorage`), pra gaveta nunca abrir em modo ícone-só sem rótulo.
+
+Com a gaveta cobrindo tudo, a **barra inferior fixa foi removida** (não
+fazia mais sentido duplicar navegação) — `.mobile-bottom-nav` teve seu
+CSS excluído de `theme.css`, o padding reservado pra ela no rodapé de
+`.page-content` (88px) voltou ao normal, e o bloco `<nav class="mobile-
+bottom-nav">` foi removido das 9 páginas.
+
+**Carga inicial de fornecedores** (2026-08-25): 69 fornecedores trazidos
+da VMarket via export CSV ("Cotações" → "Meus Fornecedores" → "Exportar
+Lista de Fornecedores"), com `importar_fornecedores_vmarket.py`.
+Idempotente por CNPJ. Categoria sempre entra como "Geral" (a VMarket não
+tem esse campo) — ajustável depois pela tela. `valor_frete` do CSV (que
+não existe no nosso schema) vira uma linha em observações quando maior
+que zero, pra não perder o dado.
+
+### 6.8 Cotações (RFQ manual, fase 2 do módulo de Compras)
+
+Tela `cotacoes.html` — comparação de preço entre fornecedores por insumo,
+**manual**: sem coleta automática (WhatsApp) ainda, mesmo bloqueio do item
+2 da seção 9. Aqui só se registra o preço que cada fornecedor já passou
+por fora, pra comparar lado a lado e marcar o vencedor por insumo.
+Adicionado em 2026-08-25, junto com o menu "Compras".
+
+`cotacao` (id, título, status `aberta`/`fechada`, criado_em) é só o
+envelope. `cotacao_preco` guarda cada preço lançado (cotação × insumo ×
+fornecedor × preço × `selecionado`), com `UNIQUE(cotacao_id, insumo_id,
+fornecedor_id)` — relançar o preço de quem já tinha cotado o mesmo insumo
+corrige o valor (upsert), não duplica. **Não existe uma tabela separada
+"quais insumos/fornecedores participam da cotação"**: a grade (linhas e
+colunas da comparação) é inferida dos próprios preços já lançados —
+simplifica o schema, mas significa que não dá pra reservar uma célula
+vazia de antemão (o insumo/fornecedor só "aparece" quando alguém lança um
+preço pra ele).
+
+Tela com duas visões dentro do mesmo arquivo (padrão parecido com o
+sub-aba de Preços/Ficha Técnica em `cardapio.html`, mas aqui trocando a
+`view` inteira via JS em vez de aba): lista de cotações
+(`#cotacoes-lista-view`) e detalhe/comparação
+(`#cotacoes-detalhe-view`). No detalhe, cada insumo com preço lançado vira
+um card, com os fornecedores que cotaram ordenados por preço — o mais
+barato ganha o badge "Melhor preço" automaticamente, mas o **vencedor
+marcado manualmente** (`selecionado`) pode ser outro fornecedor (ex: prazo
+de entrega ou pagamento melhor compensa não ser o mais barato) —
+`selecionar_preco_cotacao` desmarca qualquer outro preço do mesmo insumo
+nessa cotação ao marcar um novo (só um vencedor por insumo).
+
+"Fechar cotação" (toggle de status, sem exclusão) esconde o formulário de
+lançar preço — pensado pra quando a decisão já foi tomada, evita editar
+sem querer; "Reabrir" traz o formulário de volta. Leitura liberada pra
+todo mundo logado; criar/lançar preço/selecionar vencedor/fechar/excluir é
+só admin.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -464,6 +570,21 @@ Todos em `app.py`, prefixo `/api`.
 - `POST /api/itens-cardapio` — cadastrar item (prato) novo — só admin
 - `DELETE /api/itens-cardapio/<id>` — excluir item — só admin
 - `PUT /api/itens-cardapio/<id>/ficha-tecnica` — substitui a lista inteira de insumos do item — só admin
+
+**Fornecedores**
+- `GET /api/fornecedores` — diretório completo (ativos e inativos)
+- `POST /api/fornecedores` — cadastrar fornecedor novo — só admin
+- `PUT /api/fornecedores/<id>` — editar campos (parcial, inclusive `ativo`) — só admin
+
+**Cotações**
+- `GET /api/cotacoes` — lista com contagem de insumos/fornecedores distintos já com preço
+- `POST /api/cotacoes` — criar cotação (só `titulo`) — só admin
+- `GET /api/cotacoes/<id>` — detalhe: preços agrupados por insumo, ordenados por preço
+- `PUT /api/cotacoes/<id>` — editar título e/ou status (`aberta`/`fechada`) — só admin
+- `DELETE /api/cotacoes/<id>` — excluir cotação e seus preços — só admin
+- `POST /api/cotacoes/<id>/precos` — lançar/corrigir preço (upsert por insumo+fornecedor) — só admin
+- `DELETE /api/cotacoes/<id>/precos/<preco_id>` — remover um preço lançado — só admin
+- `PUT /api/cotacoes/<id>/precos/<preco_id>/selecionar` — marcar vencedor do insumo (desmarca os demais) — só admin
 
 **Tarefas (Kanban / ClickUp)**
 - `GET|POST /api/tarefas` — listar todas / criar
@@ -561,7 +682,7 @@ chamar a API direto com outro valor.
 Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 2026-08-17 com a Julia):
 
-1. **Estoque / VMarket** — 🟡 parte "estoque" resolvida em 2026-08-24 (catálogo de insumos + quantidade por loja, ver seção 6.4), mas não do jeito planejado originalmente: investigado e confirmado que a VMarket não tem API de parceiro (só exportação manual de planilha), então em vez de integrar, foi construído um controle **nativo** no próprio sistema. **Ambição maior definida em 2026-08-25**: parar de usar a VMarket por completo, não só o estoque — também **Compras** (pedidos) e **Cotação de insumo com fornecedor** (RFQ: pedir preço a vários fornecedores, comparar propostas, fechar pedido), hoje só na VMarket. Isso é um domínio novo (cadastro de fornecedor, fluxo de cotação/resposta, pedido de compra) — não iniciado, escopo ainda não definido com a Julia/Guilherme (quem primeiro: fornecedores? cotação? pedido?).
+1. **Estoque / VMarket** — 🟡 parte "estoque" resolvida em 2026-08-24 (catálogo de insumos + quantidade por loja, ver seção 6.4), mas não do jeito planejado originalmente: investigado e confirmado que a VMarket não tem API de parceiro (só exportação manual de planilha), então em vez de integrar, foi construído um controle **nativo** no próprio sistema. **Ambição maior definida em 2026-08-25**: parar de usar a VMarket por completo, não só o estoque — também **Compras** (pedidos) e **Cotação de insumo com fornecedor** (RFQ: pedir preço a vários fornecedores, comparar propostas, fechar pedido), hoje só na VMarket. Mapeado o fluxo completo deles (Contagem → Requisição/Pré-cotação → Cotação → matriz de comparação → Pedido de compra, 4 estágios de recebimento) — domínio novo, grande. Fase 1 (cadastro de fornecedores, seção 6.7) ✅ e Fase 2 (cotação manual + comparação por insumo, seção 6.8) ✅ concluídas em 2026-08-25. Faltam: pedido de compra ligado à cotação (com status de recebimento), e a automação de coleta de preço via WhatsApp (mesmo bloqueio do item 2) — até lá, o preço é sempre digitado à mão.
 2. **Relatório via WhatsApp** — integração com a API do WhatsApp Business pra enviar relatórios. Aguardando confirmação de acesso/credenciais da API.
 3. **ClickUp** — ✅ concluído em 2026-08-17 (backend real + Kanban persistente, ver seção 7).
 4. **Acessos da equipe** — ✅ concluído em 2026-08-19 (login individual por pessoa, com senha — ver seção 8). Landing page e cadastro público ficam **de propósito** atrás do login por enquanto (decisão da Julia: sistema é só interno, sem necessidade de porta pública ainda).

@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Cardápio</title>
+  <title>AdmFood - Cotações</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="cardapio.css">
+  <link rel="stylesheet" href="cotacoes.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -44,7 +44,7 @@
           <i data-lucide="box"></i>
           <span>Estoque</span>
         </a>
-        <div class="menu-group">
+        <div class="menu-group expandido">
           <button type="button" class="menu-item menu-group-toggle">
             <i data-lucide="shopping-cart"></i>
             <span>Compras</span>
@@ -55,13 +55,13 @@
               <i data-lucide="truck"></i>
               <span>Fornecedores</span>
             </a>
-            <a href="cotacoes.html" class="menu-subitem">
+            <a href="cotacoes.html" class="menu-subitem active">
               <i data-lucide="list-checks"></i>
               <span>Cotações</span>
             </a>
           </div>
         </div>
-        <a href="cardapio.html" class="menu-item active">
+        <a href="cardapio.html" class="menu-item">
           <i data-lucide="book-open"></i>
           <span>Cardápio</span>
         </a>
@@ -105,7 +105,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">CARDÁPIO</span>
+          <span class="header-page-title">COTAÇÕES</span>
         </div>
 
         <div class="header-right">
@@ -124,68 +124,102 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE CARDÁPIO -->
+      <!-- PÁGINA DE COTAÇÕES -->
       <div class="page-content">
 
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="book-open" class="icon-pin"></i>
-            <span>COMPARATIVO DE PREÇOS</span>
-          </div>
-          <div class="title-row">
-            <h1>Cardápio</h1>
-            <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
-            <div id="cardapio-importar-area" style="display:none;">
-              <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
-              <button type="button" class="btn-secondary" onclick="document.getElementById('cardapio-importar-arquivo').click()">
-                <i data-lucide="upload"></i>
-                Importar planilha
-              </button>
+        <!-- VISÃO: LISTA DE COTAÇÕES -->
+        <div id="cotacoes-lista-view">
+          <div class="dashboard-title-area">
+            <div class="title-top">
+              <i data-lucide="list-checks" class="icon-pin"></i>
+              <span>COTAÇÃO DE INSUMO COM FORNECEDOR</span>
             </div>
-          </div>
-        </div>
-
-        <p id="cardapio-importar-status" class="panel-subtitle" style="display:none;"></p>
-
-        <!-- SUB-ABAS: PREÇOS x FICHA TÉCNICA -->
-        <div class="cardapio-subabas">
-          <button type="button" class="cardapio-subaba active" data-subaba="precos">Preços</button>
-          <button type="button" class="cardapio-subaba" data-subaba="ficha-tecnica">Ficha Técnica</button>
-        </div>
-
-        <!-- MODO: PREÇOS -->
-        <div id="cardapio-modo-precos">
-          <!-- ABAS POR LOJA -->
-          <div class="tabs-bar" id="cardapio-tabs">
-            <!-- Renderizado dinamicamente via JS, conforme as lojas que vierem da API -->
+            <div class="title-row">
+              <h1>Cotações</h1>
+              <div class="page-acoes-topo" id="cotacoes-acoes-admin" style="display:none;">
+                <button type="button" class="btn-registrar-entrada" id="btn-nova-cotacao">
+                  <i data-lucide="plus"></i>
+                  Nova cotação
+                </button>
+              </div>
+            </div>
           </div>
 
           <p class="panel-subtitle" style="margin-top: -8px;">
-            Preço de cada item por canal de venda. Uma planilha nova traz os preços atualizados (o admin pode reimportar a qualquer momento); fotos e ajustes manuais de preço ficam até a próxima planilha reimportada trazer um valor novo pra esse produto.
+            Registro manual do preço que cada fornecedor passou — sem coleta automática ainda. Compare e marque o vencedor por insumo.
           </p>
 
-          <!-- CONTEÚDO DA LOJA SELECIONADA -->
-          <div id="cardapio-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Cotações registradas</h3>
+                <p class="table-subtitle">Clique numa cotação pra ver/editar os preços</p>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Título</th>
+                  <th>Status</th>
+                  <th>Insumos</th>
+                  <th>Fornecedores</th>
+                  <th>Criada em</th>
+                  <th id="cotacoes-th-acoes" style="display:none;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="cotacoes-tabela-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+            </div>
           </div>
         </div>
 
-        <!-- MODO: FICHA TÉCNICA -->
-        <div id="cardapio-modo-ficha-tecnica" style="display:none;">
-          <div class="content-header">
-            <p class="panel-subtitle">
-              Quais insumos cada item do cardápio usa — alimenta o cálculo de quantidade ideal do Estoque.
-              Quantidade em branco significa que ainda não sabemos a gramatura exata.
-            </p>
-            <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
-              <button type="button" class="btn-secondary" id="btn-novo-item-cardapio">
-                <i data-lucide="plus"></i>
-                Novo item
-              </button>
+        <!-- VISÃO: DETALHE DA COTAÇÃO (comparação de preços) -->
+        <div id="cotacoes-detalhe-view" style="display:none;">
+          <button type="button" class="btn-secondary-sm" id="btn-cotacao-voltar" style="margin-bottom: var(--space-4);">
+            <i data-lucide="arrow-left"></i>
+            Voltar pra lista
+          </button>
+
+          <div class="dashboard-title-area">
+            <div class="title-row">
+              <h1 id="cotacao-detalhe-titulo">—</h1>
+              <div class="page-acoes-topo" id="cotacao-detalhe-acoes-admin" style="display:none;">
+                <button type="button" class="btn-secondary" id="btn-cotacao-alternar-status">Fechar cotação</button>
+              </div>
             </div>
           </div>
-          <div id="ficha-tecnica-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+
+          <!-- FORM: LANÇAR PREÇO -->
+          <div class="chart-card" id="cotacao-form-preco-card">
+            <h3 class="table-title" style="margin-bottom: var(--space-3);">Lançar preço recebido</h3>
+            <form id="form-cotacao-preco" class="form-group-row" style="align-items: flex-end; flex-wrap: wrap;">
+              <div class="form-group">
+                <label for="cotacao-preco-insumo">Insumo</label>
+                <select id="cotacao-preco-insumo" required></select>
+              </div>
+              <div class="form-group">
+                <label for="cotacao-preco-fornecedor">Fornecedor</label>
+                <select id="cotacao-preco-fornecedor" required></select>
+              </div>
+              <div class="form-group">
+                <label for="cotacao-preco-valor">Preço (R$)</label>
+                <div class="stepper">
+                  <button type="button" class="stepper-btn" data-target="cotacao-preco-valor" data-delta="-1" aria-label="Diminuir">&minus;</button>
+                  <input type="number" step="0.01" min="0" id="cotacao-preco-valor" required>
+                  <button type="button" class="stepper-btn" data-target="cotacao-preco-valor" data-delta="1" aria-label="Aumentar">+</button>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary-sm">Adicionar</button>
+            </form>
+          </div>
+
+          <!-- COMPARAÇÃO POR INSUMO -->
+          <div id="cotacao-comparacao-lista">
+            <!-- Renderizado dinamicamente via JS: um card por insumo -->
           </div>
         </div>
 
@@ -193,48 +227,21 @@
     </main> <!-- /main-wrapper -->
 
 
-    <!-- MODAL: NOVO ITEM DO CARDÁPIO -->
-    <div class="modal-overlay" id="modal-novo-item-cardapio" style="display:none;">
+    <!-- MODAL: NOVA COTAÇÃO -->
+    <div class="modal-overlay" id="modal-nova-cotacao" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="panel-title">Novo item do cardápio</h3>
-          <button type="button" class="btn-close" id="btn-novo-item-cardapio-fechar" aria-label="Fechar">&times;</button>
+          <h3 class="panel-title">Nova cotação</h3>
+          <button type="button" class="btn-close" id="btn-nova-cotacao-fechar" aria-label="Fechar">&times;</button>
         </div>
-        <form id="form-novo-item-cardapio">
+        <form id="form-nova-cotacao">
           <div class="form-group">
-            <label for="novo-item-nome">Nome</label>
-            <input type="text" id="novo-item-nome" required placeholder="Ex: BIG ART">
-          </div>
-          <div class="form-group">
-            <label for="novo-item-categoria">Categoria</label>
-            <input type="text" id="novo-item-categoria" placeholder="Ex: Smash - Exclusivos">
+            <label for="nova-cotacao-titulo">Título</label>
+            <input type="text" id="nova-cotacao-titulo" required placeholder="Ex: Cotação Bebidas 25/08">
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary-sm" id="btn-novo-item-cardapio-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Cadastrar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL: EDITAR FICHA TÉCNICA DE UM ITEM -->
-    <div class="modal-overlay" id="modal-ficha-tecnica-item" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="panel-title" id="ficha-tecnica-item-titulo">Ficha técnica</h3>
-          <button type="button" class="btn-close" id="btn-ficha-tecnica-item-fechar" aria-label="Fechar">&times;</button>
-        </div>
-        <form id="form-ficha-tecnica-item">
-          <div id="ficha-tecnica-item-linhas" class="ficha-tecnica-linhas">
-            <!-- Renderizado dinamicamente via JS -->
-          </div>
-          <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-add-linha" style="margin-bottom: var(--space-4);">
-            <i data-lucide="plus"></i>
-            Adicionar insumo
-          </button>
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-item-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Salvar</button>
+            <button type="button" class="btn-secondary-sm" id="btn-nova-cotacao-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Criar</button>
           </div>
         </form>
       </div>

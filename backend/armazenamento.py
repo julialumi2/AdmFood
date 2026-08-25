@@ -280,6 +280,72 @@ def inicializar_banco():
             "CREATE INDEX IF NOT EXISTS idx_venda_item_item_cardapio ON venda_item(item_cardapio_id)"
         )
 
+        # Cadastro de fornecedor — semente do futuro módulo de Compras/
+        # Cotação (ver seção 9 da documentação), começando só pelo diretório,
+        # sem fluxo de cotação ainda. De rede toda (não por loja, diferente
+        # de insumo/estoque_insumo) — um fornecedor atende a rede inteira,
+        # não uma unidade específica. "ativo" em vez de excluir de verdade,
+        # porque cotação/pedido de compra (fases futuras) vão referenciar
+        # fornecedor_id — apagar quebraria esse histórico (mesmo raciocínio
+        # de usuario.ativo).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fornecedor (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                cnpj TEXT NOT NULL DEFAULT '',
+                categoria TEXT NOT NULL DEFAULT 'Geral',
+                contato_nome TEXT NOT NULL DEFAULT '',
+                contato_telefone TEXT NOT NULL DEFAULT '',
+                contato_email TEXT NOT NULL DEFAULT '',
+                prazo_pagamento TEXT NOT NULL DEFAULT '',
+                dias_entrega TEXT NOT NULL DEFAULT '',
+                pedido_minimo REAL NOT NULL DEFAULT 0,
+                observacoes TEXT NOT NULL DEFAULT '',
+                ativo INTEGER NOT NULL DEFAULT 1,
+                criado_em TEXT NOT NULL
+            )
+            """
+        )
+
+        # Cotação (RFQ manual) — fase 2 do módulo de Compras (ver seção 6.7/9
+        # da documentação). "Manual" porque não tem coleta automática de
+        # preço via WhatsApp ainda (depende do mesmo bloqueio de sempre) —
+        # aqui só se registra o preço que cada fornecedor já passou por
+        # fora, pra comparar. Sem tabela de "quais insumos/fornecedores
+        # participam" declarada à parte: a grade da cotação (linhas e
+        # colunas) é inferida dos próprios registros de preço já lançados
+        # (cotacao_preco), o que simplifica o schema mas significa que um
+        # insumo/fornecedor só "aparece" na cotação quando tem preço
+        # lançado — não dá pra reservar uma célula vazia de antemão.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titulo TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'aberta',
+                criado_em TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao_preco (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cotacao_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                preco REAL NOT NULL,
+                selecionado INTEGER NOT NULL DEFAULT 0,
+                criado_em TEXT NOT NULL,
+                UNIQUE (cotacao_id, insumo_id, fornecedor_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cotacao_preco_cotacao ON cotacao_preco(cotacao_id)"
+        )
+
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
     ticket_medio = (
@@ -1036,3 +1102,152 @@ def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
         }
         for linha in linhas
     ]
+
+
+# --- FORNECEDOR (diretório da rede, semente do módulo de Compras) ----------
+
+def criar_fornecedor(campos):
+    campos = dict(campos)
+    campos["criado_em"] = datetime.now().isoformat()
+    colunas = ", ".join(campos.keys())
+    marcadores = ", ".join("?" for _ in campos)
+    with conexao() as conn:
+        cursor = conn.execute(
+            f"INSERT INTO fornecedor ({colunas}) VALUES ({marcadores})",
+            list(campos.values()),
+        )
+        return cursor.lastrowid
+
+
+def listar_fornecedores():
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT * FROM fornecedor ORDER BY ativo DESC, nome"
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def buscar_fornecedor_por_cnpj(cnpj):
+    """Usado pra importação em lote (ex: importar_fornecedores_vmarket.py)
+    ser idempotente por CNPJ, mesmo raciocínio de buscar_insumo_por_nome."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT * FROM fornecedor WHERE cnpj = ? AND cnpj != ''", (cnpj,)
+        ).fetchone()
+        return dict(linha) if linha else None
+
+
+def atualizar_fornecedor(fornecedor_id, campos):
+    if not campos:
+        return
+    colunas = ", ".join(f"{campo} = ?" for campo in campos)
+    valores = list(campos.values()) + [fornecedor_id]
+    with conexao() as conn:
+        conn.execute(f"UPDATE fornecedor SET {colunas} WHERE id = ?", valores)
+
+
+# --- COTAÇÃO (RFQ manual, fase 2 do módulo de Compras) ----------------------
+
+def criar_cotacao(titulo):
+    with conexao() as conn:
+        cursor = conn.execute(
+            "INSERT INTO cotacao (titulo, status, criado_em) VALUES (?, 'aberta', ?)",
+            (titulo, datetime.now().isoformat()),
+        )
+        return cursor.lastrowid
+
+
+def listar_cotacoes():
+    """Cada cotação com contagem de insumos e fornecedores distintos já
+    com preço lançado — dá pra ter uma cotação "vazia" (criada mas sem
+    nenhum preço ainda), por isso os LEFT JOIN."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT c.id, c.titulo, c.status, c.criado_em,
+                   COUNT(DISTINCT p.insumo_id) AS total_insumos,
+                   COUNT(DISTINCT p.fornecedor_id) AS total_fornecedores
+            FROM cotacao c
+            LEFT JOIN cotacao_preco p ON p.cotacao_id = c.id
+            GROUP BY c.id
+            ORDER BY c.criado_em DESC
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def buscar_cotacao(cotacao_id):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM cotacao WHERE id = ?", (cotacao_id,)).fetchone()
+        return dict(linha) if linha else None
+
+
+def atualizar_cotacao(cotacao_id, campos):
+    if not campos:
+        return
+    colunas = ", ".join(f"{campo} = ?" for campo in campos)
+    valores = list(campos.values()) + [cotacao_id]
+    with conexao() as conn:
+        conn.execute(f"UPDATE cotacao SET {colunas} WHERE id = ?", valores)
+
+
+def excluir_cotacao(cotacao_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM cotacao_preco WHERE cotacao_id = ?", (cotacao_id,))
+        conn.execute("DELETE FROM cotacao WHERE id = ?", (cotacao_id,))
+
+
+def adicionar_preco_cotacao(cotacao_id, insumo_id, fornecedor_id, preco):
+    """Upsert por (cotacao, insumo, fornecedor) — relançar o preço de quem
+    já tinha cotado o mesmo insumo corrige o valor, não duplica a linha."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO cotacao_preco (cotacao_id, insumo_id, fornecedor_id, preco, criado_em)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (cotacao_id, insumo_id, fornecedor_id) DO UPDATE SET
+                preco = excluded.preco,
+                criado_em = excluded.criado_em
+            """,
+            (cotacao_id, insumo_id, fornecedor_id, preco, datetime.now().isoformat()),
+        )
+
+
+def listar_precos_cotacao(cotacao_id):
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT p.id, p.insumo_id, p.fornecedor_id, p.preco, p.selecionado,
+                   i.nome AS insumo_nome, i.categoria AS insumo_categoria, i.unidade_medida,
+                   f.nome AS fornecedor_nome
+            FROM cotacao_preco p
+            JOIN insumo i ON i.id = p.insumo_id
+            JOIN fornecedor f ON f.id = p.fornecedor_id
+            WHERE p.cotacao_id = ?
+            ORDER BY i.nome, p.preco ASC
+            """,
+            (cotacao_id,),
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def excluir_preco_cotacao(preco_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM cotacao_preco WHERE id = ?", (preco_id,))
+
+
+def selecionar_preco_cotacao(preco_id):
+    """Marca esse preço como o vencedor do insumo — desmarca qualquer outro
+    fornecedor que tenha cotado o mesmo insumo nessa cotação (só um
+    vencedor por insumo, por cotação)."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT cotacao_id, insumo_id FROM cotacao_preco WHERE id = ?", (preco_id,)
+        ).fetchone()
+        if not linha:
+            return
+        conn.execute(
+            "UPDATE cotacao_preco SET selecionado = 0 WHERE cotacao_id = ? AND insumo_id = ?",
+            (linha["cotacao_id"], linha["insumo_id"]),
+        )
+        conn.execute("UPDATE cotacao_preco SET selecionado = 1 WHERE id = ?", (preco_id,))
