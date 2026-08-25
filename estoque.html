@@ -235,7 +235,7 @@
               <tr>
                 <th>Insumo</th>
                 <th>Categoria</th>
-                <th>Atual</th>
+                <th class="col-atual-destaque">Atual</th>
                 <th title="Média diária estimada nos últimos 30 dias, a partir da Ficha Técnica × vendas">Consumo médio/dia</th>
                 <th>Nível</th>
                 <th>Status</th>
@@ -325,11 +325,19 @@
           <div class="form-group-row">
             <div class="form-group">
               <label for="editar-estoque-quantidade">Quantidade atual</label>
-              <input type="number" step="0.01" min="0" id="editar-estoque-quantidade" required>
+              <div class="stepper">
+                <button type="button" class="stepper-btn" data-target="editar-estoque-quantidade" data-delta="-1" aria-label="Diminuir">&minus;</button>
+                <input type="number" step="0.01" min="0" id="editar-estoque-quantidade" required>
+                <button type="button" class="stepper-btn" data-target="editar-estoque-quantidade" data-delta="1" aria-label="Aumentar">+</button>
+              </div>
             </div>
             <div class="form-group">
               <label for="editar-estoque-minimo">Estoque mínimo</label>
-              <input type="number" step="0.01" min="0" id="editar-estoque-minimo" required>
+              <div class="stepper">
+                <button type="button" class="stepper-btn" data-target="editar-estoque-minimo" data-delta="-1" aria-label="Diminuir">&minus;</button>
+                <input type="number" step="0.01" min="0" id="editar-estoque-minimo" required>
+                <button type="button" class="stepper-btn" data-target="editar-estoque-minimo" data-delta="1" aria-label="Aumentar">+</button>
+              </div>
             </div>
           </div>
           <div class="modal-actions">

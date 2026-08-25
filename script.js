@@ -132,6 +132,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
     carregarLotesVencendo();
+
+    // Steppers -/+ dos campos de quantidade — delegado no documento porque
+    // vários desses campos são recriados dinamicamente (modal de entrada).
+    // Anda sempre de 1 em 1 unidade (não usa o "step" do input, que é 0.01
+    // pra permitir digitar peso fracionário — de 0.01 em 0.01 o clique
+    // seria inútil pra ajuste rápido).
+    document.addEventListener('click', (evento) => {
+      const botao = evento.target.closest('.stepper-btn');
+      if (!botao) return;
+      const input = document.getElementById(botao.dataset.target);
+      if (!input) return;
+      const delta = botao.dataset.delta === '-1' ? -1 : 1;
+      const atual = parseFloat(input.value) || 0;
+      const novoValor = Math.max(0, atual + delta);
+      input.value = Math.round(novoValor * 100) / 100;
+    });
   }
 
   // 4.1 TELA DE CONFIGURAÇÕES
@@ -1208,17 +1224,30 @@ function renderEstoqueTab() {
     return;
   }
 
-  linhas.sort((a, b) => a.insumo.nome.localeCompare(b.insumo.nome));
+  linhas.sort((a, b) => (b.insumo.favorito - a.insumo.favorito) || a.insumo.nome.localeCompare(b.insumo.nome));
 
   tbody.innerHTML = linhas.map(({ insumo, loja, dados }) => {
     const percentual = dados.estoqueMinimo > 0
       ? Math.min(100, Math.round((dados.quantidadeAtual / (dados.estoqueMinimo * 1.5)) * 100))
       : 100;
+    const estrela = isAdmin
+      ? `<button type="button" class="btn-favorito ${insumo.favorito ? 'ativo' : ''}" data-acao="favoritar" data-insumo-id="${insumo.id}" data-favorito="${insumo.favorito ? '1' : '0'}" title="${insumo.favorito ? 'Remover dos favoritos' : 'Marcar como favorito'}">
+          <i data-lucide="star" ${insumo.favorito ? 'fill="currentColor"' : ''}></i>
+        </button>`
+      : (insumo.favorito ? '<i data-lucide="star" fill="currentColor" class="icone-favorito"></i>' : '');
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(insumo.nome)}</td>
+        <td>
+          <div class="insumo-nome-cell">
+            ${estrela}
+            <div>
+              <span class="font-bold">${escaparHtml(insumo.nome)}</span>
+              <span class="insumo-unidade">${escaparHtml(insumo.unidadeMedida)}</span>
+            </div>
+          </div>
+        </td>
         <td class="text-muted">${escaparHtml(insumo.categoria)}</td>
-        <td class="font-bold">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
+        <td class="font-bold col-atual-destaque">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
         <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
           ${dados.consumoMedio === null ? '—' : `${Math.round(dados.consumoMedio * 100) / 100} ${escaparHtml(insumo.unidadeMedida)}/dia`}
         </td>
@@ -1273,6 +1302,25 @@ function wireEstoqueTableEvents() {
       } catch (erro) {
         console.error('Falha ao excluir insumo:', erro);
         alert('Não foi possível excluir o insumo.');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-acao="favoritar"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const insumoId = parseInt(btn.dataset.insumoId, 10);
+      const novoValor = btn.dataset.favorito !== '1';
+      try {
+        const resposta = await fetch(`/api/insumos/${insumoId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ favorito: novoValor }),
+        });
+        if (!resposta.ok) throw new Error('falha ao favoritar');
+        await carregarInsumos();
+      } catch (erro) {
+        console.error('Falha ao favoritar insumo:', erro);
+        alert('Não foi possível atualizar o favorito.');
       }
     });
   });
@@ -1444,12 +1492,19 @@ function abrirModalEntradaInsumo() {
   document.getElementById('entrada-validade').value = '';
 
   const container = document.getElementById('entrada-distribuicao-lojas');
-  container.innerHTML = LOJAS_ESTOQUE.map(loja => `
+  container.innerHTML = LOJAS_ESTOQUE.map(loja => {
+    const inputId = `entrada-loja-${escaparHtml(loja)}`;
+    return `
     <div class="estoque-entrada-linha">
-      <label for="entrada-loja-${escaparHtml(loja)}">${escaparHtml(loja)}</label>
-      <input type="number" step="0.01" min="0" id="entrada-loja-${escaparHtml(loja)}" data-loja="${escaparHtml(loja)}" value="0">
+      <label for="${inputId}">${escaparHtml(loja)}</label>
+      <div class="stepper">
+        <button type="button" class="stepper-btn" data-target="${inputId}" data-delta="-1" aria-label="Diminuir">&minus;</button>
+        <input type="number" step="0.01" min="0" id="${inputId}" data-loja="${escaparHtml(loja)}" value="0">
+        <button type="button" class="stepper-btn" data-target="${inputId}" data-delta="1" aria-label="Aumentar">+</button>
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   document.getElementById('modal-entrada-insumo').style.display = 'flex';
 }

@@ -896,6 +896,7 @@ def _formatar_insumos(linhas):
             "nome": linha['nome'],
             "categoria": linha['categoria'],
             "unidadeMedida": linha['unidade_medida'],
+            "favorito": bool(linha['favorito']),
             "porLoja": {},
         })
         insumo["porLoja"][linha['loja']] = {
@@ -946,6 +947,8 @@ def api_atualizar_insumo(insumo_id):
         campos['categoria'] = (dados['categoria'] or 'Geral').strip() or 'Geral'
     if 'unidadeMedida' in dados:
         campos['unidade_medida'] = (dados['unidadeMedida'] or 'un').strip() or 'un'
+    if 'favorito' in dados:
+        campos['favorito'] = 1 if dados['favorito'] else 0
 
     atualizar_insumo(insumo_id, campos)
     return jsonify({"ok": True})

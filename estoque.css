@@ -66,6 +66,85 @@
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
+/* Steppers -/+ nos campos de quantidade (padrão inspirado no VMarket,
+   com as cores do sistema) */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.stepper input {
+  flex: 1;
+}
+
+.stepper-btn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Nome do insumo na tabela: favorito (estrela) + unidade de medida junto */
+.insumo-nome-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-favorito {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--border-color);
+  flex-shrink: 0;
+}
+
+.btn-favorito.ativo,
+.btn-favorito:hover {
+  color: var(--warning);
+}
+
+.btn-favorito svg,
+.icone-favorito svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icone-favorito {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.insumo-unidade {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Coluna "Atual", destacada como o Saldo nas telas de estoque de referência */
+.col-atual-destaque {
+  background-color: var(--primary-soft);
+}
+
 @media (max-width: 768px) {
   .estoque-acoes-topo {
     width: 100%;

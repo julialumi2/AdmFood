@@ -306,6 +306,21 @@ aparece em qualquer aba, já que remove de todas as lojas de qualquer
 jeito. Leitura liberada pra todo mundo logado; cadastrar/editar/excluir é
 só admin.
 
+**Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
+de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
+topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via
+`PUT /api/insumos/<id>` (`{favorito: true|false}`), só admin; pra quem não
+é admin, a estrela só aparece (fixa, sem botão) quando já favoritado.
+Inspirado no favorito da VMarket, adaptado pro catálogo único da rede em
+vez de por produto/loja.
+
+Steppers -/+ nos campos de quantidade (`.stepper-btn` em `script.js`,
+delegado no documento por causa dos campos recriados dinamicamente no
+modal de entrada) — andam de 1 em 1 unidade sempre, **não** usam o `step`
+do input (que é 0.01, pra permitir digitar peso fracionário tipo 12.5kg);
+de 0.01 em 0.01 o clique seria inútil pra ajuste rápido. Mesmo padrão
+visual da VMarket, com as cores do sistema.
+
 **Lotes de validade** (`lote_insumo`, criado em 2026-08-25) — pensado pra
 resolver o item pendente "aviso de itens vencendo" (seção 9). Separado de
 `estoque_insumo` porque a quantidade lá é um total agregado por loja, sem
@@ -437,7 +452,7 @@ Todos em `app.py`, prefixo `/api`.
 **Estoque**
 - `GET /api/insumos` — catálogo de insumos com quantidade/mínimo por loja
 - `POST /api/insumos` — cadastrar insumo novo (cria estoque zerado nas 4 lojas) — só admin
-- `PUT|DELETE /api/insumos/<id>` — editar catálogo (nome/categoria/unidade) / excluir de todas as lojas — só admin
+- `PUT|DELETE /api/insumos/<id>` — editar catálogo (nome/categoria/unidade/favorito) / excluir de todas as lojas — só admin
 - `PUT /api/insumos/<id>/estoque/<loja>` — corrigir quantidade/mínimo de uma loja (substitui, não soma) — só admin
 - `POST /api/insumos/<id>/entrada` — distribuir entrada entre lojas (soma; aceita `validade` opcional, ver 6.4) — só admin
 - `GET /api/insumos/consumo-medio?inicio=&fim=&unidade=` — consumo médio diário estimado por insumo (Ficha Técnica × vendas reais, ver 6.6)

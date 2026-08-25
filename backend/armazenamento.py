@@ -190,6 +190,10 @@ def inicializar_banco():
             )
             """
         )
+        colunas_insumo = {c["name"] for c in conn.execute("PRAGMA table_info(insumo)").fetchall()}
+        if "favorito" not in colunas_insumo:
+            conn.execute("ALTER TABLE insumo ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS estoque_insumo (
@@ -835,11 +839,11 @@ def listar_insumos():
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida,
+            SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em
             FROM insumo i
             JOIN estoque_insumo e ON e.insumo_id = i.id
-            ORDER BY i.categoria, i.nome, e.loja
+            ORDER BY i.favorito DESC, i.categoria, i.nome, e.loja
             """
         ).fetchall()
         return [dict(linha) for linha in linhas]
