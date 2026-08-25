@@ -107,6 +107,28 @@ def _total_com_desconto_ifood(detalhes, sales_channel):
     return total + desconto_ifood
 
 
+def _itens_vendidos(detalhes):
+    """Achata `detalhes["items"]` numa lista [{"nome", "quantidade"}] — usado
+    pra estimar consumo de insumo (ficha técnica × vendas reais, ver seção
+    6.6 da documentação). Combo não tem receita própria na Ficha Técnica (que
+    é por prato), então é desmontado nos itens internos; a quantidade de
+    cada um é MULTIPLICADA pela quantidade do combo em si (assumindo que a
+    quantidade do item interno é "por combo" — não confirmado com exemplo
+    real de combo com quantidade > 1, revisar se aparecer inconsistência)."""
+    itens = []
+    for item in detalhes.get("items") or []:
+        quantidade = item.get("quantity") or 0
+        if item.get("kind") == "combo":
+            for interno in item.get("items") or []:
+                itens.append({
+                    "nome": interno.get("name", ""),
+                    "quantidade": (interno.get("quantity") or 0) * quantidade,
+                })
+        else:
+            itens.append({"nome": item.get("name", ""), "quantidade": quantidade})
+    return [i for i in itens if i["nome"] and i["quantidade"]]
+
+
 def _duracao_minutos(criado_em, atualizado_em):
     """Tempo do pedido inteiro, do recebido ao fechado/entregue — a API não
     marca separadamente quando a cozinha terminou de preparar, só quando o
@@ -121,7 +143,8 @@ def buscar_resumo_do_dia(token, dia):
     """
     Retorna {"faturamento_dia": float, "quantidade_pedidos": int,
     "canais": [{"canal": str, "quantidade_pedidos": int, "faturamento": float}],
-    "pedidos_detalhados": [{"id", "canal", "criado_em", "atualizado_em", "duracao_minutos"}]}
+    "pedidos_detalhados": [{"id", "canal", "criado_em", "atualizado_em",
+    "duracao_minutos", "itens": [{"nome", "quantidade"}]}]}
     """
     todos_pedidos = buscar_pedidos_do_dia(token, dia)
     pedidos = [p for p in todos_pedidos if p["status"] in STATUS_CONCLUIDOS]
@@ -148,6 +171,7 @@ def buscar_resumo_do_dia(token, dia):
             "criado_em": pedido["created_at"],
             "atualizado_em": pedido["updated_at"],
             "duracao_minutos": _duracao_minutos(pedido["created_at"], pedido["updated_at"]),
+            "itens": _itens_vendidos(detalhes),
         })
 
         time.sleep(ESPERA_ENTRE_CHAMADAS_SEGUNDOS)

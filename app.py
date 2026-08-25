@@ -17,6 +17,7 @@ from backend.armazenamento import (
     buscar_ultima_sincronizacao,
     salvar_resumo_do_dia,
     salvar_pedidos_do_dia,
+    salvar_itens_vendidos_do_dia,
     buscar_pedidos_preparo_periodo,
     salvar_ajuste_canal,
     excluir_ajuste_canal,
@@ -50,6 +51,7 @@ from backend.armazenamento import (
     excluir_item_cardapio,
     definir_ficha_tecnica,
     buscar_ficha_tecnica_completa,
+    consumo_medio_insumo,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1005,8 +1007,44 @@ def api_entrada_insumo(insumo_id):
     if not distribuicao:
         return jsonify({"erro": "Informe ao menos uma loja com quantidade recebida."}), 400
 
-    distribuir_entrada_insumo(insumo_id, distribuicao)
+    validade = (dados.get('validade') or '').strip() or None
+    if validade:
+        try:
+            date.fromisoformat(validade)
+        except ValueError:
+            return jsonify({"erro": "Validade inválida."}), 400
+
+    distribuir_entrada_insumo(insumo_id, distribuicao, validade)
     return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/consumo-medio', methods=['GET'])
+def api_consumo_medio_insumo():
+    """Consumo médio diário de cada insumo no período, estimado a partir da
+    Ficha Técnica × vendas reais (ver consumo_medio_insumo em
+    backend/armazenamento.py) — só cobre insumo com quantidade cadastrada na
+    receita e prato já casado com item_cardapio; o resto ainda não entra na
+    conta (fica mais completo conforme a Ficha Técnica for preenchida)."""
+    inicio_str = request.args.get('inicio')
+    fim_str = request.args.get('fim')
+    unidade = request.args.get('unidade') or None
+    if unidade and unidade not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    if inicio_str and fim_str:
+        try:
+            inicio = date.fromisoformat(inicio_str)
+            fim = date.fromisoformat(fim_str)
+        except ValueError:
+            return jsonify({"erro": "Datas inválidas."}), 400
+        if inicio > fim:
+            inicio, fim = fim, inicio
+    else:
+        fim = date.today()
+        inicio = fim - timedelta(days=29)
+
+    consumo = consumo_medio_insumo(inicio.isoformat(), fim.isoformat(), unidade)
+    return jsonify({"consumo": consumo})
 
 
 # --- FICHA TÉCNICA (insumos que cada item do cardápio consome) -------------
@@ -1204,6 +1242,7 @@ def _sincronizar_lojas_em_segundo_plano(dia_alvo):
             resumo = buscar_resumo_do_dia(token, dia_alvo)
             salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
+            salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
         except Exception as erro:
             print(f"❌ Sincronização manual falhou para {nome_unidade} ({dia_iso}): {erro}")
 

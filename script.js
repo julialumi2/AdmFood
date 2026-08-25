@@ -1089,19 +1089,43 @@ const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', crit
 let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
 let estoqueEditandoContexto = null; // { insumoId, loja }
+let estoqueConsumoMedio = {}; // { [insumoId]: { [loja]: consumoMedioDiario } }
 
 async function carregarInsumos() {
   try {
-    const resposta = await fetch('/api/insumos');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
+    const [respostaInsumos, respostaConsumo] = await Promise.all([
+      fetch('/api/insumos'),
+      fetch('/api/insumos/consumo-medio'),
+    ]);
+    if (!respostaInsumos.ok) throw new Error(`Erro no servidor Flask: ${respostaInsumos.status}`);
+    const dados = await respostaInsumos.json();
     estoqueInsumos = dados.insumos || [];
+
+    estoqueConsumoMedio = {};
+    if (respostaConsumo.ok) {
+      const dadosConsumo = await respostaConsumo.json();
+      (dadosConsumo.consumo || []).forEach((linha) => {
+        const porLoja = estoqueConsumoMedio[linha.insumoId] || (estoqueConsumoMedio[linha.insumoId] = {});
+        porLoja[linha.unidade] = linha.consumoMedioDiario;
+      });
+    }
+
     renderEstoqueTab();
   } catch (erro) {
     console.error('Falha ao carregar insumos:', erro);
     const tbody = document.getElementById('estoque-tabela-body');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444;">Não foi possível carregar o estoque. Confira se o Flask está rodando.</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#ef4444;">Não foi possível carregar o estoque. Confira se o Flask está rodando.</td></tr>`;
   }
+}
+
+// null = sem dado suficiente (insumo ainda sem Ficha Técnica casada com
+// venda registrada) — diferente de 0, que seria "consumo real zero".
+function _consumoMedioParaLinha(insumoId, loja) {
+  const porLoja = estoqueConsumoMedio[insumoId];
+  if (!porLoja) return null;
+  if (loja) return loja in porLoja ? porLoja[loja] : null;
+  const valores = LOJAS_ESTOQUE.filter((l) => l in porLoja).map((l) => porLoja[l]);
+  return valores.length ? valores.reduce((a, b) => a + b, 0) : null;
 }
 
 function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
@@ -1130,14 +1154,23 @@ function _linhasEstoqueParaTab(tab) {
       return {
         insumo,
         loja: null,
-        dados: { quantidadeAtual, estoqueMinimo, status: _statusEstoqueClient(quantidadeAtual, estoqueMinimo) },
+        dados: {
+          quantidadeAtual,
+          estoqueMinimo,
+          status: _statusEstoqueClient(quantidadeAtual, estoqueMinimo),
+          consumoMedio: _consumoMedioParaLinha(insumo.id, null),
+        },
       };
     });
   }
 
   return estoqueInsumos
     .filter((insumo) => insumo.porLoja[tab])
-    .map((insumo) => ({ insumo, loja: tab, dados: insumo.porLoja[tab] }));
+    .map((insumo) => ({
+      insumo,
+      loja: tab,
+      dados: { ...insumo.porLoja[tab], consumoMedio: _consumoMedioParaLinha(insumo.id, tab) },
+    }));
 }
 
 function renderEstoqueTab() {
@@ -1169,7 +1202,7 @@ function renderEstoqueTab() {
   document.getElementById('estoque-val-critico').textContent = contagem.critico;
 
   if (!linhas.length) {
-    const colspan = 5 + (isAdmin ? 1 : 0);
+    const colspan = 6 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum insumo encontrado.</td></tr>`;
     return;
   }
@@ -1185,6 +1218,9 @@ function renderEstoqueTab() {
         <td class="font-bold">${escaparHtml(insumo.nome)}</td>
         <td class="text-muted">${escaparHtml(insumo.categoria)}</td>
         <td class="font-bold">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
+        <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
+          ${dados.consumoMedio === null ? '—' : `${Math.round(dados.consumoMedio * 100) / 100} ${escaparHtml(insumo.unidadeMedida)}/dia`}
+        </td>
         <td>
           <div class="progress-container">
             <div class="progress-bar ${STATUS_CLASSE_BARRA_ESTOQUE[dados.status]}" style="width: ${percentual}%;"></div>

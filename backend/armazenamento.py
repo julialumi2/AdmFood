@@ -7,7 +7,7 @@ a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Em produção (Dokploy), aponta pra um volume persistente (ex: /app/data/admfood.db)
 # via a variável DATABASE_PATH, senão perde os dados a cada novo deploy.
@@ -203,6 +203,30 @@ def inicializar_banco():
             """
         )
 
+        # Lotes de validade por entrada — separado de estoque_insumo porque a
+        # quantidade lá é um total agregado por loja, sem distinguir remessas;
+        # uma mesma "entrada" pode ter validade diferente da anterior. validade
+        # é opcional (insumo não perecível, tipo embalagem, não precisa ter).
+        # resolvido_em marca que o lote já foi usado/descartado (soft, não
+        # apaga a linha) — pra parar de contar no aviso de vencimento sem
+        # perder o histórico.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lote_insumo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                quantidade REAL NOT NULL,
+                validade TEXT,
+                criado_em TEXT NOT NULL,
+                resolvido_em TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_lote_insumo_validade ON lote_insumo(validade)"
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS item_cardapio (
@@ -221,6 +245,35 @@ def inicializar_banco():
                 PRIMARY KEY (item_id, insumo_id)
             )
             """
+        )
+
+        # Vendas por prato, extraídas do mesmo detalhe de pedido que já é
+        # buscado pra somar faturamento (ver _itens_vendidos em
+        # cardapio_web.py) — usado pra estimar consumo de insumo (ficha
+        # técnica × vendas reais, seção 6.6). item_cardapio_id fica NULL
+        # quando o nome do produto não bate com nenhum item da Ficha Técnica
+        # ainda cadastrado — a linha é salva mesmo assim (pelo nome cru), pra
+        # já existir histórico quando o item for cadastrado depois.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS venda_item (
+                unidade TEXT NOT NULL,
+                pedido_id INTEGER NOT NULL,
+                linha INTEGER NOT NULL,
+                dia TEXT NOT NULL,
+                canal TEXT NOT NULL,
+                nome_produto TEXT NOT NULL,
+                quantidade REAL NOT NULL,
+                item_cardapio_id INTEGER,
+                PRIMARY KEY (unidade, pedido_id, linha)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_venda_item_dia ON venda_item(dia)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_venda_item_item_cardapio ON venda_item(item_cardapio_id)"
         )
 
 
@@ -676,6 +729,44 @@ def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):
             )
 
 
+def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
+    """Grava quais itens de cardápio foram vendidos em cada pedido do dia,
+    casando pelo nome com item_cardapio (case/espaço insensível — nomes vêm
+    da Cardápio Web, cadastro na Ficha Técnica é manual, então não é garantido
+    bater exatamente). Mesmo padrão de salvar_pedidos_do_dia: resincroniza o
+    dia inteiro. Sem match, item_cardapio_id fica NULL mas a linha é salva
+    do mesmo jeito, com o nome bruto — vira histórico utilizável assim que
+    o item for cadastrado na Ficha Técnica."""
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM venda_item WHERE unidade = ? AND dia = ?",
+            (unidade, dia_iso),
+        )
+        for pedido in pedidos_detalhados:
+            for indice, item in enumerate(pedido.get("itens", [])):
+                encontrado = conn.execute(
+                    "SELECT id FROM item_cardapio WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))",
+                    (item["nome"],),
+                ).fetchone()
+                conn.execute(
+                    """
+                    INSERT INTO venda_item
+                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        unidade,
+                        pedido["id"],
+                        indice,
+                        dia_iso,
+                        pedido["canal"],
+                        item["nome"],
+                        item["quantidade"],
+                        encontrado["id"] if encontrado else None,
+                    ),
+                )
+
+
 def buscar_pedidos_preparo_periodo(inicio_iso, fim_iso, unidade=None):
     with conexao() as conn:
         if unidade:
@@ -766,6 +857,7 @@ def atualizar_insumo(insumo_id, campos):
 def excluir_insumo(insumo_id):
     with conexao() as conn:
         conn.execute("DELETE FROM estoque_insumo WHERE insumo_id = ?", (insumo_id,))
+        conn.execute("DELETE FROM lote_insumo WHERE insumo_id = ?", (insumo_id,))
         conn.execute("DELETE FROM insumo WHERE id = ?", (insumo_id,))
 
 
@@ -786,10 +878,14 @@ def atualizar_estoque_loja(insumo_id, loja, campos):
         )
 
 
-def distribuir_entrada_insumo(insumo_id, distribuicao):
+def distribuir_entrada_insumo(insumo_id, distribuicao, validade=None):
     """distribuicao: {loja: quantidade_recebida}. Soma ao estoque atual de
     cada loja informada — usado quando uma compra única (ex: 100
-    refrigerantes) chega e é dividida entre lojas."""
+    refrigerantes) chega e é dividida entre lojas.
+
+    Se `validade` for informada, também registra um lote (por loja que
+    recebeu quantidade) com essa data — mesma remessa, mesma validade pra
+    todo mundo que recebeu dela."""
     agora = datetime.now().isoformat()
     with conexao() as conn:
         for loja, quantidade in distribuicao.items():
@@ -803,12 +899,50 @@ def distribuir_entrada_insumo(insumo_id, distribuicao):
                 """,
                 (quantidade, agora, insumo_id, loja),
             )
+            if validade:
+                conn.execute(
+                    """
+                    INSERT INTO lote_insumo (insumo_id, loja, quantidade, validade, criado_em)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (insumo_id, loja, quantidade, validade, agora),
+                )
 
 
 def buscar_insumo_por_nome(nome):
     with conexao() as conn:
         linha = conn.execute("SELECT * FROM insumo WHERE nome = ?", (nome,)).fetchone()
         return dict(linha) if linha else None
+
+
+def listar_lotes_vencendo(dias=7):
+    """Lotes não resolvidos com validade nos próximos `dias` dias (inclui os
+    já vencidos — validade no passado também entra). Ordenado do mais
+    urgente pro menos, pra virar lista de aviso direto."""
+    limite = (datetime.now().date() + timedelta(days=dias)).isoformat()
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT l.id, l.insumo_id, l.loja, l.quantidade, l.validade, l.criado_em,
+                   i.nome, i.categoria, i.unidade_medida
+            FROM lote_insumo l
+            JOIN insumo i ON i.id = l.insumo_id
+            WHERE l.resolvido_em IS NULL
+              AND l.validade IS NOT NULL
+              AND l.validade <= ?
+            ORDER BY l.validade ASC
+            """,
+            (limite,),
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def marcar_lote_resolvido(lote_id):
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE lote_insumo SET resolvido_em = ? WHERE id = ?",
+            (datetime.now().isoformat(), lote_id),
+        )
 
 
 def criar_item_cardapio(nome, categoria):
@@ -856,3 +990,45 @@ def buscar_ficha_tecnica_completa():
             """
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
+    """Consumo médio DIÁRIO de cada insumo no período, por loja: soma
+    (quantidade vendida do prato × quantidade da receita) de venda_item
+    cruzado com ficha_tecnica, dividido pelos dias do período. Só entra
+    insumo com quantidade definida na ficha técnica (receita sem gramatura
+    ainda, NULL, não dá pra estimar) e prato já casado com item_cardapio
+    (item_cardapio_id IS NOT NULL em venda_item — ver salvar_itens_vendidos_do_dia).
+    Base pra sugerir quantidade ideal/estoque mínimo (seção 6.6)."""
+    dias = (datetime.fromisoformat(fim_iso) - datetime.fromisoformat(inicio_iso)).days + 1
+    condicoes = ["v.dia >= ?", "v.dia <= ?", "f.quantidade IS NOT NULL"]
+    parametros = [inicio_iso, fim_iso]
+    if unidade:
+        condicoes.append("v.unidade = ?")
+        parametros.append(unidade)
+
+    with conexao() as conn:
+        linhas = conn.execute(
+            f"""
+            SELECT v.unidade, f.insumo_id, i.nome AS insumo_nome, i.unidade_medida,
+                   SUM(v.quantidade * f.quantidade) AS total_consumido
+            FROM venda_item v
+            JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id
+            JOIN insumo i ON i.id = f.insumo_id
+            WHERE {' AND '.join(condicoes)}
+            GROUP BY v.unidade, f.insumo_id
+            ORDER BY i.categoria, i.nome
+            """,
+            parametros,
+        ).fetchall()
+
+    return [
+        {
+            "unidade": linha["unidade"],
+            "insumoId": linha["insumo_id"],
+            "insumoNome": linha["insumo_nome"],
+            "unidadeMedida": linha["unidade_medida"],
+            "consumoMedioDiario": linha["total_consumido"] / dias,
+        }
+        for linha in linhas
+    ]

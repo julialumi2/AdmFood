@@ -17,7 +17,12 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from config import LOJAS
 from backend.cardapio_web import buscar_resumo_do_dia
-from backend.armazenamento import inicializar_banco, salvar_resumo_do_dia, salvar_pedidos_do_dia
+from backend.armazenamento import (
+    inicializar_banco,
+    salvar_resumo_do_dia,
+    salvar_pedidos_do_dia,
+    salvar_itens_vendidos_do_dia,
+)
 
 # As lojas não abrem às segundas-feiras — pula sem chamar a API.
 DIA_FECHADO = 0  # date.weekday(): 0 = segunda-feira
@@ -39,6 +44,7 @@ def sincronizar_dia(dia: date):
             resumo = buscar_resumo_do_dia(token, dia)
             salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
+            salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
             print(
                 f"✅ {nome_unidade} ({dia_iso}): "
                 f"R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos"

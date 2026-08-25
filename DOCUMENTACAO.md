@@ -167,8 +167,10 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `ajuste_faturamento_canal` | Correção manual de faturamento/pedidos por canal (ver 6.3) |
 | `insumo` | Catálogo único de insumos da rede (ver 6.4) |
 | `estoque_insumo` | Quantidade atual e mínimo de cada insumo, por loja (ver 6.4) |
+| `lote_insumo` | Lotes de validade por entrada de insumo, por loja (ver 6.4) |
 | `item_cardapio` | Catálogo de pratos/itens do cardápio, pra ficha técnica (ver 6.5) |
 | `ficha_tecnica` | Quais insumos (e quanto de cada) um item do cardápio usa (ver 6.5) |
+| `venda_item` | Itens vendidos por pedido, casados com `item_cardapio` (ver 6.6) |
 
 Não há chaves estrangeiras com `ON DELETE CASCADE` — ao excluir uma tarefa
 (`excluir_tarefa`), o código apaga manualmente as linhas relacionadas em
@@ -304,6 +306,20 @@ aparece em qualquer aba, já que remove de todas as lojas de qualquer
 jeito. Leitura liberada pra todo mundo logado; cadastrar/editar/excluir é
 só admin.
 
+**Lotes de validade** (`lote_insumo`, schema criado em 2026-08-25, ainda
+sem tela/endpoint) — pensado pra resolver o item pendente "aviso de itens
+vencendo" (seção 9). Separado de `estoque_insumo` porque a quantidade lá é
+um total agregado por loja, sem distinguir remessas, e uma mesma "entrada"
+pode ter validade diferente da anterior. `validade` é opcional (insumo não
+perecível não precisa ter); `resolvido_em` marca (soft, sem apagar a
+linha) que o lote já foi usado/descartado, pra parar de contar no aviso
+sem perder o histórico. `distribuir_entrada_insumo` já aceita um
+`validade` opcional — quando informado, cria um lote por loja que recebeu
+quantidade naquela entrada (mesma remessa, mesma validade pra todo mundo).
+Falta: endpoint pra listar os vencendo/vencidos, campo de validade no
+modal "Registrar entrada" da tela, e a notificação em si (depende do
+WhatsApp, item 2 da seção 9).
+
 ### 6.5 Ficha técnica (quais insumos cada item do cardápio usa)
 
 Sub-aba dentro de `cardapio.html` (botões "Preços" / "Ficha Técnica" no
@@ -338,6 +354,51 @@ admin) sempre manda a lista inteira de insumos (substitui, não faz diff)
 — mais simples de implementar tanto no back quanto na tela. Leitura
 liberada pra todo mundo logado.
 
+### 6.6 Consumo estimado de insumo (Ficha Técnica × vendas reais)
+
+Objetivo: estimar quanto de cada insumo a rede realmente consome por dia,
+cruzando a receita (Ficha Técnica) com o volume de vendas de cada prato —
+base pra sugerir estoque mínimo/quantidade ideal em vez de precisar
+adivinhar. Adicionado em 2026-08-25.
+
+**Vendas por prato são novas** — até então o sistema só guardava
+faturamento agregado (total por loja/dia/canal), nunca quais produtos
+foram vendidos. Descoberto que o endpoint de detalhes do pedido da
+Cardápio Web (`GET /orders/{id}`), que **já é chamado** pra cada pedido
+fechado só pra pegar o `total`, também retorna um campo `items` com nome e
+quantidade de cada produto — dá pra capturar isso sem nenhuma chamada
+extra à API. `_itens_vendidos` (`backend/cardapio_web.py`) extrai essa
+lista; combo não tem receita própria na Ficha Técnica (que é por prato
+individual), então é desmontado nos itens internos, com a quantidade de
+cada um multiplicada pela quantidade do combo (assunção não confirmada com
+um exemplo real de combo com quantidade > 1 — revisar se aparecer
+inconsistência).
+
+`venda_item` (`backend/armazenamento.py`) guarda isso por pedido/linha,
+casando o nome do produto com `item_cardapio` (comparação sem
+maiúscula/minúscula nem espaço nas pontas, já que o nome vem digitado
+manualmente na Ficha Técnica e não é garantido bater exatamente com o
+nome na Cardápio Web). Sem match, a linha é salva do mesmo jeito, com o
+nome cru e `item_cardapio_id` `NULL` — quando o prato for cadastrado na
+Ficha Técnica depois, o histórico anterior a isso **não é re-processado**
+retroativamente (ficaria valendo só a partir da próxima sincronização).
+`salvar_itens_vendidos_do_dia` roda junto de `salvar_pedidos_do_dia` nos
+dois pontos de sincronização (`app.py` e `sincronizar.py`), mesmo padrão
+de resincronizar o dia inteiro.
+
+`consumo_medio_insumo(inicio, fim, unidade=None)` soma, por insumo e loja,
+`quantidade vendida do prato × quantidade da receita`, dividido pelos dias
+do período — só entra insumo com quantidade definida na Ficha Técnica
+(receita sem gramatura, `NULL`, não dá pra estimar) e prato já casado com
+`item_cardapio`. Exposto em `GET /api/insumos/consumo-medio?inicio=&fim=&unidade=`
+(sem período, últimos 30 dias). Mostrado na tela de Estoque como a coluna
+"Consumo médio/dia" (`_consumoMedioParaLinha` em `script.js`) — `null`
+(insumo sem Ficha Técnica casada com venda ainda) aparece como "—", não
+como zero, pra não parecer "consumo real zero". Ainda **não sugere**
+estoque mínimo automaticamente, só mostra o número — depende de a Ficha
+Técnica estar bem mais completa (hoje só 20 itens da Hamburgueria
+Artesanos, a maioria sem gramatura) pra virar sugestão confiável.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -362,6 +423,20 @@ Todos em `app.py`, prefixo `/api`.
 - `POST /api/precos-cardapio/importar` — sincroniza a partir de um `.xlsx` enviado (multipart, campo `planilha`) — só admin (ver seção 6.1)
 - `PUT /api/precos-cardapio/<id>` — edita o preço de um item num canal específico — só admin
 - `POST /api/precos-cardapio/<id>/foto` — sobe a foto de um item (multipart, campo `foto`, jpg/png/webp) — só admin
+
+**Estoque**
+- `GET /api/insumos` — catálogo de insumos com quantidade/mínimo por loja
+- `POST /api/insumos` — cadastrar insumo novo (cria estoque zerado nas 4 lojas) — só admin
+- `PUT|DELETE /api/insumos/<id>` — editar catálogo (nome/categoria/unidade) / excluir de todas as lojas — só admin
+- `PUT /api/insumos/<id>/estoque/<loja>` — corrigir quantidade/mínimo de uma loja (substitui, não soma) — só admin
+- `POST /api/insumos/<id>/entrada` — distribuir entrada entre lojas (soma; aceita `validade` opcional, ver 6.4) — só admin
+- `GET /api/insumos/consumo-medio?inicio=&fim=&unidade=` — consumo médio diário estimado por insumo (Ficha Técnica × vendas reais, ver 6.6)
+
+**Ficha técnica**
+- `GET /api/ficha-tecnica` — todos os itens do cardápio com seus insumos vinculados
+- `POST /api/itens-cardapio` — cadastrar item (prato) novo — só admin
+- `DELETE /api/itens-cardapio/<id>` — excluir item — só admin
+- `PUT /api/itens-cardapio/<id>/ficha-tecnica` — substitui a lista inteira de insumos do item — só admin
 
 **Tarefas (Kanban / ClickUp)**
 - `GET|POST /api/tarefas` — listar todas / criar
@@ -467,6 +542,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
 7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
 8. **Preparo** — ✅ concluído em 2026-08-24 (indicadores operacionais da cozinha — ver seção 6.2). Pivotou de KDS em tempo real (pedido do rascunho original da Julia) pra tela de relatório, depois de investigar e confirmar que a API da Cardápio Web não expõe o momento em que a cozinha termina de preparar.
+9. **Aviso de estoque baixo/vencendo + quantidade ideal** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`, seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`, seção 6.6); coluna "Consumo médio/dia" na tela de Estoque. Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, dados chegando aos poucos direto com a Julia/dono; (b) endpoint + tela pra listar lotes vencendo; (c) sugestão automática de estoque mínimo a partir do consumo médio (hoje só mostra o número); (d) o "aviso" em si (push pro WhatsApp) depende do item 2.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 
