@@ -188,6 +188,32 @@
           </div>
         </div>
 
+        <!-- CONTAINER DE LOTES VENCENDO -->
+        <div class="chart-card">
+          <div class="table-header-row">
+            <div>
+              <h3 class="table-title">Lotes vencendo</h3>
+              <p class="table-subtitle">Validade nos próximos 7 dias (inclui já vencidos)</p>
+            </div>
+          </div>
+          <div class="table-responsive">
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Loja</th>
+                <th>Quantidade</th>
+                <th>Validade</th>
+                <th id="lotes-th-acoes" style="display:none;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="lotes-vencendo-tabela-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+          </div>
+        </div>
+
         <!-- CONTAINER DA TABELA DE ITENS -->
         <div class="chart-card">
           <div class="table-header-row">
@@ -325,6 +351,10 @@
           <div class="form-group">
             <label for="entrada-insumo-select">Insumo</label>
             <select id="entrada-insumo-select" required></select>
+          </div>
+          <div class="form-group">
+            <label for="entrada-validade">Validade (opcional)</label>
+            <input type="date" id="entrada-validade">
           </div>
           <p class="panel-subtitle" style="margin-bottom: var(--space-2);">
             Quanto chegou pra cada loja (deixe 0 quem não recebeu):

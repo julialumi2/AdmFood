@@ -131,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
+    carregarLotesVencendo();
   }
 
   // 4.1 TELA DE CONFIGURAÇÕES
@@ -1277,6 +1278,86 @@ function wireEstoqueTableEvents() {
   });
 }
 
+// --- Lotes vencendo (aviso de validade) ---
+let lotesVencendo = [];
+
+async function carregarLotesVencendo() {
+  const tbody = document.getElementById('lotes-vencendo-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/insumos/lotes-vencendo?dias=7');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    lotesVencendo = dados.lotes || [];
+    renderLotesVencendo();
+  } catch (erro) {
+    console.error('Falha ao carregar lotes vencendo:', erro);
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Não foi possível carregar os lotes vencendo.</td></tr>`;
+  }
+}
+
+function _diasAteValidade(validade) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const dataValidade = new Date(`${validade}T00:00:00`);
+  return Math.round((dataValidade - hoje) / (1000 * 60 * 60 * 24));
+}
+
+function renderLotesVencendo() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const tbody = document.getElementById('lotes-vencendo-tabela-body');
+  if (!tbody) return;
+
+  const thAcoes = document.getElementById('lotes-th-acoes');
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+
+  if (!lotesVencendo.length) {
+    const colspan = 4 + (isAdmin ? 1 : 0);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum lote vencendo nos próximos 7 dias.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = lotesVencendo.map((lote) => {
+    const dias = _diasAteValidade(lote.validade);
+    const rotuloDias = dias < 0 ? `Vencido há ${Math.abs(dias)}d` : dias === 0 ? 'Vence hoje' : `Vence em ${dias}d`;
+    const classeBadge = dias < 0 ? 'neg' : 'neu-orange';
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(lote.insumoNome)}</td>
+        <td class="text-muted">${escaparHtml(lote.loja)}</td>
+        <td>${lote.quantidade} ${escaparHtml(lote.unidadeMedida)}</td>
+        <td>
+          ${new Date(`${lote.validade}T00:00:00`).toLocaleDateString('pt-BR')}
+          <span class="badge-pill ${classeBadge}">${rotuloDias}</span>
+        </td>
+        ${isAdmin ? `
+          <td class="acoes-linha">
+            <button type="button" class="btn-acao-icone" data-acao="resolver-lote" data-lote-id="${lote.id}" title="Marcar como resolvido">
+              <i data-lucide="check"></i>
+            </button>
+          </td>
+        ` : ''}
+      </tr>
+    `;
+  }).join('');
+
+  if (isAdmin) {
+    document.querySelectorAll('[data-acao="resolver-lote"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const resposta = await fetch(`/api/lotes/${btn.dataset.loteId}/resolver`, { method: 'PUT' });
+          if (!resposta.ok) throw new Error('falha ao resolver lote');
+          await carregarLotesVencendo();
+        } catch (erro) {
+          console.error('Falha ao resolver lote:', erro);
+          alert('Não foi possível marcar o lote como resolvido.');
+        }
+      });
+    });
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 // --- Modal: Editar estoque (correção manual de quantidade/mínimo) ---
 function abrirModalEditarEstoque(insumoId, loja, nomeInsumo, dadosLoja) {
   estoqueEditandoContexto = { insumoId, loja };
@@ -1360,6 +1441,7 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
 function abrirModalEntradaInsumo() {
   const select = document.getElementById('entrada-insumo-select');
   select.innerHTML = estoqueInsumos.map(i => `<option value="${i.id}">${escaparHtml(i.nome)}</option>`).join('');
+  document.getElementById('entrada-validade').value = '';
 
   const container = document.getElementById('entrada-distribuicao-lojas');
   container.innerHTML = LOJAS_ESTOQUE.map(loja => `
@@ -1392,16 +1474,18 @@ document.getElementById('form-entrada-insumo')?.addEventListener('submit', async
     alert('Informe a quantidade recebida em pelo menos uma loja.');
     return;
   }
+  const validade = document.getElementById('entrada-validade').value || null;
   try {
     const resposta = await fetch(`/api/insumos/${insumoId}/entrada`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ distribuicao }),
+      body: JSON.stringify({ distribuicao, validade }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao registrar entrada');
     fecharModalEntradaInsumo();
     await carregarInsumos();
+    await carregarLotesVencendo();
   } catch (erro) {
     console.error('Falha ao registrar entrada:', erro);
     alert(erro.message || 'Não foi possível registrar a entrada.');

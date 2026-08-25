@@ -52,6 +52,8 @@ from backend.armazenamento import (
     definir_ficha_tecnica,
     buscar_ficha_tecnica_completa,
     consumo_medio_insumo,
+    listar_lotes_vencendo,
+    marcar_lote_resolvido,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1045,6 +1047,42 @@ def api_consumo_medio_insumo():
 
     consumo = consumo_medio_insumo(inicio.isoformat(), fim.isoformat(), unidade)
     return jsonify({"consumo": consumo})
+
+
+@app.route('/api/insumos/lotes-vencendo', methods=['GET'])
+def api_lotes_vencendo():
+    """Lotes de validade vencendo (ou já vencidos) nos próximos `dias` dias,
+    ainda não resolvidos — ver listar_lotes_vencendo em
+    backend/armazenamento.py e seção 6.4 da documentação."""
+    try:
+        dias = int(request.args.get('dias', 7))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Parâmetro 'dias' inválido."}), 400
+
+    lotes = listar_lotes_vencendo(dias)
+    return jsonify({"lotes": [
+        {
+            "id": lote["id"],
+            "insumoId": lote["insumo_id"],
+            "insumoNome": lote["nome"],
+            "categoria": lote["categoria"],
+            "unidadeMedida": lote["unidade_medida"],
+            "loja": lote["loja"],
+            "quantidade": lote["quantidade"],
+            "validade": lote["validade"],
+        }
+        for lote in lotes
+    ]})
+
+
+@app.route('/api/lotes/<int:lote_id>/resolver', methods=['PUT'])
+def api_resolver_lote(lote_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    marcar_lote_resolvido(lote_id)
+    return jsonify({"ok": True})
 
 
 # --- FICHA TÉCNICA (insumos que cada item do cardápio consome) -------------

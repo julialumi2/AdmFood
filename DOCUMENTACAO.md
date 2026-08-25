@@ -306,19 +306,29 @@ aparece em qualquer aba, já que remove de todas as lojas de qualquer
 jeito. Leitura liberada pra todo mundo logado; cadastrar/editar/excluir é
 só admin.
 
-**Lotes de validade** (`lote_insumo`, schema criado em 2026-08-25, ainda
-sem tela/endpoint) — pensado pra resolver o item pendente "aviso de itens
-vencendo" (seção 9). Separado de `estoque_insumo` porque a quantidade lá é
-um total agregado por loja, sem distinguir remessas, e uma mesma "entrada"
-pode ter validade diferente da anterior. `validade` é opcional (insumo não
-perecível não precisa ter); `resolvido_em` marca (soft, sem apagar a
-linha) que o lote já foi usado/descartado, pra parar de contar no aviso
-sem perder o histórico. `distribuir_entrada_insumo` já aceita um
-`validade` opcional — quando informado, cria um lote por loja que recebeu
-quantidade naquela entrada (mesma remessa, mesma validade pra todo mundo).
-Falta: endpoint pra listar os vencendo/vencidos, campo de validade no
-modal "Registrar entrada" da tela, e a notificação em si (depende do
-WhatsApp, item 2 da seção 9).
+**Lotes de validade** (`lote_insumo`, criado em 2026-08-25) — pensado pra
+resolver o item pendente "aviso de itens vencendo" (seção 9). Separado de
+`estoque_insumo` porque a quantidade lá é um total agregado por loja, sem
+distinguir remessas, e uma mesma "entrada" pode ter validade diferente da
+anterior. `validade` é opcional (insumo não perecível não precisa ter);
+`resolvido_em` marca (soft, sem apagar a linha) que o lote já foi
+usado/descartado, pra parar de contar no aviso sem perder o histórico.
+Modal "Registrar entrada" da tela tem um campo "Validade (opcional)" —
+quando preenchido, `distribuir_entrada_insumo` cria um lote por loja que
+recebeu quantidade naquela entrada (mesma remessa, mesma validade pra
+todo mundo que recebeu dela).
+
+`GET /api/insumos/lotes-vencendo?dias=N` (padrão 7) lista lotes não
+resolvidos com validade até `N` dias à frente, **incluindo os já
+vencidos** — mostrado na tela de Estoque como o card "Lotes vencendo",
+acima da tabela principal, com badge "Vencido há Xd" (vermelho) ou "Vence
+em Xd"/"Vence hoje" (laranja), calculado no cliente a partir da validade
+(`_diasAteValidade` em `script.js`). `PUT /api/lotes/<id>/resolver` (só
+admin) marca resolvido — some da lista, não mexe na quantidade em
+`estoque_insumo` (resolver o lote é só sobre o aviso de validade, não é
+"dar saída" no estoque). Falta só a notificação em si (push pro WhatsApp,
+depende do item 2 da seção 9) — hoje o aviso é passivo, só aparece pra
+quem abrir a tela.
 
 ### 6.5 Ficha técnica (quais insumos cada item do cardápio usa)
 
@@ -431,6 +441,8 @@ Todos em `app.py`, prefixo `/api`.
 - `PUT /api/insumos/<id>/estoque/<loja>` — corrigir quantidade/mínimo de uma loja (substitui, não soma) — só admin
 - `POST /api/insumos/<id>/entrada` — distribuir entrada entre lojas (soma; aceita `validade` opcional, ver 6.4) — só admin
 - `GET /api/insumos/consumo-medio?inicio=&fim=&unidade=` — consumo médio diário estimado por insumo (Ficha Técnica × vendas reais, ver 6.6)
+- `GET /api/insumos/lotes-vencendo?dias=N` — lotes de validade vencendo/vencidos nos próximos N dias (padrão 7)
+- `PUT /api/lotes/<id>/resolver` — marca um lote como resolvido (soft, não apaga) — só admin
 
 **Ficha técnica**
 - `GET /api/ficha-tecnica` — todos os itens do cardápio com seus insumos vinculados
@@ -542,7 +554,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
 7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
 8. **Preparo** — ✅ concluído em 2026-08-24 (indicadores operacionais da cozinha — ver seção 6.2). Pivotou de KDS em tempo real (pedido do rascunho original da Julia) pra tela de relatório, depois de investigar e confirmar que a API da Cardápio Web não expõe o momento em que a cozinha termina de preparar.
-9. **Aviso de estoque baixo/vencendo + quantidade ideal** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`, seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`, seção 6.6); coluna "Consumo médio/dia" na tela de Estoque. Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, dados chegando aos poucos direto com a Julia/dono; (b) endpoint + tela pra listar lotes vencendo; (c) sugestão automática de estoque mínimo a partir do consumo médio (hoje só mostra o número); (d) o "aviso" em si (push pro WhatsApp) depende do item 2.
+9. **Aviso de estoque baixo/vencendo + quantidade ideal** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`) e card "Lotes vencendo" com botão de resolver (seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`) e coluna "Consumo médio/dia" na tela de Estoque (seção 6.6). Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, aguardando o chefe da loja definir e passar as quantidades, sem prazo; (b) sugestão automática de estoque mínimo a partir do consumo médio (hoje só mostra o número); (c) o "aviso" em si sendo empurrado (WhatsApp) — hoje é passivo, só aparece pra quem abrir a tela; depende do item 2.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 
