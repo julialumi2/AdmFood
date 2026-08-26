@@ -1,6 +1,19 @@
 /* Estilos específicos da tela de Contagens — a base compartilhada (sidebar,
    cabeçalho, cards, tabelas, botões, badges) está em theme.css */
 
+/* As três "visões" da página (lista, conferência da requisição, detalhe da
+   contagem) são <div> simples alternadas via display:none/'' — o
+   espaçamento entre seções do .page-content (gap) só vale pros filhos
+   diretos dele, então cada visão precisa do próprio flex+gap pra não
+   grudar os chart-cards um no outro quando tem mais de um. */
+#contagens-lista-view,
+#requisicao-conferencia-view,
+#contagens-detalhe-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
 .contagem-progresso-texto {
   font-size: 0.8rem;
   color: var(--text-muted);
