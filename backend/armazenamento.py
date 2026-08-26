@@ -5,6 +5,7 @@ a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 """
 
 import os
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -360,6 +361,38 @@ def inicializar_banco():
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_cotacao_preco_cotacao ON cotacao_preco(cotacao_id)"
+        )
+
+        # Contagem de estoque por link (sem login) — replica o fluxo real da
+        # VMarket: Kethllyn abre uma contagem pra uma loja, manda o link pro
+        # funcionário preencher (identificado só pelo token, sem senha), e a
+        # resposta fica de rascunho até ela conferir e aprovar — só então
+        # vira quantidade_atual de verdade em estoque_insumo. Ver seção 9 da
+        # documentação (link de exemplo da VMarket).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contagem (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL UNIQUE,
+                loja TEXT NOT NULL,
+                descricao TEXT NOT NULL DEFAULT '',
+                prazo_validade TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'aberta',
+                criado_em TEXT NOT NULL,
+                respondida_em TEXT,
+                aprovada_em TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contagem_item (
+                contagem_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                quantidade_preenchida REAL,
+                PRIMARY KEY (contagem_id, insumo_id)
+            )
+            """
         )
 
 
@@ -1292,3 +1325,147 @@ def selecionar_preco_cotacao(preco_id):
             (linha["cotacao_id"], linha["insumo_id"]),
         )
         conn.execute("UPDATE cotacao_preco SET selecionado = 1 WHERE id = ?", (preco_id,))
+
+
+DIAS_COBERTURA_IDEAL = 7  # mesma constante do front (script.js) — cotação é semanal
+
+
+def _mapa_consumo_medio_loja(loja, dias_historico=30):
+    fim = datetime.now().date()
+    inicio = fim - timedelta(days=dias_historico - 1)
+    linhas = consumo_medio_insumo(inicio.isoformat(), fim.isoformat(), loja)
+    return {linha["insumoId"]: linha["consumoMedioDiario"] for linha in linhas}
+
+
+def criar_contagem(loja, descricao, prazo_validade, categorias=None):
+    """Abre uma contagem pra uma loja — gera um token opaco (o link que vai
+    pro funcionário, sem precisar de login) e já grava uma linha por insumo
+    (ativo, e dentro das categorias escolhidas, se filtrado) esperando
+    preenchimento. `categorias` vazio/None inclui todos os insumos."""
+    token = secrets.token_urlsafe(24)
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        if categorias:
+            marcadores = ", ".join("?" for _ in categorias)
+            linhas = conn.execute(
+                f"SELECT id FROM insumo WHERE categoria IN ({marcadores})", categorias
+            ).fetchall()
+        else:
+            linhas = conn.execute("SELECT id FROM insumo").fetchall()
+
+        cursor = conn.execute(
+            """
+            INSERT INTO contagem (token, loja, descricao, prazo_validade, status, criado_em)
+            VALUES (?, ?, ?, ?, 'aberta', ?)
+            """,
+            (token, loja, descricao, prazo_validade, agora),
+        )
+        contagem_id = cursor.lastrowid
+        for linha in linhas:
+            conn.execute(
+                "INSERT INTO contagem_item (contagem_id, insumo_id) VALUES (?, ?)",
+                (contagem_id, linha["id"]),
+            )
+        return {"id": contagem_id, "token": token}
+
+
+def listar_contagens():
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT c.*,
+                   COUNT(ci.insumo_id) AS total_itens,
+                   SUM(CASE WHEN ci.quantidade_preenchida IS NOT NULL THEN 1 ELSE 0 END) AS itens_preenchidos
+            FROM contagem c
+            LEFT JOIN contagem_item ci ON ci.contagem_id = c.id
+            GROUP BY c.id
+            ORDER BY c.criado_em DESC
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def buscar_contagem_por_token(token):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM contagem WHERE token = ?", (token,)).fetchone()
+        return dict(linha) if linha else None
+
+
+def buscar_contagem(contagem_id):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM contagem WHERE id = ?", (contagem_id,)).fetchone()
+        return dict(linha) if linha else None
+
+
+def listar_itens_contagem(contagem_id, loja):
+    """Itens da contagem + quantidade ideal (consumo médio × 7 dias) pra
+    servir de referência tanto na tela pública de preenchimento quanto na
+    conferência — mesmo cálculo de DIAS_COBERTURA_IDEAL do front."""
+    mapa_consumo = _mapa_consumo_medio_loja(loja)
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT ci.insumo_id, ci.quantidade_preenchida,
+                   i.nome, i.categoria, i.unidade_medida, i.marca_homologada
+            FROM contagem_item ci
+            JOIN insumo i ON i.id = ci.insumo_id
+            WHERE ci.contagem_id = ?
+            ORDER BY i.categoria, i.nome
+            """,
+            (contagem_id,),
+        ).fetchall()
+
+    itens = []
+    for linha in linhas:
+        consumo_medio = mapa_consumo.get(linha["insumo_id"])
+        quantidade_ideal = round(consumo_medio * DIAS_COBERTURA_IDEAL, 2) if consumo_medio is not None else None
+        itens.append({
+            "insumoId": linha["insumo_id"],
+            "nome": linha["nome"],
+            "categoria": linha["categoria"],
+            "unidadeMedida": linha["unidade_medida"],
+            "marcaHomologada": linha["marca_homologada"],
+            "quantidadePreenchida": linha["quantidade_preenchida"],
+            "quantidadeIdeal": quantidade_ideal,
+        })
+    return itens
+
+
+def responder_contagem(token, valores):
+    """Grava o preenchimento (uma vez só — ver validação de status/prazo na
+    rota). `valores` = {insumo_id: quantidade}."""
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        for insumo_id, quantidade in valores.items():
+            conn.execute(
+                "UPDATE contagem_item SET quantidade_preenchida = ? WHERE contagem_id = (SELECT id FROM contagem WHERE token = ?) AND insumo_id = ?",
+                (quantidade, token, insumo_id),
+            )
+        conn.execute(
+            "UPDATE contagem SET status = 'respondida', respondida_em = ? WHERE token = ?",
+            (agora, token),
+        )
+
+
+def aprovar_contagem(contagem_id):
+    """Kethllyn confere e aprova — só agora o que foi preenchido vira
+    quantidade_atual de verdade em estoque_insumo (itens não preenchidos
+    ficam com o valor antigo, não zeram)."""
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        itens = conn.execute(
+            "SELECT insumo_id, quantidade_preenchida FROM contagem_item WHERE contagem_id = ? AND quantidade_preenchida IS NOT NULL",
+            (contagem_id,),
+        ).fetchall()
+        for item in itens:
+            conn.execute(
+                "UPDATE estoque_insumo SET quantidade_atual = ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
+                (item["quantidade_preenchida"], agora, item["insumo_id"], contagem["loja"]),
+            )
+        conn.execute(
+            "UPDATE contagem SET status = 'aprovada', aprovada_em = ? WHERE id = ?",
+            (agora, contagem_id),
+        )

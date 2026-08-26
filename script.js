@@ -209,6 +209,16 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarCotacoes();
   }
 
+  // 4.0995 TELA DE CONTAGENS (admin)
+  if (document.getElementById('contagens-tabela-body')) {
+    carregarContagens();
+  }
+
+  // 4.0996 TELA PÚBLICA DE PREENCHIMENTO DE CONTAGEM (sem login, por token)
+  if (document.getElementById('form-contagem-publica')) {
+    inicializarContagemPublica();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -1897,6 +1907,338 @@ document.getElementById('form-cotacao-preco')?.addEventListener('submit', async 
     alert(erro.message || 'Não foi possível lançar o preço.');
   }
 });
+
+// --- Contagens (admin: abrir, listar, conferir/aprovar) ---
+let contagensLista = [];
+let contagemDetalheAtual = null;
+
+async function carregarContagens() {
+  const tbody = document.getElementById('contagens-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/contagens');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    contagensLista = dados.contagens || [];
+    renderContagensTabela();
+  } catch (erro) {
+    console.error('Falha ao carregar contagens:', erro);
+    tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444;">Não foi possível carregar as contagens. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+const STATUS_LABEL_CONTAGEM = { aberta: 'Aberta', respondida: 'Aguardando conferência', aprovada: 'Aprovada' };
+const STATUS_CLASSE_CONTAGEM = { aberta: 'neu-orange', respondida: 'pos', aprovada: 'pos' };
+
+function renderContagensTabela() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const tbody = document.getElementById('contagens-tabela-body');
+  if (!tbody) return;
+
+  const thAcoes = document.getElementById('contagens-th-acoes');
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+  const acoesTopo = document.getElementById('contagens-acoes-admin');
+  if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
+
+  if (!contagensLista.length) {
+    const colspan = 5 + (isAdmin ? 1 : 0);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma contagem criada ainda.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = contagensLista.map((c) => {
+    const prazo = new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(c.loja)}</td>
+        <td class="text-muted">${escaparHtml(c.descricao) || '—'}</td>
+        <td>${c.itensPreenchidos} de ${c.totalItens}</td>
+        <td class="text-muted">${prazo}</td>
+        <td><span class="badge-pill ${STATUS_CLASSE_CONTAGEM[c.status]}">${STATUS_LABEL_CONTAGEM[c.status]}</span></td>
+        ${isAdmin ? `
+          <td class="acoes-linha">
+            <button type="button" class="btn-acao-icone" data-acao="abrir-contagem" data-id="${c.id}" title="Ver/conferir contagem">
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </td>
+        ` : ''}
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('[data-acao="abrir-contagem"]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirContagemDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function abrirContagemDetalhe(contagemId) {
+  try {
+    const resposta = await fetch(`/api/contagens/${contagemId}`);
+    if (!resposta.ok) throw new Error('falha ao carregar contagem');
+    contagemDetalheAtual = await resposta.json();
+    renderContagemDetalhe();
+    document.getElementById('contagens-lista-view').style.display = 'none';
+    document.getElementById('contagens-detalhe-view').style.display = '';
+  } catch (erro) {
+    console.error('Falha ao abrir contagem:', erro);
+    alert('Não foi possível abrir essa contagem.');
+  }
+}
+
+function renderContagemDetalhe() {
+  const c = contagemDetalheAtual;
+  if (!c) return;
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+
+  document.getElementById('contagem-detalhe-titulo').textContent = `${c.loja} — ${c.descricao || 'Contagem'}`;
+
+  const acoes = document.getElementById('contagem-detalhe-acoes-admin');
+  const btnAprovar = document.getElementById('btn-contagem-aprovar');
+  if (acoes) acoes.style.display = isAdmin ? '' : 'none';
+  if (btnAprovar) btnAprovar.disabled = c.status !== 'respondida';
+
+  const tbody = document.getElementById('contagem-detalhe-tabela-body');
+  tbody.innerHTML = c.itens.map((item) => {
+    const preenchido = item.quantidadePreenchida;
+    const ideal = item.quantidadeIdeal;
+    const deficit = (preenchido !== null && ideal !== null) ? Math.max(0, Math.round((ideal - preenchido) * 100) / 100) : null;
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(item.nome)}</td>
+        <td class="text-muted">${escaparHtml(item.categoria)}</td>
+        <td>${preenchido === null ? '<span class="text-muted">não preenchido</span>' : `${preenchido} ${escaparHtml(item.unidadeMedida)}`}</td>
+        <td>${ideal === null ? '<span class="text-muted">—</span>' : `${ideal} ${escaparHtml(item.unidadeMedida)}`}</td>
+        <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${deficit} ${escaparHtml(item.unidadeMedida)}</span>` : '—')}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => {
+  document.getElementById('contagens-detalhe-view').style.display = 'none';
+  document.getElementById('contagens-lista-view').style.display = '';
+  carregarContagens();
+});
+
+document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async () => {
+  if (!contagemDetalheAtual) return;
+  if (!confirm('Aprovar essa contagem? As quantidades preenchidas vão substituir o estoque atual da loja.')) return;
+  try {
+    const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+    await abrirContagemDetalhe(contagemDetalheAtual.id);
+  } catch (erro) {
+    console.error('Falha ao aprovar contagem:', erro);
+    alert(erro.message || 'Não foi possível aprovar essa contagem.');
+  }
+});
+
+// --- Modal: Nova contagem ---
+function abrirModalNovaContagem() {
+  document.getElementById('form-nova-contagem').reset();
+  document.getElementById('modal-nova-contagem').style.display = 'flex';
+}
+
+function fecharModalNovaContagem() {
+  document.getElementById('modal-nova-contagem').style.display = 'none';
+}
+
+document.getElementById('btn-nova-contagem')?.addEventListener('click', abrirModalNovaContagem);
+document.getElementById('btn-nova-contagem-fechar')?.addEventListener('click', fecharModalNovaContagem);
+document.getElementById('btn-nova-contagem-cancelar')?.addEventListener('click', fecharModalNovaContagem);
+
+document.getElementById('form-nova-contagem')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const corpo = {
+    loja: document.getElementById('nova-contagem-loja').value,
+    descricao: document.getElementById('nova-contagem-descricao').value,
+    prazoValidade: document.getElementById('nova-contagem-prazo').value,
+  };
+  try {
+    const resposta = await fetch('/api/contagens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao criar contagem');
+    fecharModalNovaContagem();
+    const link = `${location.origin}/preencher_contagem.html?token=${dados.token}`;
+    document.getElementById('contagem-link-valor').value = link;
+    document.getElementById('modal-contagem-link').style.display = 'flex';
+    await carregarContagens();
+  } catch (erro) {
+    console.error('Falha ao criar contagem:', erro);
+    alert(erro.message || 'Não foi possível criar a contagem.');
+  }
+});
+
+document.getElementById('btn-contagem-link-fechar')?.addEventListener('click', () => {
+  document.getElementById('modal-contagem-link').style.display = 'none';
+});
+document.getElementById('btn-contagem-link-copiar')?.addEventListener('click', async () => {
+  const input = document.getElementById('contagem-link-valor');
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+  } catch {
+    document.execCommand('copy');
+  }
+});
+
+// --- Tela pública de preenchimento de contagem (sem login, por token) ---
+async function inicializarContagemPublica() {
+  const token = new URLSearchParams(location.search).get('token');
+  const elCarregando = document.getElementById('contagem-publica-carregando');
+  const elErro = document.getElementById('contagem-publica-erro');
+  const elErroTexto = document.getElementById('contagem-publica-erro-texto');
+  const elObrigado = document.getElementById('contagem-publica-obrigado');
+  const form = document.getElementById('form-contagem-publica');
+
+  function mostrarErro(mensagem) {
+    elCarregando.style.display = 'none';
+    elErroTexto.textContent = mensagem;
+    elErro.style.display = '';
+  }
+
+  if (!token) {
+    mostrarErro('Link inválido — falta o token de acesso.');
+    return;
+  }
+
+  try {
+    const resposta = await fetch(`/api/contagens/token/${encodeURIComponent(token)}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      mostrarErro(dados.erro || 'Link inválido.');
+      return;
+    }
+
+    if (dados.status !== 'aberta' || dados.expirada) {
+      elCarregando.style.display = 'none';
+      if (dados.status === 'aberta' && dados.expirada) {
+        mostrarErro('O prazo pra preencher essa contagem já venceu.');
+      } else {
+        elObrigado.style.display = '';
+      }
+      return;
+    }
+
+    document.getElementById('contagem-publica-titulo').textContent = 'Preencher contagem de estoque';
+    document.getElementById('contagem-publica-subtitulo').textContent = `${dados.descricao ? dados.descricao + ' — ' : ''}${dados.loja} — válido até ${new Date(dados.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+
+    const porCategoria = {};
+    dados.itens.forEach((item) => {
+      (porCategoria[item.categoria] || (porCategoria[item.categoria] = [])).push(item);
+    });
+
+    const totalItens = dados.itens.length;
+    function atualizarProgresso() {
+      const preenchidos = Array.from(form.querySelectorAll('input[data-insumo-id]')).filter((input) => input.value !== '').length;
+      document.getElementById('contagem-publica-progresso').textContent = `Você preencheu ${preenchidos} de ${totalItens} itens`;
+    }
+
+    const filtroSecao = document.getElementById('contagem-publica-filtro-secao');
+    filtroSecao.innerHTML = '<option value="">Todas as seções</option>' +
+      Object.keys(porCategoria).map((categoria) => `<option value="${escaparHtml(categoria)}">${escaparHtml(categoria)}</option>`).join('');
+
+    const container = document.getElementById('contagem-publica-itens');
+    container.innerHTML = Object.entries(porCategoria).map(([categoria, itens]) => `
+      <div class="contagem-publica-secao" data-categoria="${escaparHtml(categoria)}">
+        <h3 class="contagem-publica-secao-titulo">Seção: ${escaparHtml(categoria)}</h3>
+        ${itens.map((item) => `
+          <div class="contagem-item-card" data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
+            <div class="contagem-item-campo">
+              <label>Nome</label>
+              <div class="contagem-item-somente-leitura">${escaparHtml(item.nome)}</div>
+            </div>
+            <div class="contagem-item-campo">
+              <label>Unidade</label>
+              <div class="contagem-item-somente-leitura">${escaparHtml(item.unidadeMedida)}</div>
+            </div>
+            ${item.marcaHomologada ? `
+              <div class="contagem-item-campo">
+                <label>Marca</label>
+                <div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada)}</div>
+              </div>
+            ` : ''}
+            <div class="contagem-item-campo">
+              <label>Qtde em estoque</label>
+              <input type="number" step="0.01" min="0" placeholder="0" data-insumo-id="${item.insumoId}" required>
+            </div>
+            ${item.quantidadeIdeal !== null ? `
+              <div class="contagem-item-campo">
+                <label>Sugestão</label>
+                <div class="contagem-item-somente-leitura">${item.quantidadeIdeal} ${escaparHtml(item.unidadeMedida)}</div>
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+
+    container.querySelectorAll('input[data-insumo-id]').forEach((input) => {
+      input.addEventListener('input', () => {
+        input.closest('.contagem-item-card').classList.toggle('preenchido', input.value !== '');
+        atualizarProgresso();
+      });
+    });
+
+    function aplicarFiltros() {
+      const termo = document.getElementById('contagem-publica-busca').value.trim().toLowerCase();
+      const categoria = filtroSecao.value;
+      container.querySelectorAll('.contagem-publica-secao').forEach((secao) => {
+        let algumVisivelNaSecao = false;
+        secao.querySelectorAll('.contagem-item-card').forEach((card) => {
+          const bateNome = !termo || card.dataset.nomeBusca.includes(termo);
+          const bateCategoria = !categoria || secao.dataset.categoria === categoria;
+          const visivel = bateNome && bateCategoria;
+          card.style.display = visivel ? '' : 'none';
+          if (visivel) algumVisivelNaSecao = true;
+        });
+        secao.style.display = algumVisivelNaSecao ? '' : 'none';
+      });
+    }
+
+    document.getElementById('contagem-publica-busca').addEventListener('input', aplicarFiltros);
+    filtroSecao.addEventListener('change', aplicarFiltros);
+
+    atualizarProgresso();
+    elCarregando.style.display = 'none';
+    form.style.display = '';
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const valores = {};
+      form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
+        valores[input.dataset.insumoId] = input.value;
+      });
+      const btn = document.getElementById('btn-contagem-publica-enviar');
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/api/contagens/token/${encodeURIComponent(token)}/responder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ valores }),
+        });
+        const respDados = await resp.json();
+        if (!resp.ok) throw new Error(respDados.erro || 'falha ao enviar');
+        form.style.display = 'none';
+        elObrigado.style.display = '';
+      } catch (erro) {
+        console.error('Falha ao enviar contagem:', erro);
+        alert(erro.message || 'Não foi possível enviar a contagem.');
+        btn.disabled = false;
+      }
+    });
+  } catch (erro) {
+    console.error('Falha ao carregar contagem pública:', erro);
+    mostrarErro('Não foi possível carregar essa contagem agora.');
+  }
+}
 
 // --- Modal: Editar estoque (correção manual de quantidade/mínimo) ---
 function abrirModalEditarEstoque(insumoId, loja, nomeInsumo, dadosLoja) {

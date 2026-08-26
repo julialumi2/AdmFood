@@ -68,6 +68,13 @@ from backend.armazenamento import (
     listar_precos_cotacao,
     excluir_preco_cotacao,
     selecionar_preco_cotacao,
+    criar_contagem,
+    listar_contagens,
+    buscar_contagem,
+    buscar_contagem_por_token,
+    listar_itens_contagem,
+    responder_contagem,
+    aprovar_contagem,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -174,7 +181,7 @@ _criar_equipe_inicial_se_necessario()
 
 # --- LOGIN ------------------------------------------------------------------
 
-PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html"}
+PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html"}
 ROTAS_API_PUBLICAS = {"/api/login"}
 
 
@@ -190,7 +197,10 @@ def _exigir_login():
     caminho = request.path
 
     if caminho.startswith('/api/'):
-        if caminho in ROTAS_API_PUBLICAS:
+        # Rota de contagem por token: autenticação é o próprio token (opaco,
+        # aleatório), não sessão de login — é o link mandado pro funcionário
+        # da loja preencher sem precisar de conta no sistema (ver seção 9).
+        if caminho in ROTAS_API_PUBLICAS or caminho.startswith('/api/contagens/token/'):
             return
         if not _usuario_logado():
             return jsonify({"erro": "Não autenticado."}), 401
@@ -1460,6 +1470,133 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
         return erro_admin
 
     selecionar_preco_cotacao(preco_id)
+    return jsonify({"ok": True})
+
+
+def _prazo_vencido(prazo_iso):
+    # .replace(tzinfo=None) porque o front pode mandar um ISO com "Z"
+    # (timezone-aware) — datetime.now() é naive, comparar os dois direto
+    # derruba com TypeError.
+    prazo = datetime.fromisoformat(prazo_iso).replace(tzinfo=None)
+    return prazo < datetime.now()
+
+
+def _formatar_contagem(contagem):
+    total = contagem.get('total_itens') or 0
+    preenchidos = contagem.get('itens_preenchidos') or 0
+    return {
+        "id": contagem['id'],
+        "loja": contagem['loja'],
+        "descricao": contagem['descricao'],
+        "prazoValidade": contagem['prazo_validade'],
+        "status": contagem['status'],
+        "criadoEm": contagem['criado_em'],
+        "respondidaEm": contagem['respondida_em'],
+        "aprovadaEm": contagem['aprovada_em'],
+        "totalItens": total,
+        "itensPreenchidos": preenchidos,
+        "token": contagem.get('token'),
+    }
+
+
+@app.route('/api/contagens', methods=['GET'])
+def api_listar_contagens():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"contagens": [_formatar_contagem(c) for c in listar_contagens()]})
+
+
+@app.route('/api/contagens', methods=['POST'])
+def api_criar_contagem():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja = (dados.get('loja') or '').strip()
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    descricao = (dados.get('descricao') or '').strip()
+    prazo_validade = (dados.get('prazoValidade') or '').strip()
+    if not prazo_validade:
+        return jsonify({"erro": "Informe o prazo de validade."}), 400
+    categorias = dados.get('categorias') or None
+
+    resultado = criar_contagem(loja, descricao, prazo_validade, categorias)
+    return jsonify(resultado)
+
+
+@app.route('/api/contagens/<int:contagem_id>', methods=['GET'])
+def api_buscar_contagem(contagem_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+
+    resposta = _formatar_contagem(contagem)
+    resposta['itens'] = listar_itens_contagem(contagem_id, contagem['loja'])
+    return jsonify(resposta)
+
+
+@app.route('/api/contagens/<int:contagem_id>/aprovar', methods=['POST'])
+def api_aprovar_contagem(contagem_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+    if contagem['status'] == 'aprovada':
+        return jsonify({"erro": "Essa contagem já foi aprovada."}), 400
+
+    aprovar_contagem(contagem_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/contagens/token/<token>', methods=['GET'])
+def api_buscar_contagem_por_token(token):
+    # Pública (sem login) — ver exceção em ROTAS_API_PUBLICAS/_exigir_login.
+    contagem = buscar_contagem_por_token(token)
+    if not contagem:
+        return jsonify({"erro": "Link inválido."}), 404
+
+    resposta = _formatar_contagem(contagem)
+    resposta.pop('token', None)
+    resposta['itens'] = listar_itens_contagem(contagem['id'], contagem['loja'])
+    resposta['expirada'] = contagem['status'] == 'aberta' and _prazo_vencido(contagem['prazo_validade'])
+    return jsonify(resposta)
+
+
+@app.route('/api/contagens/token/<token>/responder', methods=['POST'])
+def api_responder_contagem(token):
+    # Pública (sem login) — mesma exceção acima.
+    contagem = buscar_contagem_por_token(token)
+    if not contagem:
+        return jsonify({"erro": "Link inválido."}), 404
+    if contagem['status'] != 'aberta':
+        return jsonify({"erro": "Essa contagem já foi respondida."}), 400
+    if _prazo_vencido(contagem['prazo_validade']):
+        return jsonify({"erro": "O prazo para preencher essa contagem já venceu."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    valores_brutos = dados.get('valores') or {}
+    valores = {}
+    try:
+        for insumo_id, quantidade in valores_brutos.items():
+            if quantidade is None or quantidade == '':
+                continue
+            valores[int(insumo_id)] = float(quantidade)
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Quantidade inválida."}), 400
+    if any(v < 0 for v in valores.values()):
+        return jsonify({"erro": "Quantidade não pode ser negativa."}), 400
+
+    responder_contagem(token, valores)
     return jsonify({"ok": True})
 
 

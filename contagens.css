@@ -1,0 +1,7 @@
+/* Estilos específicos da tela de Contagens — a base compartilhada (sidebar,
+   cabeçalho, cards, tabelas, botões, badges) está em theme.css */
+
+.contagem-progresso-texto {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}

@@ -1,0 +1,175 @@
+/* Tela pública (sem login, acessada por token) de preenchimento de
+   contagem de estoque — layout inspirado no link real da VMarket que a
+   Julia mandou de exemplo (cabeçalho centralizado, avisos coloridos, um
+   cartão por produto agrupado por seção). Página única, sem sidebar/grid
+   do dashboard, pensada pra abrir bem no celular. */
+
+body {
+  background-color: var(--bg-main);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-5) var(--space-4);
+}
+
+.contagem-publica-wrap {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.contagem-publica-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.contagem-publica-header .brand-name .brand-dark { color: var(--text-dark); }
+.contagem-publica-header .brand-name .brand-red { color: var(--primary); }
+
+.contagem-publica-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-5);
+}
+
+.contagem-publica-card h2 {
+  font-size: 1.35rem;
+  color: var(--text-dark);
+  text-align: center;
+  margin-bottom: var(--space-2);
+}
+
+.contagem-publica-card > .panel-subtitle {
+  text-align: center;
+}
+
+.contagem-publica-prazo {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.contagem-publica-progresso {
+  text-align: center;
+  font-weight: 700;
+  color: var(--success);
+  margin: var(--space-3) 0;
+}
+
+.contagem-publica-icone-ok {
+  width: 40px;
+  height: 40px;
+  color: var(--success);
+  margin-bottom: var(--space-3);
+}
+
+.contagem-publica-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.contagem-publica-filtros .search-box { max-width: none; flex: 1; }
+
+#contagem-publica-filtro-secao {
+  padding: 8px var(--space-3);
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.contagem-publica-secao-titulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: var(--space-5) 0 var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-color);
+}
+
+.contagem-publica-secao-titulo:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.contagem-item-card {
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.contagem-item-campo {
+  margin-bottom: var(--space-3);
+}
+
+.contagem-item-campo:last-child { margin-bottom: 0; }
+
+.contagem-item-campo label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.contagem-item-somente-leitura {
+  padding: 10px;
+  border: 1px solid var(--surface-muted-border);
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.contagem-item-campo input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.contagem-item-campo input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.contagem-item-card.preenchido {
+  border-color: var(--success);
+}
+
+#btn-contagem-publica-enviar {
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+.form-erro {
+  background-color: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: 0.9rem;
+  text-align: center;
+}

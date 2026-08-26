@@ -3,16 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Preparo</title>
+  <title>AdmFood - Contagens</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="preparo.css">
+  <link rel="stylesheet" href="contagens.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="script.js" defer></script>
 </head>
@@ -45,7 +44,7 @@
           <i data-lucide="box"></i>
           <span>Estoque</span>
         </a>
-        <div class="menu-group">
+        <div class="menu-group expandido">
           <button type="button" class="menu-item menu-group-toggle">
             <i data-lucide="shopping-cart"></i>
             <span>Compras</span>
@@ -60,7 +59,7 @@
               <i data-lucide="list-checks"></i>
               <span>Cotações</span>
             </a>
-            <a href="contagens.html" class="menu-subitem">
+            <a href="contagens.html" class="menu-subitem active">
               <i data-lucide="clipboard-list"></i>
               <span>Contagens</span>
             </a>
@@ -70,7 +69,7 @@
           <i data-lucide="book-open"></i>
           <span>Cardápio</span>
         </a>
-        <a href="preparo.html" class="menu-item active">
+        <a href="preparo.html" class="menu-item">
           <i data-lucide="timer"></i>
           <span>Preparo</span>
         </a>
@@ -110,7 +109,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">PREPARO</span>
+          <span class="header-page-title">CONTAGENS</span>
         </div>
 
         <div class="header-right">
@@ -129,158 +128,145 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE PREPARO -->
+      <!-- PÁGINA DE CONTAGENS -->
       <div class="page-content">
 
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="timer" class="icon-pin"></i>
-            <span>INDICADORES OPERACIONAIS DA COZINHA</span>
-          </div>
-          <div class="title-row">
-            <h1>Preparo</h1>
-          </div>
-        </div>
-
-        <p class="panel-subtitle" style="margin-top: -8px;">
-          Tempo do pedido inteiro (do recebido ao fechado/entregue) — a Cardápio Web não marca separadamente
-          quando a cozinha termina de preparar, só quando o pedido é finalizado.
-        </p>
-
-        <!-- FILTRO DE PERÍODO -->
-        <div class="content-header">
-          <div class="header-titles">
-            <span class="atualizado-em" id="preparo-atualizado-em"></span>
-          </div>
-          <div class="action-controls">
-            <div class="date-range-picker">
-              <div class="date-range-field">
-                <label for="preparo-data-inicio">De</label>
-                <input type="date" id="preparo-data-inicio">
-              </div>
-              <span class="date-range-sep">–</span>
-              <div class="date-range-field">
-                <label for="preparo-data-fim">Até</label>
-                <input type="date" id="preparo-data-fim">
+        <!-- VISÃO: LISTA DE CONTAGENS -->
+        <div id="contagens-lista-view">
+          <div class="dashboard-title-area">
+            <div class="title-top">
+              <i data-lucide="clipboard-list" class="icon-pin"></i>
+              <span>CONTAGEM DE ESTOQUE POR LOJA</span>
+            </div>
+            <div class="title-row">
+              <h1>Contagens</h1>
+              <div class="page-acoes-topo" id="contagens-acoes-admin" style="display:none;">
+                <button type="button" class="btn-registrar-entrada" id="btn-nova-contagem">
+                  <i data-lucide="plus"></i>
+                  Nova contagem
+                </button>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- ABAS POR LOJA -->
-        <div class="tabs-bar" id="preparo-tabs">
-          <button class="tab-btn active" data-tab="geral">
-            <i data-lucide="store"></i>
-            <span>Visão Geral (Todas)</span>
-            <span class="tab-badge">4 Unidades</span>
-          </button>
-          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
-            <i data-lucide="store"></i>
-            <span>Hamburgueria Artesanos</span>
-          </button>
-          <button class="tab-btn" data-tab="Açaí Na Lata">
-            <i data-lucide="store"></i>
-            <span>Açaí Na Lata</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça ZN">
-            <i data-lucide="store"></i>
-            <span>Tradiça ZN</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça Simus">
-            <i data-lucide="store"></i>
-            <span>Tradiça Simus</span>
-          </button>
-        </div>
+          <p class="panel-subtitle" style="margin-top: -8px;">
+            Gera um link sem login pro funcionário da loja preencher a quantidade em estoque de cada insumo. Depois de preenchido, confira aqui antes de aprovar.
+          </p>
 
-        <!-- CARDS DE MÉTRICAS -->
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Tempo Médio do Pedido</span>
-              <div class="card-icon"><i data-lucide="timer"></i></div>
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Contagens abertas</h3>
+                <p class="table-subtitle">Clique numa contagem pra conferir o preenchimento</p>
+              </div>
             </div>
-            <div class="card-value" id="preparo-val-tempo-medio">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label"></span></div>
-          </div>
 
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Total de Pedidos</span>
-              <div class="card-icon"><i data-lucide="shopping-bag"></i></div>
-            </div>
-            <div class="card-value" id="preparo-val-pedidos">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label-2"></span></div>
-          </div>
-
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Horário de Pico</span>
-              <div class="card-icon"><i data-lucide="flame"></i></div>
-            </div>
-            <div class="card-value" id="preparo-val-pico">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-pico-sub"></span></div>
-          </div>
-        </div>
-
-        <!-- VOLUME POR HORÁRIO -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Volume de pedidos por horário do dia</h3>
-            <span class="panel-subtitle">Quando os pedidos mais chegam — ajuda a prever picos de movimento</span>
-          </div>
-          <div class="preparo-chart-wrapper">
-            <canvas id="preparoHorarioChart"></canvas>
-          </div>
-        </div>
-
-        <!-- TEMPO MÉDIO POR LOJA (só na Visão Geral) -->
-        <div class="panel" id="preparo-panel-por-loja">
-          <div class="panel-header">
-            <h3 class="panel-title">Tempo médio por loja</h3>
-            <span class="panel-subtitle">Comparativo entre as 4 unidades no período selecionado</span>
-          </div>
-          <div class="table-responsive">
+            <div class="table-responsive">
             <table>
               <thead>
                 <tr>
                   <th>Loja</th>
-                  <th>Pedidos</th>
-                  <th>Tempo médio</th>
+                  <th>Descrição</th>
+                  <th>Progresso</th>
+                  <th>Prazo</th>
+                  <th>Status</th>
+                  <th id="contagens-th-acoes" style="display:none;">Ações</th>
                 </tr>
               </thead>
-              <tbody id="preparo-por-loja-body">
+              <tbody id="contagens-tabela-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
-        <!-- GARGALOS -->
-        <div class="panel panel-table">
-          <div class="panel-header">
-            <h3 class="panel-title">Dias mais lentos do período</h3>
-            <span class="panel-subtitle">Loja + dia com maior tempo médio (mínimo 3 pedidos, pra não contar ruído)</span>
+        <!-- VISÃO: DETALHE / CONFERÊNCIA DA CONTAGEM -->
+        <div id="contagens-detalhe-view" style="display:none;">
+          <button type="button" class="btn-secondary-sm" id="btn-contagem-voltar" style="margin-bottom: var(--space-4);">
+            <i data-lucide="arrow-left"></i>
+            Voltar pra lista
+          </button>
+
+          <div class="dashboard-title-area">
+            <div class="title-row">
+              <h1 id="contagem-detalhe-titulo">—</h1>
+              <div class="page-acoes-topo" id="contagem-detalhe-acoes-admin" style="display:none;">
+                <button type="button" class="btn-secondary" id="btn-contagem-aprovar">Aprovar contagem</button>
+              </div>
+            </div>
           </div>
-          <div class="table-responsive">
-            <table>
+
+          <div class="chart-card">
+            <div class="table-responsive">
+            <table class="inventory-table">
               <thead>
                 <tr>
-                  <th>Dia</th>
-                  <th>Loja</th>
-                  <th>Pedidos</th>
-                  <th>Tempo médio</th>
+                  <th>Insumo</th>
+                  <th>Categoria</th>
+                  <th>Preenchido</th>
+                  <th>Qtd. ideal (7 dias)</th>
+                  <th>Déficit</th>
                 </tr>
               </thead>
-              <tbody id="preparo-gargalos-body">
+              <tbody id="contagem-detalhe-tabela-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
 
+
+    <!-- MODAL: NOVA CONTAGEM -->
+    <div class="modal-overlay" id="modal-nova-contagem" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Nova contagem</h3>
+          <button type="button" class="btn-close" id="btn-nova-contagem-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-nova-contagem">
+          <div class="form-group">
+            <label for="nova-contagem-loja">Loja</label>
+            <input type="text" id="nova-contagem-loja" value="Hamburgueria Artesanos" disabled>
+          </div>
+          <div class="form-group">
+            <label for="nova-contagem-descricao">Descrição</label>
+            <input type="text" id="nova-contagem-descricao" required placeholder="Ex: Contagem semanal 25/08">
+          </div>
+          <div class="form-group">
+            <label for="nova-contagem-prazo">Prazo pra preencher</label>
+            <input type="datetime-local" id="nova-contagem-prazo" required>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-nova-contagem-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Criar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: LINK GERADO -->
+    <div class="modal-overlay" id="modal-contagem-link" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Contagem criada</h3>
+          <button type="button" class="btn-close" id="btn-contagem-link-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Manda esse link pro funcionário preencher (não precisa de login):
+        </p>
+        <div class="form-group">
+          <input type="text" id="contagem-link-valor" readonly>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary-sm" id="btn-contagem-link-copiar">Copiar link</button>
+        </div>
+      </div>
+    </div>
   </div> <!-- /dashboard-wrapper -->
 
 </body>
