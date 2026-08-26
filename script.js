@@ -907,13 +907,15 @@ async function montarRelatorioWhatsApp() {
         const dadosSemana = await respSemana.json();
         const ocorrencias = dadosSemana.ocorrencias || [];
         const diaSemana = dadosSemana.diaSemana || '';
-        const valoresSemana = [0, 1, 2, 3].map(i => (ocorrencias[i] ? ocorrencias[i].faturamento : '0,00'));
 
+        // Lista quantas ocorrências desse dia da semana realmente já
+        // passaram no mês (4 ou 5, dependendo do calendário) — nada de
+        // travar em 4, senão o último sábado/domingo de um mês com 5 some
+        // do relatório.
         bloco += `\n\n`;
-        bloco += `- 1 ${diaSemana} do mês: R$ ${valoresSemana[0]}\n`;
-        bloco += `- 2 ${diaSemana} do mês: R$ ${valoresSemana[1]}\n`;
-        bloco += `- 3 ${diaSemana} do mês: R$ ${valoresSemana[2]}\n`;
-        bloco += `- 4 ${diaSemana} do mês: R$ ${valoresSemana[3]}`;
+        bloco += ocorrencias
+          .map((ocorrencia, i) => `- ${i + 1} ${diaSemana} do mês: R$ ${ocorrencia.faturamento}`)
+          .join('\n');
       }
     }
 
