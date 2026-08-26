@@ -134,6 +134,8 @@ body.dark-mode {
    tela real, encolhendo a página inteira. Precisa estar no html também. */
 html {
   overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
 }
 
 body {
@@ -151,6 +153,43 @@ body {
 :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* Barra de rolagem — vale pra qualquer contêiner com scroll do sistema
+   (sidebar, tabelas, modais), não só um elemento específico (scrollbar-width
+   e scrollbar-color no html, acima, já herdam pra tudo no Firefox). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
+
+/* A sidebar é sempre escura (independe do tema claro/escuro do resto do
+   site), então a barra usa as cores próprias dela em vez do tema geral. */
+.sidebar {
+  scrollbar-color: var(--sidebar-text-muted) transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: var(--sidebar-text-muted);
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sidebar-text);
 }
 
 /* ---------------------------------------------------------------------
@@ -243,7 +282,8 @@ body {
   position: sticky;
   top: var(--space-4);
   transition: padding 0.25s ease, margin 0.25s ease;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   box-sizing: border-box;
   box-shadow: var(--shadow-lg);
 }
@@ -292,10 +332,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
 }
 
 .menu-item {
@@ -436,10 +472,10 @@ body {
   transform: rotate(180deg);
 }
 
-/* Identidade do usuário, fixada no rodapé do menu (empurrada pra baixo
-   pelo margin-top:auto) — leva pra Configurações ao clicar. */
+/* Identidade do usuário — flui junto com o resto do menu (a sidebar
+   inteira rola como uma unidade só) — leva pra Configurações ao clicar. */
 .sidebar-user-card {
-  margin-top: auto;
+  margin-top: var(--space-4);
   display: flex;
   align-items: center;
   gap: var(--space-3);
