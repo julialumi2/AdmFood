@@ -36,7 +36,7 @@
   transform: none;
 }
 
-.quick-action-btn i { width: 16px; height: 16px; color: var(--primary); flex-shrink: 0; }
+.quick-action-btn i, .quick-action-btn svg { width: 16px; height: 16px; color: var(--primary); flex-shrink: 0; }
 
 /* GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA, LADO A LADO */
 .home-charts-row {
@@ -230,7 +230,7 @@
   flex-shrink: 0;
 }
 
-.insight-automatico-icone i { width: 17px; height: 17px; }
+.insight-automatico-icone i, .insight-automatico-icone svg { width: 17px; height: 17px; }
 
 .insight-automatico-item.alta .insight-automatico-icone { background-color: var(--success-soft); color: var(--success); }
 .insight-automatico-item.baixa .insight-automatico-icone { background-color: var(--danger-soft); color: var(--danger); }

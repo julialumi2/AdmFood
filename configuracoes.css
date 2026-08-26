@@ -39,7 +39,8 @@
   gap: 14px;
 }
 
-.toggle-tile-info i {
+.toggle-tile-info i,
+.toggle-tile-info svg {
   width: 20px;
   height: 20px;
   color: var(--text-muted);
@@ -76,7 +77,8 @@
   color: var(--text-muted);
 }
 
-.sync-info i {
+.sync-info i,
+.sync-info svg {
   width: 18px;
   height: 18px;
   flex-shrink: 0;

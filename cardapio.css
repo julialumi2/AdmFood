@@ -149,7 +149,7 @@
   color: var(--text-faint);
 }
 
-.cardapio-foto-vazia i { width: 22px; height: 22px; }
+.cardapio-foto-vazia i, .cardapio-foto-vazia svg { width: 22px; height: 22px; }
 
 .cardapio-btn-foto {
   position: absolute;
@@ -168,7 +168,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-.cardapio-btn-foto i { width: 12px; height: 12px; }
+.cardapio-btn-foto i, .cardapio-btn-foto svg { width: 12px; height: 12px; }
 
 .cardapio-card-corpo { flex: 1; min-width: 0; }
 
@@ -201,7 +201,7 @@
 }
 
 .cardapio-btn-editar:hover { color: var(--primary); border-color: var(--primary); }
-.cardapio-btn-editar i { width: 13px; height: 13px; }
+.cardapio-btn-editar i, .cardapio-btn-editar svg { width: 13px; height: 13px; }
 
 .cardapio-linha-preco {
   display: flex;

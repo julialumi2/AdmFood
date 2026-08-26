@@ -83,7 +83,7 @@ body {
   box-shadow: 0 4px 10px rgba(217, 56, 41, 0.35);
 }
 
-.brand-mark i { width: 20px; height: 20px; }
+.brand-mark i, .brand-mark svg { width: 20px; height: 20px; }
 
 .brand-name {
   font-family: 'Montserrat', sans-serif;
@@ -226,7 +226,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
 }
 
 .btn-toggle-senha:hover { color: var(--kraft-text); }
-.btn-toggle-senha i { width: 17px; height: 17px; }
+.btn-toggle-senha i, .btn-toggle-senha svg { width: 17px; height: 17px; }
 
 .forgot-wrapper {
   display: flex;
