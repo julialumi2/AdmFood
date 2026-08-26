@@ -132,6 +132,13 @@ body {
   font-size: 0.9rem;
   outline: none;
   box-sizing: border-box;
+  -moz-appearance: textfield;
+}
+
+#contagem-publica-itens td input::-webkit-outer-spin-button,
+#contagem-publica-itens td input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 #contagem-publica-itens td input:focus {
