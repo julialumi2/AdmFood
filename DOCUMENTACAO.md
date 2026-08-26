@@ -548,6 +548,48 @@ sem querer; "Reabrir" traz o formulário de volta. Leitura liberada pra
 todo mundo logado; criar/lançar preço/selecionar vencedor/fechar/excluir é
 só admin.
 
+### 6.9 Contagem de estoque por link + Requisição (núcleo do fluxo Compras)
+
+Tela `contagens.html` — VMarket-style: gera um **link sem login** (token
+opaco em `secrets.token_urlsafe`) pra um funcionário da loja preencher a
+quantidade em estoque de cada insumo, sem precisar de conta no AdmFood.
+Adicionado em 2026-08-26.
+
+`contagem` (id, token, loja, descrição, prazo_validade, status
+`aberta`/`respondida`/`aprovada`, criado_em/respondida_em/aprovada_em) +
+`contagem_item` (contagem_id, insumo_id, quantidade_preenchida) — uma linha
+por insumo ativo (ou filtrado por categoria) já criada em branco no
+momento da abertura, esperando preenchimento. `listar_itens_contagem`
+calcula a quantidade ideal (consumo médio × `DIAS_COBERTURA_IDEAL`, mesma
+conta da seção 6.6) lado a lado, tanto na tela pública de preenchimento
+quanto na conferência do admin — dá pro funcionário já ver a sugestão
+enquanto conta. `aprovar_contagem` só grava a quantidade preenchida como
+`quantidade_atual` real em `estoque_insumo` depois que o admin confere e
+aprova (itens não preenchidos mantêm o valor antigo, não zeram).
+
+**Requisição** (a peça que faltava do fluxo Requisição → Contagem →
+Cotação → Pedido descrito na seção 9) — abre o ciclo em **várias lojas de
+uma vez**, em vez de uma contagem por vez: o modal "Nova requisição" pede
+um título e prazo compartilhados + uma lista de checkboxes (uma por loja
+de `LOJAS_ESTOQUE`), e ao criar chama `POST /api/contagens` uma vez por
+loja marcada, todas com a mesma descrição/prazo. **Não existe uma tabela
+`requisicao` separada** — de propósito, pra não duplicar schema: como cada
+contagem já carrega descrição + prazo, N contagens da mesma requisição
+aparecem naturalmente agrupadas na lista (mesmo título, mesmo prazo,
+criadas juntas), e cada uma segue o fluxo de conferência/aprovação de
+loja em loja normalmente. O modal "Requisição criada" devolve um link +
+botão "Copiar" por loja selecionada, pra mandar pro responsável de cada
+uma.
+
+Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
+/api/contagens/<id>` (detalhe pra conferência, admin), `POST
+/api/contagens/<id>/aprovar` (admin), `GET /api/contagens/token/<token>` e
+`POST /api/contagens/token/<token>/responder` (públicas — token é a própria
+autenticação, ver exceção em `ROTAS_API_PUBLICAS`/`PAGINAS_PUBLICAS` em
+`app.py`). Ainda falta decidir/implementar: área de conferência somando o
+déficit das várias lojas de uma requisição antes de gerar a cotação, e a
+geração automática da cotação a partir desse déficit (ver seção 9, item 1).
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -705,12 +747,11 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
    **Inventário completo da VMarket** (levantado navegando pelo próprio sistema em 2026-08-25, item por item, pra saber o que vale a pena replicar):
    - ✅ **Já replicado nativamente**: catálogo de insumos (160 importados), fornecedores (69 importados, com pedido mínimo), vínculo insumo↔fornecedor + homologação de marca, cotação manual (lança preço por insumo/fornecedor, compara, destaca mais barato), quantidade ideal (consumo médio × 7 dias) + sugestão de compra.
    - 🔲 **Núcleo que falta** (o motivo de toda essa investigação — fluxo real: Requisição → Contagem → Cotação → Pedido → Recebimento):
-     - **Requisição** (VMarket: Cotações → Requisições → Cadastrar) — tela que abre o ciclo semanal: descrição, prazo, quais seções entram, checkbox opcional "fazer contagem de estoque antes", e um botão "Requisitantes" (quem vai preencher a contagem). É literalmente o "abrir uma nova cotação" que a Julia descreveu.
-     - **Contagem por loja** — funcionário preenche quantidade atual de cada insumo do seu setor. Depende da decisão de acesso (login "equipe" com escopo por loja vs. link por token) — conversa pausada, retomar.
-     - **Área de conferência** — revisão das contagens preenchidas antes de "gerar" a cotação de verdade.
-     - **Geração automática da cotação** a partir do déficit (ideal − atual) — hoje isso já pode ser calculado (quantidade ideal pronta), só falta ligar na criação da cotação em vez de lançar item por item na mão.
+     - ✅ **Requisição + Contagem por loja** — concluído em 2026-08-26 (decisão de acesso: link por token, sem login, estilo VMarket — ver seção 6.9). Requisição abre o ciclo em várias lojas de uma vez (título + prazo compartilhados), gerando uma contagem/link por loja selecionada; funcionário preenche a quantidade atual de cada insumo do seu setor pelo link; admin confere e aprova antes de virar quantidade real em estoque.
+     - **Área de conferência** — hoje a conferência é contagem por contagem (uma loja de cada vez); falta uma visão somando o déficit das várias lojas de uma mesma requisição antes de "gerar" a cotação de verdade.
+     - **Geração automática da cotação** a partir do déficit (ideal − atual) — hoje isso já pode ser calculado (quantidade ideal pronta, ver seção 6.6), só falta ligar na criação da cotação em vez de lançar item por item na mão.
      - **Pedido** (VMarket: Compras → Meus Pedidos / Cadastrar Pedido Manual / Agenda de Recebimento) — depois de fechar a cotação com um fornecedor vencedor, vira um pedido de compra com acompanhamento de entrega (a VMarket tem 4 estágios de recebimento). Não existe nada disso ainda no AdmFood.
-     - **Fornecedor cotando os próprios produtos** — hoje é a Julia/Kethllyn que digita o preço de cada fornecedor manualmente; a VMarket manda um link individual pro fornecedor preencher. Parte do mesmo problema de acesso sem login.
+     - **Fornecedor cotando os próprios produtos** — hoje é a Julia/Kethllyn que digita o preço de cada fornecedor manualmente; a VMarket manda um link individual pro fornecedor preencher. Mesmo padrão de link por token da Contagem (seção 6.9) deve resolver.
    - 🔻 **Existe na VMarket mas não configurado/usado por vocês hoje** (baixa prioridade — replicar seria trabalho sem necessidade comprovada): **Orçamento** (Config. Orçamento + Desvio Padrão — zero registros cadastrados); **Financeiro/Nota Fiscal** (concilia XML de nota fiscal contra pedido de compra — zero notas processadas; dependeria de integração fiscal, domínio novo).
    - ❌ **Não aplicável** (recursos da própria VMarket como marketplace, não replicáveis num sistema interno): **Guia de Fornecedores** (diretório de fornecedores parceiros da própria VMarket, pra descobrir fornecedor novo — não é o cadastro de vocês); **Shopping VMarket** (catálogo de compra direto de fornecedores parceiros da VMarket, com carrinho — depende da rede de distribuidores deles); **Lançar Faturamento** (input manual de faturamento mensal pra alimentar o CMV/Curva ABC do dashboard deles — o AdmFood já tem faturamento diário sincronizado automaticamente da Cardápio Web, mais granular que isso).
    - 📊 **Dashboard da VMarket** (não replicado ainda, mas pode inspirar métricas futuras): Curva ABC de produtos/fornecedores (participação % em compras), total em compras, economia potencial de cotações, CMV global, tempo de resposta do fornecedor / de cotação pra pedido / de pedido até entrega, solicitações emergenciais, orçado x realizado por filial.

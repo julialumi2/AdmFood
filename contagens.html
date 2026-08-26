@@ -143,14 +143,14 @@
               <div class="page-acoes-topo" id="contagens-acoes-admin" style="display:none;">
                 <button type="button" class="btn-registrar-entrada" id="btn-nova-contagem">
                   <i data-lucide="plus"></i>
-                  Nova contagem
+                  Nova requisição
                 </button>
               </div>
             </div>
           </div>
 
           <p class="panel-subtitle" style="margin-top: -8px;">
-            Gera um link sem login pro funcionário da loja preencher a quantidade em estoque de cada insumo. Depois de preenchido, confira aqui antes de aprovar.
+            Uma requisição abre o ciclo de contagem em uma ou mais lojas de uma vez — gera um link sem login por loja pro funcionário preencher a quantidade em estoque de cada insumo. Depois de preenchido, confira aqui antes de aprovar.
           </p>
 
           <div class="chart-card">
@@ -221,25 +221,27 @@
     </main> <!-- /main-wrapper -->
 
 
-    <!-- MODAL: NOVA CONTAGEM -->
+    <!-- MODAL: NOVA REQUISIÇÃO -->
     <div class="modal-overlay" id="modal-nova-contagem" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="panel-title">Nova contagem</h3>
+          <h3 class="panel-title">Nova requisição</h3>
           <button type="button" class="btn-close" id="btn-nova-contagem-fechar" aria-label="Fechar">&times;</button>
         </div>
         <form id="form-nova-contagem">
           <div class="form-group">
-            <label for="nova-contagem-loja">Loja</label>
-            <input type="text" id="nova-contagem-loja" value="Hamburgueria Artesanos" disabled>
-          </div>
-          <div class="form-group">
-            <label for="nova-contagem-descricao">Descrição</label>
+            <label for="nova-contagem-descricao">Título</label>
             <input type="text" id="nova-contagem-descricao" required placeholder="Ex: Contagem semanal 25/08">
           </div>
           <div class="form-group">
             <label for="nova-contagem-prazo">Prazo pra preencher</label>
             <input type="datetime-local" id="nova-contagem-prazo" required>
+          </div>
+          <div class="form-group">
+            <label>Lojas que entram nessa requisição</label>
+            <div class="form-checklist" id="nova-contagem-lojas">
+              <!-- Renderizado dinamicamente via JS (LOJAS_ESTOQUE) -->
+            </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-nova-contagem-cancelar">Cancelar</button>
@@ -249,21 +251,19 @@
       </div>
     </div>
 
-    <!-- MODAL: LINK GERADO -->
+    <!-- MODAL: LINKS GERADOS -->
     <div class="modal-overlay" id="modal-contagem-link" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="panel-title">Contagem criada</h3>
+          <h3 class="panel-title">Requisição criada</h3>
           <button type="button" class="btn-close" id="btn-contagem-link-fechar" aria-label="Fechar">&times;</button>
         </div>
         <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
-          Manda esse link pro funcionário preencher (não precisa de login):
+          Manda o link de cada loja pro funcionário responsável preencher (não precisa de login):
         </p>
-        <div class="form-group">
-          <input type="text" id="contagem-link-valor" readonly>
-        </div>
+        <div id="contagem-link-lista"></div>
         <div class="modal-actions">
-          <button type="button" class="btn-primary-sm" id="btn-contagem-link-copiar">Copiar link</button>
+          <button type="button" class="btn-secondary-sm" id="btn-contagem-link-fechar-2">Fechar</button>
         </div>
       </div>
     </div>

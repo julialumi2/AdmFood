@@ -5,3 +5,45 @@
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+.form-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background-color: var(--surface-muted);
+}
+
+.form-checklist label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.form-checklist input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.contagem-link-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.contagem-link-item .contagem-link-loja {
+  flex: 0 0 auto;
+  min-width: 150px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.contagem-link-item input {
+  flex: 1 1 auto;
+}

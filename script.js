@@ -2038,9 +2038,16 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
   }
 });
 
-// --- Modal: Nova contagem ---
+// --- Modal: Nova requisição (abre uma contagem por loja selecionada) ---
 function abrirModalNovaContagem() {
   document.getElementById('form-nova-contagem').reset();
+  const container = document.getElementById('nova-contagem-lojas');
+  container.innerHTML = LOJAS_ESTOQUE.map((loja, indice) => `
+    <label>
+      <input type="checkbox" name="nova-contagem-loja" value="${escaparHtml(loja)}" ${indice === 0 ? 'checked' : ''}>
+      ${escaparHtml(loja)}
+    </label>
+  `).join('');
   document.getElementById('modal-nova-contagem').style.display = 'flex';
 }
 
@@ -2054,41 +2061,60 @@ document.getElementById('btn-nova-contagem-cancelar')?.addEventListener('click',
 
 document.getElementById('form-nova-contagem')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
-  const corpo = {
-    loja: document.getElementById('nova-contagem-loja').value,
-    descricao: document.getElementById('nova-contagem-descricao').value,
-    prazoValidade: document.getElementById('nova-contagem-prazo').value,
-  };
+  const descricao = document.getElementById('nova-contagem-descricao').value;
+  const prazoValidade = document.getElementById('nova-contagem-prazo').value;
+  const lojas = Array.from(document.querySelectorAll('#nova-contagem-lojas input[name="nova-contagem-loja"]:checked')).map((i) => i.value);
+
+  if (!lojas.length) {
+    alert('Selecione pelo menos uma loja.');
+    return;
+  }
+
   try {
-    const resposta = await fetch('/api/contagens', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao criar contagem');
+    const linksGerados = [];
+    for (const loja of lojas) {
+      const resposta = await fetch('/api/contagens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loja, descricao, prazoValidade }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || `falha ao criar contagem de ${loja}`);
+      linksGerados.push({ loja, link: `${location.origin}/preencher_contagem.html?token=${dados.token}` });
+    }
+
     fecharModalNovaContagem();
-    const link = `${location.origin}/preencher_contagem.html?token=${dados.token}`;
-    document.getElementById('contagem-link-valor').value = link;
+    document.getElementById('contagem-link-lista').innerHTML = linksGerados.map((item, indice) => `
+      <div class="contagem-link-item">
+        <span class="contagem-link-loja">${escaparHtml(item.loja)}</span>
+        <input type="text" readonly value="${escaparHtml(item.link)}" id="contagem-link-valor-${indice}">
+        <button type="button" class="btn-secondary-sm" data-copiar="contagem-link-valor-${indice}">Copiar</button>
+      </div>
+    `).join('');
+    document.getElementById('contagem-link-lista').querySelectorAll('[data-copiar]').forEach((botao) => {
+      botao.addEventListener('click', async () => {
+        const input = document.getElementById(botao.dataset.copiar);
+        input.select();
+        try {
+          await navigator.clipboard.writeText(input.value);
+        } catch {
+          document.execCommand('copy');
+        }
+      });
+    });
     document.getElementById('modal-contagem-link').style.display = 'flex';
     await carregarContagens();
   } catch (erro) {
-    console.error('Falha ao criar contagem:', erro);
-    alert(erro.message || 'Não foi possível criar a contagem.');
+    console.error('Falha ao criar requisição:', erro);
+    alert(erro.message || 'Não foi possível criar a requisição.');
   }
 });
 
 document.getElementById('btn-contagem-link-fechar')?.addEventListener('click', () => {
   document.getElementById('modal-contagem-link').style.display = 'none';
 });
-document.getElementById('btn-contagem-link-copiar')?.addEventListener('click', async () => {
-  const input = document.getElementById('contagem-link-valor');
-  input.select();
-  try {
-    await navigator.clipboard.writeText(input.value);
-  } catch {
-    document.execCommand('copy');
-  }
+document.getElementById('btn-contagem-link-fechar-2')?.addEventListener('click', () => {
+  document.getElementById('modal-contagem-link').style.display = 'none';
 });
 
 // --- Tela pública de preenchimento de contagem (sem login, por token) ---
@@ -3207,6 +3233,14 @@ async function carregarUsuarioLogado() {
     // de editar/excluir (só admin) — mesma correção de corrida.
     if (usuario.papel === 'admin' && fichaTecnicaData.itens.length) {
       renderFichaTecnica();
+    }
+
+    // Tela de Contagens: botão "Nova requisição" e coluna de Ações (só
+    // admin) — mesma correção de corrida entre os dois fetches. Reage mesmo
+    // com a lista vazia, senão o botão nunca apareceria se a Contagens
+    // carregar antes de saber o papel do usuário.
+    if (usuario.papel === 'admin' && document.getElementById('contagens-tabela-body')) {
+      renderContagensTabela();
     }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);
