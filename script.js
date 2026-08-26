@@ -2149,40 +2149,36 @@ async function inicializarContagemPublica() {
     container.innerHTML = Object.entries(porCategoria).map(([categoria, itens]) => `
       <div class="contagem-publica-secao" data-categoria="${escaparHtml(categoria)}">
         <h3 class="contagem-publica-secao-titulo">Seção: ${escaparHtml(categoria)}</h3>
-        ${itens.map((item) => `
-          <div class="contagem-item-card" data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
-            <div class="contagem-item-campo">
-              <label>Nome</label>
-              <div class="contagem-item-somente-leitura">${escaparHtml(item.nome)}</div>
-            </div>
-            <div class="contagem-item-campo">
-              <label>Unidade</label>
-              <div class="contagem-item-somente-leitura">${escaparHtml(item.unidadeMedida)}</div>
-            </div>
-            ${item.marcaHomologada ? `
-              <div class="contagem-item-campo">
-                <label>Marca</label>
-                <div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada)}</div>
-              </div>
-            ` : ''}
-            <div class="contagem-item-campo">
-              <label>Qtde em estoque</label>
-              <input type="number" step="0.01" min="0" placeholder="0" data-insumo-id="${item.insumoId}" required>
-            </div>
-            ${item.quantidadeIdeal !== null ? `
-              <div class="contagem-item-campo">
-                <label>Sugestão</label>
-                <div class="contagem-item-somente-leitura">${item.quantidadeIdeal} ${escaparHtml(item.unidadeMedida)}</div>
-              </div>
-            ` : ''}
-          </div>
-        `).join('')}
+        <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome do Produto</th>
+              <th>Gramatura</th>
+              <th>Marca</th>
+              <th>Qtde em Estoque</th>
+              <th>Sugestão</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itens.map((item) => `
+              <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
+                <td class="font-bold">${escaparHtml(item.nome)}</td>
+                <td><div class="contagem-item-somente-leitura">${escaparHtml(item.unidadeMedida)}</div></td>
+                <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '')}</div></td>
+                <td><input type="number" step="0.01" min="0" placeholder="0" data-insumo-id="${item.insumoId}" required></td>
+                <td><div class="contagem-item-somente-leitura">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
       </div>
     `).join('');
 
     container.querySelectorAll('input[data-insumo-id]').forEach((input) => {
       input.addEventListener('input', () => {
-        input.closest('.contagem-item-card').classList.toggle('preenchido', input.value !== '');
+        input.closest('tr').classList.toggle('preenchido', input.value !== '');
         atualizarProgresso();
       });
     });
@@ -2192,11 +2188,11 @@ async function inicializarContagemPublica() {
       const categoria = filtroSecao.value;
       container.querySelectorAll('.contagem-publica-secao').forEach((secao) => {
         let algumVisivelNaSecao = false;
-        secao.querySelectorAll('.contagem-item-card').forEach((card) => {
-          const bateNome = !termo || card.dataset.nomeBusca.includes(termo);
+        secao.querySelectorAll('tbody tr').forEach((linha) => {
+          const bateNome = !termo || linha.dataset.nomeBusca.includes(termo);
           const bateCategoria = !categoria || secao.dataset.categoria === categoria;
           const visivel = bateNome && bateCategoria;
-          card.style.display = visivel ? '' : 'none';
+          linha.style.display = visivel ? '' : 'none';
           if (visivel) algumVisivelNaSecao = true;
         });
         secao.style.display = algumVisivelNaSecao ? '' : 'none';
