@@ -212,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4.0995 TELA DE CONTAGENS (admin)
   if (document.getElementById('contagens-tabela-body')) {
     carregarContagens();
+    carregarRequisicoes();
   }
 
   // 4.0996 TELA PÚBLICA DE PREENCHIMENTO DE CONTAGEM (sem login, por token)
@@ -1982,6 +1983,7 @@ async function abrirContagemDetalhe(contagemId) {
     contagemDetalheAtual = await resposta.json();
     renderContagemDetalhe();
     document.getElementById('contagens-lista-view').style.display = 'none';
+    document.getElementById('requisicao-conferencia-view').style.display = 'none';
     document.getElementById('contagens-detalhe-view').style.display = '';
   } catch (erro) {
     console.error('Falha ao abrir contagem:', erro);
@@ -2035,6 +2037,176 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
   } catch (erro) {
     console.error('Falha ao aprovar contagem:', erro);
     alert(erro.message || 'Não foi possível aprovar essa contagem.');
+  }
+});
+
+// --- Requisições (admin: agrupa as contagens com mesmo título/prazo e
+// soma o déficit de todas as lojas antes de virar cotação) ---
+let requisicoesLista = [];
+let requisicaoConferenciaAtual = null;
+
+async function carregarRequisicoes() {
+  const tbody = document.getElementById('requisicoes-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/requisicoes');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    requisicoesLista = dados.requisicoes || [];
+    renderRequisicoesTabela();
+  } catch (erro) {
+    console.error('Falha ao carregar requisições:', erro);
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Não foi possível carregar as requisições. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+function _statusRequisicao(r) {
+  if (r.totalmenteAprovada) return { texto: 'Aprovada', classe: 'pos' };
+  if (r.prontaParaConferencia) return { texto: 'Pronta pra conferência', classe: 'pos' };
+  return { texto: 'Aguardando lojas', classe: 'neu-orange' };
+}
+
+function renderRequisicoesTabela() {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const tbody = document.getElementById('requisicoes-tabela-body');
+  if (!tbody) return;
+
+  const thAcoes = document.getElementById('requisicoes-th-acoes');
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+
+  if (!requisicoesLista.length) {
+    const colspan = 4 + (isAdmin ? 1 : 0);
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição criada ainda.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = requisicoesLista.map((r, indice) => {
+    const prazo = new Date(r.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const status = _statusRequisicao(r);
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(r.titulo) || '—'}</td>
+        <td>${r.lojasRespondidas} de ${r.totalLojas} responderam</td>
+        <td class="text-muted">${prazo}</td>
+        <td><span class="badge-pill ${status.classe}">${status.texto}</span></td>
+        ${isAdmin ? `
+          <td class="acoes-linha">
+            <button type="button" class="btn-acao-icone" data-acao="abrir-requisicao" data-indice="${indice}" title="Ver conferência somada">
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </td>
+        ` : ''}
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('[data-acao="abrir-requisicao"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = requisicoesLista[parseInt(btn.dataset.indice, 10)];
+      abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function abrirConferenciaRequisicao(titulo, prazoValidade) {
+  try {
+    const resposta = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar requisição');
+    requisicaoConferenciaAtual = dados;
+    renderConferenciaRequisicao();
+    document.getElementById('contagens-lista-view').style.display = 'none';
+    document.getElementById('contagens-detalhe-view').style.display = 'none';
+    document.getElementById('requisicao-conferencia-view').style.display = '';
+  } catch (erro) {
+    console.error('Falha ao abrir requisição:', erro);
+    alert('Não foi possível abrir essa requisição.');
+  }
+}
+
+function renderConferenciaRequisicao() {
+  const r = requisicaoConferenciaAtual;
+  if (!r) return;
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+
+  document.getElementById('requisicao-conferencia-titulo').textContent = r.titulo || 'Requisição';
+
+  const acoes = document.getElementById('requisicao-conferencia-acoes-admin');
+  const btnAprovarTodas = document.getElementById('btn-requisicao-aprovar-todas');
+  if (acoes) acoes.style.display = isAdmin ? '' : 'none';
+  if (btnAprovarTodas) btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
+
+  const aviso = document.getElementById('requisicao-conferencia-aviso');
+  if (!r.prontaParaConferencia) {
+    aviso.style.display = '';
+    aviso.textContent = `${r.lojasRespondidas} de ${r.totalLojas} lojas já preencheram — os números somados abaixo ainda não contam quem falta.`;
+  } else if (!r.totalmenteAprovada) {
+    aviso.style.display = '';
+    aviso.textContent = 'Todas as lojas já preencheram. Confira os números e aprove pra virar quantidade real no estoque.';
+  } else {
+    aviso.style.display = 'none';
+  }
+
+  const lojasBody = document.getElementById('requisicao-conferencia-lojas-body');
+  lojasBody.innerHTML = r.contagens.map((c) => {
+    const status = STATUS_LABEL_CONTAGEM[c.status];
+    const classe = STATUS_CLASSE_CONTAGEM[c.status];
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(c.loja)}</td>
+        <td>${c.itensPreenchidos} de ${c.totalItens}</td>
+        <td><span class="badge-pill ${classe}">${status}</span></td>
+        <td class="acoes-linha">
+          <button type="button" class="btn-acao-icone" data-acao="abrir-contagem-da-requisicao" data-id="${c.id}" title="Ver/conferir essa loja">
+            <i data-lucide="arrow-right"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  lojasBody.querySelectorAll('[data-acao="abrir-contagem-da-requisicao"]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirContagemDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+
+  const itensBody = document.getElementById('requisicao-conferencia-itens-body');
+  itensBody.innerHTML = r.itens.map((item) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(item.nome)}</td>
+      <td class="text-muted">${escaparHtml(item.categoria)}</td>
+      <td>${item.preenchidoTotal} ${escaparHtml(item.unidadeMedida)}</td>
+      <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${item.idealTotal} ${escaparHtml(item.unidadeMedida)}`}</td>
+      <td>${item.deficit === null ? '<span class="text-muted">—</span>' : (item.deficit > 0 ? `<span class="badge-pill neg">comprar ${item.deficit} ${escaparHtml(item.unidadeMedida)}</span>` : '—')}</td>
+    </tr>
+  `).join('');
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.getElementById('btn-requisicao-voltar')?.addEventListener('click', () => {
+  document.getElementById('requisicao-conferencia-view').style.display = 'none';
+  document.getElementById('contagens-lista-view').style.display = '';
+  carregarRequisicoes();
+  carregarContagens();
+});
+
+document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click', async () => {
+  const r = requisicaoConferenciaAtual;
+  if (!r) return;
+  if (!confirm('Aprovar todas as lojas dessa requisição? As quantidades preenchidas vão substituir o estoque atual de cada uma.')) return;
+  try {
+    const resposta = await fetch('/api/requisicoes/conferencia/aprovar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo: r.titulo, prazoValidade: r.prazoValidade }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+    await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+  } catch (erro) {
+    console.error('Falha ao aprovar requisição:', erro);
+    alert(erro.message || 'Não foi possível aprovar essa requisição.');
   }
 });
 
@@ -3241,6 +3413,9 @@ async function carregarUsuarioLogado() {
     // carregar antes de saber o papel do usuário.
     if (usuario.papel === 'admin' && document.getElementById('contagens-tabela-body')) {
       renderContagensTabela();
+    }
+    if (usuario.papel === 'admin' && document.getElementById('requisicoes-tabela-body')) {
+      renderRequisicoesTabela();
     }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);

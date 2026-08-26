@@ -1385,6 +1385,34 @@ def listar_contagens():
         return [dict(linha) for linha in linhas]
 
 
+def listar_requisicoes():
+    """Agrupa as contagens que compartilham título + prazo — não existe uma
+    tabela `requisicao` separada (decisão de 2026-08-26, ver DOCUMENTACAO.md
+    seção 6.9): como uma requisição é só "abrir uma contagem por loja de uma
+    vez com o mesmo título/prazo", ela é reconstituída a partir das próprias
+    contagens em vez de duplicar schema."""
+    grupos = {}
+    ordem = []
+    for c in listar_contagens():
+        chave = (c['descricao'], c['prazo_validade'])
+        if chave not in grupos:
+            grupos[chave] = []
+            ordem.append(chave)
+        grupos[chave].append(c)
+
+    requisicoes = [
+        {
+            "titulo": chave[0],
+            "prazo_validade": chave[1],
+            "criado_em": min(c['criado_em'] for c in grupos[chave]),
+            "contagens": grupos[chave],
+        }
+        for chave in ordem
+    ]
+    requisicoes.sort(key=lambda r: r['criado_em'], reverse=True)
+    return requisicoes
+
+
 def buscar_contagem_por_token(token):
     with conexao() as conn:
         linha = conn.execute("SELECT * FROM contagem WHERE token = ?", (token,)).fetchone()

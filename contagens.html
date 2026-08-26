@@ -156,8 +156,34 @@
           <div class="chart-card">
             <div class="table-header-row">
               <div>
+                <h3 class="table-title">Requisições</h3>
+                <p class="table-subtitle">Cada requisição junta as contagens de uma ou mais lojas abertas de uma vez — clique pra ver a conferência somada</p>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Título</th>
+                  <th>Lojas</th>
+                  <th>Prazo</th>
+                  <th>Status</th>
+                  <th id="requisicoes-th-acoes" style="display:none;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="requisicoes-tabela-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
                 <h3 class="table-title">Contagens abertas</h3>
-                <p class="table-subtitle">Clique numa contagem pra conferir o preenchimento</p>
+                <p class="table-subtitle">Clique numa contagem pra conferir o preenchimento loja a loja</p>
               </div>
             </div>
 
@@ -174,6 +200,73 @@
                 </tr>
               </thead>
               <tbody id="contagens-tabela-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- VISÃO: CONFERÊNCIA SOMADA DA REQUISIÇÃO (várias lojas) -->
+        <div id="requisicao-conferencia-view" style="display:none;">
+          <button type="button" class="btn-secondary-sm" id="btn-requisicao-voltar" style="margin-bottom: var(--space-4);">
+            <i data-lucide="arrow-left"></i>
+            Voltar pra lista
+          </button>
+
+          <div class="dashboard-title-area">
+            <div class="title-row">
+              <h1 id="requisicao-conferencia-titulo">—</h1>
+              <div class="page-acoes-topo" id="requisicao-conferencia-acoes-admin" style="display:none;">
+                <button type="button" class="btn-secondary" id="btn-requisicao-aprovar-todas">Aprovar todas as lojas</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="panel-subtitle" id="requisicao-conferencia-aviso" style="display:none; margin-bottom: var(--space-4);"></p>
+
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Lojas dessa requisição</h3>
+              </div>
+            </div>
+            <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Loja</th>
+                  <th>Progresso</th>
+                  <th>Status</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="requisicao-conferencia-lojas-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Déficit somado (todas as lojas)</h3>
+                <p class="table-subtitle">Preenchido e quantidade ideal somados através das lojas participantes — base pra virar cotação</p>
+              </div>
+            </div>
+            <div class="table-responsive">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Categoria</th>
+                  <th>Preenchido (soma)</th>
+                  <th>Qtd. ideal (soma)</th>
+                  <th>Déficit</th>
+                </tr>
+              </thead>
+              <tbody id="requisicao-conferencia-itens-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
             </table>

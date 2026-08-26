@@ -70,6 +70,7 @@ from backend.armazenamento import (
     selecionar_preco_cotacao,
     criar_contagem,
     listar_contagens,
+    listar_requisicoes,
     buscar_contagem,
     buscar_contagem_por_token,
     listar_itens_contagem,
@@ -1505,6 +1506,112 @@ def api_listar_contagens():
     if erro_admin:
         return erro_admin
     return jsonify({"contagens": [_formatar_contagem(c) for c in listar_contagens()]})
+
+
+def _formatar_requisicao_resumo(requisicao):
+    contagens = [_formatar_contagem(c) for c in requisicao['contagens']]
+    total = len(contagens)
+    aprovadas = sum(1 for c in contagens if c['status'] == 'aprovada')
+    respondidas = sum(1 for c in contagens if c['status'] in ('respondida', 'aprovada'))
+    return {
+        "titulo": requisicao['titulo'],
+        "prazoValidade": requisicao['prazo_validade'],
+        "criadoEm": requisicao['criado_em'],
+        "contagens": contagens,
+        "totalLojas": total,
+        "lojasRespondidas": respondidas,
+        "lojasAprovadas": aprovadas,
+        "prontaParaConferencia": respondidas == total,
+        "totalmenteAprovada": aprovadas == total,
+    }
+
+
+def _buscar_grupo_requisicao(titulo, prazo_validade):
+    return next(
+        (r for r in listar_requisicoes() if r['titulo'] == titulo and r['prazo_validade'] == prazo_validade),
+        None,
+    )
+
+
+@app.route('/api/requisicoes', methods=['GET'])
+def api_listar_requisicoes():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"requisicoes": [_formatar_requisicao_resumo(r) for r in listar_requisicoes()]})
+
+
+@app.route('/api/requisicoes/conferencia', methods=['GET'])
+def api_conferencia_requisicao():
+    """Soma o preenchido e a quantidade ideal de cada insumo através de
+    todas as lojas de uma requisição — a "área de conferência" antes de
+    virar cotação de verdade (ver DOCUMENTACAO.md seção 9, item 1)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    titulo = request.args.get('titulo', '')
+    prazo_validade = request.args.get('prazoValidade', '')
+    grupo = _buscar_grupo_requisicao(titulo, prazo_validade)
+    if not grupo:
+        return jsonify({"erro": "Requisição não encontrada."}), 404
+
+    agregados = {}
+    for contagem in grupo['contagens']:
+        for item in listar_itens_contagem(contagem['id'], contagem['loja']):
+            agregado = agregados.setdefault(item['insumoId'], {
+                "insumoId": item['insumoId'],
+                "nome": item['nome'],
+                "categoria": item['categoria'],
+                "unidadeMedida": item['unidadeMedida'],
+                "preenchidoTotal": 0.0,
+                "idealTotal": 0.0,
+                "temIdeal": False,
+            })
+            if item['quantidadePreenchida'] is not None:
+                agregado['preenchidoTotal'] += item['quantidadePreenchida']
+            if item['quantidadeIdeal'] is not None:
+                agregado['idealTotal'] += item['quantidadeIdeal']
+                agregado['temIdeal'] = True
+
+    itens = []
+    for agregado in agregados.values():
+        deficit = round(agregado['idealTotal'] - agregado['preenchidoTotal'], 2) if agregado['temIdeal'] else None
+        itens.append({
+            "insumoId": agregado['insumoId'],
+            "nome": agregado['nome'],
+            "categoria": agregado['categoria'],
+            "unidadeMedida": agregado['unidadeMedida'],
+            "preenchidoTotal": round(agregado['preenchidoTotal'], 2),
+            "idealTotal": round(agregado['idealTotal'], 2) if agregado['temIdeal'] else None,
+            "deficit": max(deficit, 0) if deficit is not None else None,
+        })
+    itens.sort(key=lambda i: (i['deficit'] is None, -(i['deficit'] or 0), i['nome']))
+
+    resposta = _formatar_requisicao_resumo(grupo)
+    resposta['itens'] = itens
+    return jsonify(resposta)
+
+
+@app.route('/api/requisicoes/conferencia/aprovar', methods=['POST'])
+def api_aprovar_requisicao():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    prazo_validade = (dados.get('prazoValidade') or '').strip()
+    grupo = _buscar_grupo_requisicao(titulo, prazo_validade)
+    if not grupo:
+        return jsonify({"erro": "Requisição não encontrada."}), 404
+
+    aprovadas = 0
+    for contagem in grupo['contagens']:
+        if contagem['status'] == 'respondida':
+            aprovar_contagem(contagem['id'])
+            aprovadas += 1
+    return jsonify({"ok": True, "aprovadas": aprovadas})
 
 
 @app.route('/api/contagens', methods=['POST'])
