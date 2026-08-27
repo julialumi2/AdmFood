@@ -263,6 +263,36 @@
           </div>
         </div>
 
+        <!-- CONTAINER DE DATAS ESPECIAIS (só admin) -->
+        <div class="chart-card" id="datas-especiais-card" style="display:none;">
+          <div class="table-header-row">
+            <div>
+              <h3 class="table-title">Datas especiais</h3>
+              <p class="table-subtitle">Feriado, evento, data que costuma vender mais — enquanto a data cair dentro dos próximos 7 dias, aumenta a quantidade ideal calculada (não mexe em ajuste manual)</p>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-nova-data-especial">
+              <i data-lucide="plus"></i>
+              Nova data especial
+            </button>
+          </div>
+          <div class="table-responsive">
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Período</th>
+                <th>Multiplicador</th>
+                <th>Loja</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="datas-especiais-tabela-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+          </div>
+        </div>
+
         <!-- CONTAINER DA TABELA DE ITENS -->
         <div class="chart-card">
           <div class="table-header-row">
@@ -325,6 +355,46 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-copiar-ideal-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm">Copiar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: NOVA DATA ESPECIAL -->
+    <div class="modal-overlay" id="modal-nova-data-especial" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Nova data especial</h3>
+          <button type="button" class="btn-close" id="btn-nova-data-especial-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-nova-data-especial">
+          <div class="form-group">
+            <label for="nova-data-especial-descricao">Descrição</label>
+            <input type="text" id="nova-data-especial-descricao" required placeholder="Ex: Dia das Mães, Copa do Mundo">
+          </div>
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="nova-data-especial-inicio">De</label>
+              <input type="date" id="nova-data-especial-inicio" required>
+            </div>
+            <div class="form-group">
+              <label for="nova-data-especial-fim">Até</label>
+              <input type="date" id="nova-data-especial-fim">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="nova-data-especial-multiplicador">Multiplicador da quantidade ideal</label>
+            <input type="number" step="0.1" min="0.1" id="nova-data-especial-multiplicador" value="1.5" required>
+          </div>
+          <div class="form-group">
+            <label for="nova-data-especial-loja">Loja</label>
+            <select id="nova-data-especial-loja">
+              <option value="">Todas as lojas</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-nova-data-especial-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Salvar</button>
           </div>
         </form>
       </div>

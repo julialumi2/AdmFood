@@ -80,6 +80,10 @@ from backend.armazenamento import (
     excluir_ajuste_quantidade_ideal,
     mapa_ajustes_quantidade_ideal,
     copiar_quantidade_ideal,
+    multiplicador_quantidade_ideal,
+    criar_data_especial,
+    excluir_data_especial,
+    listar_datas_especiais,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1721,7 +1725,10 @@ def api_ajustes_quantidade_ideal():
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     mapa = mapa_ajustes_quantidade_ideal(loja)
-    return jsonify({"ajustes": [{"insumoId": k, "valorAjustado": v} for k, v in mapa.items()]})
+    return jsonify({
+        "ajustes": [{"insumoId": k, "valorAjustado": v} for k, v in mapa.items()],
+        "multiplicadorEspecial": multiplicador_quantidade_ideal(loja),
+    })
 
 
 @app.route('/api/insumos/copiar-quantidade-ideal', methods=['POST'])
@@ -1742,6 +1749,73 @@ def api_copiar_quantidade_ideal():
 
     copiados = copiar_quantidade_ideal(loja_origem, loja_destino)
     return jsonify({"ok": True, "copiados": copiados})
+
+
+def _formatar_data_especial(d):
+    return {
+        "id": d["id"],
+        "dataInicio": d["data_inicio"],
+        "dataFim": d["data_fim"],
+        "descricao": d["descricao"],
+        "multiplicador": d["multiplicador"],
+        "loja": d["loja"],
+    }
+
+
+@app.route('/api/datas-especiais', methods=['GET'])
+def api_listar_datas_especiais():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"datasEspeciais": [_formatar_data_especial(d) for d in listar_datas_especiais()]})
+
+
+@app.route('/api/datas-especiais', methods=['POST'])
+def api_criar_data_especial():
+    """Feriado/evento marcado com antecedência — aumenta a quantidade
+    ideal calculada enquanto a data cai dentro da janela de cobertura
+    (ver seção 9, 'Quantidade ideal inteligente')."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    data_inicio = (dados.get('dataInicio') or '').strip()
+    data_fim = (dados.get('dataFim') or '').strip() or data_inicio
+    descricao = (dados.get('descricao') or '').strip()
+    loja = dados.get('loja') or None
+
+    if not data_inicio:
+        return jsonify({"erro": "Informe a data de início."}), 400
+    if not descricao:
+        return jsonify({"erro": "Informe uma descrição (ex: Copa do Mundo, Dia das Mães)."}), 400
+    if loja is not None and loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        data_inicio_obj = date.fromisoformat(data_inicio)
+        data_fim_obj = date.fromisoformat(data_fim)
+    except ValueError:
+        return jsonify({"erro": "Datas inválidas."}), 400
+    if data_fim_obj < data_inicio_obj:
+        return jsonify({"erro": "A data final não pode ser antes da inicial."}), 400
+    try:
+        multiplicador = float(dados.get('multiplicador'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Informe um multiplicador numérico (ex: 1.5)."}), 400
+    if multiplicador <= 0:
+        return jsonify({"erro": "O multiplicador precisa ser maior que zero."}), 400
+
+    criar_data_especial(data_inicio_obj.isoformat(), data_fim_obj.isoformat(), descricao, multiplicador, loja)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/datas-especiais/<int:data_especial_id>', methods=['DELETE'])
+def api_excluir_data_especial(data_especial_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    excluir_data_especial(data_especial_id)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/contagens/token/<token>', methods=['GET'])

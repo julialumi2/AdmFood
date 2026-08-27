@@ -631,13 +631,30 @@ tiver, senão o calculado) e grava como ajuste manual na loja de destino —
 reaproveita a mesma tabela/mecanismo acima, não duplica lógica. Sobrescreve
 qualquer ajuste que a loja de destino já tivesse (a tela avisa antes).
 
+**Datas especiais** (concluído em 2026-08-27, terceira e última peça —
+resposta da Kethllyn: feriado/evento marcado manualmente com antecedência,
+sem o sistema tentar adivinhar sozinho). Tabela `data_especial`
+(data_inicio, data_fim, descricao, multiplicador, loja — `loja=NULL` vale
+pra rede toda). `multiplicador_quantidade_ideal(loja)` pega o maior
+multiplicador entre as datas que tocam a janela de cobertura (hoje até
+hoje + `DIAS_COBERTURA_IDEAL`) — 1.0 (não muda nada) se nenhuma tocar.
+Só multiplica o lado **calculado** da conta (consumo médio × 7 dias); o
+ajuste manual continua sendo a palavra final dela e nunca é multiplicado
+por cima. Card "Datas especiais" na tela de Estoque (só admin) pra
+cadastrar/excluir; o multiplicador ativo de cada loja viaja junto na
+mesma resposta de `GET /api/insumos/ajustes-quantidade-ideal` (evita mais
+uma chamada por loja) e o `carregarInsumos()` do Estoque já aplica em
+`_quantidadeIdealParaLoja`.
+
 Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
 /api/contagens/<id>` (detalhe de uma loja pra conferência, admin), `POST
 /api/contagens/<id>/aprovar` (admin), `PUT/DELETE
 /api/insumos/<id>/quantidade-ideal?loja=` (ajuste manual, admin), `GET
 /api/insumos/ajustes-quantidade-ideal?loja=` (lista os ajustes de uma
-loja, qualquer logado — mesma liberação de leitura do resto do Estoque),
-`POST /api/insumos/copiar-quantidade-ideal` (admin), `GET /api/contagens/token/<token>` e
+loja + o multiplicador especial ativo, qualquer logado — mesma liberação
+de leitura do resto do Estoque), `POST /api/insumos/copiar-quantidade-ideal`
+(admin), `GET/POST /api/datas-especiais` e `DELETE
+/api/datas-especiais/<id>` (admin), `GET /api/contagens/token/<token>` e
 `POST /api/contagens/token/<token>/responder` (públicas — token é a própria
 autenticação, ver exceção em `ROTAS_API_PUBLICAS`/`PAGINAS_PUBLICAS` em
 `app.py`); `GET /api/requisicoes` (lista os grupos, admin), `GET
@@ -822,7 +839,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
 7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
 8. **Preparo** — ✅ concluído em 2026-08-24 (indicadores operacionais da cozinha — ver seção 6.2). Pivotou de KDS em tempo real (pedido do rascunho original da Julia) pra tela de relatório, depois de investigar e confirmar que a API da Cardápio Web não expõe o momento em que a cozinha termina de preparar.
-9. **Aviso de estoque baixo/vencendo + quantidade ideal** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`) e card "Lotes vencendo" com botão de resolver (seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`) e coluna "Consumo médio/dia" na tela de Estoque (seção 6.6); coluna "Qtd. ideal (7 dias)" = consumo médio × 7, com "comprar X" destacado quando o atual fica abaixo do ideal (client-side, sem mudança de schema — concluído em 2026-08-25). Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, aguardando o chefe da loja definir e passar as quantidades, sem prazo (sem isso, a quantidade ideal fica "—" pra maioria dos insumos); (b) o "aviso" em si sendo empurrado (WhatsApp) — hoje é passivo, só aparece pra quem abrir a tela; depende do item 2.
+9. **Aviso de estoque baixo/vencendo + quantidade ideal inteligente** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`) e card "Lotes vencendo" com botão de resolver (seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`) e coluna "Consumo médio/dia" na tela de Estoque (seção 6.6); coluna "Qtd. ideal (7 dias)" = consumo médio × 7, com "comprar X" destacado quando o atual fica abaixo do ideal (concluído em 2026-08-25). **"Quantidade ideal inteligente"** (as 3 peças que a Kethllyn pediu no roteiro de compras, ver seção 6.9) ✅ concluída em 2026-08-27: ajuste manual por insumo/loja, copiar de loja parecida (loja nova sem histórico) e datas especiais (feriado/evento aumentando a conta calculada com antecedência) — deliberadamente **sem** IA/caixa-preta, ela pediu conta simples e visível. Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, aguardando o chefe da loja definir e passar as quantidades, sem prazo (sem isso, a quantidade ideal calculada fica "—" pra maioria dos insumos, mesmo com ajuste manual/cópia/data especial prontos); (b) o "aviso" em si sendo empurrado (WhatsApp) — hoje é passivo, só aparece pra quem abrir a tela; depende do item 2.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 

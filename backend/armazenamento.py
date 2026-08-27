@@ -405,6 +405,19 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS data_especial (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data_inicio TEXT NOT NULL,
+                data_fim TEXT NOT NULL,
+                descricao TEXT NOT NULL,
+                multiplicador REAL NOT NULL,
+                loja TEXT,
+                criado_em TEXT NOT NULL
+            )
+            """
+        )
 
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
@@ -1498,13 +1511,65 @@ def copiar_quantidade_ideal(loja_origem, loja_destino):
     return copiados
 
 
+def criar_data_especial(data_inicio, data_fim, descricao, multiplicador, loja=None):
+    """Feriado/evento marcado com antecedência (seção 9, roteiro de
+    compras) — enquanto a data cair dentro da janela de cobertura (hoje até
+    hoje + DIAS_COBERTURA_IDEAL), a quantidade ideal calculada (não a
+    ajustada na mão) sai multiplicada por esse valor. `loja=None` vale pra
+    todas as lojas."""
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO data_especial (data_inicio, data_fim, descricao, multiplicador, loja, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (data_inicio, data_fim, descricao, multiplicador, loja, agora),
+        )
+
+
+def excluir_data_especial(data_especial_id):
+    with conexao() as conn:
+        conn.execute("DELETE FROM data_especial WHERE id = ?", (data_especial_id,))
+
+
+def listar_datas_especiais():
+    with conexao() as conn:
+        linhas = conn.execute("SELECT * FROM data_especial ORDER BY data_inicio").fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def multiplicador_quantidade_ideal(loja):
+    """Maior multiplicador entre as datas especiais (dessa loja ou
+    cadastradas pra 'todas as lojas') que tocam a janela de cobertura —
+    hoje até hoje + DIAS_COBERTURA_IDEAL. 1.0 se nenhuma tocar (caso
+    comum, não muda nada na conta de sempre)."""
+    hoje = datetime.now().date()
+    fim_janela = hoje + timedelta(days=DIAS_COBERTURA_IDEAL)
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT multiplicador FROM data_especial
+            WHERE (loja IS NULL OR loja = ?)
+              AND data_inicio <= ? AND data_fim >= ?
+            """,
+            (loja, fim_janela.isoformat(), hoje.isoformat()),
+        ).fetchall()
+    if not linhas:
+        return 1.0
+    return max(linha["multiplicador"] for linha in linhas)
+
+
 def listar_itens_contagem(contagem_id, loja):
-    """Itens da contagem + quantidade ideal (consumo médio × 7 dias, ou o
-    ajuste manual da Kethllyn quando existir um pra esse insumo/loja) pra
-    servir de referência tanto na tela pública de preenchimento quanto na
+    """Itens da contagem + quantidade ideal (consumo médio × 7 dias × o
+    multiplicador de alguma data especial ativa, ou o ajuste manual da
+    Kethllyn quando existir um pra esse insumo/loja — o ajuste sempre
+    ganha da data especial, é a palavra final dela) pra servir de
+    referência tanto na tela pública de preenchimento quanto na
     conferência — mesmo cálculo de DIAS_COBERTURA_IDEAL do front."""
     mapa_consumo = _mapa_consumo_medio_loja(loja)
     mapa_ajustes = mapa_ajustes_quantidade_ideal(loja)
+    multiplicador = multiplicador_quantidade_ideal(loja)
     with conexao() as conn:
         linhas = conn.execute(
             """
@@ -1525,7 +1590,7 @@ def listar_itens_contagem(contagem_id, loja):
             quantidade_ideal = mapa_ajustes[linha["insumo_id"]]
         else:
             consumo_medio = mapa_consumo.get(linha["insumo_id"])
-            quantidade_ideal = round(consumo_medio * DIAS_COBERTURA_IDEAL, 2) if consumo_medio is not None else None
+            quantidade_ideal = round(consumo_medio * DIAS_COBERTURA_IDEAL * multiplicador, 2) if consumo_medio is not None else None
         itens.append({
             "insumoId": linha["insumo_id"],
             "nome": linha["nome"],

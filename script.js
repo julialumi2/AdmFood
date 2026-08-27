@@ -195,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
     carregarLotesVencendo();
+    carregarDatasEspeciais();
     carregarFornecedores();
   }
 
@@ -1183,6 +1184,7 @@ let estoqueTabAtual = 'geral';
 let estoqueEditandoContexto = null; // { insumoId, loja }
 let estoqueConsumoMedio = {}; // { [insumoId]: { [loja]: consumoMedioDiario } }
 let estoqueAjustesIdeal = {}; // { [insumoId]: { [loja]: valorAjustado } }
+let estoqueMultiplicadorEspecial = {}; // { [loja]: multiplicador } — 1 = nenhuma data especial ativa
 
 async function carregarInsumos() {
   try {
@@ -1205,6 +1207,7 @@ async function carregarInsumos() {
     }
 
     estoqueAjustesIdeal = {};
+    estoqueMultiplicadorEspecial = {};
     for (let i = 0; i < LOJAS_ESTOQUE.length; i++) {
       const resposta = respostasAjustes[i];
       if (!resposta.ok) continue;
@@ -1214,6 +1217,7 @@ async function carregarInsumos() {
         const porLoja = estoqueAjustesIdeal[a.insumoId] || (estoqueAjustesIdeal[a.insumoId] = {});
         porLoja[loja] = a.valorAjustado;
       });
+      estoqueMultiplicadorEspecial[loja] = dadosAjuste.multiplicadorEspecial || 1;
     }
 
     renderEstoqueTab();
@@ -1242,7 +1246,8 @@ function _quantidadeIdealParaLoja(insumoId, loja) {
   if (ajuste !== undefined) return { valor: ajuste, ajustado: true };
   const consumo = _consumoMedioParaLinha(insumoId, loja);
   if (consumo === null) return { valor: null, ajustado: false };
-  return { valor: Math.round(consumo * DIAS_COBERTURA_IDEAL * 100) / 100, ajustado: false };
+  const multiplicador = estoqueMultiplicadorEspecial[loja] || 1;
+  return { valor: Math.round(consumo * DIAS_COBERTURA_IDEAL * multiplicador * 100) / 100, ajustado: false };
 }
 
 // "Geral" soma a quantidade ideal efetiva (ajuste ou calculada) de cada
@@ -1561,6 +1566,116 @@ function renderLotesVencendo() {
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// --- DATAS ESPECIAIS (feriado/evento marcado com antecedência — aumenta
+// a quantidade ideal calculada enquanto a data cai nos próximos 7 dias;
+// só admin, ver seção 9 "Quantidade ideal inteligente") ---
+let datasEspeciaisLista = [];
+
+async function carregarDatasEspeciais() {
+  const card = document.getElementById('datas-especiais-card');
+  if (!card) return;
+  if (window.usuarioLogado?.papel !== 'admin') return;
+  try {
+    const resposta = await fetch('/api/datas-especiais');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    datasEspeciaisLista = dados.datasEspeciais || [];
+    card.style.display = '';
+    renderDatasEspeciais();
+  } catch (erro) {
+    console.error('Falha ao carregar datas especiais:', erro);
+  }
+}
+
+function renderDatasEspeciais() {
+  const tbody = document.getElementById('datas-especiais-tabela-body');
+  if (!tbody) return;
+
+  if (!datasEspeciaisLista.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhuma data especial cadastrada.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = datasEspeciaisLista.map((d) => {
+    const inicio = new Date(`${d.dataInicio}T00:00:00`).toLocaleDateString('pt-BR');
+    const fim = new Date(`${d.dataFim}T00:00:00`).toLocaleDateString('pt-BR');
+    const periodo = d.dataInicio === d.dataFim ? inicio : `${inicio} – ${fim}`;
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(d.descricao)}</td>
+        <td class="text-muted">${periodo}</td>
+        <td>${d.multiplicador}×</td>
+        <td class="text-muted">${d.loja ? escaparHtml(d.loja) : 'Todas'}</td>
+        <td class="acoes-linha">
+          <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-data-especial" data-id="${d.id}" title="Excluir">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('[data-acao="excluir-data-especial"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Excluir essa data especial?')) return;
+      try {
+        const resposta = await fetch(`/api/datas-especiais/${btn.dataset.id}`, { method: 'DELETE' });
+        if (!resposta.ok) throw new Error('falha ao excluir');
+        await carregarDatasEspeciais();
+        await carregarInsumos();
+      } catch (erro) {
+        console.error('Falha ao excluir data especial:', erro);
+        alert('Não foi possível excluir essa data especial.');
+      }
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function abrirModalNovaDataEspecial() {
+  document.getElementById('form-nova-data-especial').reset();
+  document.getElementById('nova-data-especial-multiplicador').value = '1.5';
+  const select = document.getElementById('nova-data-especial-loja');
+  select.innerHTML = '<option value="">Todas as lojas</option>' +
+    LOJAS_ESTOQUE.map((l) => `<option value="${escaparHtml(l)}">${escaparHtml(l)}</option>`).join('');
+  document.getElementById('modal-nova-data-especial').style.display = 'flex';
+}
+
+function fecharModalNovaDataEspecial() {
+  document.getElementById('modal-nova-data-especial').style.display = 'none';
+}
+
+document.getElementById('btn-nova-data-especial')?.addEventListener('click', abrirModalNovaDataEspecial);
+document.getElementById('btn-nova-data-especial-fechar')?.addEventListener('click', fecharModalNovaDataEspecial);
+document.getElementById('btn-nova-data-especial-cancelar')?.addEventListener('click', fecharModalNovaDataEspecial);
+
+document.getElementById('form-nova-data-especial')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const corpo = {
+    descricao: document.getElementById('nova-data-especial-descricao').value,
+    dataInicio: document.getElementById('nova-data-especial-inicio').value,
+    dataFim: document.getElementById('nova-data-especial-fim').value,
+    multiplicador: parseFloat(document.getElementById('nova-data-especial-multiplicador').value),
+    loja: document.getElementById('nova-data-especial-loja').value || null,
+  };
+  try {
+    const resposta = await fetch('/api/datas-especiais', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    fecharModalNovaDataEspecial();
+    await carregarDatasEspeciais();
+    await carregarInsumos();
+  } catch (erro) {
+    console.error('Falha ao salvar data especial:', erro);
+    alert(erro.message || 'Não foi possível salvar essa data especial.');
+  }
+});
 
 // --- FORNECEDORES (diretório da rede, semente do módulo de Compras) ---
 let fornecedoresLista = [];
@@ -3594,6 +3709,13 @@ async function carregarUsuarioLogado() {
     }
     if (usuario.papel === 'admin' && document.getElementById('requisicoes-tabela-body')) {
       renderRequisicoesTabela();
+    }
+
+    // Tela de Estoque: card "Datas especiais" (só admin) — mesma correção
+    // de corrida, já que carregarDatasEspeciais() só carrega se já souber
+    // que é admin no momento em que roda.
+    if (usuario.papel === 'admin' && document.getElementById('datas-especiais-card')) {
+      carregarDatasEspeciais();
     }
   } catch (erro) {
     console.error('Falha ao carregar usuário logado:', erro);
