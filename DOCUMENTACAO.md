@@ -613,12 +613,31 @@ contagem, na conferência somada da requisição e na tela pública de
 preenchimento — sem precisar editar em três lugares. O ícone de editar só
 aparece na tela de detalhe de uma contagem (não na visão somada, mesma
 razão do Estoque: editar um valor por loja não faz sentido numa linha que
-já é a soma de várias lojas).
+já é a soma de várias lojas). A tela de Estoque também passou a ler esses
+ajustes (antes só calculava do zero no navegador) — `carregarInsumos()`
+busca o ajuste das 4 lojas em paralelo junto com o consumo médio, e
+`_quantidadeIdealParaLinha()` decide por insumo/loja se usa o ajuste ou o
+calculado; na aba "Geral" soma o valor **efetivo** de cada loja (ajuste ou
+calculado), não só o consumo médio bruto — senão o ajuste de uma loja
+sumiria na soma.
+
+**Copiar quantidade ideal de outra loja** (concluído em 2026-08-27,
+segunda peça — resposta da Kethllyn: loja nova sem venda suficiente pra
+calcular sozinha, copia de uma loja parecida como ponto de partida).
+Botão "Copiar de outra loja" na tela de Estoque, só aparece numa aba de
+loja específica (não faz sentido na "Geral"). `copiar_quantidade_ideal`
+pega o valor **efetivo** de cada insumo na loja de origem (ajuste dela se
+tiver, senão o calculado) e grava como ajuste manual na loja de destino —
+reaproveita a mesma tabela/mecanismo acima, não duplica lógica. Sobrescreve
+qualquer ajuste que a loja de destino já tivesse (a tela avisa antes).
 
 Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
 /api/contagens/<id>` (detalhe de uma loja pra conferência, admin), `POST
 /api/contagens/<id>/aprovar` (admin), `PUT/DELETE
-/api/insumos/<id>/quantidade-ideal?loja=` (ajuste manual, admin), `GET /api/contagens/token/<token>` e
+/api/insumos/<id>/quantidade-ideal?loja=` (ajuste manual, admin), `GET
+/api/insumos/ajustes-quantidade-ideal?loja=` (lista os ajustes de uma
+loja, qualquer logado — mesma liberação de leitura do resto do Estoque),
+`POST /api/insumos/copiar-quantidade-ideal` (admin), `GET /api/contagens/token/<token>` e
 `POST /api/contagens/token/<token>/responder` (públicas — token é a própria
 autenticação, ver exceção em `ROTAS_API_PUBLICAS`/`PAGINAS_PUBLICAS` em
 `app.py`); `GET /api/requisicoes` (lista os grupos, admin), `GET

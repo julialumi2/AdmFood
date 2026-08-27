@@ -1182,12 +1182,14 @@ let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
 let estoqueEditandoContexto = null; // { insumoId, loja }
 let estoqueConsumoMedio = {}; // { [insumoId]: { [loja]: consumoMedioDiario } }
+let estoqueAjustesIdeal = {}; // { [insumoId]: { [loja]: valorAjustado } }
 
 async function carregarInsumos() {
   try {
-    const [respostaInsumos, respostaConsumo] = await Promise.all([
+    const [respostaInsumos, respostaConsumo, ...respostasAjustes] = await Promise.all([
       fetch('/api/insumos'),
       fetch('/api/insumos/consumo-medio'),
+      ...LOJAS_ESTOQUE.map((loja) => fetch(`/api/insumos/ajustes-quantidade-ideal?loja=${encodeURIComponent(loja)}`)),
     ]);
     if (!respostaInsumos.ok) throw new Error(`Erro no servidor Flask: ${respostaInsumos.status}`);
     const dados = await respostaInsumos.json();
@@ -1199,6 +1201,18 @@ async function carregarInsumos() {
       (dadosConsumo.consumo || []).forEach((linha) => {
         const porLoja = estoqueConsumoMedio[linha.insumoId] || (estoqueConsumoMedio[linha.insumoId] = {});
         porLoja[linha.unidade] = linha.consumoMedioDiario;
+      });
+    }
+
+    estoqueAjustesIdeal = {};
+    for (let i = 0; i < LOJAS_ESTOQUE.length; i++) {
+      const resposta = respostasAjustes[i];
+      if (!resposta.ok) continue;
+      const loja = LOJAS_ESTOQUE[i];
+      const dadosAjuste = await resposta.json();
+      (dadosAjuste.ajustes || []).forEach((a) => {
+        const porLoja = estoqueAjustesIdeal[a.insumoId] || (estoqueAjustesIdeal[a.insumoId] = {});
+        porLoja[loja] = a.valorAjustado;
       });
     }
 
@@ -1218,6 +1232,36 @@ function _consumoMedioParaLinha(insumoId, loja) {
   if (loja) return loja in porLoja ? porLoja[loja] : null;
   const valores = LOJAS_ESTOQUE.filter((l) => l in porLoja).map((l) => porLoja[l]);
   return valores.length ? valores.reduce((a, b) => a + b, 0) : null;
+}
+
+// Quantidade ideal efetiva de uma loja: o ajuste manual quando existir,
+// senão o calculado (consumo médio × DIAS_COBERTURA_IDEAL). null = nenhum
+// dos dois disponível ainda.
+function _quantidadeIdealParaLoja(insumoId, loja) {
+  const ajuste = estoqueAjustesIdeal[insumoId]?.[loja];
+  if (ajuste !== undefined) return { valor: ajuste, ajustado: true };
+  const consumo = _consumoMedioParaLinha(insumoId, loja);
+  if (consumo === null) return { valor: null, ajustado: false };
+  return { valor: Math.round(consumo * DIAS_COBERTURA_IDEAL * 100) / 100, ajustado: false };
+}
+
+// "Geral" soma a quantidade ideal efetiva (ajuste ou calculada) de cada
+// loja que tiver dado — não dá pra só somar consumo médio bruto e
+// multiplicar uma vez, porque cada loja pode ter um ajuste diferente.
+function _quantidadeIdealParaLinha(insumoId, loja) {
+  if (loja) return _quantidadeIdealParaLoja(insumoId, loja);
+  let soma = 0;
+  let temAlgum = false;
+  let algumAjustado = false;
+  LOJAS_ESTOQUE.forEach((l) => {
+    const { valor, ajustado } = _quantidadeIdealParaLoja(insumoId, l);
+    if (valor !== null) {
+      soma += valor;
+      temAlgum = true;
+      if (ajustado) algumAjustado = true;
+    }
+  });
+  return { valor: temAlgum ? Math.round(soma * 100) / 100 : null, ajustado: algumAjustado };
 }
 
 function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
@@ -1243,6 +1287,7 @@ function _linhasEstoqueParaTab(tab) {
           estoqueMinimo += dadosLoja.estoqueMinimo;
         }
       });
+      const ideal = _quantidadeIdealParaLinha(insumo.id, null);
       return {
         insumo,
         loja: null,
@@ -1251,6 +1296,8 @@ function _linhasEstoqueParaTab(tab) {
           estoqueMinimo,
           status: _statusEstoqueClient(quantidadeAtual, estoqueMinimo),
           consumoMedio: _consumoMedioParaLinha(insumo.id, null),
+          quantidadeIdeal: ideal.valor,
+          quantidadeIdealAjustada: ideal.ajustado,
         },
       };
     });
@@ -1258,11 +1305,19 @@ function _linhasEstoqueParaTab(tab) {
 
   return estoqueInsumos
     .filter((insumo) => insumo.porLoja[tab])
-    .map((insumo) => ({
-      insumo,
-      loja: tab,
-      dados: { ...insumo.porLoja[tab], consumoMedio: _consumoMedioParaLinha(insumo.id, tab) },
-    }));
+    .map((insumo) => {
+      const ideal = _quantidadeIdealParaLinha(insumo.id, tab);
+      return {
+        insumo,
+        loja: tab,
+        dados: {
+          ...insumo.porLoja[tab],
+          consumoMedio: _consumoMedioParaLinha(insumo.id, tab),
+          quantidadeIdeal: ideal.valor,
+          quantidadeIdealAjustada: ideal.ajustado,
+        },
+      };
+    });
 }
 
 function renderEstoqueTab() {
@@ -1278,6 +1333,9 @@ function renderEstoqueTab() {
   if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
   if (subtitulo) subtitulo.textContent = ehGeral ? 'Consolidado de todas as unidades' : estoqueTabAtual;
   if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
+
+  const btnCopiarIdeal = document.getElementById('btn-copiar-ideal');
+  if (btnCopiarIdeal) btnCopiarIdeal.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
   let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
 
@@ -1305,7 +1363,7 @@ function renderEstoqueTab() {
     const percentual = dados.estoqueMinimo > 0
       ? Math.min(100, Math.round((dados.quantidadeAtual / (dados.estoqueMinimo * 1.5)) * 100))
       : 100;
-    const quantidadeIdeal = dados.consumoMedio === null ? null : Math.round(dados.consumoMedio * DIAS_COBERTURA_IDEAL * 100) / 100;
+    const quantidadeIdeal = dados.quantidadeIdeal;
     const sugestaoCompra = quantidadeIdeal === null ? null : Math.max(0, Math.round((quantidadeIdeal - dados.quantidadeAtual) * 100) / 100);
     const estrela = isAdmin
       ? `<button type="button" class="btn-favorito ${insumo.favorito ? 'ativo' : ''}" data-acao="favoritar" data-insumo-id="${insumo.id}" data-favorito="${insumo.favorito ? '1' : '0'}" title="${insumo.favorito ? 'Remover dos favoritos' : 'Marcar como favorito'}">
@@ -1332,6 +1390,7 @@ function renderEstoqueTab() {
           ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
             <div class="qtd-ideal-cell">
               <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
+              ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
               ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${sugestaoCompra} ${escaparHtml(insumo.unidadeMedida)}</span>` : ''}
             </div>
           `}
@@ -2678,6 +2737,49 @@ document.getElementById('form-entrada-insumo')?.addEventListener('submit', async
   } catch (erro) {
     console.error('Falha ao registrar entrada:', erro);
     alert(erro.message || 'Não foi possível registrar a entrada.');
+  }
+});
+
+// --- Modal: copiar quantidade ideal de outra loja (loja nova sem
+// histórico próprio ainda — vira ajuste manual, insumo por insumo dá pra
+// corrigir depois) ---
+function abrirModalCopiarIdeal() {
+  const destino = estoqueTabAtual;
+  document.getElementById('copiar-ideal-destino').value = destino;
+  const select = document.getElementById('copiar-ideal-origem');
+  select.innerHTML = LOJAS_ESTOQUE.filter((l) => l !== destino)
+    .map((l) => `<option value="${escaparHtml(l)}">${escaparHtml(l)}</option>`)
+    .join('');
+  document.getElementById('modal-copiar-ideal').style.display = 'flex';
+}
+
+function fecharModalCopiarIdeal() {
+  document.getElementById('modal-copiar-ideal').style.display = 'none';
+}
+
+document.getElementById('btn-copiar-ideal')?.addEventListener('click', abrirModalCopiarIdeal);
+document.getElementById('btn-copiar-ideal-fechar')?.addEventListener('click', fecharModalCopiarIdeal);
+document.getElementById('btn-copiar-ideal-cancelar')?.addEventListener('click', fecharModalCopiarIdeal);
+
+document.getElementById('form-copiar-ideal')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const lojaDestino = estoqueTabAtual;
+  const lojaOrigem = document.getElementById('copiar-ideal-origem').value;
+  if (!confirm(`Copiar a quantidade ideal de ${lojaOrigem} pra ${lojaDestino}? Isso sobrescreve qualquer ajuste manual que ${lojaDestino} já tenha.`)) return;
+  try {
+    const resposta = await fetch('/api/insumos/copiar-quantidade-ideal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lojaOrigem, lojaDestino }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao copiar');
+    fecharModalCopiarIdeal();
+    await carregarInsumos();
+    alert(`Pronto — ${dados.copiados} insumos copiados de ${lojaOrigem}.`);
+  } catch (erro) {
+    console.error('Falha ao copiar quantidade ideal:', erro);
+    alert(erro.message || 'Não foi possível copiar.');
   }
 });
 

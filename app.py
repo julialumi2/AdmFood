@@ -78,6 +78,8 @@ from backend.armazenamento import (
     aprovar_contagem,
     salvar_ajuste_quantidade_ideal,
     excluir_ajuste_quantidade_ideal,
+    mapa_ajustes_quantidade_ideal,
+    copiar_quantidade_ideal,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1708,6 +1710,38 @@ def api_remover_ajuste_quantidade_ideal(insumo_id):
 
     excluir_ajuste_quantidade_ideal(loja, insumo_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/ajustes-quantidade-ideal', methods=['GET'])
+def api_ajustes_quantidade_ideal():
+    """Ajustes manuais de quantidade ideal de uma loja — usado pela tela de
+    Estoque pra mostrar o mesmo valor ajustado que já vale na Contagem
+    (leitura liberada pra todo mundo logado, igual o resto do Estoque)."""
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    mapa = mapa_ajustes_quantidade_ideal(loja)
+    return jsonify({"ajustes": [{"insumoId": k, "valorAjustado": v} for k, v in mapa.items()]})
+
+
+@app.route('/api/insumos/copiar-quantidade-ideal', methods=['POST'])
+def api_copiar_quantidade_ideal():
+    """'Loja nova sem histórico' (seção 9) — copia a quantidade ideal de
+    uma loja parecida pra outra, virando ajuste manual na loja destino."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja_origem = dados.get('lojaOrigem')
+    loja_destino = dados.get('lojaDestino')
+    if loja_origem not in LOJAS or loja_destino not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    if loja_origem == loja_destino:
+        return jsonify({"erro": "Escolha duas lojas diferentes."}), 400
+
+    copiados = copiar_quantidade_ideal(loja_origem, loja_destino)
+    return jsonify({"ok": True, "copiados": copiados})
 
 
 @app.route('/api/contagens/token/<token>', methods=['GET'])

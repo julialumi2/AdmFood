@@ -156,6 +156,10 @@
           <div class="title-row">
             <h1>Insumos da Rede</h1>
             <div class="page-acoes-topo" id="estoque-acoes-admin" style="display:none;">
+              <button type="button" class="btn-secondary" id="btn-copiar-ideal" style="display:none;">
+                <i data-lucide="copy"></i>
+                Copiar de outra loja
+              </button>
               <button type="button" class="btn-secondary" id="btn-novo-insumo">
                 <i data-lucide="plus"></i>
                 Novo insumo
@@ -298,6 +302,33 @@
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
 
+
+    <!-- MODAL: COPIAR QUANTIDADE IDEAL DE OUTRA LOJA -->
+    <div class="modal-overlay" id="modal-copiar-ideal" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Copiar quantidade ideal</h3>
+          <button type="button" class="btn-close" id="btn-copiar-ideal-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Pra uma loja nova sem venda suficiente pra calcular sozinha — copia a quantidade ideal de uma loja parecida como ponto de partida (vira um ajuste manual, dá pra corrigir insumo por insumo depois).
+        </p>
+        <form id="form-copiar-ideal">
+          <div class="form-group">
+            <label>Loja de destino</label>
+            <input type="text" id="copiar-ideal-destino" disabled>
+          </div>
+          <div class="form-group">
+            <label for="copiar-ideal-origem">Copiar de qual loja?</label>
+            <select id="copiar-ideal-origem" required></select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-copiar-ideal-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Copiar</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- MODAL: NOVO INSUMO -->
     <div class="modal-overlay" id="modal-novo-insumo" style="display:none;">

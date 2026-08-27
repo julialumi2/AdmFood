@@ -1464,7 +1464,7 @@ def excluir_ajuste_quantidade_ideal(loja, insumo_id):
         )
 
 
-def _mapa_ajustes_quantidade_ideal(loja):
+def mapa_ajustes_quantidade_ideal(loja):
     with conexao() as conn:
         linhas = conn.execute(
             "SELECT insumo_id, valor_ajustado FROM ajuste_quantidade_ideal WHERE loja = ?",
@@ -1473,13 +1473,38 @@ def _mapa_ajustes_quantidade_ideal(loja):
         return {linha["insumo_id"]: linha["valor_ajustado"] for linha in linhas}
 
 
+def copiar_quantidade_ideal(loja_origem, loja_destino):
+    """'Loja nova sem histórico' (seção 9, roteiro de compras respondido
+    pela Kethllyn) — copia a quantidade ideal EFETIVA (o ajuste manual da
+    loja de origem quando existir, senão a calculada a partir do consumo
+    médio dela) pra loja de destino, virando um ajuste manual lá. Não é
+    mágica: é só um jeito rápido de começar com um número razoável antes
+    da loja nova ter venda suficiente pra calcular sozinha."""
+    mapa_consumo_origem = _mapa_consumo_medio_loja(loja_origem)
+    mapa_ajustes_origem = mapa_ajustes_quantidade_ideal(loja_origem)
+    with conexao() as conn:
+        insumo_ids = [linha["id"] for linha in conn.execute("SELECT id FROM insumo").fetchall()]
+
+    copiados = 0
+    for insumo_id in insumo_ids:
+        if insumo_id in mapa_ajustes_origem:
+            valor = mapa_ajustes_origem[insumo_id]
+        else:
+            consumo = mapa_consumo_origem.get(insumo_id)
+            valor = round(consumo * DIAS_COBERTURA_IDEAL, 2) if consumo is not None else None
+        if valor is not None:
+            salvar_ajuste_quantidade_ideal(loja_destino, insumo_id, valor)
+            copiados += 1
+    return copiados
+
+
 def listar_itens_contagem(contagem_id, loja):
     """Itens da contagem + quantidade ideal (consumo médio × 7 dias, ou o
     ajuste manual da Kethllyn quando existir um pra esse insumo/loja) pra
     servir de referência tanto na tela pública de preenchimento quanto na
     conferência — mesmo cálculo de DIAS_COBERTURA_IDEAL do front."""
     mapa_consumo = _mapa_consumo_medio_loja(loja)
-    mapa_ajustes = _mapa_ajustes_quantidade_ideal(loja)
+    mapa_ajustes = mapa_ajustes_quantidade_ideal(loja)
     with conexao() as conn:
         linhas = conn.execute(
             """
