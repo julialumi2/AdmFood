@@ -2482,7 +2482,7 @@ function renderContagensTabela() {
 
   if (!contagensLista.length) {
     const colspan = 5 + (isAdmin ? 1 : 0);
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma contagem criada ainda.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição criada ainda.</td></tr>`;
     return;
   }
 
@@ -2497,7 +2497,7 @@ function renderContagensTabela() {
         <td><span class="badge-pill ${STATUS_CLASSE_CONTAGEM[c.status]}">${STATUS_LABEL_CONTAGEM[c.status]}</span></td>
         ${isAdmin ? `
           <td class="acoes-linha">
-            <button type="button" class="btn-acao-icone" data-acao="abrir-contagem" data-id="${c.id}" title="Ver/conferir contagem">
+            <button type="button" class="btn-acao-icone" data-acao="abrir-contagem" data-id="${c.id}" title="Ver/conferir requisição">
               <i data-lucide="arrow-right"></i>
             </button>
           </td>
@@ -2533,7 +2533,7 @@ function renderContagemDetalhe() {
   if (!c) return;
   const isAdmin = window.usuarioLogado?.papel === 'admin';
 
-  document.getElementById('contagem-detalhe-titulo').textContent = `${c.loja} — ${c.descricao || 'Contagem'}`;
+  document.getElementById('contagem-detalhe-titulo').textContent = `${c.loja} — ${c.descricao || 'Requisição'}`;
 
   const acoes = document.getElementById('contagem-detalhe-acoes-admin');
   const btnAprovar = document.getElementById('btn-contagem-aprovar');
@@ -2641,7 +2641,7 @@ document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => 
 
 document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async () => {
   if (!contagemDetalheAtual) return;
-  if (!confirm('Aprovar essa contagem? As quantidades preenchidas vão substituir o estoque atual da loja.')) return;
+  if (!confirm('Aprovar essa requisição? As quantidades preenchidas vão substituir o estoque atual da loja.')) return;
   try {
     const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
     const dados = await resposta.json();
@@ -2649,7 +2649,7 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
     await abrirContagemDetalhe(contagemDetalheAtual.id);
   } catch (erro) {
     console.error('Falha ao aprovar contagem:', erro);
-    alert(erro.message || 'Não foi possível aprovar essa contagem.');
+    alert(erro.message || 'Não foi possível aprovar essa requisição.');
   }
 });
 
@@ -2954,14 +2954,14 @@ async function inicializarContagemPublica() {
     if (dados.status !== 'aberta' || dados.expirada) {
       elCarregando.style.display = 'none';
       if (dados.status === 'aberta' && dados.expirada) {
-        mostrarErro('O prazo pra preencher essa contagem já venceu.');
+        mostrarErro('O prazo pra preencher essa requisição já venceu.');
       } else {
         elObrigado.style.display = '';
       }
       return;
     }
 
-    document.getElementById('contagem-publica-titulo').textContent = 'Preencher contagem de estoque';
+    document.getElementById('contagem-publica-titulo').textContent = 'Preencher requisição de estoque';
     document.getElementById('contagem-publica-subtitulo').textContent = `${dados.descricao ? dados.descricao + ' — ' : ''}${dados.loja} — válido até ${new Date(dados.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
 
     const porCategoria = {};
@@ -3060,13 +3060,13 @@ async function inicializarContagemPublica() {
         elObrigado.style.display = '';
       } catch (erro) {
         console.error('Falha ao enviar contagem:', erro);
-        alert(erro.message || 'Não foi possível enviar a contagem.');
+        alert(erro.message || 'Não foi possível enviar a requisição.');
         btn.disabled = false;
       }
     });
   } catch (erro) {
     console.error('Falha ao carregar contagem pública:', erro);
-    mostrarErro('Não foi possível carregar essa contagem agora.');
+    mostrarErro('Não foi possível carregar essa requisição agora.');
   }
 }
 

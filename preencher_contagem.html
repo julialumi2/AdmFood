@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Contagem de estoque</title>
+  <title>AdmFood - Requisição de estoque</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
@@ -37,12 +37,12 @@
 
     <div id="contagem-publica-obrigado" class="contagem-publica-card" style="display:none;">
       <i data-lucide="check-circle-2" class="contagem-publica-icone-ok"></i>
-      <h2>Contagem enviada, obrigado!</h2>
+      <h2>Requisição enviada, obrigado!</h2>
       <p class="panel-subtitle">Já registramos o que você preencheu.</p>
     </div>
 
     <form id="form-contagem-publica" class="contagem-publica-card" style="display:none;">
-      <h2 id="contagem-publica-titulo">Preencher contagem de estoque</h2>
+      <h2 id="contagem-publica-titulo">Preencher requisição de estoque</h2>
       <p class="contagem-publica-prazo" id="contagem-publica-subtitulo">—</p>
       <p class="panel-subtitle">Preencha a quantidade que tem hoje de cada item (os que estiverem zerados, preencha com 0 mesmo assim).</p>
       <p class="contagem-publica-progresso" id="contagem-publica-progresso">Você preencheu 0 de 0 itens</p>
@@ -61,7 +61,7 @@
         <!-- Renderizado dinamicamente via JS, agrupado por categoria -->
       </div>
 
-      <button type="submit" class="btn-primary" id="btn-contagem-publica-enviar">Enviar contagem</button>
+      <button type="submit" class="btn-primary" id="btn-contagem-publica-enviar">Enviar requisição</button>
     </form>
   </div>
 

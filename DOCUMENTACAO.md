@@ -628,6 +628,17 @@ opaco em `secrets.token_urlsafe`) pra um funcionário da loja preencher a
 quantidade em estoque de cada insumo, sem precisar de conta no AdmFood.
 Adicionado em 2026-08-26.
 
+**Nota de nomenclatura (2026-08-27):** pra a interface ficar igual a da
+VMarket, todo texto visível que dizia "Contagem" (menu, títulos, botões,
+mensagens de erro/confirmação, tela pública de preenchimento) passou a
+dizer **"Requisição"** — inclusive a que fala da loja individual, aceitando
+a sobreposição com o nome do agrupamento de várias lojas (decisão do
+Guilherme). Só a interface mudou: tabelas (`contagem`, `contagem_item`),
+rotas (`/api/contagens/...`), nomes de função/variável e o arquivo
+`preencher_contagem.html` continuam se chamando "contagem" internamente —
+mudar isso também não tem efeito nenhum pra quem usa o sistema e trocaria
+uma porção enorme de código à toa, então ficou de fora de propósito.
+
 `contagem` (id, token, loja, descrição, prazo_validade, status
 `aberta`/`respondida`/`aprovada`, criado_em/respondida_em/aprovada_em) +
 `contagem_item` (contagem_id, insumo_id, quantidade_preenchida) — uma linha

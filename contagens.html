@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Contagens</title>
+  <title>AdmFood - Requisições</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
@@ -61,7 +61,7 @@
             </a>
             <a href="contagens.html" class="menu-subitem active">
               <i data-lucide="clipboard-list"></i>
-              <span>Contagens</span>
+              <span>Requisições</span>
             </a>
             <a href="pedidos.html" class="menu-subitem">
               <i data-lucide="package-check"></i>
@@ -126,7 +126,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">CONTAGENS</span>
+          <span class="header-page-title">REQUISIÇÕES</span>
         </div>
 
         <div class="header-right">
@@ -153,10 +153,10 @@
           <div class="dashboard-title-area">
             <div class="title-top">
               <i data-lucide="clipboard-list" class="icon-pin"></i>
-              <span>CONTAGEM DE ESTOQUE POR LOJA</span>
+              <span>REQUISIÇÃO DE ESTOQUE POR LOJA</span>
             </div>
             <div class="title-row">
-              <h1>Contagens</h1>
+              <h1>Requisições</h1>
               <div class="page-acoes-topo" id="contagens-acoes-admin" style="display:none;">
                 <button type="button" class="btn-registrar-entrada" id="btn-nova-contagem">
                   <i data-lucide="plus"></i>
@@ -167,14 +167,14 @@
           </div>
 
           <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
-            Uma requisição abre o ciclo de contagem em uma ou mais lojas de uma vez — gera um link sem login por loja pro funcionário preencher a quantidade em estoque de cada insumo. Depois de preenchido, confira aqui antes de aprovar.
+            Uma requisição abre o preenchimento em uma ou mais lojas de uma vez — gera um link sem login por loja pro funcionário preencher a quantidade em estoque de cada insumo. Depois de preenchido, confira aqui antes de aprovar.
           </p>
 
           <div class="chart-card">
             <div class="table-header-row">
               <div>
                 <h3 class="table-title">Requisições</h3>
-                <p class="table-subtitle">Cada requisição junta as contagens de uma ou mais lojas abertas de uma vez — clique pra ver a conferência somada</p>
+                <p class="table-subtitle">Cada requisição junta os preenchimentos de uma ou mais lojas abertas de uma vez — clique pra ver a conferência somada</p>
               </div>
             </div>
 
@@ -199,8 +199,8 @@
           <div class="chart-card">
             <div class="table-header-row">
               <div>
-                <h3 class="table-title">Contagens abertas</h3>
-                <p class="table-subtitle">Clique numa contagem pra conferir o preenchimento loja a loja</p>
+                <h3 class="table-title">Requisições abertas por loja</h3>
+                <p class="table-subtitle">Clique numa requisição pra conferir o preenchimento loja a loja</p>
               </div>
             </div>
 
@@ -306,7 +306,7 @@
             <div class="title-row">
               <h1 id="contagem-detalhe-titulo">—</h1>
               <div class="page-acoes-topo" id="contagem-detalhe-acoes-admin" style="display:none;">
-                <button type="button" class="btn-secondary" id="btn-contagem-aprovar">Aprovar contagem</button>
+                <button type="button" class="btn-secondary" id="btn-contagem-aprovar">Aprovar requisição</button>
               </div>
             </div>
           </div>
@@ -346,7 +346,7 @@
         <form id="form-nova-contagem">
           <div class="form-group">
             <label for="nova-contagem-descricao">Título</label>
-            <input type="text" id="nova-contagem-descricao" required placeholder="Ex: Contagem semanal 25/08">
+            <input type="text" id="nova-contagem-descricao" required placeholder="Ex: Requisição semanal 25/08">
           </div>
           <div class="form-group">
             <label for="nova-contagem-prazo">Prazo pra preencher</label>
