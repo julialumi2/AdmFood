@@ -1751,6 +1751,27 @@ def avancar_status_pedido(pedido_id):
     return novo_status
 
 
+def limpar_requisicoes_e_cotacoes():
+    """Apaga TODO o histórico de requisições/contagens, cotações (com
+    convites e preços) e pedidos de compra — ação de manutenção sem volta,
+    usada pra limpar dados de teste antes do sistema entrar em uso de
+    verdade. Não mexe em `estoque_insumo` (a quantidade atual real fica
+    como está) nem em cadastro (insumo, fornecedor, vínculos, ajustes de
+    quantidade ideal, datas especiais) — só o histórico do fluxo de
+    Compras em si."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM pedido_compra_item")
+        conn.execute("DELETE FROM pedido_compra")
+        conn.execute("DELETE FROM cotacao_convite_item")
+        conn.execute("DELETE FROM cotacao_convite")
+        conn.execute("DELETE FROM cotacao_preco")
+        conn.execute("DELETE FROM cotacao_item")
+        conn.execute("DELETE FROM cotacao_item_loja")
+        conn.execute("DELETE FROM cotacao")
+        conn.execute("DELETE FROM contagem_item")
+        conn.execute("DELETE FROM contagem")
+
+
 DIAS_COBERTURA_IDEAL = 7  # mesma constante do front (script.js) — cotação é semanal
 
 

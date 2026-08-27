@@ -819,6 +819,23 @@ Rotas: `POST /api/cotacoes/<id>/gerar-pedidos` (admin), `GET /api/pedidos`
 (lista, admin), `GET /api/pedidos/<id>` (detalhe com itens, admin), `POST
 /api/pedidos/<id>/avancar` (admin).
 
+**"Zona de perigo" — limpar requisições e cotações** (concluída em
+2026-08-27, pedido do Guilherme pra zerar o histórico de teste antes do
+uso de verdade começar). Card vermelho no fim de `configuracoes.html`
+(só admin), atrás de um modal que exige digitar "APAGAR" (comparação
+exata, sem confirm() do navegador) pra habilitar o botão — mais forte que
+o `confirm()` simples do resto do sistema, porque aqui é tudo de uma vez,
+não um item só. `limpar_requisicoes_e_cotacoes()` apaga, na ordem certa
+de FK, `pedido_compra`/`pedido_compra_item`,
+`cotacao_convite`/`cotacao_convite_item`, `cotacao`/`cotacao_preco`/
+`cotacao_item`/`cotacao_item_loja` e `contagem`/`contagem_item` — **não**
+mexe em `estoque_insumo` (quantidade atual real fica como está) nem em
+cadastro (`insumo`, `fornecedor`, `insumo_fornecedor`,
+`ajuste_quantidade_ideal`, `data_especial`). Rota: `POST
+/api/admin/limpar-requisicoes-cotacoes` (admin). Sem confirmação a mais
+que essa — é irreversível, então só existe pra rodar direto em produção
+quando ela decidir, nunca automático.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.

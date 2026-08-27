@@ -292,6 +292,25 @@
           </div>
         </div>
 
+        <!-- ZONA DE PERIGO (só admin) -->
+        <div class="panel" id="painel-zona-perigo" style="display:none; border-color: var(--danger);">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title" style="color: var(--danger);">Zona de perigo</h3>
+              <span class="panel-subtitle">Ações que não podem ser desfeitas</span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-4); flex-wrap: wrap;">
+            <div>
+              <strong>Limpar requisições e cotações</strong>
+              <p class="panel-subtitle" style="margin-top: 4px;">
+                Apaga TODO o histórico de requisições, contagens, cotações e pedidos de compra. Não mexe no estoque atual nem no cadastro de insumos/fornecedores.
+              </p>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-limpar-requisicoes-cotacoes" style="border-color: var(--danger); color: var(--danger);">Limpar requisições e cotações</button>
+          </div>
+        </div>
+
       </div>
     </main>
 
@@ -359,6 +378,28 @@
             <button type="submit" class="btn-primary">Salvar nova senha</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- MODAL: CONFIRMAR LIMPEZA DE REQUISIÇÕES E COTAÇÕES -->
+    <div id="modalLimparRequisicoesCotacoes" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 style="color: var(--danger);">Apagar requisições e cotações?</h2>
+          <button class="btn-close" onclick="fecharModalLimparRequisicoesCotacoes()">&times;</button>
+        </div>
+        <p class="panel-subtitle">
+          Isso apaga <strong>todo</strong> o histórico de requisições, contagens, cotações e pedidos de compra — sem volta. O estoque atual e o cadastro de insumos/fornecedores não são afetados.
+        </p>
+        <div class="form-group">
+          <label for="limparConfirmarTexto">Digite <strong>APAGAR</strong> pra confirmar</label>
+          <input type="text" id="limparConfirmarTexto" placeholder="APAGAR" autocomplete="off">
+        </div>
+        <p id="limparRequisicoesCotacoesErro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" onclick="fecharModalLimparRequisicoesCotacoes()">Cancelar</button>
+          <button type="button" class="btn-primary" id="btn-confirmar-limpar-requisicoes-cotacoes" style="background-color: var(--danger); border-color: var(--danger);" disabled>Apagar tudo</button>
+        </div>
       </div>
     </div>
 

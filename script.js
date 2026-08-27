@@ -4178,6 +4178,10 @@ async function carregarUsuarioLogado() {
       painelEquipe.style.display = '';
       carregarEquipe();
     }
+    const painelZonaPerigo = document.getElementById('painel-zona-perigo');
+    if (painelZonaPerigo && usuario.papel === 'admin') {
+      painelZonaPerigo.style.display = '';
+    }
 
     // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto
     // (só admin). Os dois fetches (usuário logado + preços) rodam em
@@ -4335,6 +4339,42 @@ function abrirModalTrocarSenha() {
 function fecharModalTrocarSenha() {
   document.getElementById('modalTrocarSenha').style.display = 'none';
 }
+
+function abrirModalLimparRequisicoesCotacoes() {
+  document.getElementById('limparConfirmarTexto').value = '';
+  document.getElementById('limparRequisicoesCotacoesErro').style.display = 'none';
+  document.getElementById('btn-confirmar-limpar-requisicoes-cotacoes').disabled = true;
+  document.getElementById('modalLimparRequisicoesCotacoes').style.display = 'flex';
+}
+
+function fecharModalLimparRequisicoesCotacoes() {
+  document.getElementById('modalLimparRequisicoesCotacoes').style.display = 'none';
+}
+
+document.getElementById('btn-limpar-requisicoes-cotacoes')?.addEventListener('click', abrirModalLimparRequisicoesCotacoes);
+
+document.getElementById('limparConfirmarTexto')?.addEventListener('input', (evento) => {
+  document.getElementById('btn-confirmar-limpar-requisicoes-cotacoes').disabled = evento.target.value.trim() !== 'APAGAR';
+});
+
+document.getElementById('btn-confirmar-limpar-requisicoes-cotacoes')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-confirmar-limpar-requisicoes-cotacoes');
+  const erro = document.getElementById('limparRequisicoesCotacoesErro');
+  btn.disabled = true;
+  erro.style.display = 'none';
+  try {
+    const resposta = await fetch('/api/admin/limpar-requisicoes-cotacoes', { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao limpar');
+    fecharModalLimparRequisicoesCotacoes();
+    alert('Requisições, cotações e pedidos apagados.');
+  } catch (erro2) {
+    console.error('Falha ao limpar requisições e cotações:', erro2);
+    erro.textContent = erro2.message || 'Não foi possível apagar. Tente de novo.';
+    erro.style.display = '';
+    btn.disabled = false;
+  }
+});
 
 async function salvarTrocaSenha(event) {
   event.preventDefault();

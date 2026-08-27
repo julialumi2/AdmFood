@@ -91,6 +91,7 @@ from backend.armazenamento import (
     buscar_pedido,
     avancar_status_pedido,
     ESTAGIOS_PEDIDO,
+    limpar_requisicoes_e_cotacoes,
     listar_historico_compras,
     criar_convites_cotacao,
     listar_convites_cotacao,
@@ -1687,6 +1688,18 @@ def api_avancar_pedido(pedido_id):
     if novo_status is None:
         return jsonify({"erro": "Pedido não encontrado."}), 404
     return jsonify({"ok": True, "status": novo_status})
+
+
+@app.route('/api/admin/limpar-requisicoes-cotacoes', methods=['POST'])
+def api_limpar_requisicoes_cotacoes():
+    """Apaga todo o histórico de requisições/contagens, cotações e pedidos
+    de compra — ação de manutenção sem volta (ver
+    `limpar_requisicoes_e_cotacoes` em armazenamento.py)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    limpar_requisicoes_e_cotacoes()
+    return jsonify({"ok": True})
 
 
 def _prazo_vencido(prazo_iso):
