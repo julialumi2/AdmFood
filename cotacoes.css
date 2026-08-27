@@ -1,6 +1,17 @@
 /* Estilos específicos da tela de Cotações — a base compartilhada (sidebar,
    cabeçalho, cards, tabelas, botões, steppers) está em theme.css */
 
+/* As três abas (Cotações, Meus produtos, Compras) viram <div> alternadas
+   via display:none/'' — o espaçamento entre seções do .page-content (gap)
+   só vale pros filhos diretos dele, então cada aba precisa do próprio
+   flex+gap pra não grudar os chart-cards um no outro. */
+#cotacoes-painel-cotacoes,
+#cotacoes-painel-compras {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
 .cotacao-grupo {
   margin-bottom: var(--space-4);
 }

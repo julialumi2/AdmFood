@@ -148,6 +148,21 @@
       <!-- PÁGINA DE COTAÇÕES -->
       <div class="page-content">
 
+        <!-- NAVEGAÇÃO DE ABAS -->
+        <div class="tabs-bar" id="cotacoes-tabs-bar">
+          <button type="button" class="tab-btn active" data-tab="cotacoes">
+            <i data-lucide="list-checks"></i>
+            <span>Cotações</span>
+          </button>
+          <button type="button" class="tab-btn" data-tab="compras">
+            <i data-lucide="history"></i>
+            <span>Compras</span>
+          </button>
+        </div>
+
+        <!-- ABA: COTAÇÕES -->
+        <div id="cotacoes-painel-cotacoes">
+
         <!-- VISÃO: LISTA DE COTAÇÕES -->
         <div id="cotacoes-lista-view">
           <div class="dashboard-title-area">
@@ -245,6 +260,29 @@
           <!-- COMPARAÇÃO POR INSUMO -->
           <div id="cotacao-comparacao-lista">
             <!-- Renderizado dinamicamente via JS: um card por insumo -->
+          </div>
+        </div>
+
+        </div> <!-- /cotacoes-painel-cotacoes -->
+
+        <!-- ABA: COMPRAS (histórico de cotações fechadas) -->
+        <div id="cotacoes-painel-compras" style="display:none;">
+          <div class="dashboard-title-area">
+            <div class="title-top">
+              <i data-lucide="history" class="icon-pin"></i>
+              <span>HISTÓRICO DE COTAÇÕES FECHADAS</span>
+            </div>
+            <div class="title-row">
+              <h1>Compras</h1>
+            </div>
+          </div>
+
+          <p class="panel-subtitle" style="margin-top: -8px;">
+            O preço vencedor de cada insumo em cada rodada de cotação já fechada — um registro do que foi decidido, sem depender do acompanhamento de entrega dos Pedidos.
+          </p>
+
+          <div id="cotacoes-compras-lista">
+            <!-- Renderizado dinamicamente via JS: um card por cotação fechada -->
           </div>
         </div>
 

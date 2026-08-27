@@ -213,6 +213,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       carregarCotacoes();
     }
+
+    document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('cotacoes-painel-cotacoes').style.display = btn.dataset.tab === 'cotacoes' ? '' : 'none';
+        document.getElementById('cotacoes-painel-compras').style.display = btn.dataset.tab === 'compras' ? '' : 'none';
+        if (btn.dataset.tab === 'compras') carregarHistoricoCompras();
+      });
+    });
   }
 
   // 4.0995 TELA DE CONTAGENS (admin)
@@ -1965,6 +1975,66 @@ document.getElementById('btn-cotacao-voltar')?.addEventListener('click', async (
   cotacaoAtualId = null;
   await carregarCotacoes();
 });
+
+async function carregarHistoricoCompras() {
+  const container = document.getElementById('cotacoes-compras-lista');
+  if (!container) return;
+  container.innerHTML = `<p class="panel-subtitle">Carregando...</p>`;
+  try {
+    const resposta = await fetch('/api/cotacoes/historico');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    renderHistoricoCompras(dados.historico || []);
+  } catch (erro) {
+    console.error('Falha ao carregar histórico de compras:', erro);
+    container.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar o histórico. Confira se o Flask está rodando.</p>`;
+  }
+}
+
+function renderHistoricoCompras(historico) {
+  const container = document.getElementById('cotacoes-compras-lista');
+  if (!container) return;
+
+  if (!historico.length) {
+    container.innerHTML = `<p class="panel-subtitle">Nenhuma cotação fechada ainda — feche uma cotação na aba "Cotações" pra ela aparecer aqui.</p>`;
+    return;
+  }
+
+  container.innerHTML = historico.map((cotacao) => `
+    <div class="chart-card">
+      <div class="table-header-row">
+        <div>
+          <h3 class="table-title">${escaparHtml(cotacao.titulo)}</h3>
+          <p class="table-subtitle">Fechada em ${new Date(cotacao.criadoEm).toLocaleDateString('pt-BR')}</p>
+        </div>
+      </div>
+      ${cotacao.itens.length ? `
+        <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th>Categoria</th>
+              <th>Fornecedor vencedor</th>
+              <th>Preço</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${cotacao.itens.map(item => `
+              <tr>
+                <td class="font-bold">${escaparHtml(item.nome)}</td>
+                <td class="text-muted">${escaparHtml(item.categoria)}</td>
+                <td>${escaparHtml(item.fornecedorNome)}</td>
+                <td>R$ ${item.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
+      ` : `<p class="panel-subtitle">Nenhum vencedor foi escolhido nessa cotação antes de fechar.</p>`}
+    </div>
+  `).join('');
+}
 
 async function abrirCotacaoDetalhe(cotacaoId) {
   cotacaoAtualId = cotacaoId;

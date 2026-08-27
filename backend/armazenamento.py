@@ -1297,6 +1297,47 @@ def mapa_insumo_fornecedores():
     return mapa
 
 
+def listar_historico_compras():
+    """Cotações já fechadas com o preço vencedor de cada insumo — registro
+    de qual fornecedor/preço venceu em cada rodada, separado do rastreio de
+    entrega dos Pedidos (ela pediu os dois como coisas diferentes: um é
+    "o que foi decidido", o outro é "o que já chegou")."""
+    with conexao() as conn:
+        cotacoes = conn.execute(
+            "SELECT id, titulo, criado_em FROM cotacao WHERE status = 'fechada' ORDER BY criado_em DESC"
+        ).fetchall()
+        historico = []
+        for cotacao in cotacoes:
+            vencedores = conn.execute(
+                """
+                SELECT cp.preco, i.nome AS insumo_nome, i.categoria, i.unidade_medida,
+                       f.nome AS fornecedor_nome
+                FROM cotacao_preco cp
+                JOIN insumo i ON i.id = cp.insumo_id
+                JOIN fornecedor f ON f.id = cp.fornecedor_id
+                WHERE cp.cotacao_id = ? AND cp.selecionado = 1
+                ORDER BY i.nome
+                """,
+                (cotacao["id"],),
+            ).fetchall()
+            historico.append({
+                "id": cotacao["id"],
+                "titulo": cotacao["titulo"],
+                "criadoEm": cotacao["criado_em"],
+                "itens": [
+                    {
+                        "nome": vencedor["insumo_nome"],
+                        "categoria": vencedor["categoria"],
+                        "unidadeMedida": vencedor["unidade_medida"],
+                        "fornecedorNome": vencedor["fornecedor_nome"],
+                        "preco": vencedor["preco"],
+                    }
+                    for vencedor in vencedores
+                ],
+            })
+        return historico
+
+
 # --- COTAÇÃO (RFQ manual, fase 2 do módulo de Compras) ----------------------
 
 def criar_cotacao(titulo):

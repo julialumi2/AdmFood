@@ -554,6 +554,22 @@ sem querer; "Reabrir" traz o formulário de volta. Leitura liberada pra
 todo mundo logado; criar/lançar preço/selecionar vencedor/fechar/excluir é
 só admin.
 
+**Aba "Compras" — histórico de cotações fechadas** (concluída em
+2026-08-27, pedido do Guilherme pra deixar a tela parecida com a VMarket).
+A tela ganhou um `.tabs-bar` no topo (mesmo componente de Insights/Cardápio
+por loja) com duas abas: "Cotações" (tudo que já existia, sem mudança) e
+"Compras" — lista, por cotação já fechada, o preço vencedor de cada
+insumo (`listar_historico_compras` em `armazenamento.py`, filtra
+`cotacao.status = 'fechada'` e junta só as linhas de `cotacao_preco` com
+`selecionado = 1`). É um registro só de leitura — não tem ligação com o
+rastreio de entrega dos Pedidos (seção 6.9), são coisas diferentes de
+propósito: aqui é "o que foi decidido em cada rodada", lá é "o que já
+chegou". Rota: `GET /api/cotacoes/historico` (liberada pra todo mundo
+logado, mesmo padrão do resto de Cotações). Uma aba "Meus produtos"
+(catálogo de insumo × fornecedor × marca homologada) chegou a ser
+construída no mesmo dia e foi removida a pedido dele logo em seguida —
+sem uso no momento.
+
 ### 6.9 Contagem de estoque por link + Requisição (núcleo do fluxo Compras)
 
 Tela `contagens.html` — VMarket-style: gera um **link sem login** (token

@@ -91,6 +91,7 @@ from backend.armazenamento import (
     buscar_pedido,
     avancar_status_pedido,
     ESTAGIOS_PEDIDO,
+    listar_historico_compras,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1382,6 +1383,13 @@ def _agrupar_precos_por_insumo(precos):
 @app.route('/api/cotacoes', methods=['GET'])
 def api_listar_cotacoes():
     return jsonify({"cotacoes": [_formatar_cotacao(c) for c in listar_cotacoes()]})
+
+
+@app.route('/api/cotacoes/historico', methods=['GET'])
+def api_historico_compras():
+    """Aba "Compras" — cotações já fechadas com o preço vencedor de cada
+    insumo, separado do rastreio de entrega dos Pedidos."""
+    return jsonify({"historico": listar_historico_compras()})
 
 
 @app.route('/api/cotacoes', methods=['POST'])
