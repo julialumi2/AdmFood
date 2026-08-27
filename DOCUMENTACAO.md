@@ -695,6 +695,41 @@ cotação de verdade, admin — só funciona com todas as lojas aprovadas).
 quebra por loja de cada insumo, vazio numa cotação lançada na mão sem
 passar pela Requisição).
 
+**Pedido de compra** (concluído em 2026-08-27 — fecha o fluxo Requisição →
+Contagem → Cotação → Pedido descrito na seção 9; regras vieram do roteiro
+de compras, tela nova `pedidos.html`, 4º item do menu Compras). Duas
+tabelas: `pedido_compra` (id, cotacao_id, fornecedor_id, loja, status,
+criado_em, atualizado_em) e `pedido_compra_item` (pedido_id, insumo_id,
+quantidade, preco_unitario). Um pedido é sempre por **(fornecedor, loja)**,
+nunca a cotação inteira: o mesmo insumo pode fechar com fornecedores
+diferentes na mesma cotação (pergunta 22), e o pedido mínimo do fornecedor
+conta por loja, não somado na rede (pergunta 29) — juntar tudo numa
+cotação só faria sentido se o mínimo fosse por rede. `gerar_pedidos_de_cotacao`
+roda a partir do botão "Gerar pedidos" na tela de Cotações (aparece só
+quando a cotação tem `itens`, ou seja, veio de uma Requisição) — é uma
+etapa manual, separada de marcar o vencedor por insumo (pergunta 23: ela
+não quer isso automático). Considera só insumo com preço `selecionado`;
+quem ainda não tem vencedor fica de fora (avisa quantos, não é erro — dá
+pra clicar "Gerar pedidos" de novo depois que marcar mais vencedores, sem
+duplicar pedido de quem já foi pra evitar comprar em dobro).
+
+Acompanhamento de entrega é uma sequência simples de 4 estágios
+(`ESTAGIOS_PEDIDO` em `armazenamento.py`): Pedido enviado → Confirmado
+pelo fornecedor → A caminho → Recebido — só avança um passo por vez, sem
+pular nem voltar (a VMarket tem "4 ou mais" estágios segundo a Kethllyn,
+mas ela não tinha os nomes exatos das telas de lá; o Guilherme optou por
+esse conjunto genérico em vez de tentar adivinhar a nomenclatura). Chegar
+em "Recebido" **não** lança entrada em estoque sozinho — ela prefere
+continuar usando o "Registrar entrada" existente na mão (pergunta 25); o
+pedido aqui é só rastreio, não mexe em `estoque_insumo`. Pedido cujo total
+fica abaixo do `pedido_minimo` do fornecedor só recebe um aviso na tela
+(badge "abaixo do mínimo" na lista + banner no detalhe) — nunca bloqueia
+nada, ela decide (pergunta 28).
+
+Rotas: `POST /api/cotacoes/<id>/gerar-pedidos` (admin), `GET /api/pedidos`
+(lista, admin), `GET /api/pedidos/<id>` (detalhe com itens, admin), `POST
+/api/pedidos/<id>/avancar` (admin).
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -855,7 +890,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
      - ✅ **Requisição + Contagem por loja** — concluído em 2026-08-26 (decisão de acesso: link por token, sem login, estilo VMarket — ver seção 6.9). Requisição abre o ciclo em várias lojas de uma vez (título + prazo compartilhados), gerando uma contagem/link por loja selecionada; funcionário preenche a quantidade atual de cada insumo do seu setor pelo link; admin confere e aprova antes de virar quantidade real em estoque.
      - ✅ **Área de conferência** — concluída em 2026-08-26 (ver seção 6.9). Visão somando o preenchido e a quantidade ideal das várias lojas de uma mesma requisição, com aviso de quem ainda falta responder, e um botão pra aprovar todas as lojas prontas de uma vez.
      - ✅ **Geração automática da cotação** a partir do déficit (ideal − atual) — concluída em 2026-08-27 (ver seção 6.9). Botão "Gerar cotação" na conferência da requisição (só habilitado com todas as lojas aprovadas) cria a cotação já com a quantidade calculada por insumo (arredondada pra cima, pulando quem já está no ideal ou sem ideal calculável), preservando a quebra por loja por baixo mesmo mostrando os insumos juntos na tela.
-     - **Pedido** (VMarket: Compras → Meus Pedidos / Cadastrar Pedido Manual / Agenda de Recebimento) — depois de fechar a cotação com um fornecedor vencedor, vira um pedido de compra com acompanhamento de entrega (a VMarket tem 4 estágios de recebimento). Não existe nada disso ainda no AdmFood.
+     - ✅ **Pedido** (VMarket: Compras → Meus Pedidos / Cadastrar Pedido Manual / Agenda de Recebimento) — concluído em 2026-08-27 (ver seção 6.9). Botão "Gerar pedidos" na tela de Cotações fecha os insumos já com vencedor escolhido em pedido(s) de compra, um por fornecedor+loja; tela nova `pedidos.html` acompanha 4 estágios de entrega (Pedido enviado → Confirmado → A caminho → Recebido) e avisa quando o pedido fica abaixo do mínimo do fornecedor, sem bloquear nada.
      - **Fornecedor cotando os próprios produtos** — hoje é a Julia/Kethllyn que digita o preço de cada fornecedor manualmente; a VMarket manda um link individual pro fornecedor preencher. Mesmo padrão de link por token da Contagem (seção 6.9) deve resolver.
    - 🔻 **Existe na VMarket mas não configurado/usado por vocês hoje** (baixa prioridade — replicar seria trabalho sem necessidade comprovada): **Orçamento** (Config. Orçamento + Desvio Padrão — zero registros cadastrados); **Financeiro/Nota Fiscal** (concilia XML de nota fiscal contra pedido de compra — zero notas processadas; dependeria de integração fiscal, domínio novo).
    - ❌ **Não aplicável** (recursos da própria VMarket como marketplace, não replicáveis num sistema interno): **Guia de Fornecedores** (diretório de fornecedores parceiros da própria VMarket, pra descobrir fornecedor novo — não é o cadastro de vocês); **Shopping VMarket** (catálogo de compra direto de fornecedores parceiros da VMarket, com carrinho — depende da rede de distribuidores deles); **Lançar Faturamento** (input manual de faturamento mensal pra alimentar o CMV/Curva ABC do dashboard deles — o AdmFood já tem faturamento diário sincronizado automaticamente da Cardápio Web, mais granular que isso).

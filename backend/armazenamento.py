@@ -385,6 +385,37 @@ def inicializar_banco():
             """
         )
 
+        # Pedido de compra — nasce da cotação depois que ela é fechada com um
+        # vencedor por insumo (etapa manual, não automática — resposta da
+        # Kethllyn no roteiro, q23). Um pedido é por (fornecedor, loja): o
+        # mesmo insumo pode fechar com fornecedores diferentes na mesma
+        # cotação (q22), e o pedido mínimo do fornecedor conta por loja, não
+        # somado na rede (q29) — por isso não agrupa por cotação inteira.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedido_compra (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cotacao_id INTEGER NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'enviado',
+                criado_em TEXT NOT NULL,
+                atualizado_em TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedido_compra_item (
+                pedido_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                quantidade REAL NOT NULL,
+                preco_unitario REAL NOT NULL,
+                PRIMARY KEY (pedido_id, insumo_id)
+            )
+            """
+        )
+
         # Contagem de estoque por link (sem login) — replica o fluxo real da
         # VMarket: Kethllyn abre uma contagem pra uma loja, manda o link pro
         # funcionário preencher (identificado só pelo token, sem senha), e a
@@ -1371,6 +1402,154 @@ def selecionar_preco_cotacao(preco_id):
             (linha["cotacao_id"], linha["insumo_id"]),
         )
         conn.execute("UPDATE cotacao_preco SET selecionado = 1 WHERE id = ?", (preco_id,))
+
+
+ESTAGIOS_PEDIDO = ['enviado', 'confirmado', 'a_caminho', 'recebido']
+
+
+def gerar_pedidos_de_cotacao(cotacao_id):
+    """Fecha a cotação em pedido(s) de compra de verdade — um por
+    (fornecedor, loja), porque o mesmo insumo pode ter vencedores diferentes
+    (q22) e o pedido mínimo do fornecedor é por loja, não somado (q29). Só
+    considera insumo com preço marcado como vencedor (`selecionado`); quem
+    ainda não tem vencedor escolhido fica de fora (retornado à parte pra
+    avisar, não é erro — ela pode fechar aos poucos). Insumo que já virou
+    pedido numa chamada anterior (mesma cotação) não gera pedido de novo —
+    dá pra clicar "Gerar pedidos" mais de uma vez conforme for marcando
+    vencedor, sem duplicar pedido de quem já foi. Precisa da quebra por
+    loja de `cotacao_item_loja`, então uma cotação lançada na mão (sem
+    passar pela Requisição) não tem o que gerar aqui."""
+    precos = listar_precos_cotacao(cotacao_id)
+    vencedores = {p['insumo_id']: p for p in precos if p['selecionado']}
+
+    with conexao() as conn:
+        linhas_loja = conn.execute(
+            "SELECT insumo_id, loja, quantidade FROM cotacao_item_loja WHERE cotacao_id = ?",
+            (cotacao_id,),
+        ).fetchall()
+        insumos_ja_pedidos = {
+            linha["insumo_id"]
+            for linha in conn.execute(
+                """
+                SELECT DISTINCT pi.insumo_id
+                FROM pedido_compra_item pi
+                JOIN pedido_compra pc ON pc.id = pi.pedido_id
+                WHERE pc.cotacao_id = ?
+                """,
+                (cotacao_id,),
+            ).fetchall()
+        }
+
+    grupos = {}
+    insumos_com_quantidade = set()
+    for linha in linhas_loja:
+        insumos_com_quantidade.add(linha['insumo_id'])
+        if linha['insumo_id'] in insumos_ja_pedidos:
+            continue
+        vencedor = vencedores.get(linha['insumo_id'])
+        if not vencedor:
+            continue
+        chave = (vencedor['fornecedor_id'], linha['loja'])
+        grupos.setdefault(chave, []).append({
+            "insumoId": linha['insumo_id'],
+            "quantidade": linha['quantidade'],
+            "precoUnitario": vencedor['preco'],
+        })
+
+    insumos_sem_vencedor = len(insumos_com_quantidade - set(vencedores.keys()))
+
+    if not grupos:
+        return {"pedidosCriados": [], "insumosSemVencedor": insumos_sem_vencedor}
+
+    agora = datetime.now().isoformat()
+    pedidos_criados = []
+    with conexao() as conn:
+        for (fornecedor_id, loja), itens in grupos.items():
+            cursor = conn.execute(
+                "INSERT INTO pedido_compra (cotacao_id, fornecedor_id, loja, status, criado_em) VALUES (?, ?, ?, 'enviado', ?)",
+                (cotacao_id, fornecedor_id, loja, agora),
+            )
+            pedido_id = cursor.lastrowid
+            for item in itens:
+                conn.execute(
+                    "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
+                    (pedido_id, item['insumoId'], item['quantidade'], item['precoUnitario']),
+                )
+            pedidos_criados.append(pedido_id)
+
+    return {"pedidosCriados": pedidos_criados, "insumosSemVencedor": insumos_sem_vencedor}
+
+
+def listar_pedidos():
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
+                   f.nome AS fornecedor_nome, f.pedido_minimo,
+                   c.titulo AS cotacao_titulo,
+                   COUNT(pi.insumo_id) AS total_itens,
+                   COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS valor_total
+            FROM pedido_compra pc
+            JOIN fornecedor f ON f.id = pc.fornecedor_id
+            JOIN cotacao c ON c.id = pc.cotacao_id
+            LEFT JOIN pedido_compra_item pi ON pi.pedido_id = pc.id
+            GROUP BY pc.id
+            ORDER BY pc.criado_em DESC
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def buscar_pedido(pedido_id):
+    with conexao() as conn:
+        linha = conn.execute(
+            """
+            SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
+                   f.nome AS fornecedor_nome, f.pedido_minimo,
+                   c.titulo AS cotacao_titulo
+            FROM pedido_compra pc
+            JOIN fornecedor f ON f.id = pc.fornecedor_id
+            JOIN cotacao c ON c.id = pc.cotacao_id
+            WHERE pc.id = ?
+            """,
+            (pedido_id,),
+        ).fetchone()
+        if not linha:
+            return None
+        pedido = dict(linha)
+        itens = conn.execute(
+            """
+            SELECT pi.insumo_id, pi.quantidade, pi.preco_unitario, i.nome, i.unidade_medida
+            FROM pedido_compra_item pi
+            JOIN insumo i ON i.id = pi.insumo_id
+            WHERE pi.pedido_id = ?
+            ORDER BY i.nome
+            """,
+            (pedido_id,),
+        ).fetchall()
+        pedido['itens'] = [dict(item) for item in itens]
+        pedido['total_itens'] = len(pedido['itens'])
+        pedido['valor_total'] = sum(item['quantidade'] * item['preco_unitario'] for item in pedido['itens'])
+        return pedido
+
+
+def avancar_status_pedido(pedido_id):
+    """Avança pro próximo estágio de acompanhamento de entrega — não pula
+    etapa nem volta, sempre um passo por vez. Não mexe em estoque (ela
+    prefere continuar lançando entrada na mão, q25) — é só rastreio."""
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return None
+    indice_atual = ESTAGIOS_PEDIDO.index(pedido['status'])
+    if indice_atual >= len(ESTAGIOS_PEDIDO) - 1:
+        return pedido['status']
+    novo_status = ESTAGIOS_PEDIDO[indice_atual + 1]
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE pedido_compra SET status = ?, atualizado_em = ? WHERE id = ?",
+            (novo_status, datetime.now().isoformat(), pedido_id),
+        )
+    return novo_status
 
 
 DIAS_COBERTURA_IDEAL = 7  # mesma constante do front (script.js) — cotação é semanal

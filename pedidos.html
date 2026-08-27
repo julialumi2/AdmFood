@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Cardápio</title>
+  <title>AdmFood - Pedidos</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="cardapio.css">
+  <link rel="stylesheet" href="pedidos.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -44,7 +44,7 @@
           <i data-lucide="box"></i>
           <span>Estoque</span>
         </a>
-        <div class="menu-group">
+        <div class="menu-group expandido">
           <button type="button" class="menu-item menu-group-toggle">
             <i data-lucide="shopping-cart"></i>
             <span>Compras</span>
@@ -63,7 +63,7 @@
               <i data-lucide="clipboard-list"></i>
               <span>Contagens</span>
             </a>
-            <a href="pedidos.html" class="menu-subitem">
+            <a href="pedidos.html" class="menu-subitem active">
               <i data-lucide="package-check"></i>
               <span>Pedidos</span>
             </a>
@@ -126,7 +126,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">CARDÁPIO</span>
+          <span class="header-page-title">PEDIDOS</span>
         </div>
 
         <div class="header-right">
@@ -145,115 +145,111 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE CARDÁPIO -->
+      <!-- PÁGINA DE PEDIDOS -->
       <div class="page-content">
 
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="book-open" class="icon-pin"></i>
-            <span id="cardapio-titulo-eyebrow">COMPARATIVO DE PREÇOS</span>
-          </div>
-          <div class="title-row">
-            <h1 id="cardapio-titulo-h1">Cardápio · Preços</h1>
-            <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
-            <div id="cardapio-importar-area" style="display:none;">
-              <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
-              <button type="button" class="btn-secondary" onclick="document.getElementById('cardapio-importar-arquivo').click()">
-                <i data-lucide="upload"></i>
-                Importar planilha
-              </button>
+        <!-- VISÃO: LISTA DE PEDIDOS -->
+        <div id="pedidos-lista-view">
+          <div class="dashboard-title-area">
+            <div class="title-top">
+              <i data-lucide="package-check" class="icon-pin"></i>
+              <span>PEDIDO DE COMPRA</span>
+            </div>
+            <div class="title-row">
+              <h1>Pedidos</h1>
             </div>
           </div>
-        </div>
 
-        <p id="cardapio-importar-status" class="panel-subtitle" style="display:none;"></p>
-
-        <!-- MODO: PREÇOS -->
-        <div id="cardapio-modo-precos">
-          <!-- ABAS POR LOJA -->
-          <div class="tabs-bar" id="cardapio-tabs">
-            <!-- Renderizado dinamicamente via JS, conforme as lojas que vierem da API -->
-          </div>
-
-          <p class="panel-subtitle" style="margin-top: -8px;">
-            Preço de cada item por canal de venda. Uma planilha nova traz os preços atualizados (o admin pode reimportar a qualquer momento); fotos e ajustes manuais de preço ficam até a próxima planilha reimportada trazer um valor novo pra esse produto.
+          <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
+            Nascem de uma cotação fechada com vencedor escolhido — um pedido por fornecedor e por loja. Acompanhe aqui até a entrega chegar.
           </p>
 
-          <!-- CONTEÚDO DA LOJA SELECIONADA -->
-          <div id="cardapio-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Pedidos gerados</h3>
+                <p class="table-subtitle">Clique num pedido pra ver os itens e avançar a etapa de entrega</p>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Loja</th>
+                  <th>Cotação</th>
+                  <th>Itens</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="pedidos-tabela-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+            </div>
           </div>
         </div>
 
-        <!-- MODO: FICHA TÉCNICA -->
-        <div id="cardapio-modo-ficha-tecnica" style="display:none;">
-          <div class="content-header">
-            <p class="panel-subtitle">
-              Quais insumos cada item do cardápio usa — alimenta o cálculo de quantidade ideal do Estoque.
-              Quantidade em branco significa que ainda não sabemos a gramatura exata.
-            </p>
-            <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
-              <button type="button" class="btn-secondary" id="btn-novo-item-cardapio">
-                <i data-lucide="plus"></i>
-                Novo item
-              </button>
+        <!-- VISÃO: DETALHE DO PEDIDO -->
+        <div id="pedido-detalhe-view" style="display:none;">
+          <button type="button" class="btn-secondary-sm" id="btn-pedido-voltar" style="margin-bottom: var(--space-4);">
+            <i data-lucide="arrow-left"></i>
+            Voltar pra lista
+          </button>
+
+          <div class="dashboard-title-area">
+            <div class="title-row">
+              <h1 id="pedido-detalhe-titulo">—</h1>
+              <div class="page-acoes-topo">
+                <button type="button" class="btn-primary" id="btn-pedido-avancar">Avançar etapa</button>
+              </div>
             </div>
           </div>
-          <div id="ficha-tecnica-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+          <p class="panel-subtitle" id="pedido-detalhe-subtitulo" style="margin-bottom: var(--space-4);">—</p>
+
+          <p class="panel-subtitle" id="pedido-aviso-minimo" style="display:none; margin-bottom: var(--space-4);"></p>
+
+          <div class="chart-card" id="pedido-estagios-card">
+            <div class="pedido-estagios" id="pedido-estagios">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Itens do pedido</h3>
+              </div>
+            </div>
+            <div class="table-responsive">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Quantidade</th>
+                  <th>Preço unitário</th>
+                  <th>Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="pedido-itens-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" class="font-bold">Total</td>
+                  <td class="font-bold" id="pedido-detalhe-total">—</td>
+                </tr>
+              </tfoot>
+            </table>
+            </div>
           </div>
         </div>
 
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
-
-
-    <!-- MODAL: NOVO ITEM DO CARDÁPIO -->
-    <div class="modal-overlay" id="modal-novo-item-cardapio" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="panel-title">Novo item do cardápio</h3>
-          <button type="button" class="btn-close" id="btn-novo-item-cardapio-fechar" aria-label="Fechar">&times;</button>
-        </div>
-        <form id="form-novo-item-cardapio">
-          <div class="form-group">
-            <label for="novo-item-nome">Nome</label>
-            <input type="text" id="novo-item-nome" required placeholder="Ex: BIG ART">
-          </div>
-          <div class="form-group">
-            <label for="novo-item-categoria">Categoria</label>
-            <input type="text" id="novo-item-categoria" placeholder="Ex: Smash - Exclusivos">
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary-sm" id="btn-novo-item-cardapio-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Cadastrar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL: EDITAR FICHA TÉCNICA DE UM ITEM -->
-    <div class="modal-overlay" id="modal-ficha-tecnica-item" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="panel-title" id="ficha-tecnica-item-titulo">Ficha técnica</h3>
-          <button type="button" class="btn-close" id="btn-ficha-tecnica-item-fechar" aria-label="Fechar">&times;</button>
-        </div>
-        <form id="form-ficha-tecnica-item">
-          <div id="ficha-tecnica-item-linhas" class="ficha-tecnica-linhas">
-            <!-- Renderizado dinamicamente via JS -->
-          </div>
-          <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-add-linha" style="margin-bottom: var(--space-4);">
-            <i data-lucide="plus"></i>
-            Adicionar insumo
-          </button>
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-item-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Salvar</button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div> <!-- /dashboard-wrapper -->
 
 </body>

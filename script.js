@@ -221,6 +221,11 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarRequisicoes();
   }
 
+  // 4.0997 TELA DE PEDIDOS (admin)
+  if (document.getElementById('pedidos-tabela-body')) {
+    carregarPedidos();
+  }
+
   // 4.0996 TELA PÚBLICA DE PREENCHIMENTO DE CONTAGEM (sem login, por token)
   if (document.getElementById('form-contagem-publica')) {
     inicializarContagemPublica();
@@ -2012,6 +2017,11 @@ async function recarregarCotacaoDetalhe() {
       };
     }
 
+    const btnGerarPedidos = document.getElementById('btn-cotacao-gerar-pedidos');
+    if (btnGerarPedidos) {
+      btnGerarPedidos.style.display = isAdmin && (dados.itens || []).length > 0 ? '' : 'none';
+    }
+
     renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || []);
   } catch (erro) {
     console.error('Falha ao carregar cotação:', erro);
@@ -2079,6 +2089,22 @@ function renderCotacaoComparacao(grupos, isAdmin, itens) {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', async () => {
+  if (!confirm('Gerar pedido de compra pros insumos já com vencedor escolhido? Quem ainda não tem vencedor fica de fora, sem problema — dá pra gerar de novo depois.')) return;
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/gerar-pedidos`, { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar pedidos');
+    let mensagem = `${dados.pedidosCriados.length} pedido(s) gerado(s).`;
+    if (dados.insumosSemVencedor > 0) mensagem += ` ${dados.insumosSemVencedor} insumo(s) ainda sem vencedor escolhido ficaram de fora.`;
+    alert(mensagem);
+    window.location.href = 'pedidos.html';
+  } catch (erro) {
+    console.error('Falha ao gerar pedidos:', erro);
+    alert(erro.message || 'Não foi possível gerar os pedidos.');
+  }
+});
+
 document.getElementById('form-cotacao-preco')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
   const corpo = {
@@ -2099,6 +2125,150 @@ document.getElementById('form-cotacao-preco')?.addEventListener('submit', async 
   } catch (erro) {
     console.error('Falha ao lançar preço:', erro);
     alert(erro.message || 'Não foi possível lançar o preço.');
+  }
+});
+
+// --- Pedidos (admin: nascem da cotação, acompanhamento de entrega) ---
+const ESTAGIO_LABEL_PEDIDO = { enviado: 'Pedido enviado', confirmado: 'Confirmado pelo fornecedor', a_caminho: 'A caminho', recebido: 'Recebido' };
+const STATUS_CLASSE_BADGE_PEDIDO = { enviado: 'neu-orange', confirmado: 'neu-orange', a_caminho: 'neu-orange', recebido: 'pos' };
+
+let pedidosLista = [];
+let pedidoDetalheAtual = null;
+let pedidoEstagios = ['enviado', 'confirmado', 'a_caminho', 'recebido'];
+
+async function carregarPedidos() {
+  const tbody = document.getElementById('pedidos-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/pedidos');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    pedidosLista = dados.pedidos || [];
+    if (dados.estagios) pedidoEstagios = dados.estagios;
+    renderPedidosTabela();
+  } catch (erro) {
+    console.error('Falha ao carregar pedidos:', erro);
+    tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444;">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+function renderPedidosTabela() {
+  const tbody = document.getElementById('pedidos-tabela-body');
+  if (!tbody) return;
+
+  if (!pedidosLista.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="panel-subtitle">Nenhum pedido gerado ainda — feche uma cotação com vencedor escolhido e clique em "Gerar pedidos".</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = pedidosLista.map((p) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(p.fornecedorNome)}</td>
+      <td>${escaparHtml(p.loja)}</td>
+      <td class="text-muted">${escaparHtml(p.cotacaoTitulo)}</td>
+      <td>${p.totalItens}</td>
+      <td>R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${p.abaixoDoMinimo ? ' <span class="badge-pill neu-orange" title="Abaixo do pedido mínimo do fornecedor">abaixo do mínimo</span>' : ''}</td>
+      <td><span class="badge-pill ${STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${ESTAGIO_LABEL_PEDIDO[p.status]}</span></td>
+      <td class="acoes-linha">
+        <button type="button" class="btn-acao-icone" data-acao="abrir-pedido" data-id="${p.id}" title="Ver itens e acompanhar entrega">
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  document.querySelectorAll('[data-acao="abrir-pedido"]').forEach(btn => {
+    btn.addEventListener('click', () => abrirPedidoDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function abrirPedidoDetalhe(pedidoId) {
+  try {
+    const resposta = await fetch(`/api/pedidos/${pedidoId}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar pedido');
+    pedidoDetalheAtual = dados;
+    if (dados.estagios) pedidoEstagios = dados.estagios;
+    renderPedidoDetalhe();
+    document.getElementById('pedidos-lista-view').style.display = 'none';
+    document.getElementById('pedido-detalhe-view').style.display = '';
+  } catch (erro) {
+    console.error('Falha ao abrir pedido:', erro);
+    alert('Não foi possível abrir esse pedido.');
+  }
+}
+
+function renderPedidoDetalhe() {
+  const p = pedidoDetalheAtual;
+  if (!p) return;
+
+  document.getElementById('pedido-detalhe-titulo').textContent = `${p.fornecedorNome} — ${p.loja}`;
+  document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}`;
+
+  const aviso = document.getElementById('pedido-aviso-minimo');
+  if (p.abaixoDoMinimo) {
+    aviso.style.display = '';
+    aviso.textContent = `Esse pedido está abaixo do pedido mínimo do fornecedor (R$ ${p.pedidoMinimo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) — decida se vale somar mais itens ou seguir assim mesmo.`;
+  } else {
+    aviso.style.display = 'none';
+  }
+
+  const indiceAtual = pedidoEstagios.indexOf(p.status);
+  const estagiosDiv = document.getElementById('pedido-estagios');
+  estagiosDiv.innerHTML = pedidoEstagios.map((estagio, indice) => {
+    const estado = indice < indiceAtual ? 'concluido' : (indice === indiceAtual ? 'atual' : 'pendente');
+    const marcador = indice < indiceAtual ? '✓' : (indice + 1);
+    const linha = indice < pedidoEstagios.length - 1
+      ? `<div class="pedido-estagio-linha ${indice < indiceAtual ? 'concluida' : ''}"></div>`
+      : '';
+    return `
+      <div class="pedido-estagio" data-estado="${estado}">
+        <div class="pedido-estagio-marcador">${marcador}</div>
+        <div class="pedido-estagio-texto">${escaparHtml(ESTAGIO_LABEL_PEDIDO[estagio])}</div>
+      </div>
+      ${linha}
+    `;
+  }).join('');
+
+  const btnAvancar = document.getElementById('btn-pedido-avancar');
+  const ultimoEstagio = indiceAtual >= pedidoEstagios.length - 1;
+  btnAvancar.style.display = window.usuarioLogado?.papel === 'admin' ? '' : 'none';
+  btnAvancar.disabled = ultimoEstagio;
+  btnAvancar.textContent = ultimoEstagio ? 'Entrega concluída' : `Avançar pra "${ESTAGIO_LABEL_PEDIDO[pedidoEstagios[indiceAtual + 1]]}"`;
+
+  const itensBody = document.getElementById('pedido-itens-body');
+  itensBody.innerHTML = p.itens.map((item) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(item.nome)}</td>
+      <td>${item.quantidade} ${escaparHtml(item.unidadeMedida)}</td>
+      <td>R$ ${item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      <td>R$ ${item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+    </tr>
+  `).join('');
+  document.getElementById('pedido-detalhe-total').textContent = `R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.getElementById('btn-pedido-voltar')?.addEventListener('click', () => {
+  document.getElementById('pedido-detalhe-view').style.display = 'none';
+  document.getElementById('pedidos-lista-view').style.display = '';
+  pedidoDetalheAtual = null;
+  carregarPedidos();
+});
+
+document.getElementById('btn-pedido-avancar')?.addEventListener('click', async () => {
+  if (!pedidoDetalheAtual) return;
+  try {
+    const resposta = await fetch(`/api/pedidos/${pedidoDetalheAtual.id}/avancar`, { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao avançar');
+    await abrirPedidoDetalhe(pedidoDetalheAtual.id);
+  } catch (erro) {
+    console.error('Falha ao avançar pedido:', erro);
+    alert(erro.message || 'Não foi possível avançar esse pedido.');
   }
 });
 

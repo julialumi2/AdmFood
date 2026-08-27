@@ -1,0 +1,72 @@
+/* Estilos específicos da tela de Pedidos — a base compartilhada (sidebar,
+   cabeçalho, cards, tabelas, botões, badges) está em theme.css */
+
+#pedidos-lista-view,
+#pedido-detalhe-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.pedido-estagios {
+  display: flex;
+  align-items: center;
+}
+
+.pedido-estagio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 0;
+}
+
+.pedido-estagio-marcador {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  border: 2px solid var(--border-color);
+}
+
+.pedido-estagio[data-estado="concluido"] .pedido-estagio-marcador {
+  background-color: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.pedido-estagio[data-estado="atual"] .pedido-estagio-marcador {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.pedido-estagio-texto {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pedido-estagio[data-estado="concluido"] .pedido-estagio-texto,
+.pedido-estagio[data-estado="atual"] .pedido-estagio-texto {
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.pedido-estagio-linha {
+  flex: 1 1 auto;
+  height: 2px;
+  background-color: var(--border-color);
+  margin: 0 var(--space-2);
+}
+
+.pedido-estagio-linha.concluida {
+  background-color: var(--success);
+}

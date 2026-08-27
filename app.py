@@ -86,6 +86,11 @@ from backend.armazenamento import (
     listar_datas_especiais,
     gerar_cotacao_do_deficit,
     listar_itens_cotacao,
+    gerar_pedidos_de_cotacao,
+    listar_pedidos,
+    buscar_pedido,
+    avancar_status_pedido,
+    ESTAGIOS_PEDIDO,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1483,6 +1488,89 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
 
     selecionar_preco_cotacao(preco_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/gerar-pedidos', methods=['POST'])
+def api_gerar_pedidos_cotacao(cotacao_id):
+    """Fecha a cotação em pedido(s) de compra — etapa manual e separada de
+    marcar o vencedor de cada insumo (pergunta 23 do roteiro de compras:
+    ela não quer isso automático)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    cotacao = buscar_cotacao(cotacao_id)
+    if not cotacao:
+        return jsonify({"erro": "Cotação não encontrada."}), 404
+
+    resultado = gerar_pedidos_de_cotacao(cotacao_id)
+    if not resultado["pedidosCriados"]:
+        return jsonify({"erro": "Nenhum insumo com vencedor escolhido e quantidade pra virar pedido."}), 400
+    return jsonify({"ok": True, **resultado})
+
+
+def _formatar_pedido_resumo(pedido):
+    return {
+        "id": pedido["id"],
+        "cotacaoId": pedido["cotacao_id"],
+        "cotacaoTitulo": pedido["cotacao_titulo"],
+        "fornecedorId": pedido["fornecedor_id"],
+        "fornecedorNome": pedido["fornecedor_nome"],
+        "loja": pedido["loja"],
+        "status": pedido["status"],
+        "criadoEm": pedido["criado_em"],
+        "atualizadoEm": pedido["atualizado_em"],
+        "totalItens": pedido["total_itens"],
+        "valorTotal": round(pedido["valor_total"], 2),
+        "pedidoMinimo": pedido["pedido_minimo"],
+        "abaixoDoMinimo": pedido["pedido_minimo"] > 0 and pedido["valor_total"] < pedido["pedido_minimo"],
+    }
+
+
+@app.route('/api/pedidos', methods=['GET'])
+def api_listar_pedidos():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"pedidos": [_formatar_pedido_resumo(p) for p in listar_pedidos()], "estagios": ESTAGIOS_PEDIDO})
+
+
+@app.route('/api/pedidos/<int:pedido_id>', methods=['GET'])
+def api_buscar_pedido(pedido_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+
+    resposta = _formatar_pedido_resumo(pedido)
+    resposta["itens"] = [
+        {
+            "insumoId": item["insumo_id"],
+            "nome": item["nome"],
+            "unidadeMedida": item["unidade_medida"],
+            "quantidade": item["quantidade"],
+            "precoUnitario": item["preco_unitario"],
+            "subtotal": round(item["quantidade"] * item["preco_unitario"], 2),
+        }
+        for item in pedido["itens"]
+    ]
+    resposta["estagios"] = ESTAGIOS_PEDIDO
+    return jsonify(resposta)
+
+
+@app.route('/api/pedidos/<int:pedido_id>/avancar', methods=['POST'])
+def api_avancar_pedido(pedido_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    novo_status = avancar_status_pedido(pedido_id)
+    if novo_status is None:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    return jsonify({"ok": True, "status": novo_status})
 
 
 def _prazo_vencido(prazo_iso):
