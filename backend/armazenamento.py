@@ -4,6 +4,7 @@ Evita ter que buscar pedido por pedido a cada carregamento da página —
 a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 """
 
+import math
 import os
 import secrets
 import sqlite3
@@ -361,6 +362,27 @@ def inicializar_banco():
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_cotacao_preco_cotacao ON cotacao_preco(cotacao_id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao_item (
+                cotacao_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                quantidade_total REAL NOT NULL,
+                PRIMARY KEY (cotacao_id, insumo_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao_item_loja (
+                cotacao_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                quantidade REAL NOT NULL,
+                PRIMARY KEY (cotacao_id, insumo_id, loja)
+            )
+            """
         )
 
         # Contagem de estoque por link (sem login) — replica o fluxo real da
@@ -1602,6 +1624,106 @@ def listar_itens_contagem(contagem_id, loja):
             "quantidadeIdealAjustada": ajustada,
         })
     return itens
+
+
+def gerar_cotacao_do_deficit(titulo, prazo_validade):
+    """Gera uma cotação de verdade a partir do déficit (ideal − atual) de
+    uma requisição com todas as contagens já aprovadas (seção 9, 'Geração
+    automática da cotação a partir do déficit'). Regras vêm direto do
+    roteiro de compras que a Kethllyn respondeu: déficit sempre arredonda
+    pra cima (q1); insumo com estoque já no nível ideal nem entra na lista
+    (q2); insumo sem quantidade ideal calculada é pulado, não vira "compre
+    0" (q6); cada loja conta separado, não soma antes de calcular o
+    déficit (q7b) — por isso guarda a quebra por loja em
+    `cotacao_item_loja`, mesmo a cotação em si mostrando os insumos juntos
+    (q3, "mesmo link, insumos juntos, mas separados na hora de montar a
+    compra pra cada loja").
+
+    Retorna o id da cotação criada, ou None se a requisição não existir,
+    ainda tiver alguma contagem não aprovada, ou não sobrar nenhum insumo
+    com déficit de verdade (nada a comprar)."""
+    grupo = None
+    for r in listar_requisicoes():
+        if r['titulo'] == titulo and r['prazo_validade'] == prazo_validade:
+            grupo = r
+            break
+    if not grupo:
+        return None
+    if any(c['status'] != 'aprovada' for c in grupo['contagens']):
+        return None
+
+    deficits = {}
+    for contagem in grupo['contagens']:
+        for item in listar_itens_contagem(contagem['id'], contagem['loja']):
+            if item['quantidadeIdeal'] is None:
+                continue
+            atual = item['quantidadePreenchida'] if item['quantidadePreenchida'] is not None else 0
+            deficit = item['quantidadeIdeal'] - atual
+            if deficit <= 0:
+                continue
+            deficit = math.ceil(deficit * 100) / 100
+            info = deficits.setdefault(item['insumoId'], {
+                "nome": item['nome'],
+                "categoria": item['categoria'],
+                "unidadeMedida": item['unidadeMedida'],
+                "porLoja": {},
+            })
+            info['porLoja'][contagem['loja']] = deficit
+
+    if not deficits:
+        return None
+
+    cotacao_id = criar_cotacao(titulo)
+    with conexao() as conn:
+        for insumo_id, info in deficits.items():
+            total = round(sum(info['porLoja'].values()), 2)
+            conn.execute(
+                "INSERT INTO cotacao_item (cotacao_id, insumo_id, quantidade_total) VALUES (?, ?, ?)",
+                (cotacao_id, insumo_id, total),
+            )
+            for loja, quantidade in info['porLoja'].items():
+                conn.execute(
+                    "INSERT INTO cotacao_item_loja (cotacao_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                    (cotacao_id, insumo_id, loja, quantidade),
+                )
+    return cotacao_id
+
+
+def listar_itens_cotacao(cotacao_id):
+    """Quantidade total (soma das lojas) + quebra por loja de cada insumo
+    de uma cotação gerada automaticamente — cotação lançada na mão (sem
+    passar pela Requisição) simplesmente não tem nenhuma linha aqui."""
+    with conexao() as conn:
+        totais = conn.execute(
+            """
+            SELECT ci.insumo_id, ci.quantidade_total, i.nome, i.categoria, i.unidade_medida
+            FROM cotacao_item ci
+            JOIN insumo i ON i.id = ci.insumo_id
+            WHERE ci.cotacao_id = ?
+            ORDER BY i.categoria, i.nome
+            """,
+            (cotacao_id,),
+        ).fetchall()
+        por_loja_linhas = conn.execute(
+            "SELECT insumo_id, loja, quantidade FROM cotacao_item_loja WHERE cotacao_id = ?",
+            (cotacao_id,),
+        ).fetchall()
+
+    mapa_loja = {}
+    for linha in por_loja_linhas:
+        mapa_loja.setdefault(linha["insumo_id"], []).append({"loja": linha["loja"], "quantidade": linha["quantidade"]})
+
+    return [
+        {
+            "insumoId": t["insumo_id"],
+            "nome": t["nome"],
+            "categoria": t["categoria"],
+            "unidadeMedida": t["unidade_medida"],
+            "quantidadeTotal": t["quantidade_total"],
+            "porLoja": mapa_loja.get(t["insumo_id"], []),
+        }
+        for t in totais
+    ]
 
 
 def responder_contagem(token, valores):

@@ -646,6 +646,33 @@ mesma resposta de `GET /api/insumos/ajustes-quantidade-ideal` (evita mais
 uma chamada por loja) e o `carregarInsumos()` do Estoque já aplica em
 `_quantidadeIdealParaLoja`.
 
+**Geração automática da cotação a partir do déficit** (concluída em
+2026-08-27 — última peça do fluxo Requisição → Contagem → Cotação descrito
+na seção 9; regras vieram do roteiro de compras que a Kethllyn respondeu).
+Duas tabelas novas: `cotacao_item` (cotacao_id, insumo_id,
+quantidade_total) guarda a soma de todas as lojas por insumo — é o que a
+tela de Cotações mostra ("insumos juntos", resposta dela na pergunta 3);
+`cotacao_item_loja` (cotacao_id, insumo_id, loja, quantidade) guarda a
+quebra por loja por baixo, pra não perder a granularidade na hora de
+montar a compra de verdade pra cada unidade (pergunta 7b: nunca soma as
+lojas pra "ajudar" a bater mínimo de fornecedor). `gerar_cotacao_do_deficit`
+só roda numa requisição com **todas** as lojas já aprovadas; por insumo,
+calcula o déficit (ideal − preenchido) loja a loja, **sempre arredonda pra
+cima** (pergunta 1), **pula o insumo** se o déficit não for positivo —
+estoque já no nível ideal não vira "compre 0" (pergunta 2) — ou se não
+tiver quantidade ideal calculável ainda (pergunta 6). Não aplica nenhuma
+margem de segurança em cima do ideal (pergunta 7c). Se nenhum insumo
+sobrar com déficit de verdade, não cria cotação nenhuma (retorna `None`).
+O botão "Gerar cotação" na tela de conferência da requisição
+(`contagens.html`) só fica habilitado quando `totalmenteAprovada` é
+verdadeiro, e depois de gerar já leva direto pra
+`cotacoes.html?abrir=<id>` — a cotação nasce igual a uma lançada na mão
+(ela ainda pode editar preço, adicionar/remover fornecedor normalmente
+antes de fechar, pergunta 5), só que já vem com a quantidade calculada por
+insumo. `renderCotacaoComparacao` (script.js) mostra, acima da lista de
+preços de cada insumo, o total a comprar e a quebra por loja
+(`Comprar 12 g — Loja A: 8 g · Loja B: 4 g`).
+
 Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
 /api/contagens/<id>` (detalhe de uma loja pra conferência, admin), `POST
 /api/contagens/<id>/aprovar` (admin), `PUT/DELETE
@@ -661,9 +688,12 @@ autenticação, ver exceção em `ROTAS_API_PUBLICAS`/`PAGINAS_PUBLICAS` em
 /api/requisicoes/conferencia?titulo=&prazoValidade=` (déficit somado de
 todas as lojas do grupo, admin), `POST
 /api/requisicoes/conferencia/aprovar` (aprova todas as contagens
-`respondida` do grupo, admin). Ainda falta: a geração automática da
-cotação a partir desse déficit somado (ver seção 9, item 1) — hoje a
-conferência só mostra o número, não cria a cotação sozinha.
+`respondida` do grupo, admin), `POST
+/api/requisicoes/conferencia/gerar-cotacao` (transforma o déficit numa
+cotação de verdade, admin — só funciona com todas as lojas aprovadas).
+`GET /api/cotacoes/<id>` agora também devolve `itens` (quantidade total +
+quebra por loja de cada insumo, vazio numa cotação lançada na mão sem
+passar pela Requisição).
 
 ## 7. API — principais endpoints
 
@@ -824,7 +854,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
    - 🔲 **Núcleo que falta** (o motivo de toda essa investigação — fluxo real: Requisição → Contagem → Cotação → Pedido → Recebimento):
      - ✅ **Requisição + Contagem por loja** — concluído em 2026-08-26 (decisão de acesso: link por token, sem login, estilo VMarket — ver seção 6.9). Requisição abre o ciclo em várias lojas de uma vez (título + prazo compartilhados), gerando uma contagem/link por loja selecionada; funcionário preenche a quantidade atual de cada insumo do seu setor pelo link; admin confere e aprova antes de virar quantidade real em estoque.
      - ✅ **Área de conferência** — concluída em 2026-08-26 (ver seção 6.9). Visão somando o preenchido e a quantidade ideal das várias lojas de uma mesma requisição, com aviso de quem ainda falta responder, e um botão pra aprovar todas as lojas prontas de uma vez.
-     - **Geração automática da cotação** a partir do déficit (ideal − atual) — a conferência acima já calcula esse número somado; falta só ligar na criação da cotação em vez de lançar item por item na mão.
+     - ✅ **Geração automática da cotação** a partir do déficit (ideal − atual) — concluída em 2026-08-27 (ver seção 6.9). Botão "Gerar cotação" na conferência da requisição (só habilitado com todas as lojas aprovadas) cria a cotação já com a quantidade calculada por insumo (arredondada pra cima, pulando quem já está no ideal ou sem ideal calculável), preservando a quebra por loja por baixo mesmo mostrando os insumos juntos na tela.
      - **Pedido** (VMarket: Compras → Meus Pedidos / Cadastrar Pedido Manual / Agenda de Recebimento) — depois de fechar a cotação com um fornecedor vencedor, vira um pedido de compra com acompanhamento de entrega (a VMarket tem 4 estágios de recebimento). Não existe nada disso ainda no AdmFood.
      - **Fornecedor cotando os próprios produtos** — hoje é a Julia/Kethllyn que digita o preço de cada fornecedor manualmente; a VMarket manda um link individual pro fornecedor preencher. Mesmo padrão de link por token da Contagem (seção 6.9) deve resolver.
    - 🔻 **Existe na VMarket mas não configurado/usado por vocês hoje** (baixa prioridade — replicar seria trabalho sem necessidade comprovada): **Orçamento** (Config. Orçamento + Desvio Padrão — zero registros cadastrados); **Financeiro/Nota Fiscal** (concilia XML de nota fiscal contra pedido de compra — zero notas processadas; dependeria de integração fiscal, domínio novo).

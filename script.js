@@ -207,7 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4.099 TELA DE COTAÇÕES
   if (document.getElementById('cotacoes-tabela-body')) {
-    carregarCotacoes();
+    const abrirId = new URLSearchParams(location.search).get('abrir');
+    if (abrirId) {
+      abrirCotacaoDetalhe(parseInt(abrirId, 10));
+    } else {
+      carregarCotacoes();
+    }
   }
 
   // 4.0995 TELA DE CONTAGENS (admin)
@@ -2007,26 +2012,37 @@ async function recarregarCotacaoDetalhe() {
       };
     }
 
-    renderCotacaoComparacao(dados.grupos, isAdmin);
+    renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || []);
   } catch (erro) {
     console.error('Falha ao carregar cotação:', erro);
     alert('Não foi possível carregar a cotação.');
   }
 }
 
-function renderCotacaoComparacao(grupos, isAdmin) {
+function renderCotacaoComparacao(grupos, isAdmin, itens) {
   const container = document.getElementById('cotacao-comparacao-lista');
   if (!grupos.length) {
     container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
     return;
   }
 
-  container.innerHTML = grupos.map((grupo) => `
+  const itensPorInsumo = {};
+  (itens || []).forEach((item) => { itensPorInsumo[item.insumoId] = item; });
+
+  container.innerHTML = grupos.map((grupo) => {
+    const item = itensPorInsumo[grupo.insumoId];
+    return `
     <div class="chart-card cotacao-grupo">
       <div class="cotacao-grupo-header">
         <h4>${escaparHtml(grupo.insumoNome)}</h4>
         <span class="text-muted">${escaparHtml(grupo.categoria)}</span>
       </div>
+      ${item ? `
+        <p class="panel-subtitle" style="margin-bottom: var(--space-2);">
+          Comprar <strong>${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}</strong>
+          — ${item.porLoja.map(pl => `${escaparHtml(pl.loja)}: ${pl.quantidade} ${escaparHtml(item.unidadeMedida)}`).join(' · ')}
+        </p>
+      ` : ''}
       ${grupo.precos.map((preco, indice) => `
         <div class="cotacao-preco-linha ${indice === 0 ? 'melhor-preco' : ''} ${preco.selecionado ? 'selecionado' : ''}">
           <span class="cotacao-preco-fornecedor">${escaparHtml(preco.fornecedorNome)}</span>
@@ -2043,7 +2059,8 @@ function renderCotacaoComparacao(grupos, isAdmin) {
         </div>
       `).join('')}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   if (isAdmin) {
     document.querySelectorAll('[data-acao="selecionar-preco"]').forEach(btn => {
@@ -2385,8 +2402,10 @@ function renderConferenciaRequisicao() {
 
   const acoes = document.getElementById('requisicao-conferencia-acoes-admin');
   const btnAprovarTodas = document.getElementById('btn-requisicao-aprovar-todas');
+  const btnGerarCotacao = document.getElementById('btn-requisicao-gerar-cotacao');
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovarTodas) btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
+  if (btnGerarCotacao) btnGerarCotacao.disabled = !r.totalmenteAprovada;
 
   const aviso = document.getElementById('requisicao-conferencia-aviso');
   if (!r.prontaParaConferencia) {
@@ -2457,6 +2476,25 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
   } catch (erro) {
     console.error('Falha ao aprovar requisição:', erro);
     alert(erro.message || 'Não foi possível aprovar essa requisição.');
+  }
+});
+
+document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
+  const r = requisicaoConferenciaAtual;
+  if (!r || !r.totalmenteAprovada) return;
+  if (!confirm('Gerar cotação com o déficit dessa requisição? Você ainda vai poder editar antes de mandar pros fornecedores.')) return;
+  try {
+    const resposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo: r.titulo, prazoValidade: r.prazoValidade }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar cotação');
+    window.location.href = `cotacoes.html?abrir=${dados.cotacaoId}`;
+  } catch (erro) {
+    console.error('Falha ao gerar cotação:', erro);
+    alert(erro.message || 'Não foi possível gerar a cotação.');
   }
 });
 

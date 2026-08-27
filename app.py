@@ -84,6 +84,8 @@ from backend.armazenamento import (
     criar_data_especial,
     excluir_data_especial,
     listar_datas_especiais,
+    gerar_cotacao_do_deficit,
+    listar_itens_cotacao,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1407,6 +1409,7 @@ def api_detalhe_cotacao(cotacao_id):
             "criadoEm": cotacao["criado_em"],
         },
         "grupos": grupos,
+        "itens": listar_itens_cotacao(cotacao_id),
     })
 
 
@@ -1624,6 +1627,31 @@ def api_aprovar_requisicao():
             aprovar_contagem(contagem['id'])
             aprovadas += 1
     return jsonify({"ok": True, "aprovadas": aprovadas})
+
+
+@app.route('/api/requisicoes/conferencia/gerar-cotacao', methods=['POST'])
+def api_gerar_cotacao_requisicao():
+    """Transforma o déficit de uma requisição totalmente aprovada numa
+    cotação de verdade (com quantidade por insumo), pronta pra comparar
+    preço de fornecedor — ver DOCUMENTACAO.md seção 9, 'Geração automática
+    da cotação a partir do déficit'."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    prazo_validade = (dados.get('prazoValidade') or '').strip()
+    grupo = _buscar_grupo_requisicao(titulo, prazo_validade)
+    if not grupo:
+        return jsonify({"erro": "Requisição não encontrada."}), 404
+    if any(c['status'] != 'aprovada' for c in grupo['contagens']):
+        return jsonify({"erro": "Só é possível gerar a cotação depois que todas as lojas forem aprovadas."}), 400
+
+    cotacao_id = gerar_cotacao_do_deficit(titulo, prazo_validade)
+    if cotacao_id is None:
+        return jsonify({"erro": "Nenhum insumo com déficit — não há nada para cotar."}), 400
+    return jsonify({"ok": True, "cotacaoId": cotacao_id})
 
 
 @app.route('/api/contagens', methods=['POST'])
