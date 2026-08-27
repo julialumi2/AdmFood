@@ -2641,14 +2641,36 @@ document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => 
 
 document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async () => {
   if (!contagemDetalheAtual) return;
-  if (!confirm('Aprovar essa requisição? As quantidades preenchidas vão substituir o estoque atual da loja.')) return;
+  if (!confirm('Aprovar essa loja? As quantidades preenchidas vão substituir o estoque atual dela. Se for a última loja pendente da requisição, a cotação já é gerada em seguida.')) return;
   try {
     const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+
+    const titulo = contagemDetalheAtual.descricao;
+    const prazoValidade = contagemDetalheAtual.prazoValidade;
+    const conferencia = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`).then(r => r.json());
+
+    if (conferencia.totalmenteAprovada) {
+      const gerarResposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo, prazoValidade }),
+      });
+      const gerarDados = await gerarResposta.json();
+      if (gerarResposta.ok) {
+        alert('Todas as lojas aprovadas — cotação gerada!');
+        window.location.href = `cotacoes.html?abrir=${gerarDados.cotacaoId}`;
+        return;
+      }
+      alert(gerarDados.erro || 'Loja aprovada, mas não foi possível gerar a cotação.');
+    } else {
+      const faltam = conferencia.totalLojas - conferencia.lojasAprovadas;
+      alert(`Loja aprovada! Ainda falta${faltam > 1 ? 'm' : ''} ${faltam} loja${faltam > 1 ? 's' : ''} aprovar antes de gerar a cotação.`);
+    }
     await abrirContagemDetalhe(contagemDetalheAtual.id);
   } catch (erro) {
-    console.error('Falha ao aprovar contagem:', erro);
+    console.error('Falha ao aprovar requisição:', erro);
     alert(erro.message || 'Não foi possível aprovar essa requisição.');
   }
 });

@@ -651,6 +651,17 @@ enquanto conta. `aprovar_contagem` só grava a quantidade preenchida como
 `quantidade_atual` real em `estoque_insumo` depois que o admin confere e
 aprova (itens não preenchidos mantêm o valor antigo, não zeram).
 
+**Botão "Fazer Cotação/Pedido" no detalhe de uma loja** (concluído em
+2026-08-27, a pedido do Guilherme pra economizar um clique). O botão que
+antes só aprovava essa loja agora faz as duas coisas: aprova, e se essa
+era a **última loja pendente** da requisição (checa `totalmenteAprovada`
+em `GET /api/requisicoes/conferencia`), já chama
+`/api/requisicoes/conferencia/gerar-cotacao` e leva direto pra cotação
+gerada — sem passar pela tela de conferência somada no meio. Se ainda
+faltar loja, só aprova essa e avisa quantas faltam; nada muda pra quem
+está numa requisição de loja única (aprova e já cai na cotação, tudo num
+clique).
+
 **Requisição** (a peça que faltava do fluxo Requisição → Contagem →
 Cotação → Pedido descrito na seção 9) — abre o ciclo em **várias lojas de
 uma vez**, em vez de uma contagem por vez: o modal "Nova requisição" pede
