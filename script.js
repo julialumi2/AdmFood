@@ -3382,7 +3382,7 @@ async function carregarUsuarioLogado() {
     // paralelo — se os cards já tiverem renderizado como "só leitura" antes
     // de saber que é admin, renderiza de novo agora com os controles de edição.
     const importarArea = document.getElementById('cardapio-importar-area');
-    if (importarArea && usuario.papel === 'admin') {
+    if (importarArea && usuario.papel === 'admin' && cardapioAbaAtual === 'precos') {
       importarArea.style.display = '';
       if (typeof lucide !== 'undefined') lucide.createIcons();
       if (cardapioLojaSelecionada) renderCardapioLoja(cardapioLojaSelecionada);
@@ -4408,20 +4408,35 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
   }
 });
 
-// --- Sub-abas Preços x Ficha Técnica ---
-document.querySelectorAll('.cardapio-subaba').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.cardapio-subaba').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const modoPrecos = document.getElementById('cardapio-modo-precos');
-    const modoFicha = document.getElementById('cardapio-modo-ficha-tecnica');
-    if (btn.dataset.subaba === 'precos') {
-      modoPrecos.style.display = '';
-      modoFicha.style.display = 'none';
-    } else {
-      modoPrecos.style.display = 'none';
-      modoFicha.style.display = '';
-      if (!fichaTecnicaData.itens.length) carregarFichaTecnica();
-    }
-  });
-});
+// --- Cardápio: "Preços" e "Ficha Técnica" viraram itens separados no menu
+// lateral (mesmo padrão do grupo "Compras"), em vez de sub-abas dentro da
+// página — a rota é a mesma (cardapio.html), o modo vem do ?aba= da URL.
+var cardapioAbaAtual = 'precos';
+(function inicializarAbaCardapio() {
+  const modoPrecos = document.getElementById('cardapio-modo-precos');
+  const modoFicha = document.getElementById('cardapio-modo-ficha-tecnica');
+  if (!modoPrecos || !modoFicha) return;
+
+  const aba = new URLSearchParams(location.search).get('aba') === 'ficha-tecnica' ? 'ficha-tecnica' : 'precos';
+  cardapioAbaAtual = aba;
+
+  const eyebrow = document.getElementById('cardapio-titulo-eyebrow');
+  const titulo = document.getElementById('cardapio-titulo-h1');
+  const itemPrecos = document.getElementById('menu-cardapio-precos');
+  const itemFicha = document.getElementById('menu-cardapio-ficha');
+
+  if (aba === 'ficha-tecnica') {
+    modoPrecos.style.display = 'none';
+    modoFicha.style.display = '';
+    if (eyebrow) eyebrow.textContent = 'INSUMOS DE CADA ITEM';
+    if (titulo) titulo.textContent = 'Cardápio · Ficha Técnica';
+    if (itemFicha) itemFicha.classList.add('active');
+    if (!fichaTecnicaData.itens.length) carregarFichaTecnica();
+  } else {
+    modoPrecos.style.display = '';
+    modoFicha.style.display = 'none';
+    if (eyebrow) eyebrow.textContent = 'COMPARATIVO DE PREÇOS';
+    if (titulo) titulo.textContent = 'Cardápio · Preços';
+    if (itemPrecos) itemPrecos.classList.add('active');
+  }
+})();

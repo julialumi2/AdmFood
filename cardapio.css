@@ -3,29 +3,6 @@
 
 /* SUB-ABAS: PREÇOS x FICHA TÉCNICA — mais simples que .tabs-bar (só 2
    opções, sem ícone/badge), pra não confundir com as abas de loja. */
-.cardapio-subabas {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.cardapio-subaba {
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-pill);
-  background-color: var(--card-bg);
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.cardapio-subaba.active {
-  background-color: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
-
 /* FICHA TÉCNICA */
 .ficha-tecnica-lista {
   display: flex;

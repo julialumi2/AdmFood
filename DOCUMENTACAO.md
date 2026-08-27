@@ -352,9 +352,15 @@ quem abrir a tela.
 
 ### 6.5 Ficha técnica (quais insumos cada item do cardápio usa)
 
-Sub-aba dentro de `cardapio.html` (botões "Preços" / "Ficha Técnica" no
-topo, ver `.cardapio-subaba` em `script.js`) — não é uma aba de loja nova,
-é um segundo modo de visualização da mesma página. Existe pra alimentar
+Continua sendo a mesma página (`cardapio.html`), só um segundo modo de
+visualização — mas desde 2026-08-27 a navegação entre "Preços" e "Ficha
+Técnica" saiu de sub-abas dentro da página e virou um grupo recolhível no
+menu lateral, no mesmo padrão do grupo "Compras" (ver seção 10). O modo
+vem do `?aba=precos`/`?aba=ficha-tecnica` na URL — `inicializarAbaCardapio()`
+em `script.js` lê isso no carregamento, mostra/esconde `#cardapio-modo-*`,
+atualiza o título da página e marca o item certo do menu como ativo (sem
+isso, o grupo "Cardápio" nunca saberia qual sub-item destacar, já que as
+duas visões não são páginas/arquivos separados). Existe pra alimentar
 o cálculo de "quantidade ideal" do Estoque a partir do histórico de
 vendas: pra saber quanto de um insumo se gasta, precisa saber quais
 pratos o usam e quanto de cada um entra na receita.
@@ -797,3 +803,11 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 - Rotas de arquivo estático (`/<path:nome_arquivo>`) bloqueiam qualquer nome
   com `/` ou `\` e qualquer extensão fora de `EXTENSOES_PUBLICAS` — protege
   contra acesso a `.py`, `.env`, `.db`, `backend/`, `.git/` etc pela URL.
+- Grupo recolhível no menu lateral (`.menu-group`/`.menu-subgroup`, ver
+  `script.js` seção "GRUPOS DE MENU RECOLHÍVEIS"): quando várias telas são
+  páginas de verdade (Fornecedores/Cotações/Contagens dentro de "Compras"),
+  cada uma marca seu próprio sub-item com `active` direto no HTML. Quando
+  são a MESMA página com mais de um modo de visualização (Preços/Ficha
+  Técnica dentro de "Cardápio"), o modo vem de um `?aba=` na URL e o
+  próprio JS da página marca o sub-item ativo e alterna os `#modo-*` — o
+  grupo em si não sabe a diferença entre os dois casos.

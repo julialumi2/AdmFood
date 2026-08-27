@@ -65,10 +65,23 @@
             </a>
           </div>
         </div>
-        <a href="cardapio.html" class="menu-item active">
-          <i data-lucide="book-open"></i>
-          <span>Cardápio</span>
-        </a>
+        <div class="menu-group">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="book-open"></i>
+            <span>Cardápio</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="cardapio.html?aba=precos" class="menu-subitem" id="menu-cardapio-precos">
+              <i data-lucide="tag"></i>
+              <span>Preços</span>
+            </a>
+            <a href="cardapio.html?aba=ficha-tecnica" class="menu-subitem" id="menu-cardapio-ficha">
+              <i data-lucide="file-text"></i>
+              <span>Ficha Técnica</span>
+            </a>
+          </div>
+        </div>
         <a href="preparo.html" class="menu-item">
           <i data-lucide="timer"></i>
           <span>Preparo</span>
@@ -134,10 +147,10 @@
         <div class="dashboard-title-area">
           <div class="title-top">
             <i data-lucide="book-open" class="icon-pin"></i>
-            <span>COMPARATIVO DE PREÇOS</span>
+            <span id="cardapio-titulo-eyebrow">COMPARATIVO DE PREÇOS</span>
           </div>
           <div class="title-row">
-            <h1>Cardápio</h1>
+            <h1 id="cardapio-titulo-h1">Cardápio · Preços</h1>
             <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
             <div id="cardapio-importar-area" style="display:none;">
               <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
@@ -150,12 +163,6 @@
         </div>
 
         <p id="cardapio-importar-status" class="panel-subtitle" style="display:none;"></p>
-
-        <!-- SUB-ABAS: PREÇOS x FICHA TÉCNICA -->
-        <div class="cardapio-subabas">
-          <button type="button" class="cardapio-subaba active" data-subaba="precos">Preços</button>
-          <button type="button" class="cardapio-subaba" data-subaba="ficha-tecnica">Ficha Técnica</button>
-        </div>
 
         <!-- MODO: PREÇOS -->
         <div id="cardapio-modo-precos">

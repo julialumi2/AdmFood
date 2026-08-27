@@ -66,10 +66,23 @@
             </a>
           </div>
         </div>
-        <a href="cardapio.html" class="menu-item">
-          <i data-lucide="book-open"></i>
-          <span>Cardápio</span>
-        </a>
+        <div class="menu-group">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="book-open"></i>
+            <span>Cardápio</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="cardapio.html?aba=precos" class="menu-subitem" id="menu-cardapio-precos">
+              <i data-lucide="tag"></i>
+              <span>Preços</span>
+            </a>
+            <a href="cardapio.html?aba=ficha-tecnica" class="menu-subitem" id="menu-cardapio-ficha">
+              <i data-lucide="file-text"></i>
+              <span>Ficha Técnica</span>
+            </a>
+          </div>
+        </div>
         <a href="preparo.html" class="menu-item">
           <i data-lucide="timer"></i>
           <span>Preparo</span>
