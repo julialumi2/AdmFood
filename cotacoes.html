@@ -225,6 +225,10 @@
               <h1 id="cotacao-detalhe-titulo">—</h1>
               <div class="page-acoes-topo" id="cotacao-detalhe-acoes-admin" style="display:none;">
                 <button type="button" class="btn-secondary" id="btn-cotacao-alternar-status">Fechar cotação</button>
+                <button type="button" class="btn-secondary" id="btn-cotacao-convidar-fornecedores" style="display:none;">
+                  <i data-lucide="send"></i>
+                  Convidar fornecedores
+                </button>
                 <button type="button" class="btn-primary" id="btn-cotacao-gerar-pedidos" style="display:none;">
                   <i data-lucide="package-check"></i>
                   Gerar pedidos
@@ -255,6 +259,31 @@
               </div>
               <button type="submit" class="btn-primary-sm">Adicionar</button>
             </form>
+          </div>
+
+          <!-- CONVITES ENVIADOS AOS FORNECEDORES -->
+          <div class="chart-card" id="cotacao-convites-card" style="display:none;">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Convites enviados aos fornecedores</h3>
+                <p class="table-subtitle">Link sem login pra cada fornecedor preencher o próprio preço dos insumos sem fornecedor vinculado ainda</p>
+              </div>
+            </div>
+            <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Status</th>
+                  <th>Prazo</th>
+                  <th>Link</th>
+                </tr>
+              </thead>
+              <tbody id="cotacao-convites-tabela-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+            </div>
           </div>
 
           <!-- COMPARAÇÃO POR INSUMO -->
@@ -305,6 +334,29 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-nova-cotacao-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm">Criar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: CONVIDAR FORNECEDORES -->
+    <div class="modal-overlay" id="modal-convidar-fornecedores" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Convidar fornecedores</h3>
+          <button type="button" class="btn-close" id="btn-convidar-fornecedores-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Manda o link de preenchimento pra todo fornecedor ativo, só dos insumos dessa cotação que ainda não têm fornecedor vinculado. Cada fornecedor decide, item por item, se vende ou não.
+        </p>
+        <form id="form-convidar-fornecedores">
+          <div class="form-group">
+            <label for="convidar-fornecedores-prazo">Prazo pra responder</label>
+            <input type="datetime-local" id="convidar-fornecedores-prazo" required>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-convidar-fornecedores-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Enviar convites</button>
           </div>
         </form>
       </div>

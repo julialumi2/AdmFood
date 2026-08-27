@@ -241,6 +241,11 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarContagemPublica();
   }
 
+  // 4.0996b TELA PÚBLICA DE PREENCHIMENTO DE COTAÇÃO (sem login, por token)
+  if (document.getElementById('form-cotacao-publica')) {
+    inicializarPreencherCotacao();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -2092,12 +2097,113 @@ async function recarregarCotacaoDetalhe() {
       btnGerarPedidos.style.display = isAdmin && (dados.itens || []).length > 0 ? '' : 'none';
     }
 
+    const btnConvidar = document.getElementById('btn-cotacao-convidar-fornecedores');
+    const convitesCard = document.getElementById('cotacao-convites-card');
+    const temItens = (dados.itens || []).length > 0;
+    if (btnConvidar) btnConvidar.style.display = isAdmin && temItens ? '' : 'none';
+    if (temItens && isAdmin) {
+      await carregarConvitesCotacao();
+    } else if (convitesCard) {
+      convitesCard.style.display = 'none';
+    }
+
     renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || []);
   } catch (erro) {
     console.error('Falha ao carregar cotação:', erro);
     alert('Não foi possível carregar a cotação.');
   }
 }
+
+async function carregarConvitesCotacao() {
+  const card = document.getElementById('cotacao-convites-card');
+  if (!card) return;
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    renderConvitesCotacao(dados.convites || []);
+  } catch (erro) {
+    console.error('Falha ao carregar convites:', erro);
+  }
+}
+
+const STATUS_LABEL_CONVITE = { aberta: 'Aguardando resposta', respondida: 'Respondido' };
+
+function renderConvitesCotacao(convites) {
+  const card = document.getElementById('cotacao-convites-card');
+  const tbody = document.getElementById('cotacao-convites-tabela-body');
+  if (!card || !tbody) return;
+
+  card.style.display = convites.length ? '' : 'none';
+  if (!convites.length) return;
+
+  tbody.innerHTML = convites.map((c) => {
+    const expirado = c.status === 'aberta' && new Date(c.prazoValidade) < new Date();
+    const statusTexto = expirado ? 'Prazo vencido' : STATUS_LABEL_CONVITE[c.status];
+    const statusClasse = c.status === 'respondida' ? 'pos' : (expirado ? 'neg' : 'neu-orange');
+    const link = `${location.origin}/preencher_cotacao.html?token=${c.token}`;
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(c.fornecedorNome)}</td>
+        <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
+        <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+        <td>
+          <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}">
+            <i data-lucide="copy"></i>
+            Copiar link
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('[data-acao="copiar-link-convite"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.link);
+        const textoOriginal = btn.innerHTML;
+        btn.innerHTML = 'Copiado!';
+        setTimeout(() => { btn.innerHTML = textoOriginal; if (typeof lucide !== 'undefined') lucide.createIcons(); }, 1500);
+      } catch (erro) {
+        console.error('Falha ao copiar link:', erro);
+        alert(btn.dataset.link);
+      }
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.getElementById('btn-cotacao-convidar-fornecedores')?.addEventListener('click', () => {
+  document.getElementById('convidar-fornecedores-prazo').value = '';
+  document.getElementById('modal-convidar-fornecedores').style.display = 'flex';
+});
+document.getElementById('btn-convidar-fornecedores-fechar')?.addEventListener('click', () => {
+  document.getElementById('modal-convidar-fornecedores').style.display = 'none';
+});
+document.getElementById('btn-convidar-fornecedores-cancelar')?.addEventListener('click', () => {
+  document.getElementById('modal-convidar-fornecedores').style.display = 'none';
+});
+
+document.getElementById('form-convidar-fornecedores')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const prazoValidade = document.getElementById('convidar-fornecedores-prazo').value;
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prazoValidade }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao enviar convites');
+    document.getElementById('modal-convidar-fornecedores').style.display = 'none';
+    alert(`${dados.convites.length} convite(s) enviado(s) — copie o link de cada fornecedor na tabela abaixo.`);
+    await carregarConvitesCotacao();
+  } catch (erro) {
+    console.error('Falha ao convidar fornecedores:', erro);
+    alert(erro.message || 'Não foi possível enviar os convites.');
+  }
+});
 
 function renderCotacaoComparacao(grupos, isAdmin, itens) {
   const container = document.getElementById('cotacao-comparacao-lista');
@@ -2961,6 +3067,109 @@ async function inicializarContagemPublica() {
   } catch (erro) {
     console.error('Falha ao carregar contagem pública:', erro);
     mostrarErro('Não foi possível carregar essa contagem agora.');
+  }
+}
+
+async function inicializarPreencherCotacao() {
+  const token = new URLSearchParams(location.search).get('token');
+  const elCarregando = document.getElementById('cotacao-publica-carregando');
+  const elErro = document.getElementById('cotacao-publica-erro');
+  const elErroTexto = document.getElementById('cotacao-publica-erro-texto');
+  const elObrigado = document.getElementById('cotacao-publica-obrigado');
+  const form = document.getElementById('form-cotacao-publica');
+
+  function mostrarErro(mensagem) {
+    elCarregando.style.display = 'none';
+    elErroTexto.textContent = mensagem;
+    elErro.style.display = '';
+  }
+
+  if (!token) {
+    mostrarErro('Link inválido — falta o token de acesso.');
+    return;
+  }
+
+  try {
+    const resposta = await fetch(`/api/cotacoes/convite/${encodeURIComponent(token)}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      mostrarErro(dados.erro || 'Link inválido.');
+      return;
+    }
+
+    if (dados.status !== 'aberta' || dados.expirado) {
+      elCarregando.style.display = 'none';
+      if (dados.status === 'aberta' && dados.expirado) {
+        mostrarErro('O prazo pra responder essa cotação já venceu.');
+      } else {
+        elObrigado.style.display = '';
+      }
+      return;
+    }
+
+    document.getElementById('cotacao-publica-titulo').textContent = dados.cotacaoTitulo || 'Preencher cotação de preços';
+    document.getElementById('cotacao-publica-subtitulo').textContent = `Válido até ${new Date(dados.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+
+    const container = document.getElementById('cotacao-publica-itens');
+    container.innerHTML = dados.itens.map((item) => `
+      <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
+        <td class="font-bold">${escaparHtml(item.nome)}</td>
+        <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '—')}</div></td>
+        <td><div class="contagem-item-somente-leitura">${item.quantidade} ${escaparHtml(item.unidadeMedida)}</div></td>
+        <td><input type="number" step="0.01" min="0.01" placeholder="0,00" data-insumo-id="${item.insumoId}"></td>
+        <td style="text-align:center;"><input type="checkbox" data-nao-vende-id="${item.insumoId}"></td>
+      </tr>
+    `).join('');
+
+    container.querySelectorAll('[data-nao-vende-id]').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        const input = container.querySelector(`[data-insumo-id="${checkbox.dataset.naoVendeId}"]`);
+        input.disabled = checkbox.checked;
+        if (checkbox.checked) input.value = '';
+      });
+    });
+
+    document.getElementById('cotacao-publica-busca').addEventListener('input', (evento) => {
+      const termo = evento.target.value.trim().toLowerCase();
+      container.querySelectorAll('tr').forEach((linha) => {
+        linha.style.display = !termo || linha.dataset.nomeBusca.includes(termo) ? '' : 'none';
+      });
+    });
+
+    elCarregando.style.display = 'none';
+    form.style.display = '';
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const precos = {};
+      container.querySelectorAll('[data-insumo-id]').forEach((input) => {
+        if (!input.disabled && input.value !== '') precos[input.dataset.insumoId] = input.value;
+      });
+      if (!Object.keys(precos).length) {
+        alert('Preencha o preço de pelo menos um item, ou marque todos como "não vendo esse item".');
+        return;
+      }
+      const btn = document.getElementById('btn-cotacao-publica-enviar');
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/api/cotacoes/convite/${encodeURIComponent(token)}/responder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ precos }),
+        });
+        const respDados = await resp.json();
+        if (!resp.ok) throw new Error(respDados.erro || 'falha ao enviar');
+        form.style.display = 'none';
+        elObrigado.style.display = '';
+      } catch (erro) {
+        console.error('Falha ao enviar cotação:', erro);
+        alert(erro.message || 'Não foi possível enviar a cotação.');
+        btn.disabled = false;
+      }
+    });
+  } catch (erro) {
+    console.error('Falha ao carregar cotação pública:', erro);
+    mostrarErro('Não foi possível carregar essa cotação agora.');
   }
 }
 

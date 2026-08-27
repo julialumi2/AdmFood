@@ -92,6 +92,10 @@ from backend.armazenamento import (
     avancar_status_pedido,
     ESTAGIOS_PEDIDO,
     listar_historico_compras,
+    criar_convites_cotacao,
+    listar_convites_cotacao,
+    buscar_convite_por_token,
+    responder_convite_cotacao,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -198,7 +202,7 @@ _criar_equipe_inicial_se_necessario()
 
 # --- LOGIN ------------------------------------------------------------------
 
-PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html"}
+PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html", "preencher_cotacao.html"}
 ROTAS_API_PUBLICAS = {"/api/login"}
 
 
@@ -217,7 +221,11 @@ def _exigir_login():
         # Rota de contagem por token: autenticação é o próprio token (opaco,
         # aleatório), não sessão de login — é o link mandado pro funcionário
         # da loja preencher sem precisar de conta no sistema (ver seção 9).
-        if caminho in ROTAS_API_PUBLICAS or caminho.startswith('/api/contagens/token/'):
+        if (
+            caminho in ROTAS_API_PUBLICAS
+            or caminho.startswith('/api/contagens/token/')
+            or caminho.startswith('/api/cotacoes/convite/')
+        ):
             return
         if not _usuario_logado():
             return jsonify({"erro": "Não autenticado."}), 401
@@ -1495,6 +1503,106 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
         return erro_admin
 
     selecionar_preco_cotacao(preco_id)
+    return jsonify({"ok": True})
+
+
+def _formatar_convite(convite):
+    return {
+        "id": convite["id"],
+        "fornecedorId": convite["fornecedor_id"],
+        "fornecedorNome": convite["fornecedor_nome"],
+        "prazoValidade": convite["prazo_validade"],
+        "status": convite["status"],
+        "criadoEm": convite["criado_em"],
+        "respondidaEm": convite["respondida_em"],
+        "token": convite["token"],
+    }
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/convites', methods=['GET'])
+def api_listar_convites_cotacao(cotacao_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"convites": [_formatar_convite(c) for c in listar_convites_cotacao(cotacao_id)]})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/convites', methods=['POST'])
+def api_criar_convites_cotacao(cotacao_id):
+    """Manda o link de preenchimento pra todo fornecedor ativo, pros
+    insumos dessa cotação que ainda não têm fornecedor vinculado (ver
+    `criar_convites_cotacao` em armazenamento.py pra regra completa)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    cotacao = buscar_cotacao(cotacao_id)
+    if not cotacao:
+        return jsonify({"erro": "Cotação não encontrada."}), 404
+
+    dados = request.get_json(silent=True) or {}
+    prazo_validade = (dados.get('prazoValidade') or '').strip()
+    if not prazo_validade:
+        return jsonify({"erro": "Informe o prazo de validade do convite."}), 400
+
+    resultado = criar_convites_cotacao(cotacao_id, prazo_validade)
+    if resultado["insumosSemFornecedor"] == 0:
+        return jsonify({"erro": "Todos os insumos dessa cotação já têm fornecedor vinculado — não há nada pra cotar em aberto."}), 400
+    return jsonify({"ok": True, **resultado})
+
+
+@app.route('/api/cotacoes/convite/<token>', methods=['GET'])
+def api_buscar_convite_por_token(token):
+    # Pública (sem login) — ver exceção em _exigir_login.
+    convite = buscar_convite_por_token(token)
+    if not convite:
+        return jsonify({"erro": "Link inválido."}), 404
+
+    resposta = _formatar_convite(convite)
+    resposta.pop('token', None)
+    resposta['cotacaoTitulo'] = convite['cotacao_titulo']
+    resposta['itens'] = [
+        {
+            "insumoId": item["insumo_id"],
+            "nome": item["nome"],
+            "categoria": item["categoria"],
+            "unidadeMedida": item["unidade_medida"],
+            "marcaHomologada": item["marca_homologada"],
+            "quantidade": item["quantidade_total"],
+            "precoPreenchido": item["preco_preenchido"],
+        }
+        for item in convite["itens"]
+    ]
+    resposta['expirado'] = convite['status'] == 'aberta' and _prazo_vencido(convite['prazo_validade'])
+    return jsonify(resposta)
+
+
+@app.route('/api/cotacoes/convite/<token>/responder', methods=['POST'])
+def api_responder_convite_cotacao(token):
+    # Pública (sem login) — mesma exceção acima.
+    convite = buscar_convite_por_token(token)
+    if not convite:
+        return jsonify({"erro": "Link inválido."}), 404
+    if convite['status'] != 'aberta':
+        return jsonify({"erro": "Essa cotação já foi respondida."}), 400
+    if _prazo_vencido(convite['prazo_validade']):
+        return jsonify({"erro": "O prazo pra responder essa cotação já venceu."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    precos_brutos = dados.get('precos') or {}
+    precos = {}
+    try:
+        for insumo_id, preco in precos_brutos.items():
+            if preco is None or preco == '':
+                continue
+            preco_float = float(preco)
+            if preco_float <= 0:
+                return jsonify({"erro": "Preço precisa ser maior que zero."}), 400
+            precos[int(insumo_id)] = preco_float
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Preço inválido."}), 400
+
+    responder_convite_cotacao(token, precos)
     return jsonify({"ok": True})
 
 

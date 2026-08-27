@@ -570,6 +570,57 @@ logado, mesmo padrão do resto de Cotações). Uma aba "Meus produtos"
 construída no mesmo dia e foi removida a pedido dele logo em seguida —
 sem uso no momento.
 
+**Fornecedor cotando pelo próprio link** (concluído em 2026-08-27 —
+última peça do "núcleo que falta" da seção 9, item 1). Mesmo padrão de
+link sem login por token da Contagem/seção 6.9, mas pro **fornecedor**
+preencher o próprio preço em vez do admin lançar na mão. Só existe pra
+cotação que veio de uma Requisição (tem `cotacao_item`, ou seja, tem
+quantidade calculada) — cotação lançada na mão continua só manual.
+
+Decisão de escopo do Guilherme em 2026-08-27, depois de ver o link real
+que a VMarket manda pro fornecedor (link de exemplo trazido por ele,
+`cotacao.vmarket.com.br/preencher/...`): **o sistema não tenta adivinhar
+quem cota o quê por vínculo** — o botão "Convidar fornecedores" manda o
+link pra **todo fornecedor ativo**, só dos insumos da cotação que ainda
+**não têm nenhum fornecedor vinculado** (`insumo_fornecedor` vazio pra
+aquele insumo — "sem fornecedor homologado"); insumo que já tem
+fornecedor vinculado continua sendo cotado na mão como sempre. Dentro do
+link, é o **próprio fornecedor** quem decide, insumo por insumo, se vende
+ou não — preenche o preço de quem vende e marca "não vendo esse item" pra
+quem não faz parte do catálogo dele (não bloqueia o resto da cotação).
+Ficaram de fora por decisão dele (extras que a VMarket tem e podem virar
+pedido separado depois): fornecedor sugerir marca diferente da
+homologada, marcar "produto em falta", escolher unidade/gramatura do
+próprio preço, anexar arquivo, e observação geral/por item.
+
+Tabelas: `cotacao_convite` (id, cotacao_id, fornecedor_id, token único,
+prazo_validade, status `aberta`/`respondida`, criado_em, respondida_em —
+`UNIQUE(cotacao_id, fornecedor_id)` pra não duplicar convite do mesmo
+fornecedor se "Convidar fornecedores" for clicado de novo, só cobre quem
+ainda não tinha) e `cotacao_convite_item` (convite_id, insumo_id) — fixa a
+lista de insumos no momento do convite, pra não mudar debaixo do
+fornecedor se alguém vincular um fornecedor novo depois de já ter mandado
+o link. Resposta do fornecedor grava direto em `cotacao_preco` (mesma
+tabela/mecanismo da cotação manual — reaproveita `adicionar_preco_cotacao`
+sem duplicar lógica), então cai automaticamente na mesma tela de
+comparação. Uma vez respondido, o convite fica travado (pergunta 18 do
+roteiro de compras: fornecedor não edita depois de enviar) — reabrir o
+mesmo link só mostra "obrigado". Se o prazo vencer sem resposta, mostra
+"prazo venceu" e a cotação segue sem o preço dele, sem travar nada
+(pergunta 19). Fornecedor só vê o próprio preço, nunca o dos concorrentes
+(pergunta 20b) — o link não expõe `cotacao_preco` de ninguém.
+
+Tela pública nova `preencher_cotacao.html` (reaproveita o CSS de
+`preencher_contagem.css` — layout genérico de "página pública por token",
+não é específico de contagem apesar do nome do arquivo). Rotas: `POST
+/api/cotacoes/<id>/convites` (admin, manda os convites), `GET
+/api/cotacoes/<id>/convites` (admin, lista pra tabela "Convites enviados"
+na tela de Cotações, com botão "Copiar link" por fornecedor), `GET
+/api/cotacoes/convite/<token>` e `POST
+/api/cotacoes/convite/<token>/responder` (públicas — token é a própria
+autenticação, mesma exceção de `/api/contagens/token/` em
+`_exigir_login`).
+
 ### 6.9 Contagem de estoque por link + Requisição (núcleo do fluxo Compras)
 
 Tela `contagens.html` — VMarket-style: gera um **link sem login** (token
@@ -902,17 +953,17 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 
    **Inventário completo da VMarket** (levantado navegando pelo próprio sistema em 2026-08-25, item por item, pra saber o que vale a pena replicar):
    - ✅ **Já replicado nativamente**: catálogo de insumos (160 importados), fornecedores (69 importados, com pedido mínimo), vínculo insumo↔fornecedor + homologação de marca, cotação manual (lança preço por insumo/fornecedor, compara, destaca mais barato), quantidade ideal (consumo médio × 7 dias) + sugestão de compra.
-   - 🔲 **Núcleo que falta** (o motivo de toda essa investigação — fluxo real: Requisição → Contagem → Cotação → Pedido → Recebimento):
+   - ✅ **Núcleo do fluxo Compras** — concluído em 2026-08-27 (o motivo de toda essa investigação — fluxo real: Requisição → Contagem → Cotação → Pedido → Recebimento):
      - ✅ **Requisição + Contagem por loja** — concluído em 2026-08-26 (decisão de acesso: link por token, sem login, estilo VMarket — ver seção 6.9). Requisição abre o ciclo em várias lojas de uma vez (título + prazo compartilhados), gerando uma contagem/link por loja selecionada; funcionário preenche a quantidade atual de cada insumo do seu setor pelo link; admin confere e aprova antes de virar quantidade real em estoque.
      - ✅ **Área de conferência** — concluída em 2026-08-26 (ver seção 6.9). Visão somando o preenchido e a quantidade ideal das várias lojas de uma mesma requisição, com aviso de quem ainda falta responder, e um botão pra aprovar todas as lojas prontas de uma vez.
      - ✅ **Geração automática da cotação** a partir do déficit (ideal − atual) — concluída em 2026-08-27 (ver seção 6.9). Botão "Gerar cotação" na conferência da requisição (só habilitado com todas as lojas aprovadas) cria a cotação já com a quantidade calculada por insumo (arredondada pra cima, pulando quem já está no ideal ou sem ideal calculável), preservando a quebra por loja por baixo mesmo mostrando os insumos juntos na tela.
      - ✅ **Pedido** (VMarket: Compras → Meus Pedidos / Cadastrar Pedido Manual / Agenda de Recebimento) — concluído em 2026-08-27 (ver seção 6.9). Botão "Gerar pedidos" na tela de Cotações fecha os insumos já com vencedor escolhido em pedido(s) de compra, um por fornecedor+loja; tela nova `pedidos.html` acompanha 4 estágios de entrega (Pedido enviado → Confirmado → A caminho → Recebido) e avisa quando o pedido fica abaixo do mínimo do fornecedor, sem bloquear nada.
-     - **Fornecedor cotando os próprios produtos** — hoje é a Julia/Kethllyn que digita o preço de cada fornecedor manualmente; a VMarket manda um link individual pro fornecedor preencher. Mesmo padrão de link por token da Contagem (seção 6.9) deve resolver.
+     - ✅ **Fornecedor cotando os próprios produtos** — concluído em 2026-08-27 (ver seção 6.9). Botão "Convidar fornecedores" manda link sem login pra todo fornecedor ativo, só dos insumos ainda sem fornecedor vinculado; cada fornecedor decide na hora, item por item, se vende ou não.
    - 🔻 **Existe na VMarket mas não configurado/usado por vocês hoje** (baixa prioridade — replicar seria trabalho sem necessidade comprovada): **Orçamento** (Config. Orçamento + Desvio Padrão — zero registros cadastrados); **Financeiro/Nota Fiscal** (concilia XML de nota fiscal contra pedido de compra — zero notas processadas; dependeria de integração fiscal, domínio novo).
    - ❌ **Não aplicável** (recursos da própria VMarket como marketplace, não replicáveis num sistema interno): **Guia de Fornecedores** (diretório de fornecedores parceiros da própria VMarket, pra descobrir fornecedor novo — não é o cadastro de vocês); **Shopping VMarket** (catálogo de compra direto de fornecedores parceiros da VMarket, com carrinho — depende da rede de distribuidores deles); **Lançar Faturamento** (input manual de faturamento mensal pra alimentar o CMV/Curva ABC do dashboard deles — o AdmFood já tem faturamento diário sincronizado automaticamente da Cardápio Web, mais granular que isso).
    - 📊 **Dashboard da VMarket** (não replicado ainda, mas pode inspirar métricas futuras): Curva ABC de produtos/fornecedores (participação % em compras), total em compras, economia potencial de cotações, CMV global, tempo de resposta do fornecedor / de cotação pra pedido / de pedido até entrega, solicitações emergenciais, orçado x realizado por filial.
 
-   Fase 1 (cadastro de fornecedores, seção 6.7), Fase 2 (cotação manual + comparação por insumo, seção 6.8) e vínculo insumo↔fornecedor/marca homologada ✅ concluídas em 2026-08-25. Faltam as peças do "núcleo que falta" acima, na ordem: decidir o modelo de acesso (login "equipe" por loja + token por cotação pra fornecedor), depois requisição → contagem → conferência → geração automática → pedido/recebimento.
+   Fase 1 (cadastro de fornecedores, seção 6.7), Fase 2 (cotação manual + comparação por insumo, seção 6.8) e vínculo insumo↔fornecedor/marca homologada ✅ concluídas em 2026-08-25. Núcleo do fluxo Compras (Requisição → Contagem → Conferência → Geração automática de cotação → Pedido → Fornecedor cotando pelo link) ✅ concluído em 2026-08-27. Fica faltando só o que estiver em 🔻/❌/📊 acima (baixa prioridade ou não aplicável).
 2. **Relatório via WhatsApp** — integração com a API do WhatsApp Business pra enviar relatórios. Aguardando confirmação de acesso/credenciais da API.
 3. **ClickUp** — ✅ concluído em 2026-08-17 (backend real + Kanban persistente, ver seção 7).
 4. **Acessos da equipe** — ✅ concluído em 2026-08-19 (login individual por pessoa, com senha — ver seção 8). Landing page e cadastro público ficam **de propósito** atrás do login por enquanto (decisão da Julia: sistema é só interno, sem necessidade de porta pública ainda).

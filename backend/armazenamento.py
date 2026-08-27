@@ -385,6 +385,42 @@ def inicializar_banco():
             """
         )
 
+        # Convite de cotação por link (sem login) — pro fornecedor preencher
+        # o próprio preço, mesmo padrão de token da Contagem. Só é mandado
+        # pra insumo sem nenhum fornecedor vinculado ainda (ver
+        # `mapa_insumo_fornecedores`): quem já tem fornecedor homologado
+        # continua sendo cotado na mão. O sistema não filtra quem cota o
+        # quê — o link vai pra TODOS os fornecedores ativos, e cada um
+        # decide por insumo se vende ou não (decisão do Guilherme,
+        # 2026-08-27: mais simples que tentar adivinhar por vínculo).
+        # `cotacao_convite_item` fixa a lista de insumos no momento do
+        # convite, pra não mudar debaixo do fornecedor se alguém vincular
+        # um fornecedor novo depois de já ter mandado o link.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao_convite (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cotacao_id INTEGER NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                prazo_validade TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'aberta',
+                criado_em TEXT NOT NULL,
+                respondida_em TEXT,
+                UNIQUE (cotacao_id, fornecedor_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao_convite_item (
+                convite_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                PRIMARY KEY (convite_id, insumo_id)
+            )
+            """
+        )
+
         # Pedido de compra — nasce da cotação depois que ela é fechada com um
         # vencedor por insumo (etapa manual, não automática — resposta da
         # Kethllyn no roteiro, q23). Um pedido é por (fornecedor, loja): o
@@ -1443,6 +1479,128 @@ def selecionar_preco_cotacao(preco_id):
             (linha["cotacao_id"], linha["insumo_id"]),
         )
         conn.execute("UPDATE cotacao_preco SET selecionado = 1 WHERE id = ?", (preco_id,))
+
+
+def _insumos_sem_fornecedor_vinculado(cotacao_id):
+    """Insumos dessa cotação que ainda não têm nenhum fornecedor vinculado
+    — só esses entram no convite aberto pra todo mundo cotar."""
+    mapa = mapa_insumo_fornecedores()
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT insumo_id FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,)
+        ).fetchall()
+    return [linha["insumo_id"] for linha in linhas if not mapa.get(linha["insumo_id"])]
+
+
+def criar_convites_cotacao(cotacao_id, prazo_validade):
+    """Manda o link de preenchimento pra TODO fornecedor ativo (não filtra
+    por vínculo — decisão do Guilherme em 2026-08-27: o próprio fornecedor
+    decide por insumo se vende ou não dentro do link, em vez do sistema
+    tentar adivinhar). Só considera insumo sem fornecedor vinculado ainda;
+    quem já tem, continua sendo cotado na mão. Fornecedor que já tem
+    convite pra essa cotação não recebe outro (evita resetar o token de
+    quem já está respondendo ou já respondeu)."""
+    insumo_ids = _insumos_sem_fornecedor_vinculado(cotacao_id)
+    if not insumo_ids:
+        return {"convites": [], "insumosSemFornecedor": 0}
+
+    fornecedores = [f for f in listar_fornecedores() if f["ativo"]]
+    agora = datetime.now().isoformat()
+    convites = []
+    with conexao() as conn:
+        existentes = {
+            linha["fornecedor_id"]
+            for linha in conn.execute(
+                "SELECT fornecedor_id FROM cotacao_convite WHERE cotacao_id = ?", (cotacao_id,)
+            ).fetchall()
+        }
+        for fornecedor in fornecedores:
+            if fornecedor["id"] in existentes:
+                continue
+            token = secrets.token_urlsafe(24)
+            cursor = conn.execute(
+                """
+                INSERT INTO cotacao_convite (cotacao_id, fornecedor_id, token, prazo_validade, status, criado_em)
+                VALUES (?, ?, ?, ?, 'aberta', ?)
+                """,
+                (cotacao_id, fornecedor["id"], token, prazo_validade, agora),
+            )
+            convite_id = cursor.lastrowid
+            for insumo_id in insumo_ids:
+                conn.execute(
+                    "INSERT INTO cotacao_convite_item (convite_id, insumo_id) VALUES (?, ?)",
+                    (convite_id, insumo_id),
+                )
+            convites.append({"id": convite_id, "fornecedorId": fornecedor["id"], "fornecedorNome": fornecedor["nome"], "token": token})
+
+    return {"convites": convites, "insumosSemFornecedor": len(insumo_ids)}
+
+
+def listar_convites_cotacao(cotacao_id):
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT cc.id, cc.fornecedor_id, cc.token, cc.prazo_validade, cc.status, cc.criado_em, cc.respondida_em,
+                   f.nome AS fornecedor_nome
+            FROM cotacao_convite cc
+            JOIN fornecedor f ON f.id = cc.fornecedor_id
+            WHERE cc.cotacao_id = ?
+            ORDER BY f.nome
+            """,
+            (cotacao_id,),
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def buscar_convite_por_token(token):
+    with conexao() as conn:
+        linha = conn.execute(
+            """
+            SELECT cc.id, cc.cotacao_id, cc.fornecedor_id, cc.token, cc.prazo_validade, cc.status, cc.criado_em, cc.respondida_em,
+                   f.nome AS fornecedor_nome, c.titulo AS cotacao_titulo
+            FROM cotacao_convite cc
+            JOIN fornecedor f ON f.id = cc.fornecedor_id
+            JOIN cotacao c ON c.id = cc.cotacao_id
+            WHERE cc.token = ?
+            """,
+            (token,),
+        ).fetchone()
+        if not linha:
+            return None
+        convite = dict(linha)
+        itens = conn.execute(
+            """
+            SELECT cci.insumo_id, i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
+                   ci.quantidade_total, cp.preco AS preco_preenchido
+            FROM cotacao_convite_item cci
+            JOIN insumo i ON i.id = cci.insumo_id
+            LEFT JOIN cotacao_item ci ON ci.cotacao_id = ? AND ci.insumo_id = cci.insumo_id
+            LEFT JOIN cotacao_preco cp ON cp.cotacao_id = ? AND cp.insumo_id = cci.insumo_id AND cp.fornecedor_id = ?
+            WHERE cci.convite_id = ?
+            ORDER BY i.nome
+            """,
+            (convite["cotacao_id"], convite["cotacao_id"], convite["fornecedor_id"], convite["id"]),
+        ).fetchall()
+        convite["itens"] = [dict(item) for item in itens]
+        return convite
+
+
+def responder_convite_cotacao(token, precos):
+    """`precos` = {insumo_id: preco}, só com quem o fornecedor realmente
+    preencheu — quem ele marcou como "não vendo" nem chega aqui. Uma vez
+    respondido, o convite fica travado (pergunta 18 do roteiro): não dá
+    pra chamar de novo pelo mesmo token."""
+    convite = buscar_convite_por_token(token)
+    if not convite or convite["status"] != "aberta":
+        return False
+    for insumo_id, preco in precos.items():
+        adicionar_preco_cotacao(convite["cotacao_id"], int(insumo_id), convite["fornecedor_id"], preco)
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE cotacao_convite SET status = 'respondida', respondida_em = ? WHERE token = ?",
+            (datetime.now().isoformat(), token),
+        )
+    return True
 
 
 ESTAGIOS_PEDIDO = ['enviado', 'confirmado', 'a_caminho', 'recebido']
