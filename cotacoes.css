@@ -6,7 +6,9 @@
    só vale pros filhos diretos dele, então cada aba precisa do próprio
    flex+gap pra não grudar os chart-cards um no outro. */
 #cotacoes-painel-cotacoes,
-#cotacoes-painel-compras {
+#cotacoes-painel-compras,
+#cotacoes-lista-view,
+#cotacoes-detalhe-view {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
