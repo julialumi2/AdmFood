@@ -76,6 +76,8 @@ from backend.armazenamento import (
     listar_itens_contagem,
     responder_contagem,
     aprovar_contagem,
+    salvar_ajuste_quantidade_ideal,
+    excluir_ajuste_quantidade_ideal,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1567,12 +1569,15 @@ def api_conferencia_requisicao():
                 "preenchidoTotal": 0.0,
                 "idealTotal": 0.0,
                 "temIdeal": False,
+                "algumAjustado": False,
             })
             if item['quantidadePreenchida'] is not None:
                 agregado['preenchidoTotal'] += item['quantidadePreenchida']
             if item['quantidadeIdeal'] is not None:
                 agregado['idealTotal'] += item['quantidadeIdeal']
                 agregado['temIdeal'] = True
+            if item.get('quantidadeIdealAjustada'):
+                agregado['algumAjustado'] = True
 
     itens = []
     for agregado in agregados.values():
@@ -1584,6 +1589,7 @@ def api_conferencia_requisicao():
             "unidadeMedida": agregado['unidadeMedida'],
             "preenchidoTotal": round(agregado['preenchidoTotal'], 2),
             "idealTotal": round(agregado['idealTotal'], 2) if agregado['temIdeal'] else None,
+            "idealAjustado": agregado['algumAjustado'],
             "deficit": max(deficit, 0) if deficit is not None else None,
         })
     itens.sort(key=lambda i: (i['deficit'] is None, -(i['deficit'] or 0), i['nome']))
@@ -1662,6 +1668,45 @@ def api_aprovar_contagem(contagem_id):
         return jsonify({"erro": "Essa contagem já foi aprovada."}), 400
 
     aprovar_contagem(contagem_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/<int:insumo_id>/quantidade-ideal', methods=['PUT'])
+def api_ajustar_quantidade_ideal(insumo_id):
+    """Sobrescreve manualmente a quantidade ideal calculada, quando o
+    número não bate com o que a Kethllyn sabe da realidade da loja (ver
+    seção 9 da documentação, 'Quantidade ideal inteligente')."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    dados = request.get_json(silent=True) or {}
+    try:
+        valor = float(dados.get('valor'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Informe um valor numérico."}), 400
+    if valor < 0:
+        return jsonify({"erro": "O valor não pode ser negativo."}), 400
+
+    salvar_ajuste_quantidade_ideal(loja, insumo_id, valor)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/<int:insumo_id>/quantidade-ideal', methods=['DELETE'])
+def api_remover_ajuste_quantidade_ideal(insumo_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    excluir_ajuste_quantidade_ideal(loja, insumo_id)
     return jsonify({"ok": True})
 
 

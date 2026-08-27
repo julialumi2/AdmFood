@@ -394,6 +394,17 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ajuste_quantidade_ideal (
+                loja TEXT NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                valor_ajustado REAL NOT NULL,
+                atualizado_em TEXT NOT NULL,
+                PRIMARY KEY (loja, insumo_id)
+            )
+            """
+        )
 
 
 def salvar_resumo_do_dia(unidade, dia_iso, resumo):
@@ -1425,11 +1436,50 @@ def buscar_contagem(contagem_id):
         return dict(linha) if linha else None
 
 
+def salvar_ajuste_quantidade_ideal(loja, insumo_id, valor_ajustado):
+    """Sobrescreve a quantidade ideal calculada (consumo médio × 7 dias) por
+    um valor que a Kethllyn decidiu na mão, quando ela acha que o cálculo
+    não bate com a realidade — sobrevive a novos recálculos até ela remover
+    o ajuste (mesmo padrão do ajuste manual de faturamento por canal)."""
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO ajuste_quantidade_ideal (loja, insumo_id, valor_ajustado, atualizado_em)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (loja, insumo_id) DO UPDATE SET
+                valor_ajustado = excluded.valor_ajustado,
+                atualizado_em = excluded.atualizado_em
+            """,
+            (loja, insumo_id, valor_ajustado, agora),
+        )
+
+
+def excluir_ajuste_quantidade_ideal(loja, insumo_id):
+    """Remove o ajuste manual — volta a mostrar o valor calculado."""
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM ajuste_quantidade_ideal WHERE loja = ? AND insumo_id = ?",
+            (loja, insumo_id),
+        )
+
+
+def _mapa_ajustes_quantidade_ideal(loja):
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT insumo_id, valor_ajustado FROM ajuste_quantidade_ideal WHERE loja = ?",
+            (loja,),
+        ).fetchall()
+        return {linha["insumo_id"]: linha["valor_ajustado"] for linha in linhas}
+
+
 def listar_itens_contagem(contagem_id, loja):
-    """Itens da contagem + quantidade ideal (consumo médio × 7 dias) pra
+    """Itens da contagem + quantidade ideal (consumo médio × 7 dias, ou o
+    ajuste manual da Kethllyn quando existir um pra esse insumo/loja) pra
     servir de referência tanto na tela pública de preenchimento quanto na
     conferência — mesmo cálculo de DIAS_COBERTURA_IDEAL do front."""
     mapa_consumo = _mapa_consumo_medio_loja(loja)
+    mapa_ajustes = _mapa_ajustes_quantidade_ideal(loja)
     with conexao() as conn:
         linhas = conn.execute(
             """
@@ -1445,8 +1495,12 @@ def listar_itens_contagem(contagem_id, loja):
 
     itens = []
     for linha in linhas:
-        consumo_medio = mapa_consumo.get(linha["insumo_id"])
-        quantidade_ideal = round(consumo_medio * DIAS_COBERTURA_IDEAL, 2) if consumo_medio is not None else None
+        ajustada = linha["insumo_id"] in mapa_ajustes
+        if ajustada:
+            quantidade_ideal = mapa_ajustes[linha["insumo_id"]]
+        else:
+            consumo_medio = mapa_consumo.get(linha["insumo_id"])
+            quantidade_ideal = round(consumo_medio * DIAS_COBERTURA_IDEAL, 2) if consumo_medio is not None else None
         itens.append({
             "insumoId": linha["insumo_id"],
             "nome": linha["nome"],
@@ -1455,6 +1509,7 @@ def listar_itens_contagem(contagem_id, loja):
             "marcaHomologada": linha["marca_homologada"],
             "quantidadePreenchida": linha["quantidade_preenchida"],
             "quantidadeIdeal": quantidade_ideal,
+            "quantidadeIdealAjustada": ajustada,
         })
     return itens
 

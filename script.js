@@ -2003,6 +2003,9 @@ function renderContagemDetalhe() {
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovar) btnAprovar.disabled = c.status !== 'respondida';
 
+  const thAcoes = document.getElementById('contagem-detalhe-th-acoes');
+  if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+
   const tbody = document.getElementById('contagem-detalhe-tabela-body');
   tbody.innerHTML = c.itens.map((item) => {
     const preenchido = item.quantidadePreenchida;
@@ -2013,12 +2016,85 @@ function renderContagemDetalhe() {
         <td class="font-bold">${escaparHtml(item.nome)}</td>
         <td class="text-muted">${escaparHtml(item.categoria)}</td>
         <td>${preenchido === null ? '<span class="text-muted">não preenchido</span>' : `${preenchido} ${escaparHtml(item.unidadeMedida)}`}</td>
-        <td>${ideal === null ? '<span class="text-muted">—</span>' : `${ideal} ${escaparHtml(item.unidadeMedida)}`}</td>
+        <td>${ideal === null ? '<span class="text-muted">—</span>' : `${ideal} ${escaparHtml(item.unidadeMedida)}`}${item.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}</td>
         <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${deficit} ${escaparHtml(item.unidadeMedida)}</span>` : '—')}</td>
+        ${isAdmin ? `
+          <td class="acoes-linha">
+            <button type="button" class="btn-acao-icone" data-acao="ajustar-ideal" data-insumo-id="${item.insumoId}" title="Ajustar quantidade ideal">
+              <i data-lucide="pencil"></i>
+            </button>
+          </td>
+        ` : ''}
       </tr>
     `;
   }).join('');
+
+  tbody.querySelectorAll('[data-acao="ajustar-ideal"]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      const item = c.itens.find((i) => i.insumoId === parseInt(botao.dataset.insumoId, 10));
+      if (item) abrirModalAjusteIdeal(c.loja, item);
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// --- Modal: ajustar quantidade ideal na mão ---
+let ajusteIdealContexto = null; // { loja, insumoId }
+
+function abrirModalAjusteIdeal(loja, item) {
+  ajusteIdealContexto = { loja, insumoId: item.insumoId };
+  document.getElementById('ajuste-ideal-insumo-nome').textContent = `${item.nome} — ${loja}`;
+  document.getElementById('ajuste-ideal-unidade').textContent = item.unidadeMedida;
+  document.getElementById('ajuste-ideal-valor').value = item.quantidadeIdeal !== null ? item.quantidadeIdeal : '';
+  document.getElementById('ajuste-ideal-aviso').style.display = item.quantidadeIdealAjustada ? '' : 'none';
+  document.getElementById('btn-ajuste-ideal-remover').style.display = item.quantidadeIdealAjustada ? '' : 'none';
+  document.getElementById('modal-ajuste-ideal').style.display = 'flex';
+}
+
+function fecharModalAjusteIdeal() {
+  document.getElementById('modal-ajuste-ideal').style.display = 'none';
+  ajusteIdealContexto = null;
+}
+
+document.getElementById('btn-ajuste-ideal-fechar')?.addEventListener('click', fecharModalAjusteIdeal);
+document.getElementById('btn-ajuste-ideal-cancelar')?.addEventListener('click', fecharModalAjusteIdeal);
+
+document.getElementById('form-ajuste-ideal')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!ajusteIdealContexto) return;
+  const { loja, insumoId } = ajusteIdealContexto;
+  const valor = document.getElementById('ajuste-ideal-valor').value;
+  try {
+    const resposta = await fetch(`/api/insumos/${insumoId}/quantidade-ideal?loja=${encodeURIComponent(loja)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ valor: parseFloat(valor) }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao ajustar');
+    fecharModalAjusteIdeal();
+    if (contagemDetalheAtual) await abrirContagemDetalhe(contagemDetalheAtual.id);
+  } catch (erro) {
+    console.error('Falha ao ajustar quantidade ideal:', erro);
+    alert(erro.message || 'Não foi possível salvar o ajuste.');
+  }
+});
+
+document.getElementById('btn-ajuste-ideal-remover')?.addEventListener('click', async () => {
+  if (!ajusteIdealContexto) return;
+  const { loja, insumoId } = ajusteIdealContexto;
+  try {
+    const resposta = await fetch(`/api/insumos/${insumoId}/quantidade-ideal?loja=${encodeURIComponent(loja)}`, { method: 'DELETE' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao remover ajuste');
+    fecharModalAjusteIdeal();
+    if (contagemDetalheAtual) await abrirContagemDetalhe(contagemDetalheAtual.id);
+  } catch (erro) {
+    console.error('Falha ao remover ajuste:', erro);
+    alert(erro.message || 'Não foi possível remover o ajuste.');
+  }
+});
 
 document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => {
   document.getElementById('contagens-detalhe-view').style.display = 'none';
@@ -2176,7 +2252,7 @@ function renderConferenciaRequisicao() {
       <td class="font-bold">${escaparHtml(item.nome)}</td>
       <td class="text-muted">${escaparHtml(item.categoria)}</td>
       <td>${item.preenchidoTotal} ${escaparHtml(item.unidadeMedida)}</td>
-      <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${item.idealTotal} ${escaparHtml(item.unidadeMedida)}`}</td>
+      <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${item.idealTotal} ${escaparHtml(item.unidadeMedida)}`}${item.idealAjustado ? ' <span class="badge-pill neu-orange" title="Alguma loja tem ajuste manual">ajustado</span>' : ''}</td>
       <td>${item.deficit === null ? '<span class="text-muted">—</span>' : (item.deficit > 0 ? `<span class="badge-pill neg">comprar ${item.deficit} ${escaparHtml(item.unidadeMedida)}</span>` : '—')}</td>
     </tr>
   `).join('');

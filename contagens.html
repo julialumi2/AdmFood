@@ -313,6 +313,7 @@
                   <th>Preenchido</th>
                   <th>Qtd. ideal (7 dias)</th>
                   <th>Déficit</th>
+                  <th id="contagem-detalhe-th-acoes" style="display:none;">Ações</th>
                 </tr>
               </thead>
               <tbody id="contagem-detalhe-tabela-body">
@@ -371,6 +372,31 @@
         <div class="modal-actions">
           <button type="button" class="btn-secondary-sm" id="btn-contagem-link-fechar-2">Fechar</button>
         </div>
+      </div>
+    </div>
+
+    <!-- MODAL: AJUSTAR QUANTIDADE IDEAL NA MÃO -->
+    <div class="modal-overlay" id="modal-ajuste-ideal" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Ajustar quantidade ideal</h3>
+          <button type="button" class="btn-close" id="btn-ajuste-ideal-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);" id="ajuste-ideal-insumo-nome"></p>
+        <form id="form-ajuste-ideal">
+          <div class="form-group">
+            <label for="ajuste-ideal-valor">Quantidade ideal (<span id="ajuste-ideal-unidade"></span>)</label>
+            <input type="number" step="0.01" min="0" id="ajuste-ideal-valor" required>
+          </div>
+          <p class="panel-subtitle" id="ajuste-ideal-aviso" style="display:none;">
+            Esse valor foi ajustado manualmente — fica assim até você removê-lo, mesmo que o cálculo automático mude.
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-ajuste-ideal-remover" style="display:none;">Voltar pro calculado</button>
+            <button type="button" class="btn-secondary-sm" id="btn-ajuste-ideal-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Salvar</button>
+          </div>
+        </form>
       </div>
     </div>
   </div> <!-- /dashboard-wrapper -->

@@ -601,9 +601,24 @@ preencher). O botão "Aprovar todas as lojas" chama `aprovar_contagem` pra
 cada contagem `respondida` do grupo de uma vez, em vez de aprovar loja por
 loja na tela de detalhe.
 
+**Ajuste manual da quantidade ideal** (concluído em 2026-08-27, primeira
+peça da "Quantidade ideal inteligente" — respostas da Kethllyn no roteiro
+de compras confirmaram manter a conta simples/visível e só permitir
+sobrescrever na mão quando ela achar o número errado). Tabela
+`ajuste_quantidade_ideal` (loja, insumo_id, valor_ajustado) — mesmo padrão
+de sobrescrita em tempo de leitura do `ajuste_faturamento_canal` (seção
+6.3): sobrevive a novos recálculos até ela remover. Aplicado dentro de
+`listar_itens_contagem`, então vale automaticamente na tela de detalhe da
+contagem, na conferência somada da requisição e na tela pública de
+preenchimento — sem precisar editar em três lugares. O ícone de editar só
+aparece na tela de detalhe de uma contagem (não na visão somada, mesma
+razão do Estoque: editar um valor por loja não faz sentido numa linha que
+já é a soma de várias lojas).
+
 Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
 /api/contagens/<id>` (detalhe de uma loja pra conferência, admin), `POST
-/api/contagens/<id>/aprovar` (admin), `GET /api/contagens/token/<token>` e
+/api/contagens/<id>/aprovar` (admin), `PUT/DELETE
+/api/insumos/<id>/quantidade-ideal?loja=` (ajuste manual, admin), `GET /api/contagens/token/<token>` e
 `POST /api/contagens/token/<token>/responder` (públicas — token é a própria
 autenticação, ver exceção em `ROTAS_API_PUBLICAS`/`PAGINAS_PUBLICAS` em
 `app.py`); `GET /api/requisicoes` (lista os grupos, admin), `GET
