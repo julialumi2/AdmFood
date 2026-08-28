@@ -762,6 +762,20 @@ insumo. `renderCotacaoComparacao` (script.js) mostra, acima da lista de
 preços de cada insumo, o total a comprar e a quebra por loja
 (`Comprar 12 g — Loja A: 8 g · Loja B: 4 g`).
 
+**Idempotente contra clique duplo** (concluído em 2026-08-28, risco real
+que ela levantou revisando o fluxo: clicar duas vezes em "Gerar cotação",
+ou em "Fazer Cotação/Pedido" da última loja, criava **duas cotações
+duplicadas** com os mesmos insumos). `cotacao` ganhou duas colunas,
+`requisicao_titulo`/`requisicao_prazo` (migração via `ALTER TABLE`, só
+preenchidas quando a cotação nasce de `gerar_cotacao_do_deficit` — uma
+cotação lançada na mão fica com elas `NULL`). Não dá pra usar o `titulo`
+puro pra detectar duplicata porque ele pode ser editado depois
+(`atualizar_cotacao`) e deixaria de bater; essas duas colunas ficam
+travadas no valor original da requisição pra sempre. Antes de gerar,
+`gerar_cotacao_do_deficit` procura uma cotação já existente com esse
+par exato — se achar, devolve o id dela sem criar nada de novo (nem
+recalcula os itens); só cria de verdade na primeira chamada.
+
 Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
 /api/contagens/<id>` (detalhe de uma loja pra conferência, admin), `POST
 /api/contagens/<id>/aprovar` (admin), `PUT/DELETE
@@ -804,8 +818,8 @@ duplicar pedido de quem já foi pra evitar comprar em dobro).
 
 Acompanhamento de entrega é uma sequência simples de 4 estágios
 (`ESTAGIOS_PEDIDO` em `armazenamento.py`): Pedido enviado → Confirmado
-pelo fornecedor → A caminho → Recebido — só avança um passo por vez, sem
-pular nem voltar (a VMarket tem "4 ou mais" estágios segundo a Kethllyn,
+pelo fornecedor → A caminho → Recebido — só um passo de cada vez, sem
+pular (a VMarket tem "4 ou mais" estágios segundo a Kethllyn,
 mas ela não tinha os nomes exatos das telas de lá; o Guilherme optou por
 esse conjunto genérico em vez de tentar adivinhar a nomenclatura). Chegar
 em "Recebido" **não** lança entrada em estoque sozinho — ela prefere
@@ -813,11 +827,16 @@ continuar usando o "Registrar entrada" existente na mão (pergunta 25); o
 pedido aqui é só rastreio, não mexe em `estoque_insumo`. Pedido cujo total
 fica abaixo do `pedido_minimo` do fornecedor só recebe um aviso na tela
 (badge "abaixo do mínimo" na lista + banner no detalhe) — nunca bloqueia
-nada, ela decide (pergunta 28).
+nada, ela decide (pergunta 28). Botão "Voltar etapa" (concluído em
+2026-08-28, risco real que ela apontou: clicar "avançar" sem querer não
+tinha como desfazer) — `voltar_status_pedido` é o espelho de
+`avancar_status_pedido`, um passo pra trás por vez, trava em "Pedido
+enviado" (não some do rastreio). Também não mexe em estoque.
 
 Rotas: `POST /api/cotacoes/<id>/gerar-pedidos` (admin), `GET /api/pedidos`
 (lista, admin), `GET /api/pedidos/<id>` (detalhe com itens, admin), `POST
-/api/pedidos/<id>/avancar` (admin).
+/api/pedidos/<id>/avancar` (admin), `POST /api/pedidos/<id>/voltar`
+(admin).
 
 **"Zona de perigo" — limpar requisições e cotações** (concluída em
 2026-08-27, pedido do Guilherme pra zerar o histórico de teste antes do

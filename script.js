@@ -2408,11 +2408,18 @@ function renderPedidoDetalhe() {
     `;
   }).join('');
 
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
   const btnAvancar = document.getElementById('btn-pedido-avancar');
   const ultimoEstagio = indiceAtual >= pedidoEstagios.length - 1;
-  btnAvancar.style.display = window.usuarioLogado?.papel === 'admin' ? '' : 'none';
+  btnAvancar.style.display = isAdmin ? '' : 'none';
   btnAvancar.disabled = ultimoEstagio;
   btnAvancar.textContent = ultimoEstagio ? 'Entrega concluída' : `Avançar pra "${ESTAGIO_LABEL_PEDIDO[pedidoEstagios[indiceAtual + 1]]}"`;
+
+  const btnVoltarEtapa = document.getElementById('btn-pedido-voltar-etapa');
+  const primeiroEstagio = indiceAtual <= 0;
+  btnVoltarEtapa.style.display = isAdmin ? '' : 'none';
+  btnVoltarEtapa.disabled = primeiroEstagio;
+  btnVoltarEtapa.textContent = primeiroEstagio ? 'Voltar etapa' : `Voltar pra "${ESTAGIO_LABEL_PEDIDO[pedidoEstagios[indiceAtual - 1]]}"`;
 
   const itensBody = document.getElementById('pedido-itens-body');
   itensBody.innerHTML = p.itens.map((item) => `
@@ -2445,6 +2452,19 @@ document.getElementById('btn-pedido-avancar')?.addEventListener('click', async (
   } catch (erro) {
     console.error('Falha ao avançar pedido:', erro);
     alert(erro.message || 'Não foi possível avançar esse pedido.');
+  }
+});
+
+document.getElementById('btn-pedido-voltar-etapa')?.addEventListener('click', async () => {
+  if (!pedidoDetalheAtual) return;
+  try {
+    const resposta = await fetch(`/api/pedidos/${pedidoDetalheAtual.id}/voltar`, { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao voltar');
+    await abrirPedidoDetalhe(pedidoDetalheAtual.id);
+  } catch (erro) {
+    console.error('Falha ao voltar etapa do pedido:', erro);
+    alert(erro.message || 'Não foi possível voltar essa etapa.');
   }
 });
 

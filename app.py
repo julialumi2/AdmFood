@@ -90,6 +90,7 @@ from backend.armazenamento import (
     listar_pedidos,
     buscar_pedido,
     avancar_status_pedido,
+    voltar_status_pedido,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
     listar_historico_compras,
@@ -1685,6 +1686,18 @@ def api_avancar_pedido(pedido_id):
         return erro_admin
 
     novo_status = avancar_status_pedido(pedido_id)
+    if novo_status is None:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    return jsonify({"ok": True, "status": novo_status})
+
+
+@app.route('/api/pedidos/<int:pedido_id>/voltar', methods=['POST'])
+def api_voltar_pedido(pedido_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    novo_status = voltar_status_pedido(pedido_id)
     if novo_status is None:
         return jsonify({"erro": "Pedido não encontrado."}), 404
     return jsonify({"ok": True, "status": novo_status})

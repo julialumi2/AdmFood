@@ -346,6 +346,12 @@ def inicializar_banco():
             )
             """
         )
+        colunas_cotacao = {c["name"] for c in conn.execute("PRAGMA table_info(cotacao)").fetchall()}
+        if "requisicao_titulo" not in colunas_cotacao:
+            conn.execute("ALTER TABLE cotacao ADD COLUMN requisicao_titulo TEXT")
+        if "requisicao_prazo" not in colunas_cotacao:
+            conn.execute("ALTER TABLE cotacao ADD COLUMN requisicao_prazo TEXT")
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS cotacao_preco (
@@ -1376,11 +1382,15 @@ def listar_historico_compras():
 
 # --- COTAÇÃO (RFQ manual, fase 2 do módulo de Compras) ----------------------
 
-def criar_cotacao(titulo):
+def criar_cotacao(titulo, requisicao_titulo=None, requisicao_prazo=None):
+    """`requisicao_titulo`/`requisicao_prazo` só vêm preenchidos quando a
+    cotação nasce de `gerar_cotacao_do_deficit` — é o que permite detectar
+    "essa requisição já gerou uma cotação" sem depender do `titulo`
+    (que pode ser editado depois e não é um identificador estável)."""
     with conexao() as conn:
         cursor = conn.execute(
-            "INSERT INTO cotacao (titulo, status, criado_em) VALUES (?, 'aberta', ?)",
-            (titulo, datetime.now().isoformat()),
+            "INSERT INTO cotacao (titulo, status, criado_em, requisicao_titulo, requisicao_prazo) VALUES (?, 'aberta', ?, ?, ?)",
+            (titulo, datetime.now().isoformat(), requisicao_titulo, requisicao_prazo),
         )
         return cursor.lastrowid
 
@@ -1751,6 +1761,25 @@ def avancar_status_pedido(pedido_id):
     return novo_status
 
 
+def voltar_status_pedido(pedido_id):
+    """Volta pro estágio anterior — corrige quando avança sem querer
+    (risco real que ela apontou, revisão 2026-08-28). Mesma regra do
+    avanço: um passo de cada vez, não mexe em estoque."""
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return None
+    indice_atual = ESTAGIOS_PEDIDO.index(pedido['status'])
+    if indice_atual <= 0:
+        return pedido['status']
+    novo_status = ESTAGIOS_PEDIDO[indice_atual - 1]
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE pedido_compra SET status = ?, atualizado_em = ? WHERE id = ?",
+            (novo_status, datetime.now().isoformat(), pedido_id),
+        )
+    return novo_status
+
+
 def limpar_requisicoes_e_cotacoes():
     """Apaga TODO o histórico de requisições/contagens, cotações (com
     convites e preços) e pedidos de compra — ação de manutenção sem volta,
@@ -2040,7 +2069,20 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
 
     Retorna o id da cotação criada, ou None se a requisição não existir,
     ainda tiver alguma contagem não aprovada, ou não sobrar nenhum insumo
-    com déficit de verdade (nada a comprar)."""
+    com déficit de verdade (nada a comprar). **Idempotente**: se essa
+    requisição já tinha gerado uma cotação antes (clicar duas vezes em
+    "Gerar cotação", ou aprovar a última loja duas vezes), devolve a
+    cotação que já existe em vez de criar uma duplicada com os mesmos
+    insumos — risco real que ela apontou (roteiro de compras, revisão
+    2026-08-28)."""
+    with conexao() as conn:
+        existente = conn.execute(
+            "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ?",
+            (titulo, prazo_validade),
+        ).fetchone()
+    if existente:
+        return existente["id"]
+
     grupo = None
     for r in listar_requisicoes():
         if r['titulo'] == titulo and r['prazo_validade'] == prazo_validade:
@@ -2072,7 +2114,7 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     if not deficits:
         return None
 
-    cotacao_id = criar_cotacao(titulo)
+    cotacao_id = criar_cotacao(titulo, requisicao_titulo=titulo, requisicao_prazo=prazo_validade)
     with conexao() as conn:
         for insumo_id, info in deficits.items():
             total = round(sum(info['porLoja'].values()), 2)
