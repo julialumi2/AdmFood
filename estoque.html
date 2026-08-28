@@ -378,6 +378,16 @@
         <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
           Preencha só os insumos que quiser ajustar — o resto continua como está. Útil pra destravar a cotação enquanto a Ficha Técnica não calcula sozinha pra todo mundo.
         </p>
+        <details style="margin-bottom: var(--space-3);">
+          <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Colar lista (nome + quantidade, um por linha)</summary>
+          <div style="margin-top: var(--space-2); display:flex; flex-direction:column; gap: var(--space-2);">
+            <textarea id="ajuste-lote-colar-texto" rows="5" placeholder="Ex: Alho Descascado 1Kg;1&#10;Bacon Fatiado;50" style="width:100%; font-family: inherit; padding: var(--space-2); border: 1px solid var(--input-border); background-color: var(--input-bg); color: var(--text-dark); border-radius: var(--radius-sm);"></textarea>
+            <div style="display:flex; align-items:center; gap: var(--space-3);">
+              <button type="button" class="btn-secondary-sm" id="btn-ajuste-lote-processar-colar">Processar lista</button>
+              <span class="panel-subtitle" id="ajuste-lote-colar-resultado"></span>
+            </div>
+          </div>
+        </details>
         <div class="search-box" style="margin-bottom: var(--space-3);">
           <i data-lucide="search"></i>
           <input type="text" placeholder="Buscar insumo..." id="ajuste-lote-busca">

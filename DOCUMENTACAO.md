@@ -737,6 +737,22 @@ está visível no DOM, pra não perder o que já foi preenchido quando ela
 usa a busca pra filtrar e editar outro grupo de insumos. Rota: `POST
 /api/insumos/ajustes-quantidade-ideal/lote` (admin).
 
+**Colar lista no ajuste em lote** (concluído em 2026-08-28, mesmo dia —
+ela queria trazer a "sugestão de compra" que a VMarket já calcula pra
+cada insumo, em vez de preencher os 80+ valores um a um). Um `<details>`
+recolhido dentro do modal ("Colar lista") com uma textarea onde dá pra
+colar linhas `nome<separador>quantidade` (aceita tab, `;` ou `,` — tenta
+nessa ordem por linha, pra funcionar tanto colando de planilha quanto
+digitando na mão) e um botão "Processar lista". `_normalizarNomeInsumo`
+tira acento/maiúscula/pontuação de cada nome antes de comparar, então
+"BACON" e "Bacon" e "Baçon" (colado errado) ainda batem — mas o match é
+sempre **exato** depois de normalizado, nunca por aproximação/substring:
+insumo que não bater é listado em "não encontrado" pra ela conferir e
+ajustar na mão, em vez de arriscar aplicar valor no insumo errado.
+Processa 100% no navegador (só usa os insumos já carregados da própria
+tela) — nenhuma rota nova, só popula os mesmos campos que já existem
+no modal.
+
 **Datas especiais** (concluído em 2026-08-27, terceira e última peça —
 resposta da Kethllyn: feriado/evento marcado manualmente com antecedência,
 sem o sistema tentar adivinhar sozinho). Tabela `data_especial`

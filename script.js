@@ -3458,9 +3458,59 @@ function abrirModalAjusteLote() {
   document.getElementById('ajuste-lote-loja-nome').textContent = estoqueTabAtual;
   document.getElementById('ajuste-lote-busca').value = '';
   document.getElementById('ajuste-lote-erro').style.display = 'none';
+  document.getElementById('ajuste-lote-colar-texto').value = '';
+  document.getElementById('ajuste-lote-colar-resultado').textContent = '';
   renderAjusteLoteTabela('');
   document.getElementById('modal-ajuste-lote').style.display = 'flex';
 }
+
+// Tira acento/maiúscula/pontuação pra comparar nome colado com nome
+// cadastrado sem exigir que bata caractere por caractere.
+function _normalizarNomeInsumo(nome) {
+  return nome
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function processarColarListaAjusteLote() {
+  const texto = document.getElementById('ajuste-lote-colar-texto').value;
+  const porNomeNormalizado = new Map();
+  _linhasEstoqueParaTab(estoqueTabAtual).forEach((linha) => {
+    porNomeNormalizado.set(_normalizarNomeInsumo(linha.insumo.nome), linha.insumo.id);
+  });
+
+  let casados = 0;
+  const naoEncontrados = [];
+
+  texto.split('\n').forEach((linhaTexto) => {
+    const bruta = linhaTexto.trim();
+    if (!bruta) return;
+    const separador = bruta.includes('\t') ? '\t' : (bruta.includes(';') ? ';' : ',');
+    const partes = bruta.split(separador);
+    if (partes.length < 2) { naoEncontrados.push(bruta); return; }
+
+    const valor = partes[partes.length - 1].trim().replace(',', '.');
+    const nome = partes.slice(0, -1).join(separador).trim();
+    if (!nome || isNaN(parseFloat(valor))) { naoEncontrados.push(bruta); return; }
+
+    const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
+    if (insumoId) {
+      ajusteLoteValores[insumoId] = valor;
+      casados++;
+    } else {
+      naoEncontrados.push(nome);
+    }
+  });
+
+  renderAjusteLoteTabela(document.getElementById('ajuste-lote-busca').value);
+  document.getElementById('ajuste-lote-colar-resultado').textContent = naoEncontrados.length
+    ? `${casados} casado(s). Não encontrado (confira o nome e ajuste na mão): ${naoEncontrados.join(', ')}`
+    : `${casados} casado(s), todos encontrados.`;
+}
+
+document.getElementById('btn-ajuste-lote-processar-colar')?.addEventListener('click', processarColarListaAjusteLote);
 
 function fecharModalAjusteLote() {
   document.getElementById('modal-ajuste-lote').style.display = 'none';
