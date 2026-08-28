@@ -1931,6 +1931,18 @@ def salvar_ajuste_quantidade_ideal(loja, insumo_id, valor_ajustado):
         )
 
 
+def salvar_ajustes_quantidade_ideal_em_lote(loja, valores):
+    """`valores` = {insumo_id: valor} — aplica vários ajustes manuais de
+    uma vez (mesma tabela/mecanismo de `salvar_ajuste_quantidade_ideal`).
+    Construído em 2026-08-28 depois que ela testou em produção e viu que,
+    com a Ficha Técnica ainda incompleta, a maioria dos insumos fica sem
+    quantidade ideal calculável — ajustar um por um pelo lápis é inviável
+    pra destravar a cotação de uma vez."""
+    for insumo_id, valor in valores.items():
+        salvar_ajuste_quantidade_ideal(loja, insumo_id, valor)
+    return len(valores)
+
+
 def excluir_ajuste_quantidade_ideal(loja, insumo_id):
     """Remove o ajuste manual — volta a mostrar o valor calculado."""
     with conexao() as conn:

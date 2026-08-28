@@ -77,6 +77,7 @@ from backend.armazenamento import (
     responder_contagem,
     aprovar_contagem,
     salvar_ajuste_quantidade_ideal,
+    salvar_ajustes_quantidade_ideal_em_lote,
     excluir_ajuste_quantidade_ideal,
     mapa_ajustes_quantidade_ideal,
     copiar_quantidade_ideal,
@@ -1988,6 +1989,40 @@ def api_remover_ajuste_quantidade_ideal(insumo_id):
 
     excluir_ajuste_quantidade_ideal(loja, insumo_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/ajustes-quantidade-ideal/lote', methods=['POST'])
+def api_ajustar_quantidade_ideal_lote():
+    """Ajusta a quantidade ideal de vários insumos de uma vez, pra não
+    precisar passar um por um quando a Ficha Técnica ainda não calcula
+    sozinha pra muitos insumos."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    valores_brutos = dados.get('valores') or {}
+    valores = {}
+    try:
+        for insumo_id, valor in valores_brutos.items():
+            if valor is None or valor == '':
+                continue
+            valor_float = float(valor)
+            if valor_float < 0:
+                return jsonify({"erro": "Nenhum valor pode ser negativo."}), 400
+            valores[int(insumo_id)] = valor_float
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Valor inválido."}), 400
+
+    if not valores:
+        return jsonify({"erro": "Preencha pelo menos um insumo."}), 400
+
+    salvos = salvar_ajustes_quantidade_ideal_em_lote(loja, valores)
+    return jsonify({"ok": True, "salvos": salvos})
 
 
 @app.route('/api/insumos/ajustes-quantidade-ideal', methods=['GET'])

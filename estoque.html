@@ -164,6 +164,10 @@
                 <i data-lucide="copy"></i>
                 Copiar de outra loja
               </button>
+              <button type="button" class="btn-secondary" id="btn-ajuste-lote" style="display:none;">
+                <i data-lucide="table"></i>
+                Ajustar em lote
+              </button>
               <button type="button" class="btn-secondary" id="btn-novo-insumo">
                 <i data-lucide="plus"></i>
                 Novo insumo
@@ -361,6 +365,43 @@
             <button type="submit" class="btn-primary-sm">Copiar</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- MODAL: AJUSTAR QUANTIDADE IDEAL EM LOTE -->
+    <div class="modal-overlay" id="modal-ajuste-lote" style="display:none;">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 class="panel-title">Ajustar quantidade ideal em lote — <span id="ajuste-lote-loja-nome">—</span></h3>
+          <button type="button" class="btn-close" id="btn-ajuste-lote-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Preencha só os insumos que quiser ajustar — o resto continua como está. Útil pra destravar a cotação enquanto a Ficha Técnica não calcula sozinha pra todo mundo.
+        </p>
+        <div class="search-box" style="margin-bottom: var(--space-3);">
+          <i data-lucide="search"></i>
+          <input type="text" placeholder="Buscar insumo..." id="ajuste-lote-busca">
+        </div>
+        <div class="table-responsive" style="max-height: 45vh; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Categoria</th>
+                <th>Ideal atual</th>
+                <th>Novo valor</th>
+              </tr>
+            </thead>
+            <tbody id="ajuste-lote-tabela-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+        <p id="ajuste-lote-erro" class="panel-subtitle" style="display:none; color: var(--danger); margin-top: var(--space-2);"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-ajuste-lote-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary-sm" id="btn-ajuste-lote-salvar">Salvar ajustes</button>
+        </div>
       </div>
     </div>
 

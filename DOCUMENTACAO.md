@@ -720,6 +720,23 @@ tiver, senão o calculado) e grava como ajuste manual na loja de destino —
 reaproveita a mesma tabela/mecanismo acima, não duplica lógica. Sobrescreve
 qualquer ajuste que a loja de destino já tivesse (a tela avisa antes).
 
+**Ajustar quantidade ideal em lote** (concluído em 2026-08-28, depois que
+ela testou o fluxo de Compras em produção e viu que, com a Ficha Técnica
+ainda incompleta, a maioria dos insumos fica sem quantidade ideal
+calculável — e ajustar um por um pelo lápis é inviável pra destravar a
+cotação de uma vez). Botão "Ajustar em lote" na tela de Estoque (mesma
+regra de visibilidade do "Copiar de outra loja": só numa aba de loja
+específica, não na "Geral"). Abre um modal listando todos os insumos
+daquela loja com o valor ideal efetivo atual + um campo pra digitar um
+valor novo; só os campos preenchidos são salvos, o resto não é tocado.
+`salvar_ajustes_quantidade_ideal_em_lote(loja, valores)` é só um laço
+chamando `salvar_ajuste_quantidade_ideal` pra cada item — mesma
+tabela/mecanismo de sempre, sem conceito novo. O modal guarda os valores
+digitados num objeto à parte (`ajusteLoteValores`) em vez de ler só o que
+está visível no DOM, pra não perder o que já foi preenchido quando ela
+usa a busca pra filtrar e editar outro grupo de insumos. Rota: `POST
+/api/insumos/ajustes-quantidade-ideal/lote` (admin).
+
 **Datas especiais** (concluído em 2026-08-27, terceira e última peça —
 resposta da Kethllyn: feriado/evento marcado manualmente com antecedência,
 sem o sistema tentar adivinhar sozinho). Tabela `data_especial`

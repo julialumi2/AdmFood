@@ -1367,6 +1367,9 @@ function renderEstoqueTab() {
   const btnCopiarIdeal = document.getElementById('btn-copiar-ideal');
   if (btnCopiarIdeal) btnCopiarIdeal.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
+  const btnAjusteLote = document.getElementById('btn-ajuste-lote');
+  if (btnAjusteLote) btnAjusteLote.style.display = (isAdmin && !ehGeral) ? '' : 'none';
+
   let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
 
   const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
@@ -3445,6 +3448,79 @@ document.getElementById('form-copiar-ideal')?.addEventListener('submit', async (
   } catch (erro) {
     console.error('Falha ao copiar quantidade ideal:', erro);
     alert(erro.message || 'Não foi possível copiar.');
+  }
+});
+
+let ajusteLoteValores = {};
+
+function abrirModalAjusteLote() {
+  ajusteLoteValores = {};
+  document.getElementById('ajuste-lote-loja-nome').textContent = estoqueTabAtual;
+  document.getElementById('ajuste-lote-busca').value = '';
+  document.getElementById('ajuste-lote-erro').style.display = 'none';
+  renderAjusteLoteTabela('');
+  document.getElementById('modal-ajuste-lote').style.display = 'flex';
+}
+
+function fecharModalAjusteLote() {
+  document.getElementById('modal-ajuste-lote').style.display = 'none';
+}
+
+function renderAjusteLoteTabela(filtro) {
+  const tbody = document.getElementById('ajuste-lote-tabela-body');
+  const termo = filtro.trim().toLowerCase();
+  const linhas = _linhasEstoqueParaTab(estoqueTabAtual)
+    .filter((linha) => !termo || linha.insumo.nome.toLowerCase().includes(termo));
+
+  tbody.innerHTML = linhas.map((linha) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(linha.insumo.nome)}</td>
+      <td class="text-muted">${escaparHtml(linha.insumo.categoria)}</td>
+      <td>${linha.dados.quantidadeIdeal !== null ? `${linha.dados.quantidadeIdeal} ${escaparHtml(linha.insumo.unidadeMedida)}` : '<span class="text-muted">—</span>'}${linha.dados.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange">ajustado</span>' : ''}</td>
+      <td><input type="number" step="0.01" min="0" placeholder="—" data-insumo-id="${linha.insumo.id}" value="${ajusteLoteValores[linha.insumo.id] ?? ''}" style="width:100px;"></td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('input[data-insumo-id]').forEach((input) => {
+    input.addEventListener('input', () => {
+      if (input.value === '') delete ajusteLoteValores[input.dataset.insumoId];
+      else ajusteLoteValores[input.dataset.insumoId] = input.value;
+    });
+  });
+}
+
+document.getElementById('btn-ajuste-lote')?.addEventListener('click', abrirModalAjusteLote);
+document.getElementById('btn-ajuste-lote-fechar')?.addEventListener('click', fecharModalAjusteLote);
+document.getElementById('btn-ajuste-lote-cancelar')?.addEventListener('click', fecharModalAjusteLote);
+
+document.getElementById('ajuste-lote-busca')?.addEventListener('input', (evento) => {
+  renderAjusteLoteTabela(evento.target.value);
+});
+
+document.getElementById('btn-ajuste-lote-salvar')?.addEventListener('click', async () => {
+  const erro = document.getElementById('ajuste-lote-erro');
+  erro.style.display = 'none';
+
+  if (!Object.keys(ajusteLoteValores).length) {
+    erro.textContent = 'Preencha pelo menos um insumo.';
+    erro.style.display = '';
+    return;
+  }
+  try {
+    const resposta = await fetch('/api/insumos/ajustes-quantidade-ideal/lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loja: estoqueTabAtual, valores: ajusteLoteValores }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    fecharModalAjusteLote();
+    await carregarInsumos();
+    alert(`Pronto — ${dados.salvos} insumo(s) ajustado(s).`);
+  } catch (erroCatch) {
+    console.error('Falha ao ajustar quantidade ideal em lote:', erroCatch);
+    erro.textContent = erroCatch.message || 'Não foi possível salvar.';
+    erro.style.display = '';
   }
 });
 
