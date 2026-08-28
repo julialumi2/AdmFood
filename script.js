@@ -5543,6 +5543,8 @@ function abrirModalFichaTecnicaItem(itemId) {
   }
   fichaTecnicaEditandoItemId = itemId;
   document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${item.nome}`;
+  document.getElementById('ficha-tecnica-colar-texto').value = '';
+  document.getElementById('ficha-tecnica-colar-resultado').textContent = '';
 
   const container = document.getElementById('ficha-tecnica-item-linhas');
   const linhasIniciais = item.insumos.length
@@ -5554,6 +5556,53 @@ function abrirModalFichaTecnicaItem(itemId) {
   document.getElementById('modal-ficha-tecnica-item').style.display = 'flex';
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// Cola "insumo;quantidade" (um por linha) e SUBSTITUI as linhas do form
+// pelas que bateram — mesmo critério de nome do "colar lista" do Estoque
+// (_normalizarNomeInsumo), sempre exato depois de normalizado, nunca por
+// aproximação, pra não gravar quantidade no insumo errado da receita.
+function processarColarListaFichaTecnica() {
+  const texto = document.getElementById('ficha-tecnica-colar-texto').value;
+  const porNomeNormalizado = new Map();
+  fichaTecnicaData.insumosDisponiveis.forEach((insumo) => {
+    porNomeNormalizado.set(_normalizarNomeInsumo(insumo.nome), insumo.id);
+  });
+
+  const casados = [];
+  const naoEncontrados = [];
+
+  texto.split('\n').forEach((linhaTexto) => {
+    const bruta = linhaTexto.trim();
+    if (!bruta) return;
+    const separador = bruta.includes('\t') ? '\t' : (bruta.includes(';') ? ';' : ',');
+    const partes = bruta.split(separador);
+    if (partes.length < 2) { naoEncontrados.push(bruta); return; }
+
+    const valor = partes[partes.length - 1].trim().replace(',', '.');
+    const nome = partes.slice(0, -1).join(separador).trim();
+    if (!nome || isNaN(parseFloat(valor))) { naoEncontrados.push(bruta); return; }
+
+    const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
+    if (insumoId) {
+      casados.push({ insumoId, quantidade: valor });
+    } else {
+      naoEncontrados.push(nome);
+    }
+  });
+
+  if (casados.length) {
+    const container = document.getElementById('ficha-tecnica-item-linhas');
+    container.innerHTML = casados.map((c) => _linhaFichaTecnicaHTML(c.insumoId, c.quantidade)).join('');
+    _wireLinhasFichaTecnica();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  document.getElementById('ficha-tecnica-colar-resultado').textContent = naoEncontrados.length
+    ? `${casados.length} casado(s), substituíram a lista abaixo. Não encontrado (confira o nome e adiciona na mão): ${naoEncontrados.join(', ')}`
+    : `${casados.length} casado(s), substituíram a lista abaixo — confira e clica em "Salvar".`;
+}
+
+document.getElementById('btn-ficha-tecnica-processar-colar')?.addEventListener('click', processarColarListaFichaTecnica);
 
 function fecharModalFichaTecnicaItem() {
   document.getElementById('modal-ficha-tecnica-item').style.display = 'none';

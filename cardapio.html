@@ -240,6 +240,17 @@
           <button type="button" class="btn-close" id="btn-ficha-tecnica-item-fechar" aria-label="Fechar">&times;</button>
         </div>
         <form id="form-ficha-tecnica-item">
+          <details style="margin-bottom: var(--space-3);">
+            <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Colar lista (insumo + quantidade, um por linha)</summary>
+            <div style="margin-top: var(--space-2); display:flex; flex-direction:column; gap: var(--space-2);">
+              <p class="panel-subtitle">Substitui a lista de insumos abaixo pela colada aqui — confira antes de salvar.</p>
+              <textarea id="ficha-tecnica-colar-texto" rows="5" placeholder="Ex: Pão brioche;1&#10;Bacon;50" style="width:100%; font-family: inherit; padding: var(--space-2); border: 1px solid var(--input-border); background-color: var(--input-bg); color: var(--text-dark); border-radius: var(--radius-sm);"></textarea>
+              <div style="display:flex; align-items:center; gap: var(--space-3);">
+                <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-processar-colar">Processar lista</button>
+                <span class="panel-subtitle" id="ficha-tecnica-colar-resultado"></span>
+              </div>
+            </div>
+          </details>
           <div id="ficha-tecnica-item-linhas" class="ficha-tecnica-linhas">
             <!-- Renderizado dinamicamente via JS -->
           </div>

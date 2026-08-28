@@ -390,6 +390,21 @@ admin) sempre manda a lista inteira de insumos (substitui, não faz diff)
 — mais simples de implementar tanto no back quanto na tela. Leitura
 liberada pra todo mundo logado.
 
+**Colar lista na ficha técnica de um item** (concluído em 2026-08-28,
+mesmo padrão de "colar lista" já usado no ajuste de quantidade ideal e na
+importação de insumos — preencher receita por receita, insumo por
+insumo, pelo "Adicionar insumo" é lento pra um cardápio inteiro). Dentro
+do modal de ficha técnica de um item, um `<details>` recolhido ("Colar
+lista") com uma textarea pra colar `insumo;quantidade` (aceita tab, `;`
+ou `,`) e um botão "Processar lista". Usa o mesmo `_normalizarNomeInsumo`
+e o mesmo critério de match exato (sem aproximação) dos outros "colar
+lista" — o que bater **substitui** as linhas do formulário abaixo (é a
+mesma receita inteira, não um acréscimo); o que não bater fica listado
+pra ela adicionar na mão pelo "Adicionar insumo". Ainda precisa clicar
+"Salvar" depois — processar só popula o formulário, não grava sozinho.
+100% client-side (reusa `fichaTecnicaData.insumosDisponiveis` já
+carregado), nenhuma rota nova.
+
 ### 6.6 Consumo estimado de insumo (Ficha Técnica × vendas reais)
 
 Objetivo: estimar quanto de cada insumo a rede realmente consome por dia,
