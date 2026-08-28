@@ -168,6 +168,10 @@
                 <i data-lucide="table"></i>
                 Ajustar em lote
               </button>
+              <button type="button" class="btn-secondary" id="btn-insumos-loja" style="display:none;">
+                <i data-lucide="list-checks"></i>
+                Insumos da loja
+              </button>
               <button type="button" class="btn-secondary" id="btn-novo-insumo">
                 <i data-lucide="plus"></i>
                 Novo insumo
@@ -411,6 +415,46 @@
         <div class="modal-actions">
           <button type="button" class="btn-secondary-sm" id="btn-ajuste-lote-cancelar">Cancelar</button>
           <button type="button" class="btn-primary-sm" id="btn-ajuste-lote-salvar">Salvar ajustes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: INSUMOS DA LOJA (define o que entra no link de Requisição) -->
+    <div class="modal-overlay" id="modal-insumos-loja" style="display:none;">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 class="panel-title">Insumos da loja — <span id="insumos-loja-nome">—</span></h3>
+          <button type="button" class="btn-close" id="btn-insumos-loja-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Desmarque os insumos que essa loja não usa — eles deixam de aparecer no link de Requisição dela (continuam existindo normalmente no catálogo e nas outras lojas).
+        </p>
+        <div style="display:flex; gap: var(--space-3); align-items:center; margin-bottom: var(--space-3); flex-wrap: wrap;">
+          <div class="search-box" style="flex:1; min-width:180px;">
+            <i data-lucide="search"></i>
+            <input type="text" placeholder="Buscar insumo..." id="insumos-loja-busca">
+          </div>
+          <button type="button" class="btn-secondary-sm" id="btn-insumos-loja-marcar-todos">Marcar todos</button>
+          <button type="button" class="btn-secondary-sm" id="btn-insumos-loja-desmarcar-todos">Desmarcar todos</button>
+        </div>
+        <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px;">Usa</th>
+                <th>Insumo</th>
+                <th>Categoria</th>
+              </tr>
+            </thead>
+            <tbody id="insumos-loja-tabela-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+        <p id="insumos-loja-erro" class="panel-subtitle" style="display:none; color: var(--danger); margin-top: var(--space-2);"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-insumos-loja-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary-sm" id="btn-insumos-loja-salvar">Salvar</button>
         </div>
       </div>
     </div>

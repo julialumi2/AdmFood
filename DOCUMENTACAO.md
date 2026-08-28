@@ -690,6 +690,39 @@ preencher). O botão "Aprovar todas as lojas" chama `aprovar_contagem` pra
 cada contagem `respondida` do grupo de uma vez, em vez de aprovar loja por
 loja na tela de detalhe.
 
+**Insumos separados por loja** (concluído em 2026-08-28, pedido do
+Guilherme: os links de Requisição/Contagem mostravam o cardápio inteiro de
+insumos pra toda loja, mesmo insumo que só existe numa unidade — ex.
+insumo exclusivo da Tradiça aparecendo no link do Artesanos). Tabela nova
+`insumo_loja` (insumo_id, loja) — só a presença da linha diz que aquele
+insumo entra no link daquela loja; **não mexe em `estoque_insumo`**
+(continua com uma linha por insumo × loja, de propósito, pra não arriscar
+regressão em nada que já lia de lá — Estoque, quantidade ideal, etc.). Na
+primeira vez que o banco sobe com a tabela nova, roda um backfill que
+associa **todo insumo a toda loja** (preserva o comportamento antigo de
+"aparece em tudo"); a partir daí ela vai desmarcando loja por loja com a
+ferramenta abaixo. `criar_insumo` já grava a associação pra loja(s)
+escolhida(s) na hora de cadastrar um insumo novo; `excluir_insumo` limpa
+`insumo_loja` junto. `criar_contagem` (usada tanto por uma Requisição de
+loja única quanto por cada loja de uma Requisição em grupo) troca o
+`SELECT` de "todo insumo" por um `JOIN` em `insumo_loja` filtrado pela loja
+que está abrindo o link — é o único ponto do fluxo que precisa mudar,
+porque tudo o resto (conferência, cotação, pedido) já parte da lista de
+itens que a contagem gerou.
+
+Ferramenta **"Insumos da loja"** (botão na tela de Estoque, mesma regra de
+visibilidade do "Copiar de outra loja"/"Ajustar em lote": só numa aba de
+loja específica, não na "Geral", só admin) — modal com checkbox por
+insumo (marcado = entra no link dessa loja), busca pra filtrar a lista e
+botões "Marcar todos"/"Desmarcar todos" (respeitam o filtro atual, não a
+lista inteira). `listar_insumos_por_loja(loja)` devolve todo insumo
+cadastrado com um booleano `aplica`; `salvar_insumos_da_loja(loja,
+insumoIds)` é **substituição completa** (apaga todas as linhas daquela
+loja em `insumo_loja` e recria só com os ids marcados), não um merge —
+desmarcar um insumo e salvar realmente tira ele da loja. Rotas: `GET
+/api/insumos/por-loja?loja=` (qualquer logado, mesma liberação de leitura
+do resto do Estoque) e `POST /api/insumos/por-loja` (admin).
+
 **Ajuste manual da quantidade ideal** (concluído em 2026-08-27, primeira
 peça da "Quantidade ideal inteligente" — respostas da Kethllyn no roteiro
 de compras confirmaram manter a conta simples/visível e só permitir

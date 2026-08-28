@@ -42,6 +42,8 @@ from backend.armazenamento import (
     PASTA_FOTOS_CARDAPIO,
     criar_insumo,
     listar_insumos,
+    listar_insumos_por_loja,
+    salvar_insumos_da_loja,
     atualizar_insumo,
     excluir_insumo,
     atualizar_estoque_loja,
@@ -992,6 +994,37 @@ def api_criar_insumo():
         definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
 
     return jsonify({"id": insumo_id})
+
+
+@app.route('/api/insumos/por-loja', methods=['GET'])
+def api_listar_insumos_por_loja():
+    """Todo insumo com uma marcação se a loja pedida usa ele ou não —
+    alimenta a tela "Insumos da loja" (Estoque) e decide quem entra no
+    link de Requisição de cada loja."""
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    return jsonify({"insumos": listar_insumos_por_loja(loja)})
+
+
+@app.route('/api/insumos/por-loja', methods=['POST'])
+def api_salvar_insumos_da_loja():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    try:
+        insumo_ids = [int(i) for i in (dados.get('insumoIds') or [])]
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Lista de insumos inválida."}), 400
+
+    salvar_insumos_da_loja(loja, insumo_ids)
+    return jsonify({"ok": True, "total": len(insumo_ids)})
 
 
 @app.route('/api/insumos/<int:insumo_id>', methods=['PUT'])

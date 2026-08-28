@@ -211,6 +211,34 @@ def inicializar_banco():
             """
         )
 
+        # Quais insumos entram no link de Requisição de cada loja — separado
+        # de propósito de `estoque_insumo` (que continua tendo uma linha por
+        # insumo × loja pra toda a rede, sem mudar nada do que já existe em
+        # Estoque/quantidade ideal). Ex: "Pão de dog" não precisa aparecer no
+        # link da Hamburgueria Artesanos pro funcionário contar. Presença de
+        # linha = "essa loja usa esse insumo". Migração faz backfill de TODOS
+        # os insumos pra TODAS as lojas na primeira vez (preserva o
+        # comportamento atual — todo insumo aparecia em toda loja), e ela
+        # ajusta manualmente a partir daí pela tela de "Insumos da loja".
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS insumo_loja (
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                PRIMARY KEY (insumo_id, loja)
+            )
+            """
+        )
+        if conn.execute("SELECT COUNT(*) AS n FROM insumo_loja").fetchone()["n"] == 0:
+            lojas_existentes = [l["loja"] for l in conn.execute("SELECT DISTINCT loja FROM estoque_insumo").fetchall()]
+            insumo_ids = [i["id"] for i in conn.execute("SELECT id FROM insumo").fetchall()]
+            for insumo_id in insumo_ids:
+                for loja in lojas_existentes:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)",
+                        (insumo_id, loja),
+                    )
+
         # Lotes de validade por entrada — separado de estoque_insumo porque a
         # quantidade lá é um total agregado por loja, sem distinguir remessas;
         # uma mesma "entrada" pode ter validade diferente da anterior. validade
@@ -1066,6 +1094,10 @@ def criar_insumo(nome, categoria, unidade_medida, lojas):
                 """,
                 (insumo_id, loja, agora),
             )
+            conn.execute(
+                "INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)",
+                (insumo_id, loja),
+            )
         return insumo_id
 
 
@@ -1084,6 +1116,34 @@ def listar_insumos():
         return [dict(linha) for linha in linhas]
 
 
+def listar_insumos_por_loja(loja):
+    """Todo insumo do catálogo com uma marcação se essa loja específica usa
+    ele ou não — pra tela "Insumos da loja" (Estoque), que decide quais
+    insumos entram no link de Requisição de cada loja."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT i.id, i.nome, i.categoria,
+                   EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = ?) AS aplica
+            FROM insumo i
+            ORDER BY i.categoria, i.nome
+            """,
+            (loja,),
+        ).fetchall()
+        return [{"id": l["id"], "nome": l["nome"], "categoria": l["categoria"], "aplica": bool(l["aplica"])} for l in linhas]
+
+
+def salvar_insumos_da_loja(loja, insumo_ids):
+    """Substitui por completo quais insumos essa loja usa — remove quem não
+    estiver na lista nova, adiciona quem estiver (mesmo espírito do
+    "Ajustar em lote": ela decide tudo de uma vez em vez de item por
+    item)."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM insumo_loja WHERE loja = ?", (loja,))
+        for insumo_id in insumo_ids:
+            conn.execute("INSERT INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, loja))
+
+
 def atualizar_insumo(insumo_id, campos):
     if not campos:
         return
@@ -1097,6 +1157,7 @@ def excluir_insumo(insumo_id):
     with conexao() as conn:
         conn.execute("DELETE FROM estoque_insumo WHERE insumo_id = ?", (insumo_id,))
         conn.execute("DELETE FROM lote_insumo WHERE insumo_id = ?", (insumo_id,))
+        conn.execute("DELETE FROM insumo_loja WHERE insumo_id = ?", (insumo_id,))
         conn.execute("DELETE FROM insumo WHERE id = ?", (insumo_id,))
 
 
@@ -1826,19 +1887,33 @@ def _mapa_consumo_medio_loja(loja, dias_historico=30):
 
 def criar_contagem(loja, descricao, prazo_validade, categorias=None):
     """Abre uma contagem pra uma loja — gera um token opaco (o link que vai
-    pro funcionário, sem precisar de login) e já grava uma linha por insumo
-    (ativo, e dentro das categorias escolhidas, se filtrado) esperando
-    preenchimento. `categorias` vazio/None inclui todos os insumos."""
+    pro funcionário, sem precisar de login) e já grava uma linha só pros
+    insumos que essa loja usa (`insumo_loja`), dentro das categorias
+    escolhidas se filtrado, esperando preenchimento. `categorias` vazio/None
+    inclui todos os insumos dessa loja. Assim o funcionário do Artesanos não
+    vê insumo que só existe nos Tradiças, e vice-versa (ajustável na tela
+    "Insumos da loja" do Estoque)."""
     token = secrets.token_urlsafe(24)
     agora = datetime.now().isoformat()
     with conexao() as conn:
         if categorias:
             marcadores = ", ".join("?" for _ in categorias)
             linhas = conn.execute(
-                f"SELECT id FROM insumo WHERE categoria IN ({marcadores})", categorias
+                f"""
+                SELECT i.id FROM insumo i
+                JOIN insumo_loja il ON il.insumo_id = i.id AND il.loja = ?
+                WHERE i.categoria IN ({marcadores})
+                """,
+                [loja, *categorias],
             ).fetchall()
         else:
-            linhas = conn.execute("SELECT id FROM insumo").fetchall()
+            linhas = conn.execute(
+                """
+                SELECT i.id FROM insumo i
+                JOIN insumo_loja il ON il.insumo_id = i.id AND il.loja = ?
+                """,
+                (loja,),
+            ).fetchall()
 
         cursor = conn.execute(
             """

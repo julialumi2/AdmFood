@@ -1370,6 +1370,9 @@ function renderEstoqueTab() {
   const btnAjusteLote = document.getElementById('btn-ajuste-lote');
   if (btnAjusteLote) btnAjusteLote.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
+  const btnInsumosLoja = document.getElementById('btn-insumos-loja');
+  if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
+
   let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
 
   const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
@@ -3569,6 +3572,94 @@ document.getElementById('btn-ajuste-lote-salvar')?.addEventListener('click', asy
     alert(`Pronto — ${dados.salvos} insumo(s) ajustado(s).`);
   } catch (erroCatch) {
     console.error('Falha ao ajustar quantidade ideal em lote:', erroCatch);
+    erro.textContent = erroCatch.message || 'Não foi possível salvar.';
+    erro.style.display = '';
+  }
+});
+
+let insumosLojaTodos = [];
+let insumosLojaSelecionados = new Set();
+
+async function abrirModalInsumosLoja() {
+  document.getElementById('insumos-loja-nome').textContent = estoqueTabAtual;
+  document.getElementById('insumos-loja-busca').value = '';
+  document.getElementById('insumos-loja-erro').style.display = 'none';
+  document.getElementById('insumos-loja-tabela-body').innerHTML = '<tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>';
+  document.getElementById('modal-insumos-loja').style.display = 'flex';
+  try {
+    const resposta = await fetch(`/api/insumos/por-loja?loja=${encodeURIComponent(estoqueTabAtual)}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
+    insumosLojaTodos = dados.insumos;
+    insumosLojaSelecionados = new Set(insumosLojaTodos.filter((i) => i.aplica).map((i) => i.id));
+    renderInsumosLojaTabela('');
+  } catch (erro) {
+    console.error('Falha ao carregar insumos da loja:', erro);
+    document.getElementById('insumos-loja-tabela-body').innerHTML = '<tr><td colspan="3" style="color:#ef4444;">Não foi possível carregar.</td></tr>';
+  }
+}
+
+function fecharModalInsumosLoja() {
+  document.getElementById('modal-insumos-loja').style.display = 'none';
+}
+
+function renderInsumosLojaTabela(filtro) {
+  const termo = filtro.trim().toLowerCase();
+  const tbody = document.getElementById('insumos-loja-tabela-body');
+  const linhas = insumosLojaTodos.filter((i) => !termo || i.nome.toLowerCase().includes(termo));
+
+  tbody.innerHTML = linhas.map((i) => `
+    <tr>
+      <td><input type="checkbox" data-insumo-id="${i.id}" ${insumosLojaSelecionados.has(i.id) ? 'checked' : ''}></td>
+      <td class="font-bold">${escaparHtml(i.nome)}</td>
+      <td class="text-muted">${escaparHtml(i.categoria)}</td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('input[data-insumo-id]').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      const id = parseInt(checkbox.dataset.insumoId, 10);
+      if (checkbox.checked) insumosLojaSelecionados.add(id);
+      else insumosLojaSelecionados.delete(id);
+    });
+  });
+}
+
+document.getElementById('btn-insumos-loja')?.addEventListener('click', abrirModalInsumosLoja);
+document.getElementById('btn-insumos-loja-fechar')?.addEventListener('click', fecharModalInsumosLoja);
+document.getElementById('btn-insumos-loja-cancelar')?.addEventListener('click', fecharModalInsumosLoja);
+
+document.getElementById('insumos-loja-busca')?.addEventListener('input', (evento) => {
+  renderInsumosLojaTabela(evento.target.value);
+});
+
+document.getElementById('btn-insumos-loja-marcar-todos')?.addEventListener('click', () => {
+  const termo = document.getElementById('insumos-loja-busca').value.trim().toLowerCase();
+  insumosLojaTodos.filter((i) => !termo || i.nome.toLowerCase().includes(termo)).forEach((i) => insumosLojaSelecionados.add(i.id));
+  renderInsumosLojaTabela(document.getElementById('insumos-loja-busca').value);
+});
+
+document.getElementById('btn-insumos-loja-desmarcar-todos')?.addEventListener('click', () => {
+  const termo = document.getElementById('insumos-loja-busca').value.trim().toLowerCase();
+  insumosLojaTodos.filter((i) => !termo || i.nome.toLowerCase().includes(termo)).forEach((i) => insumosLojaSelecionados.delete(i.id));
+  renderInsumosLojaTabela(document.getElementById('insumos-loja-busca').value);
+});
+
+document.getElementById('btn-insumos-loja-salvar')?.addEventListener('click', async () => {
+  const erro = document.getElementById('insumos-loja-erro');
+  erro.style.display = 'none';
+  try {
+    const resposta = await fetch('/api/insumos/por-loja', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loja: estoqueTabAtual, insumoIds: Array.from(insumosLojaSelecionados) }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    fecharModalInsumosLoja();
+    alert(`Pronto — ${dados.total} insumo(s) marcados pra ${estoqueTabAtual}.`);
+  } catch (erroCatch) {
+    console.error('Falha ao salvar insumos da loja:', erroCatch);
     erro.textContent = erroCatch.message || 'Não foi possível salvar.';
     erro.style.display = '';
   }
