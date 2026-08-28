@@ -41,6 +41,7 @@ from backend.armazenamento import (
     atualizar_preco_cardapio,
     PASTA_FOTOS_CARDAPIO,
     criar_insumo,
+    criar_insumos_em_lote,
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
@@ -994,6 +995,31 @@ def api_criar_insumo():
         definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
 
     return jsonify({"id": insumo_id})
+
+
+@app.route('/api/insumos/lote', methods=['POST'])
+def api_criar_insumos_em_lote():
+    """Cadastra vários insumos novos de uma vez, já restritos às lojas
+    marcadas (ex: catálogo da VMarket de uma loja que ainda não tinha
+    nenhum insumo cadastrado no AdmFood)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    nomes = [str(n).strip() for n in (dados.get('nomes') or []) if str(n).strip()]
+    if not nomes:
+        return jsonify({"erro": "Informe ao menos um nome de insumo."}), 400
+
+    lojas = dados.get('lojas') or []
+    if not lojas or any(l not in LOJAS for l in lojas):
+        return jsonify({"erro": "Selecione ao menos uma loja válida."}), 400
+
+    categoria = (dados.get('categoria') or 'Geral').strip() or 'Geral'
+    unidade_medida = (dados.get('unidadeMedida') or 'un').strip() or 'un'
+
+    resultado = criar_insumos_em_lote(nomes, categoria, unidade_medida, lojas)
+    return jsonify(resultado)
 
 
 @app.route('/api/insumos/por-loja', methods=['GET'])

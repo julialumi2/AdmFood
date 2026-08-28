@@ -3349,6 +3349,87 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
   }
 });
 
+// --- Modal: Importar insumos em lote (catálogo novo de uma loja, ex: VMarket) ---
+function abrirModalImportarInsumos() {
+  document.getElementById('importar-insumos-categoria').value = 'Geral';
+  document.getElementById('importar-insumos-unidade').value = 'un';
+  document.getElementById('importar-insumos-texto').value = '';
+  document.getElementById('importar-insumos-erro').style.display = 'none';
+  document.getElementById('importar-insumos-resultado').textContent = '';
+  const container = document.getElementById('importar-insumos-lojas');
+  container.innerHTML = LOJAS_ESTOQUE.map((loja) => `
+    <label class="checklist-item">
+      <input type="checkbox" name="importar-insumos-loja" value="${escaparHtml(loja)}">
+      ${escaparHtml(loja)}
+    </label>
+  `).join('');
+  document.getElementById('modal-importar-insumos').style.display = 'flex';
+}
+
+function fecharModalImportarInsumos() {
+  document.getElementById('modal-importar-insumos').style.display = 'none';
+}
+
+// Extrai só o nome de cada linha colada — aceita "nome", "nome;valor",
+// "nome,valor" ou "nome<tab>valor" (o valor, se vier, é ignorado aqui;
+// essa lista é só pra cadastrar o insumo, não pra ajustar quantidade).
+function _extrairNomesColados(texto) {
+  return texto.split('\n').map((linhaTexto) => {
+    const bruta = linhaTexto.trim();
+    if (!bruta) return null;
+    const separador = bruta.includes('\t') ? '\t' : (bruta.includes(';') ? ';' : (bruta.includes(',') ? ',' : null));
+    if (!separador) return bruta;
+    const partes = bruta.split(separador);
+    return partes.slice(0, -1).join(separador).trim() || bruta;
+  }).filter(Boolean);
+}
+
+document.getElementById('btn-importar-insumos')?.addEventListener('click', abrirModalImportarInsumos);
+document.getElementById('btn-importar-insumos-fechar')?.addEventListener('click', fecharModalImportarInsumos);
+document.getElementById('btn-importar-insumos-cancelar')?.addEventListener('click', fecharModalImportarInsumos);
+
+document.getElementById('btn-importar-insumos-confirmar')?.addEventListener('click', async () => {
+  const erro = document.getElementById('importar-insumos-erro');
+  erro.style.display = 'none';
+
+  const lojas = Array.from(document.querySelectorAll('input[name="importar-insumos-loja"]:checked')).map((el) => el.value);
+  const nomes = _extrairNomesColados(document.getElementById('importar-insumos-texto').value);
+
+  if (!lojas.length) {
+    erro.textContent = 'Marque pelo menos uma loja.';
+    erro.style.display = '';
+    return;
+  }
+  if (!nomes.length) {
+    erro.textContent = 'Cola pelo menos um nome de insumo.';
+    erro.style.display = '';
+    return;
+  }
+
+  try {
+    const resposta = await fetch('/api/insumos/lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nomes,
+        lojas,
+        categoria: document.getElementById('importar-insumos-categoria').value,
+        unidadeMedida: document.getElementById('importar-insumos-unidade').value,
+      }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao importar');
+    document.getElementById('importar-insumos-resultado').textContent = dados.duplicados.length
+      ? `${dados.criados.length} insumo(s) cadastrado(s). Já existiam (ignorados): ${dados.duplicados.join(', ')}`
+      : `${dados.criados.length} insumo(s) cadastrado(s), nenhum duplicado.`;
+    await carregarInsumos();
+  } catch (erroCatch) {
+    console.error('Falha ao importar insumos em lote:', erroCatch);
+    erro.textContent = erroCatch.message || 'Não foi possível importar.';
+    erro.style.display = '';
+  }
+});
+
 // --- Modal: Registrar entrada (distribuição entre lojas) ---
 function abrirModalEntradaInsumo() {
   const select = document.getElementById('entrada-insumo-select');

@@ -172,6 +172,10 @@
                 <i data-lucide="list-checks"></i>
                 Insumos da loja
               </button>
+              <button type="button" class="btn-secondary" id="btn-importar-insumos">
+                <i data-lucide="upload"></i>
+                Importar insumos
+              </button>
               <button type="button" class="btn-secondary" id="btn-novo-insumo">
                 <i data-lucide="plus"></i>
                 Novo insumo
@@ -496,6 +500,46 @@
             <button type="submit" class="btn-primary-sm">Salvar</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- MODAL: IMPORTAR INSUMOS EM LOTE -->
+    <div class="modal-overlay" id="modal-importar-insumos" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Importar insumos em lote</h3>
+          <button type="button" class="btn-close" id="btn-importar-insumos-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+          Pra quando uma loja traz um catálogo de insumos que ainda não existe
+          no AdmFood. Cola um nome por linha (aceita colar "Nome;valor" ou
+          "Nome,valor" também — só o nome é usado aqui) e escolhe pra qual(is)
+          loja(s) esses insumos valem.
+        </p>
+        <div class="form-group">
+          <label>Loja(s)</label>
+          <div class="checklist-fornecedores" id="importar-insumos-lojas"></div>
+        </div>
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="importar-insumos-categoria">Categoria</label>
+            <input type="text" id="importar-insumos-categoria" placeholder="Ex: Bebidas" value="Geral">
+          </div>
+          <div class="form-group">
+            <label for="importar-insumos-unidade">Unidade de medida</label>
+            <input type="text" id="importar-insumos-unidade" placeholder="kg, L, un..." value="un">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="importar-insumos-texto">Lista de insumos</label>
+          <textarea id="importar-insumos-texto" rows="10" placeholder="Água Com Gás CRISTAL DA COCA;3&#10;Coca Cola 350Ml fd 12uni;12&#10;..."></textarea>
+        </div>
+        <p id="importar-insumos-erro" style="color:#ef4444; display:none;"></p>
+        <p id="importar-insumos-resultado" class="panel-subtitle"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-importar-insumos-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary-sm" id="btn-importar-insumos-confirmar">Cadastrar insumos</button>
+        </div>
       </div>
     </div>
 

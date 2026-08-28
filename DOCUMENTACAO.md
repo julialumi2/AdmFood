@@ -723,6 +723,28 @@ desmarcar um insumo e salvar realmente tira ele da loja. Rotas: `GET
 /api/insumos/por-loja?loja=` (qualquer logado, mesma liberação de leitura
 do resto do Estoque) e `POST /api/insumos/por-loja` (admin).
 
+**Importar insumos em lote** (concluído em 2026-08-28, na sequência direta
+do "Insumos separados por loja" acima — ao tentar aplicar a lista da
+VMarket na Tradiça Simus, ficou claro que nenhum dos itens dela existia
+ainda como insumo no AdmFood, só os 35 ingredientes de hambúrguer do
+Artesanos). Botão "Importar insumos" (ao lado de "Novo insumo", visível
+em qualquer aba, admin) abre um modal com checklist de loja(s), categoria
+e unidade padrão pro lote inteiro, e uma textarea pra colar a lista —
+aceita tanto um nome puro por linha quanto o mesmo formato `nome;valor`
+do "colar lista" da seção anterior (o valor é ignorado aqui, é só pra não
+precisar editar o arquivo que ela já tinha colado em outro lugar).
+`criar_insumos_em_lote(nomes, categoria, unidade_medida, lojas)` chama
+`criar_insumo` pra cada nome novo — mesmo caminho de sempre, sem
+mecanismo paralelo — e pula (reportando na tela) qualquer nome que já
+bata, normalizado (`_normalizar_nome_insumo`, mesmo critério do
+`_normalizarNomeInsumo` do front), com um insumo já existente no catálogo
+ou repetido dentro do próprio lote colado, pra nunca duplicar. Como
+`criar_insumo` já associa o insumo só às lojas passadas (tanto em
+`estoque_insumo` quanto em `insumo_loja`), insumo importado só pra
+Tradiça já nasce de fora do link do Artesanos e do Açaí — não precisa
+passar depois pela ferramenta "Insumos da loja" pra tirar. Rota: `POST
+/api/insumos/lote` (admin).
+
 **Ajuste manual da quantidade ideal** (concluído em 2026-08-27, primeira
 peça da "Quantidade ideal inteligente" — respostas da Kethllyn no roteiro
 de compras confirmaram manter a conta simples/visível e só permitir

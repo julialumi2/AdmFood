@@ -6,8 +6,10 @@ a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 
 import math
 import os
+import re
 import secrets
 import sqlite3
+import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
@@ -1099,6 +1101,44 @@ def criar_insumo(nome, categoria, unidade_medida, lojas):
                 (insumo_id, loja),
             )
         return insumo_id
+
+
+def _normalizar_nome_insumo(nome):
+    """Mesmo critério do `_normalizarNomeInsumo` do front (script.js): tira
+    acento/maiúscula/pontuação, pra comparar nome colado com nome já
+    cadastrado sem exigir bater caractere por caractere."""
+    nome = unicodedata.normalize("NFD", nome)
+    nome = "".join(c for c in nome if unicodedata.category(c) != "Mn")
+    nome = nome.lower()
+    return re.sub(r"[^a-z0-9]+", " ", nome).strip()
+
+
+def criar_insumos_em_lote(nomes, categoria, unidade_medida, lojas):
+    """Cadastra vários insumos novos de uma vez (mesma regra de
+    `criar_insumo` por trás, mesma categoria/unidade pro lote inteiro) —
+    pra quando uma loja nova traz um catálogo que ainda não existe no
+    AdmFood (ex: itens da VMarket). Pula nome que já bate, normalizado,
+    com um insumo já cadastrado (no banco ou repetido dentro do próprio
+    lote colado), pra não duplicar."""
+    with conexao() as conn:
+        existentes = {
+            _normalizar_nome_insumo(l["nome"]) for l in conn.execute("SELECT nome FROM insumo").fetchall()
+        }
+    criados = []
+    duplicados = []
+    vistos_no_lote = set()
+    for nome in nomes:
+        nome = nome.strip()
+        if not nome:
+            continue
+        chave = _normalizar_nome_insumo(nome)
+        if chave in existentes or chave in vistos_no_lote:
+            duplicados.append(nome)
+            continue
+        vistos_no_lote.add(chave)
+        insumo_id = criar_insumo(nome, categoria, unidade_medida, lojas)
+        criados.append({"id": insumo_id, "nome": nome})
+    return {"criados": criados, "duplicados": duplicados}
 
 
 def listar_insumos():
