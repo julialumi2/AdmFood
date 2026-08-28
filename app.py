@@ -91,6 +91,7 @@ from backend.armazenamento import (
     buscar_pedido,
     avancar_status_pedido,
     voltar_status_pedido,
+    excluir_pedido,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
     listar_historico_compras,
@@ -1701,6 +1702,21 @@ def api_voltar_pedido(pedido_id):
     if novo_status is None:
         return jsonify({"erro": "Pedido não encontrado."}), 404
     return jsonify({"ok": True, "status": novo_status})
+
+
+@app.route('/api/pedidos/<int:pedido_id>', methods=['DELETE'])
+def api_excluir_pedido(pedido_id):
+    """Cancela um pedido gerado por engano — libera o insumo pra entrar
+    de novo na próxima "Gerar pedidos" dessa cotação."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    excluir_pedido(pedido_id)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/admin/limpar-requisicoes-cotacoes', methods=['POST'])

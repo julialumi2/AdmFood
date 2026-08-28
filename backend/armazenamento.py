@@ -1780,6 +1780,19 @@ def voltar_status_pedido(pedido_id):
     return novo_status
 
 
+def excluir_pedido(pedido_id):
+    """Cancela um pedido gerado por engano (fornecedor errado, duplicado
+    etc. — risco real que ela apontou, revisão 2026-08-28). Não mexe em
+    estoque (o pedido nunca mexeu). Excluir libera o(s) insumo(s) desse
+    pedido pra aparecer de novo da próxima vez que "Gerar pedidos" rodar
+    nessa cotação — `gerar_pedidos_de_cotacao` só pula insumo que já tem
+    pedido_compra_item existente, então cancelar é o mesmo que "ainda não
+    foi pedido"."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
+        conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
+
+
 def limpar_requisicoes_e_cotacoes():
     """Apaga TODO o histórico de requisições/contagens, cotações (com
     convites e preços) e pedidos de compra — ação de manutenção sem volta,

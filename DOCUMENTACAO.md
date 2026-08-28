@@ -833,10 +833,20 @@ tinha como desfazer) — `voltar_status_pedido` é o espelho de
 `avancar_status_pedido`, um passo pra trás por vez, trava em "Pedido
 enviado" (não some do rastreio). Também não mexe em estoque.
 
+**Cancelar pedido** (concluído em 2026-08-28, mesma revisão: pedido
+gerado pro fornecedor errado, ou duplicado, não tinha como sair de
+existir — só apagando tudo na Zona de Perigo). Botão "Cancelar pedido" no
+detalhe (vermelho, mas sem destaque igual ao de avançar/voltar, pra não
+ser o primeiro clique óbvio). `excluir_pedido` apaga o pedido e seus
+itens; como `gerar_pedidos_de_cotacao` só pula insumo que já tem
+`pedido_compra_item` registrado, cancelar automaticamente libera esse(s)
+insumo(s) pra aparecer de novo na próxima vez que "Gerar pedidos" rodar
+na mesma cotação — não precisa de nenhuma lógica extra de "desfazer".
+
 Rotas: `POST /api/cotacoes/<id>/gerar-pedidos` (admin), `GET /api/pedidos`
 (lista, admin), `GET /api/pedidos/<id>` (detalhe com itens, admin), `POST
 /api/pedidos/<id>/avancar` (admin), `POST /api/pedidos/<id>/voltar`
-(admin).
+(admin), `DELETE /api/pedidos/<id>` (admin, cancela).
 
 **"Zona de perigo" — limpar requisições e cotações** (concluída em
 2026-08-27, pedido do Guilherme pra zerar o histórico de teste antes do

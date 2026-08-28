@@ -2409,6 +2409,9 @@ function renderPedidoDetalhe() {
   }).join('');
 
   const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const btnCancelar = document.getElementById('btn-pedido-cancelar');
+  btnCancelar.style.display = isAdmin ? '' : 'none';
+
   const btnAvancar = document.getElementById('btn-pedido-avancar');
   const ultimoEstagio = indiceAtual >= pedidoEstagios.length - 1;
   btnAvancar.style.display = isAdmin ? '' : 'none';
@@ -2452,6 +2455,24 @@ document.getElementById('btn-pedido-avancar')?.addEventListener('click', async (
   } catch (erro) {
     console.error('Falha ao avançar pedido:', erro);
     alert(erro.message || 'Não foi possível avançar esse pedido.');
+  }
+});
+
+document.getElementById('btn-pedido-cancelar')?.addEventListener('click', async () => {
+  if (!pedidoDetalheAtual) return;
+  const p = pedidoDetalheAtual;
+  if (!confirm(`Cancelar o pedido de "${p.fornecedorNome}" pra "${p.loja}"? Essa ação não pode ser desfeita — os insumos dele voltam a ficar disponíveis pra gerar um pedido novo a partir da mesma cotação.`)) return;
+  try {
+    const resposta = await fetch(`/api/pedidos/${p.id}`, { method: 'DELETE' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao cancelar');
+    document.getElementById('pedido-detalhe-view').style.display = 'none';
+    document.getElementById('pedidos-lista-view').style.display = '';
+    pedidoDetalheAtual = null;
+    await carregarPedidos();
+  } catch (erro) {
+    console.error('Falha ao cancelar pedido:', erro);
+    alert(erro.message || 'Não foi possível cancelar esse pedido.');
   }
 });
 
