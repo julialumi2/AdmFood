@@ -84,6 +84,12 @@
   gap: 4px;
 }
 
+.tendencia-texto {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .inventory-table {
   width: 100%;
   border-collapse: collapse;

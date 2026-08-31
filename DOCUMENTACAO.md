@@ -858,6 +858,33 @@ mesma resposta de `GET /api/insumos/ajustes-quantidade-ideal` (evita mais
 uma chamada por loja) e o `carregarInsumos()` do Estoque já aplica em
 `_quantidadeIdealParaLoja`.
 
+**Sugestão de compra por tendência** (concluída em 2026-08-31, pedido do
+chefe da Julia repassado pelo Guilherme: além da quantidade ideal fixa,
+algo que "estude o comportamento das últimas semanas" e avise quando a
+loja estiver fugindo do padrão — motivado pelo CMV variando muito mês a
+mês no DRE dela). Decisão consciente: **não** é uma chamada de IA de
+verdade (custo/latência por linha, e chave de API em produção) — é
+estatística simples, mesma fonte de dados que já alimenta a quantidade
+ideal. `carregarInsumos()` (Estoque) busca `/api/insumos/consumo-medio`
+uma segunda vez, agora com uma janela de 14 dias (`_janelaConsumoRecente`)
+em vez dos 30 dias padrão, e `_sugestaoTendenciaParaLoja` compara as duas
+médias: se o consumo recente desviar 15% ou mais da média de 30 dias
+(`LIMIAR_DESVIO_TENDENCIA`), mostra uma linha extra "↑/↓ tendência: X
+(+Y%)" abaixo da quantidade ideal, na tela de Estoque — só numa loja
+específica, nunca na "Geral" (tendência de 4 lojas somadas confunde mais
+que ajuda). Puramente informativo: não sobrescreve nem participa do
+cálculo de déficit, quantidade ideal ou pedido em lugar nenhum — só
+chama atenção pra ela decidir se compra diferente do de sempre.
+
+Ficou de fora dessa primeira versão, registrado como pendência: detectar
+"a loja está comprando mais do que consome" (a causa mais provável do
+CMV variar, segundo o próprio chefe) exigiria saber **quando** cada
+compra aconteceu, mas hoje `distribuir_entrada_insumo` só grava isso em
+`lote_insumo` quando a entrada tem validade preenchida — entrada sem
+validade só soma direto em `estoque_insumo`, sem deixar rastro de data.
+Sem esse histórico confiável, não dá pra fazer essa comparação sem
+arriscar alertar coisa errada.
+
 **Geração automática da cotação a partir do déficit** (concluída em
 2026-08-27 — última peça do fluxo Requisição → Contagem → Cotação descrito
 na seção 9; regras vieram do roteiro de compras que a Kethllyn respondeu).

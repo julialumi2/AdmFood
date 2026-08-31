@@ -1211,15 +1211,27 @@ const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', crit
 let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
 let estoqueEditandoContexto = null; // { insumoId, loja }
-let estoqueConsumoMedio = {}; // { [insumoId]: { [loja]: consumoMedioDiario } }
+let estoqueConsumoMedio = {}; // { [insumoId]: { [loja]: consumoMedioDiario } } — média dos últimos 30 dias
+let estoqueConsumoRecente = {}; // { [insumoId]: { [loja]: consumoMedioDiario } } — média dos últimos 14 dias, pra enxergar tendência
 let estoqueAjustesIdeal = {}; // { [insumoId]: { [loja]: valorAjustado } }
 let estoqueMultiplicadorEspecial = {}; // { [loja]: multiplicador } — 1 = nenhuma data especial ativa
 
+// Janela "recente" pra comparar com a média de 30 dias e detectar
+// tendência de alta/queda — ver _sugestaoTendenciaParaLoja.
+function _janelaConsumoRecente() {
+  const fim = new Date();
+  const inicio = new Date(fim);
+  inicio.setDate(fim.getDate() - 13);
+  return { inicio: inicio.toISOString().slice(0, 10), fim: fim.toISOString().slice(0, 10) };
+}
+
 async function carregarInsumos() {
   try {
-    const [respostaInsumos, respostaConsumo, ...respostasAjustes] = await Promise.all([
+    const { inicio: inicioRecente, fim: fimRecente } = _janelaConsumoRecente();
+    const [respostaInsumos, respostaConsumo, respostaConsumoRecente, ...respostasAjustes] = await Promise.all([
       fetch('/api/insumos'),
       fetch('/api/insumos/consumo-medio'),
+      fetch(`/api/insumos/consumo-medio?inicio=${inicioRecente}&fim=${fimRecente}`),
       ...LOJAS_ESTOQUE.map((loja) => fetch(`/api/insumos/ajustes-quantidade-ideal?loja=${encodeURIComponent(loja)}`)),
     ]);
     if (!respostaInsumos.ok) throw new Error(`Erro no servidor Flask: ${respostaInsumos.status}`);
@@ -1231,6 +1243,15 @@ async function carregarInsumos() {
       const dadosConsumo = await respostaConsumo.json();
       (dadosConsumo.consumo || []).forEach((linha) => {
         const porLoja = estoqueConsumoMedio[linha.insumoId] || (estoqueConsumoMedio[linha.insumoId] = {});
+        porLoja[linha.unidade] = linha.consumoMedioDiario;
+      });
+    }
+
+    estoqueConsumoRecente = {};
+    if (respostaConsumoRecente.ok) {
+      const dadosConsumoRecente = await respostaConsumoRecente.json();
+      (dadosConsumoRecente.consumo || []).forEach((linha) => {
+        const porLoja = estoqueConsumoRecente[linha.insumoId] || (estoqueConsumoRecente[linha.insumoId] = {});
         porLoja[linha.unidade] = linha.consumoMedioDiario;
       });
     }
@@ -1296,6 +1317,28 @@ function _quantidadeIdealParaLinha(insumoId, loja) {
     }
   });
   return { valor: temAlgum ? Math.round(soma * 100) / 100 : null, ajustado: algumAjustado };
+}
+
+// Sugestão por tendência (pedido do chefe da Julia: além da quantidade
+// ideal fixa, algo que "estude o comportamento das últimas semanas" e
+// avise quando estiver fugindo do padrão). Compara o consumo médio dos
+// últimos 14 dias com a média de 30 dias já usada na quantidade ideal —
+// sem chamada de IA nenhuma, só estatística simples. Só faz sentido por
+// loja individual (tendência somada de 4 lojas diferentes confunde mais
+// que ajuda), e só aparece quando o desvio é grande o suficiente pra
+// valer a pena olhar. Puramente informativo: não entra no cálculo de
+// déficit/pedido em nenhum lugar, só chama atenção pra ela decidir.
+const LIMIAR_DESVIO_TENDENCIA = 0.15; // 15% de diferença pra começar a avisar
+
+function _sugestaoTendenciaParaLoja(insumoId, loja) {
+  const recente = estoqueConsumoRecente[insumoId]?.[loja];
+  const base = estoqueConsumoMedio[insumoId]?.[loja];
+  if (recente === undefined || !base) return null;
+  const desvio = (recente - base) / base;
+  if (Math.abs(desvio) < LIMIAR_DESVIO_TENDENCIA) return null;
+  const multiplicador = estoqueMultiplicadorEspecial[loja] || 1;
+  const valor = Math.round(recente * DIAS_COBERTURA_IDEAL * multiplicador * 100) / 100;
+  return { valor, desvioPercentual: Math.round(desvio * 100), subindo: desvio > 0 };
 }
 
 function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
@@ -1405,6 +1448,7 @@ function renderEstoqueTab() {
       : 100;
     const quantidadeIdeal = dados.quantidadeIdeal;
     const sugestaoCompra = quantidadeIdeal === null ? null : Math.max(0, Math.round((quantidadeIdeal - dados.quantidadeAtual) * 100) / 100);
+    const tendencia = loja ? _sugestaoTendenciaParaLoja(insumo.id, loja) : null;
     const estrela = isAdmin
       ? `<button type="button" class="btn-favorito ${insumo.favorito ? 'ativo' : ''}" data-acao="favoritar" data-insumo-id="${insumo.id}" data-favorito="${insumo.favorito ? '1' : '0'}" title="${insumo.favorito ? 'Remover dos favoritos' : 'Marcar como favorito'}">
           <i data-lucide="star" ${insumo.favorito ? 'fill="currentColor"' : ''}></i>
@@ -1432,6 +1476,7 @@ function renderEstoqueTab() {
               <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
               ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
               ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${sugestaoCompra} ${escaparHtml(insumo.unidadeMedida)}</span>` : ''}
+              ${tendencia ? `<span class="tendencia-texto" title="Consumo médio dos últimos 14 dias comparado com a média de 30 dias — não muda o cálculo de déficit, é só um alerta">${tendencia.subindo ? '↑' : '↓'} tendência: ${tendencia.valor} ${escaparHtml(insumo.unidadeMedida)} (${tendencia.subindo ? '+' : ''}${tendencia.desvioPercentual}%)</span>` : ''}
             </div>
           `}
         </td>
