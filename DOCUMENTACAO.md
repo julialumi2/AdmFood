@@ -87,6 +87,23 @@ python sincronizar.py               # sincroniza ontem
 python sincronizar.py 2026-08-02    # sincroniza uma data específica
 ```
 
+**Fuso horário do servidor** (corrigido em 2026-08-31, achado testando o
+fluxo de Compras: uma Requisição com prazo marcado pra "hoje às 17h35"
+aparecia com o prazo vencido bem antes disso). A imagem `python:3.12-slim`
+roda em UTC por padrão; o front manda `prazo_validade` como horário de
+Brasília sem indicar fuso nenhum (`<input type="datetime-local">`, sempre
+hora local do navegador), e o back compara direto com
+`datetime.now()`/`date.today()` (`_prazo_vencido` em `app.py`, e o job de
+sincronização "de hoje" que roda a cada 15 min). Sem os dois lados no
+mesmo fuso, Brasília sendo UTC-3, qualquer prazo de hoje parecia vencer
+3h mais cedo — e a sincronização "de hoje" corria risco de pegar o dia
+errado durante a noite (21h-23h59 de Brasília cai already no dia seguinte
+em UTC). Corrigido no `Dockerfile` com `ENV TZ=America/Sao_Paulo` +
+`tzdata` instalado (a imagem slim não vem com o banco de fusos horários
+completo) — alinha `datetime.now()`/`date.today()` do processo inteiro
+com o horário de Brasília, sem precisar tocar em cada comparação de data
+espalhada pelo código.
+
 ## 4. Sincronização com a Cardápio Web
 
 `backend/cardapio_web.py` fala com `https://integracao.cardapioweb.com/api/partner/v1`:
