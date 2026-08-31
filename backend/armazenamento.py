@@ -997,25 +997,43 @@ def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):
             )
 
 
+def _casar_item_cardapio(nome_vendido, catalogo_normalizado):
+    """catalogo_normalizado: {nome_normalizado: id}. Tenta o nome vendido
+    inteiro primeiro (tira acento/maiúscula/pontuação, mesmo critério de
+    _normalizar_nome_insumo — nomes vêm da Cardápio Web, cadastro na Ficha
+    Técnica é manual, não bate exatamente). Se não bater e o nome vendido
+    tiver um "- subtítulo" de marketing colado (comum na Cardápio Web, ex:
+    "Tasty Bacon - releitura do Big Tasty"), tenta de novo só com a parte
+    antes do traço."""
+    candidato = catalogo_normalizado.get(_normalizar_nome_insumo(nome_vendido))
+    if candidato:
+        return candidato
+    if " - " in nome_vendido:
+        prefixo = nome_vendido.split(" - ", 1)[0]
+        return catalogo_normalizado.get(_normalizar_nome_insumo(prefixo))
+    return None
+
+
 def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     """Grava quais itens de cardápio foram vendidos em cada pedido do dia,
-    casando pelo nome com item_cardapio (case/espaço insensível — nomes vêm
+    casando pelo nome com item_cardapio (ver _casar_item_cardapio — nomes vêm
     da Cardápio Web, cadastro na Ficha Técnica é manual, então não é garantido
     bater exatamente). Mesmo padrão de salvar_pedidos_do_dia: resincroniza o
     dia inteiro. Sem match, item_cardapio_id fica NULL mas a linha é salva
     do mesmo jeito, com o nome bruto — vira histórico utilizável assim que
     o item for cadastrado na Ficha Técnica."""
     with conexao() as conn:
+        catalogo = {
+            _normalizar_nome_insumo(linha["nome"]): linha["id"]
+            for linha in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+        }
         conn.execute(
             "DELETE FROM venda_item WHERE unidade = ? AND dia = ?",
             (unidade, dia_iso),
         )
         for pedido in pedidos_detalhados:
             for indice, item in enumerate(pedido.get("itens", [])):
-                encontrado = conn.execute(
-                    "SELECT id FROM item_cardapio WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))",
-                    (item["nome"],),
-                ).fetchone()
+                item_cardapio_id = _casar_item_cardapio(item["nome"], catalogo)
                 conn.execute(
                     """
                     INSERT INTO venda_item
@@ -1030,7 +1048,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                         pedido["canal"],
                         item["nome"],
                         item["quantidade"],
-                        encontrado["id"] if encontrado else None,
+                        item_cardapio_id,
                     ),
                 )
 

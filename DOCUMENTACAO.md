@@ -1209,8 +1209,25 @@ sem tirar acento nem cortar sufixo de marketing — "Tasty Bacon -
 releitura do Big Tasty" (28 vendas) não bate com o cadastro "Tasty
 Bacon", e "Cléssico - Cheese Salada" (31) não bate com "CLASSICO" por
 causa do acento. Prioridade decidida pela Julia: cadastrar a Ficha
-Técnica da Tradiça primeiro (maior volume), correção do casamento de
-nome depois — nenhuma das duas começada ainda.
+Técnica da Tradiça primeiro (o chefe dela está fazendo isso loja por
+loja), correção do casamento de nome logo em seguida.
+
+**Correção do casamento de nome** (concluída em 2026-08-31).
+`_casar_item_cardapio` (backend/armazenamento.py) tenta o nome vendido
+inteiro primeiro, normalizado (mesmo critério de `_normalizar_nome_insumo`
+— tira acento/maiúscula/pontuação), e se não bater e o nome tiver um
+"- subtítulo" de marketing colado (ex: "Tasty Bacon - releitura do Big
+Tasty"), tenta de novo só com a parte antes do traço. `salvar_itens_vendidos_do_dia`
+agora busca o catálogo inteiro uma vez por sincronização (antes era uma
+query por item vendido) e casa em memória — mais rápido e mais correto
+ao mesmo tempo. Resultado real, ressincronizando 30/08: de 7% (44/600)
+pra **21% (126/600)** de match, sem nenhum prato novo cadastrado — só
+corrigindo o casamento dos 20 que já existiam. O resto que falta é
+mesmo cobertura de catálogo (Tradiça/Açaí, combos), não formatação de
+nome. A correção vale só pra sincronizações novas — dias já sincronizados
+antes se corrigem sozinhos na reconferência automática dos últimos 7
+dias (ver seção 6.3), ou com uma ressincronização manual pra ir mais
+longe no histórico.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 
