@@ -1,6 +1,6 @@
-# AdmFood
+### AdmFood
 
-Sistema de gestão interna para uma rede de 4 lojas (hamburgueria e açaiteria), cobrindo estoque, compras, cardápio e indicadores de vendas — construído pra substituir planilhas soltas e um sistema de terceiros (VMarket) por um fluxo próprio, mais simples e sob medida pro negócio.
+Sistema de gestão interna para uma rede de 4 lojas, cobrindo estoque, compras, cardápio e indicadores de vendas — construído pra substituir planilhas soltas e um sistema de terceiros por um fluxo próprio, mais simples e sob medida pro negócio.
 
 Em produção, usado no dia a dia pela equipe de compras e pela gestão da rede.
 
@@ -16,17 +16,12 @@ Em produção, usado no dia a dia pela equipe de compras e pela gestão da rede.
 
 ## Stack
 
-Python (Flask) · SQLite · HTML/CSS/JavaScript puro (sem framework de front) · Gunicorn + APScheduler em produção · Integração com a API da Cardápio Web.
-
-## Rodando localmente
-
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
-Sobe em `http://127.0.0.1:5000`. Variáveis de ambiente num `.env` na raiz (nunca commitado — ver `.env.example`). Detalhes de cada variável, arquitetura e histórico completo de decisões em [`DOCUMENTACAO.md`](DOCUMENTACAO.md).
+· Python (Flask) 
+· SQLite 
+· HTML/CSS/JavaScript puro (sem framework de front) 
+· Gunicorn + APScheduler em produção 
+· Integração com a API da Cardápio Web.
 
 ## Sobre o desenvolvimento
 
-Projeto conduzido com desenvolvimento assistido por IA (Claude Code): especificação de requisito, revisão e teste de cada entrega antes de ir pra produção, e decisão técnica registrada em documentação — não só geração de código.
+Projeto conduzido com desenvolvimento assistido por IA: especificação de requisito, revisão e teste de cada entrega antes de ir pra produção, e decisão técnica registrada em documentação — não só geração de código.
