@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - Guia de Compras</title>
+  <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
+  <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="guia-compras.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Estoque</span>
+        </a>
+        <div class="menu-group expandido">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="shopping-cart"></i>
+            <span>Compras</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="fornecedores.html" class="menu-subitem">
+              <i data-lucide="truck"></i>
+              <span>Fornecedores</span>
+            </a>
+            <a href="cotacoes.html" class="menu-subitem">
+              <i data-lucide="list-checks"></i>
+              <span>Cotações</span>
+            </a>
+            <a href="contagens.html" class="menu-subitem">
+              <i data-lucide="clipboard-list"></i>
+              <span>Requisições</span>
+            </a>
+            <a href="pedidos.html" class="menu-subitem">
+              <i data-lucide="package-check"></i>
+              <span>Pedidos</span>
+            </a>
+            <a href="guia-compras.html" class="menu-subitem active">
+              <i data-lucide="compass"></i>
+              <span>Guia</span>
+            </a>
+          </div>
+        </div>
+        <div class="menu-group">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="book-open"></i>
+            <span>Cardápio</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="cardapio.html?aba=precos" class="menu-subitem" id="menu-cardapio-precos">
+              <i data-lucide="tag"></i>
+              <span>Preços</span>
+            </a>
+            <a href="cardapio.html?aba=ficha-tecnica" class="menu-subitem" id="menu-cardapio-ficha">
+              <i data-lucide="file-text"></i>
+              <span>Ficha Técnica</span>
+            </a>
+          </div>
+        </div>
+        <a href="preparo.html" class="menu-item">
+          <i data-lucide="timer"></i>
+          <span>Preparo</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <a href="insight.html" class="menu-item">
+          <i data-lucide="lightbulb"></i>
+          <span>Insights</span>
+        </a>
+        <a href="configuracoes.html" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+
+      <a href="configuracoes.html" class="sidebar-user-card">
+        <div class="avatar sidebar-user-avatar">JS</div>
+        <div class="user-info">
+          <span class="user-name sidebar-user-name">Julia Suzuki</span>
+          <span class="user-role sidebar-user-role">Admin</span>
+        </div>
+        <i data-lucide="chevron-right" class="sidebar-user-card-icon"></i>
+      </a>
+    </aside>
+
+    <!-- Fecha a gaveta de menu ao tocar fora, só no celular -->
+    <div class="mobile-menu-backdrop" id="mobile-menu-backdrop"></div>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">GUIA DE COMPRAS</span>
+        </div>
+
+        <div class="header-right">
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+        </div>
+      </header>
+
+      <!-- PÁGINA DE GUIA DE COMPRAS -->
+      <div class="page-content">
+
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="compass" class="icon-pin"></i>
+            <span>COMO FUNCIONA</span>
+          </div>
+          <div class="title-row">
+            <h1>Fluxo de Compras</h1>
+          </div>
+        </div>
+
+        <p class="guia-intro">
+          Seis etapas, cada uma com um dono e um lugar certo pra acontecer — da requisição que sai
+          do escritório até o insumo chegar de verdade no estoque da loja. <strong>Nada aqui é
+          automático demais</strong>: cada passagem de etapa é uma ação sua, e as que têm mais
+          risco de erro (cotação em duplicidade, pedido errado, etapa avançada sem querer) já têm
+          um jeito de desfazer.
+        </p>
+
+        <div class="chart-card">
+          <p class="panel-title" style="margin-bottom: var(--space-1);">O caminho, de ponta a ponta</p>
+          <div class="guia-mapa">
+            <div class="guia-mapa-no"><span class="num">1</span><span class="rotulo">Requisição</span></div>
+            <span class="guia-mapa-seta">→</span>
+            <div class="guia-mapa-no"><span class="num">2</span><span class="rotulo">Contagem</span></div>
+            <span class="guia-mapa-seta">→</span>
+            <div class="guia-mapa-no"><span class="num">3</span><span class="rotulo">Conferência</span></div>
+            <span class="guia-mapa-seta">→</span>
+            <div class="guia-mapa-no"><span class="num">4</span><span class="rotulo">Cotação</span></div>
+            <span class="guia-mapa-seta">→</span>
+            <div class="guia-mapa-no"><span class="num">5</span><span class="rotulo">Pedido</span></div>
+            <span class="guia-mapa-seta">→</span>
+            <div class="guia-mapa-no"><span class="num">6</span><span class="rotulo">Entrada</span></div>
+          </div>
+        </div>
+
+        <ol class="guia-etapas" style="margin-top: var(--space-8);">
+
+          <li class="guia-etapa">
+            <div class="guia-etapa-trilho"><div class="guia-etapa-num">1</div></div>
+            <div class="guia-etapa-corpo">
+              <div class="guia-etapa-head">
+                <h3 class="guia-etapa-nome">Requisição</h3>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você (admin)</span>
+              </div>
+              <p class="guia-etapa-onde">Onde: <b>Compras → Requisições</b> → <span class="guia-btnref">Nova requisição</span></p>
+              <p>
+                Você dá um título (ex: "Requisição semana 35"), define um prazo e marca quais
+                lojas entram nessa rodada — pode ser uma só ou as quatro juntas. Por trás, o
+                sistema abre uma Contagem separada pra cada loja marcada, mas te devolve um link
+                individual de preenchimento por loja, pronto pra mandar pro responsável de cada
+                unidade.
+              </p>
+              <p>
+                Cada link já mostra só os insumos daquela loja específica — quem recebe o link do
+                Açaí não perde tempo digitando quantidade de pão de hambúrguer.
+              </p>
+            </div>
+          </li>
+
+          <li class="guia-etapa">
+            <div class="guia-etapa-trilho"><div class="guia-etapa-num">2</div></div>
+            <div class="guia-etapa-corpo">
+              <div class="guia-etapa-head">
+                <h3 class="guia-etapa-nome">Contagem</h3>
+                <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px solid var(--border-color);">Funcionário da loja</span>
+              </div>
+              <p class="guia-etapa-onde">Onde: o link enviado — sem precisar de login</p>
+              <p>
+                A pessoa da loja abre o link e preenche a quantidade que tem em estoque agora,
+                insumo por insumo — igual o preenchimento que já é feito na VMarket. A "quantidade
+                ideal" calculada aparece do lado, como referência, mas quem decide o número real é
+                sempre quem está contando.
+              </p>
+              <p>Item com estoque zerado também deve ser preenchido com 0 — deixar em branco impede que o déficit seja calculado.</p>
+            </div>
+          </li>
+
+          <li class="guia-etapa">
+            <div class="guia-etapa-trilho"><div class="guia-etapa-num">3</div></div>
+            <div class="guia-etapa-corpo">
+              <div class="guia-etapa-head">
+                <h3 class="guia-etapa-nome">Conferência</h3>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você (admin)</span>
+              </div>
+              <p class="guia-etapa-onde">Onde: <b>Compras → Requisições</b> → abrir a requisição</p>
+              <p>
+                Aqui entram todas as lojas participantes somadas: pra cada insumo, o sistema mostra
+                o déficit (ideal menos preenchido), sempre arredondado pra cima. As lojas nunca são
+                somadas artificialmente pra "ajudar" a bater o mínimo de um fornecedor — a quebra
+                por loja continua guardada por baixo, pra montar a compra certa depois.
+              </p>
+              <p>
+                Número parecendo errado? Dá pra corrigir a quantidade ideal na hora, insumo por
+                insumo, em <span class="guia-btnref">Ajustar em lote</span> pra loja inteira, ou
+                colando uma lista pronta — útil quando você já tem a sugestão de outro sistema. Só
+                depois que todas as lojas aprovarem (uma por uma ou em
+                <span class="guia-btnref">Aprovar todas</span>) o botão de gerar cotação libera.
+              </p>
+              <div class="guia-seguranca">
+                <span class="guia-seguranca-marca">↺</span>
+                <p>Clicar duas vezes em <span class="guia-btnref">Gerar cotação</span> não cria
+                duplicata — o sistema reconhece que aquela requisição já virou cotação e te leva
+                direto pra ela.</p>
+              </div>
+            </div>
+          </li>
+
+          <li class="guia-etapa">
+            <div class="guia-etapa-trilho"><div class="guia-etapa-num">4</div></div>
+            <div class="guia-etapa-corpo">
+              <div class="guia-etapa-head">
+                <h3 class="guia-etapa-nome">Cotação</h3>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
+                <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px dashed var(--border-color);">Fornecedores</span>
+              </div>
+              <p class="guia-etapa-onde">Onde: <b>Compras → Cotações</b></p>
+              <p>
+                A cotação já nasce com a quantidade total de cada insumo calculada. Você manda o
+                link pros fornecedores cadastrados, cada um preenche o preço que cobra, e você
+                escolhe o vencedor insumo por insumo — pode ser um fornecedor diferente por item,
+                sem problema nenhum.
+              </p>
+              <div class="guia-seguranca">
+                <span class="guia-seguranca-marca">↺</span>
+                <p>Nada fecha sozinho: até você marcar o vencedor de um insumo, dá pra editar preço
+                e trocar fornecedor à vontade.</p>
+              </div>
+            </div>
+          </li>
+
+          <li class="guia-etapa">
+            <div class="guia-etapa-trilho"><div class="guia-etapa-num">5</div></div>
+            <div class="guia-etapa-corpo">
+              <div class="guia-etapa-head">
+                <h3 class="guia-etapa-nome">Pedido</h3>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
+              </div>
+              <p class="guia-etapa-onde">Onde: <b>Compras → Pedidos</b></p>
+              <p>
+                Com os vencedores marcados, <span class="guia-btnref">Gerar pedidos</span> cria um
+                pedido por fornecedor <em>e</em> por loja — nunca a cotação inteira de uma vez,
+                porque o pedido mínimo de cada fornecedor vale por loja, não pela rede somada. Cada
+                pedido caminha por quatro etapas: Enviado → Confirmado → A caminho → Recebido.
+              </p>
+              <div class="guia-seguranca">
+                <span class="guia-seguranca-marca">↺</span>
+                <p>Avançou sem querer? <span class="guia-btnref">Voltar etapa</span> desfaz um
+                passo. Pedido pro fornecedor errado, ou duplicado?
+                <span class="guia-btnref">Cancelar pedido</span> apaga ele e libera esses insumos
+                pra entrar num próximo "Gerar pedidos" — sem passo extra.</p>
+              </div>
+            </div>
+          </li>
+
+          <li class="guia-etapa">
+            <div class="guia-etapa-trilho"><div class="guia-etapa-num">6</div></div>
+            <div class="guia-etapa-corpo">
+              <div class="guia-etapa-head">
+                <h3 class="guia-etapa-nome">Entrada em estoque</h3>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
+              </div>
+              <p class="guia-etapa-onde">Onde: <b>Estoque</b> → <span class="guia-btnref">Registrar entrada</span></p>
+              <p>
+                Chegar em "Recebido" no pedido <strong>não</strong> atualiza o estoque sozinho — de
+                propósito, porque o que chega pode não bater exatamente com o que foi pedido. Você
+                confirma a quantidade real e distribui entre as lojas em "Registrar entrada". É
+                esse número que vira a base da próxima Contagem, fechando o ciclo.
+              </p>
+            </div>
+          </li>
+
+        </ol>
+
+        <h2 class="guia-secao-titulo">Ferramentas de apoio</h2>
+        <p class="guia-secao-sub">Não são etapas do fluxo — são o que mantém os números certos por trás dele.</p>
+
+        <div class="guia-ferramentas">
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Insumos da loja</div>
+              <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
+            </div>
+            <div class="guia-ferramenta-desc">Decide quais insumos entram no link de Requisição de cada loja — pra ninguém preencher o que não usa.</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Importar insumos</div>
+              <span class="guia-ferramenta-local">Estoque</span>
+            </div>
+            <div class="guia-ferramenta-desc">Cadastra vários insumos novos de uma vez, já associados à loja certa — pra quando chega um catálogo inteiro de fora (ex: VMarket).</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Ajustar em lote + colar lista</div>
+              <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
+            </div>
+            <div class="guia-ferramenta-desc">Corrige a quantidade ideal de vários insumos de uma vez — inclusive colando uma lista pronta de outro sistema.</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Ficha técnica + colar lista</div>
+              <span class="guia-ferramenta-local">Cardápio → Ficha Técnica</span>
+            </div>
+            <div class="guia-ferramenta-desc">Define quais insumos cada prato usa e em que quantidade — é o que faz a "quantidade ideal" calcular sozinha em vez de vir sempre em branco.</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Zona de perigo</div>
+              <span class="guia-ferramenta-local">Configurações</span>
+            </div>
+            <div class="guia-ferramenta-desc">Apaga todo o histórico de requisição/cotação de uma vez — exige digitar "APAGAR" pra confirmar. Só pra limpar teste, nunca automático.</div>
+          </div>
+        </div>
+
+        <h2 class="guia-secao-titulo">Perguntas que você pode ter</h2>
+
+        <ul class="guia-faq" style="margin-bottom: var(--space-8);">
+          <li>
+            <p class="guia-faq-p">Uma loja não respondeu a tempo — travo tudo?</p>
+            <p class="guia-faq-r">A Conferência mostra exatamente quais lojas ainda faltam. Gerar cotação exige todas aprovadas, mas nada te impede de aprovar as que já responderam e esperar o resto.</p>
+          </li>
+          <li>
+            <p class="guia-faq-p">Posso cotar as quatro lojas juntas mesmo elas sendo diferentes?</p>
+            <p class="guia-faq-r">Sim — é assim que já funciona hoje, porque fornecedor não preenche quatro cotações separadas na prática. Cota-se junto, e o pedido depois é combinado pra entregar separado por loja.</p>
+          </li>
+          <li>
+            <p class="guia-faq-p">E se eu errar uma etapa do pedido?</p>
+            <p class="guia-faq-r">"Voltar etapa" desfaz um passo; "Cancelar pedido" apaga o pedido inteiro e devolve os insumos dele pra próxima leva de "Gerar pedidos".</p>
+          </li>
+          <li>
+            <p class="guia-faq-p">Preciso ter medo de clicar duas vezes em algum botão importante?</p>
+            <p class="guia-faq-r">Não em "Gerar cotação" — ele é protegido contra duplicidade. As ações realmente irreversíveis (como a Zona de Perigo) pedem confirmação por texto antes de deixar continuar.</p>
+          </li>
+        </ul>
+
+      </div>
+    </main>
+  </div>
+
+</body>
+</html>

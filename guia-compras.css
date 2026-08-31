@@ -1,0 +1,277 @@
+/* Página "Guia de Compras" (cardapio.html/estoque.html reaproveitam o
+   grosso do layout de theme.css — isso aqui é só o conteúdo específico
+   do guia: mapa geral, linha do tempo das etapas, tabela de ferramentas
+   e FAQ). */
+
+.guia-intro {
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.65;
+  margin: -4px 0 var(--space-6);
+}
+
+.guia-intro strong {
+  color: var(--text-dark);
+  font-weight: 700;
+}
+
+/* ---------- Mapa geral (visão de ponta a ponta) ---------- */
+
+.guia-mapa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+.guia-mapa-no {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.guia-mapa-no .num {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-weight: 700;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guia-mapa-no .rotulo {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.guia-mapa-seta {
+  color: var(--text-faint);
+  margin: 0 var(--space-1);
+}
+
+/* ---------- Linha do tempo das etapas ---------- */
+
+.guia-etapas {
+  list-style: none;
+  margin: 0 0 var(--space-8);
+  padding: 0;
+}
+
+.guia-etapa {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 0 var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+.guia-etapa:last-child { padding-bottom: 0; }
+
+.guia-etapa-trilho {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.guia-etapa-num {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.guia-etapa-trilho::after {
+  content: "";
+  position: absolute;
+  top: 44px;
+  bottom: calc(-1 * var(--space-8));
+  left: 50%;
+  width: 2px;
+  background: var(--border-color);
+  transform: translateX(-50%);
+}
+
+.guia-etapa:last-child .guia-etapa-trilho::after { display: none; }
+
+.guia-etapa-corpo {
+  min-width: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.guia-etapa-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.guia-etapa-nome {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.guia-etapa-onde {
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  margin: 0 0 var(--space-3);
+}
+
+.guia-etapa-onde b { color: var(--text-muted); font-weight: 700; }
+
+.guia-etapa-corpo p {
+  margin: 0 0 var(--space-3);
+  color: var(--text-dark);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  max-width: 62ch;
+}
+
+.guia-etapa-corpo p:last-of-type { margin-bottom: 0; }
+
+.guia-btnref {
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-size: 0.86em;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.05em 0.4em;
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.guia-seguranca {
+  margin-top: var(--space-3);
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  max-width: 62ch;
+}
+
+.guia-seguranca-marca {
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.guia-seguranca p {
+  margin: 0 !important;
+  font-size: 0.86rem !important;
+  color: var(--text-dark) !important;
+}
+
+/* ---------- Ferramentas de apoio ---------- */
+
+.guia-secao-titulo {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: var(--space-8) 0 var(--space-1);
+}
+
+.guia-secao-sub {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin: 0 0 var(--space-5);
+}
+
+.guia-ferramentas {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-8);
+}
+
+.guia-ferramenta-linha {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) 1fr;
+  gap: var(--space-1) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.guia-ferramenta-linha:last-child { border-bottom: none; }
+
+.guia-ferramenta-nome {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-dark);
+}
+
+.guia-ferramenta-local {
+  display: block;
+  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.guia-ferramenta-desc {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .guia-ferramenta-linha { grid-template-columns: 1fr; }
+}
+
+/* ---------- FAQ ---------- */
+
+.guia-faq {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.guia-faq-p {
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 4px;
+  font-size: 0.94rem;
+}
+
+.guia-faq-r {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  max-width: 64ch;
+  line-height: 1.6;
+}
