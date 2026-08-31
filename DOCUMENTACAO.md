@@ -885,6 +885,12 @@ validade só soma direto em `estoque_insumo`, sem deixar rastro de data.
 Sem esse histórico confiável, não dá pra fazer essa comparação sem
 arriscar alertar coisa errada.
 
+Testado em produção no mesmo dia contra dados reais: a lógica funciona
+certo (validado com casos sintéticos de alta/queda/sem dado), mas na
+prática aparece pouco ainda, pelo mesmo motivo que já limitava a
+"Quantidade ideal" — ver a pendência da Ficha Técnica incompleta na
+seção 9 (item 9), confirmada com números concretos no mesmo teste.
+
 **Geração automática da cotação a partir do déficit** (concluída em
 2026-08-27 — última peça do fluxo Requisição → Contagem → Cotação descrito
 na seção 9; regras vieram do roteiro de compras que a Kethllyn respondeu).
@@ -1190,6 +1196,21 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
 8. **Preparo** — ✅ concluído em 2026-08-24 (indicadores operacionais da cozinha — ver seção 6.2). Pivotou de KDS em tempo real (pedido do rascunho original da Julia) pra tela de relatório, depois de investigar e confirmar que a API da Cardápio Web não expõe o momento em que a cozinha termina de preparar.
 9. **Aviso de estoque baixo/vencendo + quantidade ideal inteligente** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`) e card "Lotes vencendo" com botão de resolver (seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`) e coluna "Consumo médio/dia" na tela de Estoque (seção 6.6); coluna "Qtd. ideal (7 dias)" = consumo médio × 7, com "comprar X" destacado quando o atual fica abaixo do ideal (concluído em 2026-08-25). **"Quantidade ideal inteligente"** (as 3 peças que a Kethllyn pediu no roteiro de compras, ver seção 6.9) ✅ concluída em 2026-08-27: ajuste manual por insumo/loja, copiar de loja parecida (loja nova sem histórico) e datas especiais (feriado/evento aumentando a conta calculada com antecedência) — deliberadamente **sem** IA/caixa-preta, ela pediu conta simples e visível. Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, aguardando o chefe da loja definir e passar as quantidades, sem prazo (sem isso, a quantidade ideal calculada fica "—" pra maioria dos insumos, mesmo com ajuste manual/cópia/data especial prontos); (b) o "aviso" em si sendo empurrado (WhatsApp) — hoje é passivo, só aparece pra quem abrir a tela; depende do item 2.
+
+**Confirmado com números reais em 2026-08-31** (ao testar a "sugestão por
+tendência" abaixo — ela também depende dessa mesma Ficha Técnica): de 600
+linhas de `venda_item` sincronizadas, só 44 (7%) casaram com um item da
+Ficha Técnica. A maior fatia perdida é a **Tradiça** (hot dogs) — nunca
+teve nenhum prato cadastrado, só o Artesanos teve a carga inicial — ex:
+"Tradiça Duplo" (53 vendas), "Hot Dog com Calabresa" (43), "Hot Dog com
+Bacon" (25) ficam de fora inteiros. Segundo fator, menor mas real: o
+casamento em `salvar_itens_vendidos_do_dia` é só `LOWER(TRIM(nome))`,
+sem tirar acento nem cortar sufixo de marketing — "Tasty Bacon -
+releitura do Big Tasty" (28 vendas) não bate com o cadastro "Tasty
+Bacon", e "Cléssico - Cheese Salada" (31) não bate com "CLASSICO" por
+causa do acento. Prioridade decidida pela Julia: cadastrar a Ficha
+Técnica da Tradiça primeiro (maior volume), correção do casamento de
+nome depois — nenhuma das duas começada ainda.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 
