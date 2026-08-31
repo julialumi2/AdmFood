@@ -1078,6 +1078,23 @@ cadastro (`insumo`, `fornecedor`, `insumo_fornecedor`,
 que essa — é irreversível, então só existe pra rodar direto em produção
 quando ela decidir, nunca automático.
 
+**Excluir uma requisição isolada** (concluído em 2026-08-31, terceiro e
+último item da lista de risco que ela levantou revisando o fluxo — pedido
+do Guilherme). A Zona de Perigo acima só apaga **tudo** de uma vez —
+descartar uma única requisição de teste (ex: "TESTE - apagar depois")
+exigia zerar o histórico inteiro. Ícone de lixeira na lista de
+Requisições (`contagens.html`, só admin, ao lado do de abrir a
+conferência) chama `excluir_requisicao(titulo, prazo_validade)` — mesma
+ordem de FK da limpeza geral, mas filtrada só pelas contagens desse
+grupo e a cotação/pedidos nascidos dela (se existir), via
+`requisicao_titulo`/`requisicao_prazo`. Confirmação simples (`confirm()`
+do navegador, não o "digitar APAGAR" da limpeza geral) — proporcional ao
+risco menor de mexer só numa requisição, não no histórico todo. Testado
+com uma requisição de 2 lojas já aprovada e com cotação gerada: exclusão
+apagou as 2 contagens, a cotação e os itens dela, sem tocar em nenhum
+outro dado. Rota: `DELETE /api/requisicoes?titulo=&prazoValidade=`
+(admin).
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.

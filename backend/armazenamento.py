@@ -1933,6 +1933,44 @@ def limpar_requisicoes_e_cotacoes():
         conn.execute("DELETE FROM contagem")
 
 
+def excluir_requisicao(titulo, prazo_validade):
+    """Apaga uma única requisição (o grupo de contagens com esse título +
+    prazo) e a cotação/pedidos gerados a partir dela, se existir — versão
+    pontual da Zona de Perigo acima, que só apagava tudo de uma vez (risco
+    real que ela apontou: não dava pra descartar uma requisição de teste
+    isolada sem zerar o histórico inteiro). Mesma regra de não mexer em
+    `estoque_insumo` nem em cadastro."""
+    with conexao() as conn:
+        cotacoes = conn.execute(
+            "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ?",
+            (titulo, prazo_validade),
+        ).fetchall()
+        for cotacao in cotacoes:
+            cotacao_id = cotacao["id"]
+            conn.execute(
+                "DELETE FROM pedido_compra_item WHERE pedido_id IN (SELECT id FROM pedido_compra WHERE cotacao_id = ?)",
+                (cotacao_id,),
+            )
+            conn.execute("DELETE FROM pedido_compra WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute(
+                "DELETE FROM cotacao_convite_item WHERE convite_id IN (SELECT id FROM cotacao_convite WHERE cotacao_id = ?)",
+                (cotacao_id,),
+            )
+            conn.execute("DELETE FROM cotacao_convite WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute("DELETE FROM cotacao_preco WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute("DELETE FROM cotacao_item_loja WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute("DELETE FROM cotacao WHERE id = ?", (cotacao_id,))
+        conn.execute(
+            "DELETE FROM contagem_item WHERE contagem_id IN (SELECT id FROM contagem WHERE descricao = ? AND prazo_validade = ?)",
+            (titulo, prazo_validade),
+        )
+        conn.execute(
+            "DELETE FROM contagem WHERE descricao = ? AND prazo_validade = ?",
+            (titulo, prazo_validade),
+        )
+
+
 DIAS_COBERTURA_IDEAL = 7  # mesma constante do front (script.js) — cotação é semanal
 
 

@@ -99,6 +99,7 @@ from backend.armazenamento import (
     excluir_pedido,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
+    excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
     listar_convites_cotacao,
@@ -1862,6 +1863,23 @@ def api_listar_requisicoes():
     if erro_admin:
         return erro_admin
     return jsonify({"requisicoes": [_formatar_requisicao_resumo(r) for r in listar_requisicoes()]})
+
+
+@app.route('/api/requisicoes', methods=['DELETE'])
+def api_excluir_requisicao():
+    """Exclui uma única requisição (versão pontual da Zona de Perigo, que
+    só apaga tudo de uma vez) — ver excluir_requisicao em
+    backend/armazenamento.py."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    titulo = request.args.get('titulo', '')
+    prazo_validade = request.args.get('prazoValidade', '')
+    grupo = _buscar_grupo_requisicao(titulo, prazo_validade)
+    if not grupo:
+        return jsonify({"erro": "Requisição não encontrada."}), 404
+    excluir_requisicao(titulo, prazo_validade)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/requisicoes/conferencia', methods=['GET'])

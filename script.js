@@ -2841,6 +2841,9 @@ function renderRequisicoesTabela() {
             <button type="button" class="btn-acao-icone" data-acao="abrir-requisicao" data-indice="${indice}" title="Ver conferência somada">
               <i data-lucide="arrow-right"></i>
             </button>
+            <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-requisicao" data-indice="${indice}" title="Excluir só essa requisição">
+              <i data-lucide="trash-2"></i>
+            </button>
           </td>
         ` : ''}
       </tr>
@@ -2851,6 +2854,22 @@ function renderRequisicoesTabela() {
     btn.addEventListener('click', () => {
       const r = requisicoesLista[parseInt(btn.dataset.indice, 10)];
       abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+    });
+  });
+
+  tbody.querySelectorAll('[data-acao="excluir-requisicao"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const r = requisicoesLista[parseInt(btn.dataset.indice, 10)];
+      if (!confirm(`Excluir a requisição "${r.titulo || 'sem título'}"? Isso apaga as contagens de todas as lojas e a cotação/pedidos gerados a partir dela, se existirem — só dessa requisição, o resto do histórico continua intacto. Não dá pra desfazer.`)) return;
+      try {
+        const resposta = await fetch(`/api/requisicoes?titulo=${encodeURIComponent(r.titulo)}&prazoValidade=${encodeURIComponent(r.prazoValidade)}`, { method: 'DELETE' });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao excluir');
+        await carregarRequisicoes();
+      } catch (erro) {
+        console.error('Falha ao excluir requisição:', erro);
+        alert(erro.message || 'Não foi possível excluir essa requisição.');
+      }
     });
   });
 
