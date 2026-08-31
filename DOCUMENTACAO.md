@@ -949,6 +949,23 @@ travadas no valor original da requisição pra sempre. Antes de gerar,
 par exato — se achar, devolve o id dela sem criar nada de novo (nem
 recalcula os itens); só cria de verdade na primeira chamada.
 
+**Avisar insumo sem quantidade ideal calculável** (concluído em
+2026-08-31, segundo item da lista de risco que ela levantou revisando o
+fluxo — pedido do Guilherme). Antes, `gerar_cotacao_do_deficit` pulava
+silenciosamente qualquer insumo sem quantidade ideal calculável (item
+`sem_ideal` do loop) — ele nunca entrava na cotação, e não tinha como
+saber disso sem ir conferir manualmente. Agora a função devolve
+`{"cotacaoId", "insumosSemIdeal": [{"insumoId", "nome"}, ...]}` em vez de
+só o id; a rota `POST /api/requisicoes/conferencia/gerar-cotacao` repassa
+essa lista, e os dois pontos que chamam essa rota (o clique manual em
+"Gerar cotação" na conferência, e o atalho de aprovar a última loja
+direto pra cotação) mostram um alerta com os nomes antes de levar pra
+tela da cotação — `_avisoInsumosSemIdeal` em `script.js`. Testado com
+dado real: de 35 insumos de uma contagem, 28 sem ideal calculável (falta
+de Ficha Técnica/venda casada) foram corretamente listados, e os 7 com
+déficit de verdade entraram na cotação normalmente. Não muda nada no
+cálculo em si — só torna visível o que já acontecia por baixo.
+
 Rotas: `GET/POST /api/contagens` (lista/cria, admin), `GET
 /api/contagens/<id>` (detalhe de uma loja pra conferência, admin), `POST
 /api/contagens/<id>/aprovar` (admin), `PUT/DELETE

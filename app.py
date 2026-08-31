@@ -1959,10 +1959,14 @@ def api_gerar_cotacao_requisicao():
     if any(c['status'] != 'aprovada' for c in grupo['contagens']):
         return jsonify({"erro": "Só é possível gerar a cotação depois que todas as lojas forem aprovadas."}), 400
 
-    cotacao_id = gerar_cotacao_do_deficit(titulo, prazo_validade)
-    if cotacao_id is None:
+    resultado = gerar_cotacao_do_deficit(titulo, prazo_validade)
+    if resultado["cotacaoId"] is None:
         return jsonify({"erro": "Nenhum insumo com déficit — não há nada para cotar."}), 400
-    return jsonify({"ok": True, "cotacaoId": cotacao_id})
+    return jsonify({
+        "ok": True,
+        "cotacaoId": resultado["cotacaoId"],
+        "insumosSemIdeal": resultado["insumosSemIdeal"],
+    })
 
 
 @app.route('/api/contagens', methods=['POST'])

@@ -2225,21 +2225,26 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     (q3, "mesmo link, insumos juntos, mas separados na hora de montar a
     compra pra cada loja").
 
-    Retorna o id da cotação criada, ou None se a requisição não existir,
+    Retorna {"cotacaoId": id ou None, "insumosSemIdeal": [{"insumoId",
+    "nome"}, ...]}. `cotacaoId` vem None se a requisição não existir,
     ainda tiver alguma contagem não aprovada, ou não sobrar nenhum insumo
-    com déficit de verdade (nada a comprar). **Idempotente**: se essa
-    requisição já tinha gerado uma cotação antes (clicar duas vezes em
-    "Gerar cotação", ou aprovar a última loja duas vezes), devolve a
-    cotação que já existe em vez de criar uma duplicada com os mesmos
-    insumos — risco real que ela apontou (roteiro de compras, revisão
-    2026-08-28)."""
+    com déficit de verdade (nada a comprar). `insumosSemIdeal` avisa quais
+    insumos ficaram de fora do cálculo por não terem quantidade ideal
+    calculável em pelo menos uma loja — antes sumiam da cotação sem
+    nenhum aviso, risco real que ela apontou revisando o fluxo (a pessoa
+    só descobriria o insumo faltando muito depois, olhando o pedido final).
+    **Idempotente**: se essa requisição já tinha gerado uma cotação antes
+    (clicar duas vezes em "Gerar cotação", ou aprovar a última loja duas
+    vezes), devolve a cotação que já existe em vez de criar uma duplicada
+    com os mesmos insumos — risco real que ela apontou (roteiro de
+    compras, revisão 2026-08-28)."""
     with conexao() as conn:
         existente = conn.execute(
             "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ?",
             (titulo, prazo_validade),
         ).fetchone()
     if existente:
-        return existente["id"]
+        return {"cotacaoId": existente["id"], "insumosSemIdeal": []}
 
     grupo = None
     for r in listar_requisicoes():
@@ -2247,14 +2252,16 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
             grupo = r
             break
     if not grupo:
-        return None
+        return {"cotacaoId": None, "insumosSemIdeal": []}
     if any(c['status'] != 'aprovada' for c in grupo['contagens']):
-        return None
+        return {"cotacaoId": None, "insumosSemIdeal": []}
 
     deficits = {}
+    sem_ideal = {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
             if item['quantidadeIdeal'] is None:
+                sem_ideal[item['insumoId']] = item['nome']
                 continue
             atual = item['quantidadePreenchida'] if item['quantidadePreenchida'] is not None else 0
             deficit = item['quantidadeIdeal'] - atual
@@ -2269,8 +2276,10 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
             })
             info['porLoja'][contagem['loja']] = deficit
 
+    insumos_sem_ideal = [{"insumoId": insumo_id, "nome": nome} for insumo_id, nome in sem_ideal.items()]
+
     if not deficits:
-        return None
+        return {"cotacaoId": None, "insumosSemIdeal": insumos_sem_ideal}
 
     cotacao_id = criar_cotacao(titulo, requisicao_titulo=titulo, requisicao_prazo=prazo_validade)
     with conexao() as conn:
@@ -2285,7 +2294,7 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
                     "INSERT INTO cotacao_item_loja (cotacao_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
                     (cotacao_id, insumo_id, loja, quantidade),
                 )
-    return cotacao_id
+    return {"cotacaoId": cotacao_id, "insumosSemIdeal": insumos_sem_ideal}
 
 
 def listar_itens_cotacao(cotacao_id):

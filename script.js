@@ -2755,7 +2755,7 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
       });
       const gerarDados = await gerarResposta.json();
       if (gerarResposta.ok) {
-        alert('Todas as lojas aprovadas — cotação gerada!');
+        alert('Todas as lojas aprovadas — cotação gerada!' + _avisoInsumosSemIdeal(gerarDados.insumosSemIdeal));
         window.location.href = `cotacoes.html?abrir=${gerarDados.cotacaoId}`;
         return;
       }
@@ -2943,6 +2943,15 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
   }
 });
 
+// Avisa quais insumos ficaram de fora da cotação por não terem quantidade
+// ideal calculável ainda — antes sumiam da lista sem ninguém perceber, só
+// descobrindo bem depois que aquele insumo nunca entrou num pedido.
+function _avisoInsumosSemIdeal(insumosSemIdeal) {
+  if (!insumosSemIdeal || !insumosSemIdeal.length) return '';
+  const nomes = insumosSemIdeal.map((i) => i.nome).join(', ');
+  return `\n\nAtenção: ${insumosSemIdeal.length} insumo(s) ficaram de fora da cotação por ainda não terem quantidade ideal calculável (Ficha Técnica incompleta ou sem venda registrada): ${nomes}. Ajusta a quantidade ideal na mão pra esses insumos entrarem numa próxima cotação.`;
+}
+
 document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
   const r = requisicaoConferenciaAtual;
   if (!r || !r.totalmenteAprovada) return;
@@ -2955,6 +2964,8 @@ document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar cotação');
+    const aviso = _avisoInsumosSemIdeal(dados.insumosSemIdeal);
+    if (aviso) alert(aviso.trim());
     window.location.href = `cotacoes.html?abrir=${dados.cotacaoId}`;
   } catch (erro) {
     console.error('Falha ao gerar cotação:', erro);
