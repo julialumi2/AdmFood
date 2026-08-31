@@ -2372,3 +2372,21 @@ def aprovar_contagem(contagem_id):
             "UPDATE contagem SET status = 'aprovada', aprovada_em = ? WHERE id = ?",
             (agora, contagem_id),
         )
+
+
+def reabrir_contagem(contagem_id):
+    """Volta uma contagem 'respondida' ou 'aprovada' pra 'aberta',
+    destravando o link público de novo pra digitar os valores certos —
+    risco real que ela apontou: erro de preenchimento aprovado sem querer
+    não tinha conserto nenhum, só apagando tudo pela Zona de Perigo. Não
+    desfaz o que já foi aprovado em `estoque_insumo` (não existe rastro de
+    qual era o valor anterior pra reverter com segurança); quando a loja
+    reenviar e alguém aprovar de novo, `aprovar_contagem` sobrescreve com
+    o valor corrigido normalmente. Se a Requisição já tiver gerado uma
+    cotação, os números lá **não** se atualizam sozinhos — a tela avisa
+    disso antes de reabrir."""
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE contagem SET status = 'aberta', respondida_em = NULL, aprovada_em = NULL WHERE id = ?",
+            (contagem_id,),
+        )

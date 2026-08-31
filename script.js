@@ -2633,8 +2633,10 @@ function renderContagemDetalhe() {
 
   const acoes = document.getElementById('contagem-detalhe-acoes-admin');
   const btnAprovar = document.getElementById('btn-contagem-aprovar');
+  const btnReabrir = document.getElementById('btn-contagem-reabrir');
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovar) btnAprovar.disabled = c.status !== 'respondida';
+  if (btnReabrir) btnReabrir.style.display = (isAdmin && c.status !== 'aberta') ? '' : 'none';
 
   const thAcoes = document.getElementById('contagem-detalhe-th-acoes');
   if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
@@ -2768,6 +2770,20 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
   } catch (erro) {
     console.error('Falha ao aprovar requisição:', erro);
     alert(erro.message || 'Não foi possível aprovar essa requisição.');
+  }
+});
+
+document.getElementById('btn-contagem-reabrir')?.addEventListener('click', async () => {
+  if (!contagemDetalheAtual) return;
+  if (!confirm('Reabrir essa contagem pra corrigir? O link volta a aceitar preenchimento — quem responder vai digitar tudo de novo do zero. Se essa Requisição já gerou uma cotação, os números lá não atualizam sozinhos.')) return;
+  try {
+    const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/reabrir`, { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao reabrir');
+    await abrirContagemDetalhe(contagemDetalheAtual.id);
+  } catch (erro) {
+    console.error('Falha ao reabrir contagem:', erro);
+    alert(erro.message || 'Não foi possível reabrir essa contagem.');
   }
 });
 

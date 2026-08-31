@@ -79,6 +79,7 @@ from backend.armazenamento import (
     listar_itens_contagem,
     responder_contagem,
     aprovar_contagem,
+    reabrir_contagem,
     salvar_ajuste_quantidade_ideal,
     salvar_ajustes_quantidade_ideal_em_lote,
     excluir_ajuste_quantidade_ideal,
@@ -2017,6 +2018,22 @@ def api_aprovar_contagem(contagem_id):
         return jsonify({"erro": "Essa contagem já foi aprovada."}), 400
 
     aprovar_contagem(contagem_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/contagens/<int:contagem_id>/reabrir', methods=['POST'])
+def api_reabrir_contagem(contagem_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+    if contagem['status'] == 'aberta':
+        return jsonify({"erro": "Essa contagem já está aberta."}), 400
+
+    reabrir_contagem(contagem_id)
     return jsonify({"ok": True})
 
 

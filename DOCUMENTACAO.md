@@ -703,6 +703,29 @@ enquanto conta. `aprovar_contagem` só grava a quantidade preenchida como
 `quantidade_atual` real em `estoque_insumo` depois que o admin confere e
 aprova (itens não preenchidos mantêm o valor antigo, não zeram).
 
+**Reabrir contagem respondida/aprovada** (concluído em 2026-08-31,
+primeiro item da lista de risco que ela levantou revisando o fluxo —
+pedido do Guilherme). Antes, uma contagem aprovada (ou só respondida) com
+erro de digitação não tinha conserto: o link público só aceita
+preenchimento com status `aberta` (`api_responder_contagem` recusa
+qualquer outro status), e não existia nenhum jeito de voltar atrás — só
+apagando tudo pela Zona de Perigo. Botão **"Reabrir pra corrigir"** no
+detalhe da contagem (vermelho, ao lado de "Fazer Cotação/Pedido", só
+admin, só aparece quando o status não é `aberta`) chama
+`reabrir_contagem`, que volta o status pra `aberta` e limpa
+`respondida_em`/`aprovada_em` — o mesmo link então aceita preenchimento
+de novo. **Não** desfaz o que já tinha sido gravado em `estoque_insumo`
+(não existe histórico de qual era o valor anterior pra reverter com
+segurança); quando alguém reenviar e a contagem for aprovada de novo,
+`aprovar_contagem` sobrescreve com o valor corrigido normalmente — resolve
+o problema na prática, mesmo sem um "desfazer" de verdade. O formulário
+público sempre abre em branco (não pré-preenche com o valor antigo), então
+reabrir significa preencher tudo de novo, não só o item errado — aceitável
+pra um caso de correção, que deve ser raro. Se a Requisição já tiver
+gerado uma cotação, os números lá **não** atualizam sozinhos — o texto de
+confirmação avisa isso antes de reabrir. Rota: `POST
+/api/contagens/<id>/reabrir` (admin).
+
 **Botão "Fazer Cotação/Pedido" no detalhe de uma loja** (concluído em
 2026-08-27, a pedido do Guilherme pra economizar um clique). O botão que
 antes só aprovava essa loja agora faz as duas coisas: aprova, e se essa
