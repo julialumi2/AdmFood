@@ -1,16 +1,3 @@
-/* ==========================================================================
-   TEMA COMPARTILHADO — usado por todas as telas do painel (Resumo, Insights,
-   Estoque, ClickUp, Configurações). Antes cada página tinha seu próprio CSS
-   praticamente duplicado, com pequenas diferenças de cor/espaçamento/raio de
-   borda entre uma tela e outra — esse arquivo é a fonte única da estrutura
-   e dos componentes compartilhados, pra manter tudo visualmente consistente.
-   Cada página ainda pode ter um CSS próprio, mas só com o que é específico
-   dela (ex: kanban do ClickUp, tabela de insumos do Estoque).
-   ========================================================================== */
-
-/* Fonte utilitária pra valores em dinheiro/contagens — reforça a leitura
-   em coluna (dígitos monoespaçados) e dá o ar de "comanda impressa" que
-   guia o resto do redesign (ver .valor-mono, .hero-*, .store-card). */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&display=swap');
 
 /* ---------------------------------------------------------------------
