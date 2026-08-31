@@ -275,10 +275,14 @@ vindo certo do backend, usuário certo como admin), mas ficava **fora da
 aberto, e a tabela de 6 colunas não cabia mais espremida do lado do
 gráfico de 220px (`.canal-analysis` é flex) — sobrava rolagem horizontal
 escondida numa área pequena que ninguém pensaria em rolar. Classe nova
-`.tabela-com-acoes` (insight.css) força a tabela a ocupar a largura toda
-do painel, empilhada abaixo do gráfico, só quando a coluna de ações está
-ativa (`renderCanalAnalysis` alterna a classe junto com `podeEditar`).
-Enquanto o bug não tinha correção, o ajuste desse dia específico foi
+`.tabela-com-acoes` (insight.css) dá o `min-width` real da tabela de 6
+colunas (~540px, contra os 260px de sempre) — com o mínimo certo, o
+`flex-wrap` que o `.canal-analysis` já tinha resolve sozinho: gráfico e
+tabela continuam lado a lado quando cabe na tela, e só empilha (tabela
+embaixo do gráfico) se a janela for estreita demais pros dois juntos, sem
+nunca mais sobrar rolagem escondida (`renderCanalAnalysis` alterna a
+classe junto com `podeEditar`). Enquanto o bug não tinha correção, o
+ajuste desse dia específico foi
 aplicado direto via `PUT /api/ajuste-canal` pelo Console do navegador
 (mesma rota que o botão chama) — sem mexer no banco diretamente.
 
