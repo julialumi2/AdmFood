@@ -1,6 +1,6 @@
 ### AdmFood
 
-Sistema de gestão interna para uma rede de 4 lojas, cobrindo estoque, compras, cardápio e indicadores de vendas — construído pra substituir planilhas soltas e um sistema de terceiros por um fluxo próprio, mais simples e sob medida pro negócio.
+Sistema de gestão interna para uma rede de 4 lojas, cobrindo estoque, compras, cardápio e indicadores de vendas, construído pra substituir planilhas soltas e um sistema de terceiros por um fluxo próprio, mais simples e sob medida pro negócio.
 
 Em produção, usado no dia a dia pela equipe de compras e pela gestão da rede.
 
