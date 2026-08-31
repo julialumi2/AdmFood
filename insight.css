@@ -54,6 +54,17 @@
   min-width: 260px;
 }
 
+/* Com a coluna "Ações" (só quando dá pra editar um dia específico), a
+   tabela de 6 colunas não cabe mais espremida do lado do gráfico de 220px
+   — ficava rolagem horizontal escondida numa área pequena, invisível na
+   prática (o botão de editar existia no DOM mas nunca aparecia na tela).
+   Empilha a tabela abaixo do gráfico, ocupando a largura toda do painel,
+   só nesse caso — ver renderCanalAnalysis em script.js. */
+.canal-table-wrapper.tabela-com-acoes {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
 .canal-table {
   width: 100%;
   border-collapse: collapse;

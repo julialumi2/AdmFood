@@ -280,13 +280,18 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
     if (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true") and _sou_o_unico_worker_a_agendar():
         from apscheduler.schedulers.background import BackgroundScheduler
 
-        # Reconfere os últimos 3 dias (não só ontem) — pedido que ainda estava
+        # Reconfere os últimos 7 dias (não só ontem) — pedido que ainda estava
         # "em andamento" na hora de uma sincronização anterior (comum em dias
-        # de mais movimento) fica de fora daquela vez, mas é pego na
-        # reconferência do dia seguinte. Também cobre uma sincronização que
+        # de mais movimento, ou reaberto depois de já ter fechado) fica de
+        # fora daquela vez, mas é pego numa reconferência seguinte assim que
+        # voltar a ficar "concluído". Também cobre uma sincronização que
         # falhou por completo (rede, deploy no meio da madrugada, etc.), que
-        # senão deixaria aquele dia incompleto pra sempre.
-        DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA = 3
+        # senão deixaria aquele dia incompleto pra sempre. Era 3 dias
+        # (2026-08-24); subiu pra 7 (2026-08-31) porque um pedido reaberto
+        # pode levar mais que 3 dias pra ser fechado de novo do lado da
+        # Cardápio Web — mesmo assim, se nunca voltar a "concluído", só o
+        # ajuste manual de canal resolve (ver seção 6.3 da documentação).
+        DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA = 7
 
         def _rodar_sincronizacao_diaria():
             for dias_atras in range(1, DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA + 1):

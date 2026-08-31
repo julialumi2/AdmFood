@@ -671,6 +671,10 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
 
   const podeEditar = !!(contextoEdicao && window.usuarioLogado?.papel === 'admin');
   if (thAcoes) thAcoes.style.display = podeEditar ? '' : 'none';
+  // A 6ª coluna (Ações) não cabe espremida do lado do gráfico — ver
+  // .tabela-com-acoes em insight.css. Sem isso o botão de editar existe
+  // no DOM mas fica atrás de uma rolagem horizontal invisível na prática.
+  document.querySelector('.canal-table-wrapper')?.classList.toggle('tabela-com-acoes', podeEditar);
 
   if (canalChartInstance) {
     canalChartInstance.destroy();
