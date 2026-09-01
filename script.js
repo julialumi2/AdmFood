@@ -5773,6 +5773,39 @@ async function importarPlanilhaCardapio(event) {
   }
 }
 
+async function sincronizarComCardapioWeb() {
+  const botao = document.getElementById('btn-sincronizar-cw');
+  const statusEl = document.getElementById('cardapio-importar-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '';
+  statusEl.textContent = 'Sincronizando com a Cardápio Web...';
+  if (botao) botao.disabled = true;
+
+  try {
+    const resposta = await fetch('/api/precos-cardapio/sincronizar-cw', { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao sincronizar');
+
+    const resultados = dados.resultados || [];
+    const comErro = resultados.filter(r => r.erro);
+    const resumo = resultados
+      .map(r => r.erro ? `${r.loja}: erro (${r.erro})` : `${r.loja}: ${r.produtos} produtos${r.fotosBaixadas ? `, ${r.fotosBaixadas} foto(s) nova(s)` : ''}`)
+      .join(' · ');
+
+    statusEl.style.color = comErro.length ? 'var(--danger)' : 'var(--success)';
+    statusEl.textContent = resumo || 'Nenhuma loja com token configurado.';
+    await carregarPrecosCardapio();
+  } catch (erro) {
+    console.error('Falha ao sincronizar com a Cardápio Web:', erro);
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = erro.message || 'Não foi possível conectar ao servidor.';
+  } finally {
+    if (botao) botao.disabled = false;
+  }
+}
+
+document.getElementById('btn-sincronizar-cw')?.addEventListener('click', sincronizarComCardapioWeb);
+
 // --- FICHA TÉCNICA (insumos que cada item do cardápio consome) ---
 // Ficha Técnica virou uma tela por loja (custo + valor de venda de cada
 // produto, receita própria por unidade) — ver seção 6.5 da documentação.

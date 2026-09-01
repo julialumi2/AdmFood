@@ -164,7 +164,11 @@
           <div class="title-row">
             <h1 id="cardapio-titulo-h1">Cardápio · Preços</h1>
             <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
-            <div id="cardapio-importar-area" style="display:none;">
+            <div id="cardapio-importar-area" class="action-controls" style="display:none;">
+              <button type="button" class="btn-secondary" id="btn-sincronizar-cw">
+                <i data-lucide="refresh-cw"></i>
+                Sincronizar com Cardápio Web
+              </button>
               <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
               <button type="button" class="btn-secondary" onclick="document.getElementById('cardapio-importar-arquivo').click()">
                 <i data-lucide="upload"></i>
