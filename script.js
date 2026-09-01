@@ -2207,11 +2207,17 @@ function renderConvitesCotacao(convites) {
         <td class="font-bold">${escaparHtml(c.fornecedorNome)}</td>
         <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-        <td>
+        <td class="acoes-linha">
           <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}">
             <i data-lucide="copy"></i>
             Copiar link
           </button>
+          ${c.status === 'respondida' ? `
+            <button type="button" class="btn-secondary-sm" data-acao="reabrir-convite" data-id="${c.id}" title="Deixar o fornecedor corrigir o preço enviado">
+              <i data-lucide="rotate-ccw"></i>
+              Reabrir
+            </button>
+          ` : ''}
         </td>
       </tr>
     `;
@@ -2227,6 +2233,21 @@ function renderConvitesCotacao(convites) {
       } catch (erro) {
         console.error('Falha ao copiar link:', erro);
         alert(btn.dataset.link);
+      }
+    });
+  });
+
+  tbody.querySelectorAll('[data-acao="reabrir-convite"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Reabrir esse convite? O fornecedor vai poder preencher os preços de novo pelo mesmo link.')) return;
+      try {
+        const resposta = await fetch(`/api/cotacoes/convites/${btn.dataset.id}/reabrir`, { method: 'POST' });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao reabrir');
+        await carregarConvitesCotacao();
+      } catch (erro) {
+        console.error('Falha ao reabrir convite:', erro);
+        alert(erro.message || 'Não foi possível reabrir esse convite.');
       }
     });
   });
@@ -3318,6 +3339,7 @@ async function inicializarPreencherCotacao() {
         alert('Preencha o preço de pelo menos um item, ou marque todos como "não vendo esse item".');
         return;
       }
+      if (!confirm('Após fechar, não vai dar pra alterar os preços. Tem certeza?')) return;
       const btn = document.getElementById('btn-cotacao-publica-enviar');
       btn.disabled = true;
       try {

@@ -107,6 +107,7 @@ from backend.armazenamento import (
     listar_convites_cotacao,
     buscar_convite_por_token,
     responder_convite_cotacao,
+    reabrir_convite_cotacao,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
@@ -1621,6 +1622,18 @@ def api_criar_convites_cotacao(cotacao_id):
     if resultado["insumosSemFornecedor"] == 0:
         return jsonify({"erro": "Todos os insumos dessa cotação já têm fornecedor vinculado — não há nada pra cotar em aberto."}), 400
     return jsonify({"ok": True, **resultado})
+
+
+@app.route('/api/cotacoes/convites/<int:convite_id>/reabrir', methods=['POST'])
+def api_reabrir_convite_cotacao(convite_id):
+    """Destrava de novo o link de um fornecedor que já respondeu — pra
+    corrigir preço enviado errado (ver reabrir_convite_cotacao em
+    armazenamento.py)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    reabrir_convite_cotacao(convite_id)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/cotacoes/convite/<token>', methods=['GET'])

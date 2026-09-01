@@ -1746,6 +1746,21 @@ def responder_convite_cotacao(token, precos):
     return True
 
 
+def reabrir_convite_cotacao(convite_id):
+    """Volta o convite de um fornecedor pra 'aberta', destravando o link
+    dele de novo — mesmo espírito do "Reabrir contagem": fornecedor
+    preencheu preço errado sem querer e, antes disso, não tinha conserto
+    (o link trava sozinho depois de respondido, pergunta 18 do roteiro).
+    Não apaga os preços já lançados por ele — se enviar de novo, cada
+    preço é sobrescrito individualmente (`adicionar_preco_cotacao` já faz
+    upsert por insumo), não tudo de uma vez."""
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE cotacao_convite SET status = 'aberta', respondida_em = NULL WHERE id = ?",
+            (convite_id,),
+        )
+
+
 ESTAGIOS_PEDIDO = ['enviado', 'confirmado', 'a_caminho', 'recebido']
 
 

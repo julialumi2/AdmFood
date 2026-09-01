@@ -662,6 +662,21 @@ mesmo link só mostra "obrigado". Se o prazo vencer sem resposta, mostra
 (pergunta 19). Fornecedor só vê o próprio preço, nunca o dos concorrentes
 (pergunta 20b) — o link não expõe `cotacao_preco` de ninguém.
 
+**Confirmação antes de travar + reabrir pelo admin** (concluído em
+2026-09-01, pedido da Julia: fornecedor não tinha aviso nenhum de que o
+link travava pra sempre depois de enviar, e ela não tinha como destravar
+se ele mandasse preço errado — só existia a Zona de Perigo, tudo ou
+nada). Duas peças pequenas: (1) a tela pública agora pergunta "Após
+fechar, não vai dar pra alterar os preços. Tem certeza?" antes de
+enviar, dando uma última chance de conferir; (2) na tabela "Convites
+enviados" (Cotações, admin), convite já respondido ganha um botão
+**"Reabrir"** ao lado de "Copiar link" — `reabrir_convite_cotacao` volta
+o status pra `aberta` e limpa `respondida_em`, destravando o mesmo link
+de novo. Não apaga o preço já lançado; se o fornecedor reenviar,
+`adicionar_preco_cotacao` sobrescreve por ser upsert (mesmo mecanismo de
+sempre), não duplica linha. Rota: `POST
+/api/cotacoes/convites/<id>/reabrir` (admin).
+
 Tela pública nova `preencher_cotacao.html` (reaproveita o CSS de
 `preencher_contagem.css` — layout genérico de "página pública por token",
 não é específico de contagem apesar do nome do arquivo). Rotas: `POST
