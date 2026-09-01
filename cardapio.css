@@ -10,24 +10,64 @@
   gap: var(--space-3);
 }
 
-.ficha-tecnica-card {
+.ficha-tecnica-produto-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ficha-tecnica-produto {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: var(--space-4);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
-.ficha-tecnica-card-topo {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+.ficha-tecnica-produto-linha {
+  display: grid;
+  grid-template-columns: 1fr 130px 110px minmax(28px, auto);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
 }
 
-.ficha-tecnica-card-nome { font-weight: 700; font-size: 0.9rem; color: var(--text-dark); }
-.ficha-tecnica-card-categoria { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.ficha-tecnica-produto-linha .btn-secondary-sm { white-space: nowrap; justify-self: end; }
+
+.ficha-tecnica-produto-linha[data-acao="expandir-produto"] { cursor: pointer; }
+.ficha-tecnica-produto-linha[data-acao="expandir-produto"]:hover { background-color: var(--surface-muted); }
+
+.ficha-tecnica-produto-nome { font-weight: 700; font-size: 0.9rem; color: var(--text-dark); }
+.ficha-tecnica-produto-custo,
+.ficha-tecnica-produto-venda { font-size: 0.85rem; color: var(--text-dark); }
+
+.input-custo-produto {
+  width: 100%;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: 6px var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-dark);
+  font-family: inherit;
+}
+
+.ficha-tecnica-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.ficha-tecnica-produto.expandido .ficha-tecnica-chevron { transform: rotate(180deg); }
+
+.ficha-tecnica-produto-expandido {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--surface-muted-border);
+  margin-top: -1px;
+}
+
+.ficha-tecnica-produto-expandido:empty { display: none !important; }
 
 .ficha-tecnica-ingredientes {
   display: flex;

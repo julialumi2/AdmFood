@@ -4903,10 +4903,11 @@ async function carregarUsuarioLogado() {
       renderEstoqueTab();
     }
 
-    // Tela de Cardápio → sub-aba Ficha Técnica: botão "Novo item" e ícones
-    // de editar/excluir (só admin) — mesma correção de corrida.
-    if (usuario.papel === 'admin' && fichaTecnicaData.itens.length) {
-      renderFichaTecnica();
+    // Tela de Cardápio → sub-aba Ficha Técnica: botão "Novo item", custo
+    // editável e ações de editar/excluir (só admin) — mesma correção de
+    // corrida entre os dois fetches.
+    if (usuario.papel === 'admin' && fichaTecnicaProdutos.length) {
+      renderFichaTecnicaProdutos();
     }
 
     // Tela de Contagens: botão "Nova requisição" e coluna de Ações (só
@@ -5745,104 +5746,228 @@ async function importarPlanilhaCardapio(event) {
 }
 
 // --- FICHA TÉCNICA (insumos que cada item do cardápio consome) ---
-let fichaTecnicaData = { itens: [], insumosDisponiveis: [] };
+// Ficha Técnica virou uma tela por loja (custo + valor de venda de cada
+// produto, receita própria por unidade) — ver seção 6.5 da documentação.
+let fichaTecnicaLojaAtual = 'Hamburgueria Artesanos';
+let fichaTecnicaProdutos = [];
+let fichaTecnicaInsumosDisponiveis = [];
 let fichaTecnicaEditandoItemId = null;
+const fichaTecnicaExpandidos = new Set();
+const fichaTecnicaInsumosCache = new Map();
+let fichaTecnicaProdutoPendente = null;
 
-async function carregarFichaTecnica() {
+async function carregarProdutosFichaTecnica() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   if (!conteudoEl) return;
   try {
-    const resposta = await fetch('/api/ficha-tecnica');
+    const resposta = await fetch(`/api/cardapio/produtos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    fichaTecnicaData = await resposta.json();
-    renderFichaTecnica();
+    const dados = await resposta.json();
+    fichaTecnicaProdutos = dados.produtos || [];
+    fichaTecnicaExpandidos.clear();
+    fichaTecnicaInsumosCache.clear();
+    renderFichaTecnicaProdutos();
   } catch (erro) {
-    console.error('Falha ao carregar ficha técnica:', erro);
-    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar a ficha técnica.</p>`;
+    console.error('Falha ao carregar produtos da ficha técnica:', erro);
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os produtos dessa loja.</p>`;
   }
 }
 
-function renderFichaTecnica() {
+function renderFichaTecnicaProdutos() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
   if (!conteudoEl) return;
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
 
-  const itens = fichaTecnicaData.itens || [];
-  if (!itens.length) {
-    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum item cadastrado ainda.</p>`;
+  if (!fichaTecnicaProdutos.length) {
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto encontrado pra essa loja em Preços — importe a planilha de preços primeiro.</p>`;
     return;
   }
 
-  // Agrupa por categoria, preservando a ordem que já veio da API (categoria, nome).
   const categorias = [];
   const porCategoria = new Map();
-  itens.forEach(item => {
-    if (!porCategoria.has(item.categoria)) {
-      porCategoria.set(item.categoria, []);
-      categorias.push(item.categoria);
+  fichaTecnicaProdutos.forEach(p => {
+    if (!porCategoria.has(p.categoria)) {
+      porCategoria.set(p.categoria, []);
+      categorias.push(p.categoria);
     }
-    porCategoria.get(item.categoria).push(item);
+    porCategoria.get(p.categoria).push(p);
   });
 
   conteudoEl.innerHTML = categorias.map(categoria => `
     <div class="cardapio-categoria-titulo">${escaparHtml(categoria)}</div>
-    <div class="ficha-tecnica-lista">
-      ${porCategoria.get(categoria).map(item => `
-        <div class="ficha-tecnica-card">
-          <div class="ficha-tecnica-card-topo">
-            <div class="ficha-tecnica-card-nome">${escaparHtml(item.nome)}</div>
-            ${isAdmin ? `
-              <div class="acoes-linha">
-                <button type="button" class="btn-acao-icone" data-acao="editar-ficha-tecnica" data-item-id="${item.id}" title="Editar insumos">
-                  <i data-lucide="pencil"></i>
-                </button>
-                <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-item-cardapio" data-item-id="${item.id}" data-nome="${escaparHtml(item.nome)}" title="Excluir item">
-                  <i data-lucide="trash-2"></i>
-                </button>
-              </div>
-            ` : ''}
+    <div class="ficha-tecnica-produto-lista">
+      ${porCategoria.get(categoria).map(p => {
+        const expandido = p.itemCardapioId && fichaTecnicaExpandidos.has(p.itemCardapioId);
+        return `
+        <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
+          <div class="ficha-tecnica-produto-linha" ${p.itemCardapioId ? `data-acao="expandir-produto" data-item-id="${p.itemCardapioId}"` : ''}>
+            <div class="ficha-tecnica-produto-nome">${escaparHtml(p.nome)}</div>
+            <div class="ficha-tecnica-produto-custo">
+              ${isAdmin && p.itemCardapioId
+                ? `<input type="number" step="0.01" min="0" class="input-custo-produto" data-acao="editar-custo" data-item-id="${p.itemCardapioId}" value="${p.custo ?? ''}" placeholder="Custo">`
+                : `<span>${p.custo != null ? 'R$ ' + p.custo.toFixed(2) : '—'}</span>`}
+            </div>
+            <div class="ficha-tecnica-produto-venda">${p.valorVenda != null ? 'R$ ' + p.valorVenda.toFixed(2) : '—'}</div>
+            ${p.itemCardapioId
+              ? `<i data-lucide="chevron-down" class="ficha-tecnica-chevron"></i>`
+              : (isAdmin
+                  ? `<button type="button" class="btn-secondary-sm" data-acao="criar-ficha-produto" data-nome="${escaparHtml(p.nome)}" data-categoria="${escaparHtml(p.categoria)}">Cadastrar ficha técnica</button>`
+                  : `<span class="ficha-tecnica-vazio">sem ficha técnica</span>`)}
           </div>
-          <div class="ficha-tecnica-ingredientes">
-            ${item.insumos.length ? item.insumos.map(ins => `
-              <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
-            `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda.</span>`}
-          </div>
+          <div class="ficha-tecnica-produto-expandido" style="display:${expandido ? '' : 'none'};" data-painel-item-id="${p.itemCardapioId ?? ''}"></div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
   `).join('');
 
-  if (isAdmin) {
-    conteudoEl.querySelectorAll('[data-acao="editar-ficha-tecnica"]').forEach(btn => {
-      btn.addEventListener('click', () => abrirModalFichaTecnicaItem(parseInt(btn.dataset.itemId, 10)));
+  conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
+    linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));
+  });
+  conteudoEl.querySelectorAll('[data-acao="editar-custo"]').forEach(input => {
+    input.addEventListener('click', (evento) => evento.stopPropagation());
+    input.addEventListener('change', () => salvarCustoProduto(parseInt(input.dataset.itemId, 10), input.value));
+  });
+  conteudoEl.querySelectorAll('[data-acao="criar-ficha-produto"]').forEach(btn => {
+    btn.addEventListener('click', (evento) => {
+      evento.stopPropagation();
+      fichaTecnicaProdutoPendente = { nome: btn.dataset.nome, categoria: btn.dataset.categoria };
+      document.getElementById('novo-item-nome').value = btn.dataset.nome;
+      document.getElementById('novo-item-categoria').value = btn.dataset.categoria;
+      document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
     });
-    conteudoEl.querySelectorAll('[data-acao="excluir-item-cardapio"]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm(`Excluir "${btn.dataset.nome}" e sua ficha técnica?`)) return;
-        try {
-          const resposta = await fetch(`/api/itens-cardapio/${btn.dataset.itemId}`, { method: 'DELETE' });
-          if (!resposta.ok) throw new Error('falha ao excluir');
-          await carregarFichaTecnica();
-        } catch (erro) {
-          console.error('Falha ao excluir item do cardápio:', erro);
-          alert('Não foi possível excluir.');
-        }
-      });
-    });
-  }
+  });
+
+  // Reabre o painel de quem já estava expandido antes de re-renderizar
+  // (ex: depois de salvar o custo) — sem isso, cada render fecharia tudo.
+  fichaTecnicaExpandidos.forEach(itemId => renderPainelFichaTecnicaExpandido(itemId));
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+async function salvarCustoProduto(itemId, valor) {
+  const custo = valor === '' ? null : parseFloat(valor);
+  if (custo === null || isNaN(custo)) return;
+  try {
+    const resposta = await fetch(`/api/itens-cardapio/${itemId}/custo`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loja: fichaTecnicaLojaAtual, custo }),
+    });
+    if (!resposta.ok) throw new Error('falha ao salvar custo');
+    const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+    if (produto) produto.custo = custo;
+  } catch (erro) {
+    console.error('Falha ao salvar custo:', erro);
+    alert('Não foi possível salvar o custo.');
+  }
+}
+
+async function alternarProdutoFichaTecnica(itemId) {
+  if (fichaTecnicaExpandidos.has(itemId)) {
+    fichaTecnicaExpandidos.delete(itemId);
+  } else {
+    fichaTecnicaExpandidos.add(itemId);
+  }
+  renderFichaTecnicaProdutos();
+}
+
+async function renderPainelFichaTecnicaExpandido(itemId) {
+  const painel = document.querySelector(`[data-painel-item-id="${itemId}"]`);
+  if (!painel) return;
+  painel.style.display = '';
+  painel.innerHTML = `<p class="panel-subtitle">Carregando...</p>`;
+
+  try {
+    const dados = await _buscarFichaTecnicaItem(itemId);
+    const isAdmin = window.usuarioLogado?.papel === 'admin';
+    const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+    painel.innerHTML = `
+      <div class="ficha-tecnica-ingredientes">
+        ${dados.insumos.length ? dados.insumos.map(ins => `
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
+        `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
+      </div>
+      ${isAdmin ? `
+        <div class="acoes-linha" style="margin-top: var(--space-2);">
+          <button type="button" class="btn-secondary-sm" data-acao="editar-ficha-tecnica" data-item-id="${itemId}">
+            <i data-lucide="pencil"></i>
+            Editar insumos
+          </button>
+          <button type="button" class="btn-secondary-sm btn-excluir" data-acao="excluir-item-cardapio" data-item-id="${itemId}" data-nome="${escaparHtml(produto?.nome || '')}">
+            <i data-lucide="trash-2"></i>
+            Excluir item
+          </button>
+        </div>
+      ` : ''}
+    `;
+
+    painel.querySelector('[data-acao="editar-ficha-tecnica"]')?.addEventListener('click', () => abrirModalFichaTecnicaItem(itemId));
+    painel.querySelector('[data-acao="excluir-item-cardapio"]')?.addEventListener('click', async (evento) => {
+      if (!confirm(`Excluir "${evento.currentTarget.dataset.nome}" e sua ficha técnica (em todas as lojas)?`)) return;
+      try {
+        const resposta = await fetch(`/api/itens-cardapio/${itemId}`, { method: 'DELETE' });
+        if (!resposta.ok) throw new Error('falha ao excluir');
+        fichaTecnicaExpandidos.delete(itemId);
+        await carregarProdutosFichaTecnica();
+      } catch (erro) {
+        console.error('Falha ao excluir item do cardápio:', erro);
+        alert('Não foi possível excluir.');
+      }
+    });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('Falha ao carregar ficha técnica do item:', erro);
+    painel.innerHTML = `<p class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar os insumos.</p>`;
+  }
+}
+
+// Busca (com cache por loja atual) os insumos + catálogo disponível de um
+// item — usado tanto pro painel expandido quanto pro modal de edição.
+async function _buscarFichaTecnicaItem(itemId) {
+  if (fichaTecnicaInsumosCache.has(itemId)) return fichaTecnicaInsumosCache.get(itemId);
+  const resposta = await fetch(`/api/itens-cardapio/${itemId}/ficha-tecnica?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
+  if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+  const dados = await resposta.json();
+  fichaTecnicaInsumosCache.set(itemId, dados);
+  return dados;
+}
+
+// --- Dropdown de loja (mesmo componente/JS do seletor de Estoque) ---
+(function inicializarLojaSelectFichaTecnica() {
+  const seletor = document.getElementById('ficha-tecnica-loja-select');
+  if (!seletor) return;
+  const trigger = document.getElementById('ficha-tecnica-loja-trigger');
+  const menu = document.getElementById('ficha-tecnica-loja-menu');
+
+  trigger.addEventListener('click', () => seletor.classList.toggle('aberto'));
+  document.addEventListener('click', (evento) => {
+    if (!seletor.contains(evento.target)) seletor.classList.remove('aberto');
+  });
+
+  menu.querySelectorAll('.loja-select-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      menu.querySelectorAll('.loja-select-item').forEach((i) => i.classList.remove('active'));
+      item.classList.add('active');
+      trigger.querySelector('.loja-select-label').textContent = item.querySelector('span').textContent;
+      fichaTecnicaLojaAtual = item.dataset.loja;
+      seletor.classList.remove('aberto');
+      carregarProdutosFichaTecnica();
+    });
+  });
+})();
+
 // --- Modal: Novo item do cardápio ---
 function abrirModalNovoItemCardapio() {
+  fichaTecnicaProdutoPendente = null;
   document.getElementById('form-novo-item-cardapio').reset();
   document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
 }
 function fecharModalNovoItemCardapio() {
   document.getElementById('modal-novo-item-cardapio').style.display = 'none';
+  fichaTecnicaProdutoPendente = null;
 }
 document.getElementById('btn-novo-item-cardapio')?.addEventListener('click', abrirModalNovoItemCardapio);
 document.getElementById('btn-novo-item-cardapio-fechar')?.addEventListener('click', fecharModalNovoItemCardapio);
@@ -5854,6 +5979,7 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
     nome: document.getElementById('novo-item-nome').value,
     categoria: document.getElementById('novo-item-categoria').value,
   };
+  const abriaFichaLogoEmSeguida = fichaTecnicaProdutoPendente;
   try {
     const resposta = await fetch('/api/itens-cardapio', {
       method: 'POST',
@@ -5863,7 +5989,8 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
     fecharModalNovoItemCardapio();
-    await carregarFichaTecnica();
+    await carregarProdutosFichaTecnica();
+    if (abriaFichaLogoEmSeguida) abrirModalFichaTecnicaItem(dados.id);
   } catch (erro) {
     console.error('Falha ao cadastrar item do cardápio:', erro);
     alert(erro.message || 'Não foi possível cadastrar.');
@@ -5872,7 +5999,7 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
 
 // --- Modal: Editar ficha técnica de um item ---
 function _linhaFichaTecnicaHTML(insumoId, quantidade) {
-  const opcoes = fichaTecnicaData.insumosDisponiveis.map(i =>
+  const opcoes = fichaTecnicaInsumosDisponiveis.map(i =>
     `<option value="${i.id}" ${i.id === insumoId ? 'selected' : ''}>${escaparHtml(i.nome)} (${escaparHtml(i.unidadeMedida)})</option>`
   ).join('');
   return `
@@ -5892,21 +6019,30 @@ function _wireLinhasFichaTecnica() {
   });
 }
 
-function abrirModalFichaTecnicaItem(itemId) {
-  const item = fichaTecnicaData.itens.find(i => i.id === itemId);
-  if (!item || !fichaTecnicaData.insumosDisponiveis.length) {
-    if (!fichaTecnicaData.insumosDisponiveis.length) alert('Cadastre pelo menos um insumo no Estoque antes de montar a ficha técnica.');
+async function abrirModalFichaTecnicaItem(itemId) {
+  let dados;
+  try {
+    dados = await _buscarFichaTecnicaItem(itemId);
+  } catch (erro) {
+    console.error('Falha ao carregar ficha técnica do item:', erro);
+    alert('Não foi possível carregar os insumos desse item.');
     return;
   }
+  fichaTecnicaInsumosDisponiveis = dados.insumosDisponiveis;
+  if (!fichaTecnicaInsumosDisponiveis.length) {
+    alert('Cadastre pelo menos um insumo no Estoque antes de montar a ficha técnica.');
+    return;
+  }
+  const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
   fichaTecnicaEditandoItemId = itemId;
-  document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${item.nome}`;
+  document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${produto?.nome || ''} (${fichaTecnicaLojaAtual})`;
   document.getElementById('ficha-tecnica-colar-texto').value = '';
   document.getElementById('ficha-tecnica-colar-resultado').textContent = '';
 
   const container = document.getElementById('ficha-tecnica-item-linhas');
-  const linhasIniciais = item.insumos.length
-    ? item.insumos
-    : [{ insumoId: fichaTecnicaData.insumosDisponiveis[0].id, quantidade: null }];
+  const linhasIniciais = dados.insumos.length
+    ? dados.insumos
+    : [{ insumoId: fichaTecnicaInsumosDisponiveis[0].id, quantidade: null }];
   container.innerHTML = linhasIniciais.map(ins => _linhaFichaTecnicaHTML(ins.insumoId, ins.quantidade)).join('');
   _wireLinhasFichaTecnica();
 
@@ -5921,7 +6057,7 @@ function abrirModalFichaTecnicaItem(itemId) {
 function processarColarListaFichaTecnica() {
   const texto = document.getElementById('ficha-tecnica-colar-texto').value;
   const porNomeNormalizado = new Map();
-  fichaTecnicaData.insumosDisponiveis.forEach((insumo) => {
+  fichaTecnicaInsumosDisponiveis.forEach((insumo) => {
     porNomeNormalizado.set(_normalizarNomeInsumo(insumo.nome), insumo.id);
   });
 
@@ -5970,9 +6106,9 @@ document.getElementById('btn-ficha-tecnica-item-fechar')?.addEventListener('clic
 document.getElementById('btn-ficha-tecnica-item-cancelar')?.addEventListener('click', fecharModalFichaTecnicaItem);
 
 document.getElementById('btn-ficha-tecnica-add-linha')?.addEventListener('click', () => {
-  if (!fichaTecnicaData.insumosDisponiveis.length) return;
+  if (!fichaTecnicaInsumosDisponiveis.length) return;
   const container = document.getElementById('ficha-tecnica-item-linhas');
-  container.insertAdjacentHTML('beforeend', _linhaFichaTecnicaHTML(fichaTecnicaData.insumosDisponiveis[0].id, null));
+  container.insertAdjacentHTML('beforeend', _linhaFichaTecnicaHTML(fichaTecnicaInsumosDisponiveis[0].id, null));
   _wireLinhasFichaTecnica();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 });
@@ -5990,12 +6126,18 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
     const resposta = await fetch(`/api/itens-cardapio/${fichaTecnicaEditandoItemId}/ficha-tecnica`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ insumos }),
+      body: JSON.stringify({ loja: fichaTecnicaLojaAtual, insumos }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    const itemId = fichaTecnicaEditandoItemId;
     fecharModalFichaTecnicaItem();
-    await carregarFichaTecnica();
+    fichaTecnicaInsumosCache.delete(itemId);
+    const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+    if (produto) produto.temFichaTecnica = insumos.length > 0;
+    if (fichaTecnicaExpandidos.has(itemId)) {
+      await renderPainelFichaTecnicaExpandido(itemId);
+    }
   } catch (erro) {
     console.error('Falha ao salvar ficha técnica:', erro);
     alert(erro.message || 'Não foi possível salvar.');
@@ -6025,7 +6167,7 @@ var cardapioAbaAtual = 'precos';
     if (eyebrow) eyebrow.textContent = 'INSUMOS DE CADA ITEM';
     if (titulo) titulo.textContent = 'Cardápio · Ficha Técnica';
     if (itemFicha) itemFicha.classList.add('active');
-    if (!fichaTecnicaData.itens.length) carregarFichaTecnica();
+    if (!fichaTecnicaProdutos.length) carregarProdutosFichaTecnica();
   } else {
     modoPrecos.style.display = '';
     modoFicha.style.display = 'none';

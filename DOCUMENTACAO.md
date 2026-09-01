@@ -402,10 +402,11 @@ o cálculo de "quantidade ideal" do Estoque a partir do histórico de
 vendas: pra saber quanto de um insumo se gasta, precisa saber quais
 pratos o usam e quanto de cada um entra na receita.
 
-`item_cardapio` é o catálogo do prato em si (ex: "BIG ART") — **não** é
-por loja nem por canal, é a receita, que não muda dependendo de onde é
-vendida. `ficha_tecnica` liga um item a um ou mais insumos, com
-quantidade **opcional** (`NULL` quando não sabemos a gramatura exata).
+`item_cardapio` é o catálogo do prato em si (ex: "BIG ART") — de rede
+toda, não muda por loja/canal. `ficha_tecnica` liga um item a um ou mais
+insumos, com quantidade **opcional** (`NULL` quando não sabemos a
+gramatura exata) — **por loja desde 2026-09-01** (ver subseção abaixo):
+o mesmo prato pode ter receita diferente em cada unidade.
 
 **Carga inicial** (2026-08-24): os primeiros 20 itens (lanches, porções e
 uma salada) foram montados a partir da descrição de cada produto no
@@ -423,9 +424,10 @@ depois pra adicionar categorias novas (combos, por exemplo) sem duplicar
 o que já existe.
 
 Editar a ficha técnica de um item (`PUT /api/itens-cardapio/<id>/ficha-tecnica`,
-admin) sempre manda a lista inteira de insumos (substitui, não faz diff)
-— mais simples de implementar tanto no back quanto na tela. Leitura
-liberada pra todo mundo logado.
+admin, corpo leva `loja` + a lista de insumos) sempre manda a lista
+inteira de insumos daquela loja (substitui, não faz diff) — mais simples
+de implementar tanto no back quanto na tela, e não mexe na receita das
+outras 3 lojas. Leitura liberada pra todo mundo logado.
 
 **Colar lista na ficha técnica de um item** (concluído em 2026-08-28,
 mesmo padrão de "colar lista" já usado no ajuste de quantidade ideal e na
@@ -439,8 +441,52 @@ lista" — o que bater **substitui** as linhas do formulário abaixo (é a
 mesma receita inteira, não um acréscimo); o que não bater fica listado
 pra ela adicionar na mão pelo "Adicionar insumo". Ainda precisa clicar
 "Salvar" depois — processar só popula o formulário, não grava sozinho.
-100% client-side (reusa `fichaTecnicaData.insumosDisponiveis` já
-carregado), nenhuma rota nova.
+100% client-side (reusa `fichaTecnicaInsumosDisponiveis` já carregado
+pro item+loja aberto no modal), nenhuma rota nova.
+
+**Ficha técnica por loja, com custo e valor de venda** (concluído em
+2026-09-01, pedido da Julia: ela queria um botão pra cadastrar ficha
+técnica na mão — já existia, "Novo item", ela só não sabia — e um
+dropdown pra alternar por loja vendo custo e valor de venda de cada
+produto, clicando pra ver a receita. Perguntei antes de mexer: custo é
+**digitado à mão** por ela (não calculado — insumo não tem preço no
+catálogo), valor de venda mostrado é só o canal **Cardápio Web**
+(balcão), e ela confirmou que queria mesmo **receita diferente por
+loja**, não só filtro de quais produtos aparecem).
+
+Isso mudou a arquitetura: `ficha_tecnica` ganhou a coluna `loja` e a PK
+virou `(item_id, insumo_id, loja)` — SQLite não deixa alterar PK com
+`ALTER TABLE`, então a migração (roda uma vez, checando
+`PRAGMA table_info`) renomeia a tabela antiga, recria com o schema novo
+e **duplica cada receita existente pras 4 lojas** (todo mundo começa
+idêntico, diverge só quando ela editar pela tela). `consumo_medio_insumo`
+(seção 6.6, base da quantidade ideal do Estoque) ganhou `AND f.loja =
+v.unidade` no JOIN — graças ao backfill, é comparação direta, sem
+fallback. Tabela nova `item_cardapio_custo` (item_id, loja, custo,
+atualizado_em) guarda o valor digitado à mão, também por loja.
+
+A tela em si (`#cardapio-modo-ficha-tecnica`) trocou os cards sempre
+abertos por uma lista de **produtos da loja selecionada**: a fonte não é
+mais `item_cardapio` direto, é `preco_cardapio` (que já sabe quem vende o
+quê e o valor de venda do balcão) — cada produto é casado com um
+`item_cardapio` via `_casar_item_cardapio` (mesma função que já casava
+venda real × receita, seção 6.6, reaproveitada aqui sem duplicar
+critério). Produto sem match nenhum aparece com "sem ficha técnica" e
+(admin) um botão "Cadastrar ficha técnica" que pré-preenche o modal
+"Novo item" com o nome exato vendido e, assim que cadastrado, já abre o
+modal de insumos direto pra essa loja. Clicar num produto já casado
+expande (busca os insumos daquela loja sob demanda, com cache simples
+por item enquanto a loja não muda) mostrando os chips de insumo e, pra
+admin, "Editar insumos"/"Excluir item". Custo vira um campo numérico
+editável inline pra admin (salva ao sair do campo, `PUT
+/api/itens-cardapio/<id>/custo`); valor de venda é só leitura aqui
+(editar preço continua em "Preços"). Dropdown de loja é o mesmo
+componente visual do `.loja-select` de Estoque — movido de `estoque.css`
+pra `theme.css` por ser a segunda tela a usar exatamente o mesmo
+HTML/CSS/JS. Rota antiga `GET /api/ficha-tecnica` (sem noção de loja) foi
+removida — só tinha um consumidor, e esse consumidor foi substituído por
+completo. Rotas novas: `GET /api/cardapio/produtos?loja=` e `GET
+/api/itens-cardapio/<id>/ficha-tecnica?loja=`.
 
 ### 6.6 Consumo estimado de insumo (Ficha Técnica × vendas reais)
 

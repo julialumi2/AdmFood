@@ -53,7 +53,9 @@ from backend.armazenamento import (
     listar_itens_cardapio,
     excluir_item_cardapio,
     definir_ficha_tecnica,
-    buscar_ficha_tecnica_completa,
+    buscar_ficha_tecnica_item,
+    salvar_custo_item_cardapio,
+    listar_produtos_por_loja,
     consumo_medio_insumo,
     listar_lotes_vencendo,
     marcar_lote_resolvido,
@@ -1233,39 +1235,42 @@ def api_resolver_lote(lote_id):
 
 
 # --- FICHA TÉCNICA (insumos que cada item do cardápio consome) -------------
-# Item aqui é o PRATO (ex: "BIG ART"), independente de loja/canal — é uma
-# receita, não muda por onde é vendido. Ver seção 6.5 da documentação.
+# Item aqui é o PRATO (ex: "BIG ART") — o catálogo em si é único pra rede
+# toda, mas desde 2026-09-01 a receita (quais insumos + quantidade) é POR
+# LOJA: a mesma "BIG ART" pode usar insumos diferentes na Hamburgueria e na
+# Tradiça. Ver seção 6.5 da documentação.
 
-@app.route('/api/ficha-tecnica', methods=['GET'])
-def api_listar_ficha_tecnica():
-    itens = listar_itens_cardapio()
-    links = buscar_ficha_tecnica_completa()
+@app.route('/api/cardapio/produtos', methods=['GET'])
+def api_listar_produtos_cardapio():
+    """Produtos vendidos por uma loja (vem de preco_cardapio), já casados
+    com o item da Ficha Técnica quando existir, com custo (digitado à mão)
+    e valor de venda do balcão (Cardápio Web) — base da tela de Ficha
+    Técnica por loja."""
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    return jsonify({"produtos": listar_produtos_por_loja(loja)})
 
-    links_por_item = {}
-    for link in links:
-        links_por_item.setdefault(link['item_id'], []).append({
-            "insumoId": link['insumo_id'],
-            "nome": link['insumo_nome'],
-            "unidadeMedida": link['unidade_medida'],
-            "quantidade": link['quantidade'],
-        })
 
-    itens_formatados = [
+@app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['GET'])
+def api_buscar_ficha_tecnica_item(item_id):
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    insumos = [
         {
-            "id": item['id'],
-            "nome": item['nome'],
-            "categoria": item['categoria'],
-            "insumos": links_por_item.get(item['id'], []),
+            "insumoId": i['insumo_id'],
+            "nome": i['insumo_nome'],
+            "unidadeMedida": i['unidade_medida'],
+            "quantidade": i['quantidade'],
         }
-        for item in itens
+        for i in buscar_ficha_tecnica_item(item_id, loja)
     ]
-
     insumos_disponiveis = [
         {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida']}
         for i in _insumos_unicos(listar_insumos())
     ]
-
-    return jsonify({"itens": itens_formatados, "insumosDisponiveis": insumos_disponiveis})
+    return jsonify({"insumos": insumos, "insumosDisponiveis": insumos_disponiveis})
 
 
 def _insumos_unicos(linhas_estoque):
@@ -1312,6 +1317,10 @@ def api_definir_ficha_tecnica(item_id):
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
     links_brutos = dados.get('insumos') or []
     links = []
     for link in links_brutos:
@@ -1329,7 +1338,28 @@ def api_definir_ficha_tecnica(item_id):
             quantidade = None
         links.append({"insumoId": insumo_id, "quantidade": quantidade})
 
-    definir_ficha_tecnica(item_id, links)
+    definir_ficha_tecnica(item_id, loja, links)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/custo', methods=['PUT'])
+def api_salvar_custo_item_cardapio(item_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        custo = float(dados.get('custo'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Informe um custo válido."}), 400
+    if custo < 0:
+        return jsonify({"erro": "Custo não pode ser negativo."}), 400
+
+    salvar_custo_item_cardapio(item_id, loja, custo)
     return jsonify({"ok": True})
 
 

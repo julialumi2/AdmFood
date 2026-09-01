@@ -279,8 +279,50 @@ def inicializar_banco():
             CREATE TABLE IF NOT EXISTS ficha_tecnica (
                 item_id INTEGER NOT NULL,
                 insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
                 quantidade REAL,
-                PRIMARY KEY (item_id, insumo_id)
+                PRIMARY KEY (item_id, insumo_id, loja)
+            )
+            """
+        )
+        colunas_ficha_tecnica = {c["name"] for c in conn.execute("PRAGMA table_info(ficha_tecnica)").fetchall()}
+        if "loja" not in colunas_ficha_tecnica:
+            # Ficha técnica virou uma receita por loja (antes era uma só pra
+            # rede toda, ver seção 6.5) — SQLite não deixa mudar PRIMARY KEY
+            # com ALTER TABLE, então recria a tabela e duplica cada receita
+            # existente pras lojas que já existem em estoque_insumo (mesmo
+            # critério do backfill de insumo_loja acima), pra todo mundo
+            # começar idêntico até ela divergir alguma pela tela.
+            conn.execute("ALTER TABLE ficha_tecnica RENAME TO ficha_tecnica_old")
+            conn.execute(
+                """
+                CREATE TABLE ficha_tecnica (
+                    item_id INTEGER NOT NULL,
+                    insumo_id INTEGER NOT NULL,
+                    loja TEXT NOT NULL,
+                    quantidade REAL,
+                    PRIMARY KEY (item_id, insumo_id, loja)
+                )
+                """
+            )
+            lojas_existentes = [l["loja"] for l in conn.execute("SELECT DISTINCT loja FROM estoque_insumo").fetchall()]
+            linhas_antigas = conn.execute("SELECT item_id, insumo_id, quantidade FROM ficha_tecnica_old").fetchall()
+            for linha in linhas_antigas:
+                for loja in lojas_existentes:
+                    conn.execute(
+                        "INSERT INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                        (linha["item_id"], linha["insumo_id"], loja, linha["quantidade"]),
+                    )
+            conn.execute("DROP TABLE ficha_tecnica_old")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS item_cardapio_custo (
+                item_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                custo REAL NOT NULL,
+                atualizado_em TEXT NOT NULL,
+                PRIMARY KEY (item_id, loja)
             )
             """
         )
@@ -1336,33 +1378,95 @@ def listar_itens_cardapio():
 def excluir_item_cardapio(item_id):
     with conexao() as conn:
         conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ?", (item_id,))
+        conn.execute("DELETE FROM item_cardapio_custo WHERE item_id = ?", (item_id,))
         conn.execute("DELETE FROM item_cardapio WHERE id = ?", (item_id,))
 
 
-def definir_ficha_tecnica(item_id, links):
-    """Substitui a lista inteira de insumos do item por `links`
-    (`[{"insumoId": int, "quantidade": float|None}, ...]`) — mais simples
-    que fazer diff, e a tela sempre manda a lista completa mesmo."""
+def definir_ficha_tecnica(item_id, loja, links):
+    """Substitui a lista inteira de insumos do item **naquela loja** por
+    `links` (`[{"insumoId": int, "quantidade": float|None}, ...]`) — mais
+    simples que fazer diff, e a tela sempre manda a lista completa mesmo.
+    Não mexe na receita das outras lojas (ficha técnica é por loja desde
+    2026-09-01, ver seção 6.5)."""
     with conexao() as conn:
-        conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ?", (item_id,))
+        conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ? AND loja = ?", (item_id, loja))
         for link in links:
             conn.execute(
-                "INSERT INTO ficha_tecnica (item_id, insumo_id, quantidade) VALUES (?, ?, ?)",
-                (item_id, link["insumoId"], link.get("quantidade")),
+                "INSERT INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                (item_id, link["insumoId"], loja, link.get("quantidade")),
             )
 
 
-def buscar_ficha_tecnica_completa():
+def buscar_ficha_tecnica_item(item_id, loja):
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT f.item_id, f.insumo_id, f.quantidade,
-                   i.nome AS insumo_nome, i.unidade_medida
+            SELECT f.insumo_id, f.quantidade, i.nome AS insumo_nome, i.unidade_medida
             FROM ficha_tecnica f
             JOIN insumo i ON i.id = f.insumo_id
-            """
+            WHERE f.item_id = ? AND f.loja = ?
+            ORDER BY i.nome
+            """,
+            (item_id, loja),
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def salvar_custo_item_cardapio(item_id, loja, custo):
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO item_cardapio_custo (item_id, loja, custo, atualizado_em)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(item_id, loja) DO UPDATE SET
+                custo = excluded.custo,
+                atualizado_em = excluded.atualizado_em
+            """,
+            (item_id, loja, custo, datetime.now().isoformat()),
+        )
+
+
+def mapa_custos_item_cardapio():
+    with conexao() as conn:
+        linhas = conn.execute("SELECT item_id, loja, custo FROM item_cardapio_custo").fetchall()
+        return {(l["item_id"], l["loja"]): l["custo"] for l in linhas}
+
+
+def listar_produtos_por_loja(loja):
+    """Lista de produtos da loja pra tela de Ficha Técnica: parte de
+    `preco_cardapio` (que já sabe quem vende o quê e o valor de venda do
+    balcão), casa cada nome com um `item_cardapio` já cadastrado via
+    `_casar_item_cardapio` (mesmo critério usado pra bater venda com
+    receita, seção 6.6) e junta o custo digitado à mão quando existir.
+    Produto sem match nenhum volta com itemCardapioId None — a tela
+    oferece cadastrar um item novo com esse nome."""
+    with conexao() as conn:
+        produtos = conn.execute(
+            "SELECT id, categoria, produto, cardapio_web FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
+            (loja,),
+        ).fetchall()
+        catalogo = {
+            _normalizar_nome_insumo(i["nome"]): i["id"]
+            for i in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+        }
+        tem_ficha = {
+            r["item_id"]
+            for r in conn.execute("SELECT DISTINCT item_id FROM ficha_tecnica WHERE loja = ?", (loja,)).fetchall()
+        }
+    custos = mapa_custos_item_cardapio()
+
+    resultado = []
+    for p in produtos:
+        item_id = _casar_item_cardapio(p["produto"], catalogo)
+        resultado.append({
+            "itemCardapioId": item_id,
+            "nome": p["produto"],
+            "categoria": p["categoria"],
+            "valorVenda": p["cardapio_web"],
+            "custo": custos.get((item_id, loja)) if item_id else None,
+            "temFichaTecnica": item_id in tem_ficha if item_id else False,
+        })
+    return resultado
 
 
 def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
@@ -1386,7 +1490,7 @@ def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
             SELECT v.unidade, f.insumo_id, i.nome AS insumo_nome, i.unidade_medida,
                    SUM(v.quantidade * f.quantidade) AS total_consumido
             FROM venda_item v
-            JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id
+            JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id AND f.loja = v.unidade
             JOIN insumo i ON i.id = f.insumo_id
             WHERE {' AND '.join(condicoes)}
             GROUP BY v.unidade, f.insumo_id

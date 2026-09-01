@@ -197,8 +197,9 @@
         <div id="cardapio-modo-ficha-tecnica" style="display:none;">
           <div class="content-header">
             <p class="panel-subtitle">
-              Quais insumos cada item do cardápio usa — alimenta o cálculo de quantidade ideal do Estoque.
-              Quantidade em branco significa que ainda não sabemos a gramatura exata.
+              Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade)
+              também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra.
+              Clique num produto pra ver/editar os insumos.
             </p>
             <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
               <button type="button" class="btn-secondary" id="btn-novo-item-cardapio">
@@ -207,6 +208,33 @@
               </button>
             </div>
           </div>
+
+          <div class="loja-select" id="ficha-tecnica-loja-select">
+            <button type="button" class="loja-select-trigger" id="ficha-tecnica-loja-trigger">
+              <i data-lucide="store"></i>
+              <span class="loja-select-label">Hamburgueria Artesanos</span>
+              <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+            </button>
+            <div class="loja-select-menu" id="ficha-tecnica-loja-menu">
+              <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
+                <i data-lucide="store"></i>
+                <span>Hamburgueria Artesanos</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
+                <i data-lucide="store"></i>
+                <span>Açaí Na Lata</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
+                <i data-lucide="store"></i>
+                <span>Tradiça ZN</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
+                <i data-lucide="store"></i>
+                <span>Tradiça Simus</span>
+              </button>
+            </div>
+          </div>
+
           <div id="ficha-tecnica-conteudo">
             <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
           </div>
