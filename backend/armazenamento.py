@@ -1179,7 +1179,8 @@ def listar_insumos():
             """
             SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
                    i.marca_homologada,
-                   e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em
+                   e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em,
+                   EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = e.loja) AS aplica
             FROM insumo i
             JOIN estoque_insumo e ON e.insumo_id = i.id
             ORDER BY i.favorito DESC, i.categoria, i.nome, e.loja

@@ -1359,12 +1359,14 @@ function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
 // específica traz a linha real daquela loja.
 function _linhasEstoqueParaTab(tab) {
   if (tab === 'geral') {
-    return estoqueInsumos.map((insumo) => {
+    return estoqueInsumos
+      .filter((insumo) => LOJAS_ESTOQUE.some((loja) => insumo.porLoja[loja]?.aplica))
+      .map((insumo) => {
       let quantidadeAtual = 0;
       let estoqueMinimo = 0;
       LOJAS_ESTOQUE.forEach((loja) => {
         const dadosLoja = insumo.porLoja[loja];
-        if (dadosLoja) {
+        if (dadosLoja?.aplica) {
           quantidadeAtual += dadosLoja.quantidadeAtual;
           estoqueMinimo += dadosLoja.estoqueMinimo;
         }
@@ -1386,7 +1388,7 @@ function _linhasEstoqueParaTab(tab) {
   }
 
   return estoqueInsumos
-    .filter((insumo) => insumo.porLoja[tab])
+    .filter((insumo) => insumo.porLoja[tab]?.aplica)
     .map((insumo) => {
       const ideal = _quantidadeIdealParaLinha(insumo.id, tab);
       return {

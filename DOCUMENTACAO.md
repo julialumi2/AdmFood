@@ -860,6 +860,24 @@ Tradiça já nasce de fora do link do Artesanos e do Açaí — não precisa
 passar depois pela ferramenta "Insumos da loja" pra tirar. Rota: `POST
 /api/insumos/lote` (admin).
 
+**Estoque também passou a respeitar "Insumos da loja"** (concluído em
+2026-09-01, pedido da Julia: ao clicar numa loja específica em Estoque —
+ex. Açaí Na Lata — ela queria ver só os insumos daquela loja, e não via
+efeito nenhum ao desmarcar algo em "Insumos da loja", porque essa
+ferramenta só filtrava o link de Requisição (decisão original documentada
+acima, de propósito pra não mexer em `estoque_insumo`). Revertida agora:
+`listar_insumos()` ganhou mais uma coluna,
+`EXISTS(...) AS aplica` (mesmo `insumo_loja` de sempre, comparado
+insumo×loja), e o filtro por aba em Estoque
+(`_linhasEstoqueParaTab` em `script.js`) passou a exigir `aplica` além de
+só existir a linha de `estoque_insumo` — tanto pra abrir uma aba de loja
+específica quanto pra somar na aba "Geral". Não mexe em nenhuma outra
+tela: Ficha Técnica, Cotações e o resto continuam do jeito que estavam,
+só o comportamento de listagem do Estoque mudou. Como o backfill de
+`insumo_loja` original marcou **todo insumo em toda loja**, nada muda pra
+quem nunca abriu "Insumos da loja" — o efeito só aparece depois que ela
+for lá e desmarcar o que não é daquela unidade.
+
 **Ajuste manual da quantidade ideal** (concluído em 2026-08-27, primeira
 peça da "Quantidade ideal inteligente" — respostas da Kethllyn no roteiro
 de compras confirmaram manter a conta simples/visível e só permitir

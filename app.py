@@ -973,6 +973,7 @@ def _formatar_insumos(linhas):
             "estoqueMinimo": linha['estoque_minimo'],
             "status": _status_estoque(linha['quantidade_atual'], linha['estoque_minimo']),
             "atualizadoEm": linha['atualizado_em'],
+            "aplica": bool(linha['aplica']),
         }
     return list(por_insumo.values())
 
