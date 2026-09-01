@@ -2380,7 +2380,7 @@ function _renderTabelaComparacaoCotacao() {
           <span class="font-bold">${escaparHtml(grupo.insumoNome)}</span>
           <span class="text-muted td-insumo-categoria">${escaparHtml(grupo.categoria)}</span>
         </td>
-        <td class="text-muted">${item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—'}</td>
+        <td class="text-muted td-quantidade-fixa">${item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—'}</td>
         ${celulas}
       </tr>
     `;
@@ -2391,7 +2391,7 @@ function _renderTabelaComparacaoCotacao() {
       <thead>
         <tr>
           <th class="th-insumo-fixo">Insumo</th>
-          <th>Quantidade</th>
+          <th class="th-quantidade-fixa">Quantidade</th>
           ${theadFornecedores}
         </tr>
       </thead>
