@@ -5580,12 +5580,15 @@ function _cardapioCorpoHTML(p, canais, isAdmin, editando) {
   `;
 }
 
+// categorias: [{ nome, contagem }] — contagem vira o número de itens
+// daquela categoria, mostrado como badge (Preços e Ficha Técnica).
 function _renderSidebarCategorias(containerId, categorias, categoriaSelecionada, onSelecionar) {
   const sidebar = document.getElementById(containerId);
   if (!sidebar) return;
-  sidebar.innerHTML = categorias.map(nome => `
+  sidebar.innerHTML = categorias.map(({ nome, contagem }) => `
     <button type="button" class="cardapio-categoria-item ${nome === categoriaSelecionada ? 'active' : ''}" data-categoria="${escaparHtml(nome)}">
-      ${escaparHtml(nome)}
+      <span>${escaparHtml(nome)}</span>
+      <span class="cardapio-categoria-contagem">${contagem}</span>
     </button>
   `).join('');
   sidebar.querySelectorAll('.cardapio-categoria-item').forEach(btn => {
@@ -5604,7 +5607,8 @@ function renderCardapioLoja(nomeLoja) {
   if (!cardapioCategoriaSelecionada || !nomesCategorias.includes(cardapioCategoriaSelecionada)) {
     cardapioCategoriaSelecionada = nomesCategorias[0] || null;
   }
-  _renderSidebarCategorias('cardapio-categorias-sidebar', nomesCategorias, cardapioCategoriaSelecionada, (nome) => {
+  const categoriasComContagem = loja.categorias.map(cat => ({ nome: cat.nome, contagem: cat.produtos.length }));
+  _renderSidebarCategorias('cardapio-categorias-sidebar', categoriasComContagem, cardapioCategoriaSelecionada, (nome) => {
     cardapioCategoriaSelecionada = nome;
     renderCardapioLoja(nomeLoja);
   });
@@ -5824,7 +5828,8 @@ function renderFichaTecnicaProdutos() {
   if (!fichaTecnicaCategoriaSelecionada || !categorias.includes(fichaTecnicaCategoriaSelecionada)) {
     fichaTecnicaCategoriaSelecionada = categorias[0] || null;
   }
-  _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categorias, fichaTecnicaCategoriaSelecionada, (nome) => {
+  const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
+  _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
     fichaTecnicaCategoriaSelecionada = nome;
     renderFichaTecnicaProdutos();
   });

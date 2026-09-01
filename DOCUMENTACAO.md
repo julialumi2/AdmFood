@@ -251,6 +251,28 @@ volta pra primeira categoria da loja nova; categoria com o mesmo nome
 continua selecionada. Em telas estreitas (≤768px) a sidebar vira uma
 fileira horizontal com rolagem, em vez de empilhar embaixo do conteúdo.
 
+**Passada de design na sidebar + seletor de loja** (concluído em
+2026-09-01, pedido explícito da Julia — "mais bonita, mais profissional,
+mantendo as cores da minha marca" — usando a skill `frontend-design`;
+aprovou um preview antes de eu aplicar). Sem cor nova nenhuma, só
+`--primary`/`--surface-muted`/etc. que já existiam:
+- Categoria ativa ganhou silhueta de **aba de dossiê** — reta à esquerda,
+  arredondada só à direita, com barra `--primary` à esquerda — em vez do
+  pill cheio de antes. Referência direta ao nome da tela (Ficha
+  **Técnica** = arquivo de fichas).
+- Cada categoria mostra um **badge de contagem** (`.cardapio-categoria-contagem`)
+  com quantos produtos tem ali — `_renderSidebarCategorias` passou a
+  receber `[{nome, contagem}]` em vez de só nomes; os dois call sites
+  (`renderCardapioLoja` e `renderFichaTecnicaProdutos`) calculam a
+  contagem a partir do tamanho da lista de produtos por categoria.
+- No mobile (≤768px), a aba vira um chip com borda em vez do corte
+  assimétrico (que só faz sentido na coluna vertical).
+- O seletor de loja da Ficha Técnica ganhou um ícone num roundel colorido
+  e um rótulo "Loja selecionada" acima do nome — classe nova
+  `.loja-select-realce` em `cardapio.css`, escopada só nesse componente
+  (`#ficha-tecnica-loja-select`) pra não alterar o `.loja-select` simples
+  que o Estoque também usa.
+
 ### 6.2 Preparo (indicadores operacionais da cozinha)
 
 Tela `preparo.html` — nasceu de um pedido de KDS (Kitchen Display System)

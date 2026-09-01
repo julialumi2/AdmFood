@@ -143,25 +143,38 @@
 }
 
 .cardapio-categorias-sidebar {
-  width: 220px;
+  width: 230px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  border-left: 1px solid var(--border-color);
 }
 
+.cardapio-categorias-sidebar:empty { border-left: none; }
+
+/* Aba de dossiê: reta à esquerda, arredondada à direita — a categoria
+   ativa "avança" como uma ficha puxada pra frente do arquivo, condizente
+   com uma tela chamada Ficha Técnica. */
 .cardapio-categoria-item {
-  display: block;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
-  padding: 10px var(--space-3);
+  padding: 12px var(--space-4) 12px 15px;
+  margin-left: -1px;
   background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-family: inherit;
+  font-size: 0.83rem;
   font-weight: 700;
   color: var(--text-muted);
   cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.2s cubic-bezier(.2,.8,.2,1);
 }
 
 .cardapio-categoria-item:hover { background-color: var(--surface-muted); color: var(--text-dark); }
@@ -169,6 +182,34 @@
 .cardapio-categoria-item.active {
   color: var(--primary);
   background-color: var(--primary-soft);
+  border-left-color: var(--primary);
+  border-top-color: var(--surface-muted-border);
+  border-bottom-color: var(--surface-muted-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardapio-categoria-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+.cardapio-categoria-contagem {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-faint);
+  background-color: var(--surface-muted);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  min-width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.cardapio-categoria-item.active .cardapio-categoria-contagem {
+  color: var(--primary);
+  background-color: rgba(217, 56, 41, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardapio-categoria-item { transition: none; }
 }
 
 #cardapio-conteudo,
@@ -176,6 +217,44 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Seletor de loja com mais presença (só Ficha Técnica — Estoque continua
+   com o .loja-select simples, essa variante não mexe na base). */
+.loja-select-realce .loja-select-trigger {
+  gap: var(--space-3);
+  padding: 10px 16px 10px 10px;
+}
+
+.loja-select-icone-realce {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background-color: var(--primary-soft);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.loja-select-icone-realce i, .loja-select-icone-realce svg { width: 16px; height: 16px; }
+
+.loja-select-texto-realce {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.loja-select-rotulo-realce {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.loja-select-realce .loja-select-label { font-size: 0.9rem; }
 
 @media (max-width: 768px) {
   .cardapio-catalogo-layout { flex-direction: column; }
@@ -185,8 +264,17 @@
     overflow-x: auto;
     gap: var(--space-2);
     padding-bottom: var(--space-1);
+    border-left: none;
   }
-  .cardapio-categoria-item { white-space: nowrap; width: auto; }
+  .cardapio-categoria-item {
+    white-space: nowrap;
+    width: auto;
+    margin-left: 0;
+    border-radius: var(--radius-pill);
+    border-left: none;
+    border-color: var(--border-color);
+  }
+  .cardapio-categoria-item.active { border-color: var(--primary); }
 }
 
 .cardapio-categoria-titulo {
