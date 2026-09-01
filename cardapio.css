@@ -218,8 +218,20 @@
   min-width: 0;
 }
 
+/* "Novo item" e o seletor de loja lado a lado, à direita do texto de
+   apoio — em telas estreitas, quebra linha e empilha (mesmo comportamento
+   de .content-header, que também é flex-wrap). */
+.ficha-tecnica-topo-acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 /* Seletor de loja com mais presença (só Ficha Técnica — Estoque continua
    com o .loja-select simples, essa variante não mexe na base). */
+.loja-select-realce { margin-bottom: 0; }
+
 .loja-select-realce .loja-select-trigger {
   gap: var(--space-3);
   padding: 10px 16px 10px 10px;
