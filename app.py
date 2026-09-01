@@ -1249,7 +1249,11 @@ def api_listar_produtos_cardapio():
     loja = request.args.get('loja')
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
-    return jsonify({"produtos": listar_produtos_por_loja(loja)})
+    produtos = listar_produtos_por_loja(loja)
+    for p in produtos:
+        foto_arquivo = p.pop('fotoArquivo', None)
+        p['fotoUrl'] = f"/cardapio-fotos/{foto_arquivo}" if foto_arquivo else None
+    return jsonify({"produtos": produtos})
 
 
 @app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['GET'])

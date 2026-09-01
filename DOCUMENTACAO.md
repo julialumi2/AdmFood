@@ -235,6 +235,22 @@ pasta `cardapio_fotos/` do lado do `admfood.db`, **no mesmo volume
 persistente** (mesmo motivo do banco: sem isso, some a cada redeploy).
 Servidas via `/cardapio-fotos/<arquivo>`, só extensões de imagem.
 
+**Sidebar de categorias, igual o Catálogo da Cardápio Web** (concluído em
+2026-09-01, pedido da Julia depois de mostrar print de
+`portal.cardapioweb.com/cardapio/produtos`: categorias numa coluna à
+esquerda, clicáveis, mostrando só os produtos da categoria escolhida à
+direita — em vez de empilhar todas as categorias na mesma página).
+`renderCardapioLoja` ganhou uma segunda dimensão de estado
+(`cardapioCategoriaSelecionada`, junto da loja) e passou a desenhar só a
+categoria ativa; a lista de categorias e o clique pra trocar vêm de
+`_renderSidebarCategorias` (`script.js`), uma função pequena e genérica
+que também passou a alimentar a Ficha Técnica (seção 6.5) — mesmo
+componente visual (`.cardapio-categorias-sidebar`/`.cardapio-categoria-item`
+em `cardapio.css`) nas duas telas. Trocar de loja sem categoria em comum
+volta pra primeira categoria da loja nova; categoria com o mesmo nome
+continua selecionada. Em telas estreitas (≤768px) a sidebar vira uma
+fileira horizontal com rolagem, em vez de empilhar embaixo do conteúdo.
+
 ### 6.2 Preparo (indicadores operacionais da cozinha)
 
 Tela `preparo.html` — nasceu de um pedido de KDS (Kitchen Display System)
@@ -487,6 +503,12 @@ HTML/CSS/JS. Rota antiga `GET /api/ficha-tecnica` (sem noção de loja) foi
 removida — só tinha um consumidor, e esse consumidor foi substituído por
 completo. Rotas novas: `GET /api/cardapio/produtos?loja=` e `GET
 /api/itens-cardapio/<id>/ficha-tecnica?loja=`.
+
+Ganhou também a foto do produto (mesmo `foto_arquivo`/`fotoUrl` de
+"Preços", seção 6.1 — `listar_produtos_por_loja` só passou a selecionar
+essa coluna a mais) e a sidebar de categorias (ver seção 6.1) — as duas
+mudanças vieram junto do pedido da Julia de deixar essa tela com a cara
+do Catálogo da Cardápio Web.
 
 ### 6.6 Consumo estimado de insumo (Ficha Técnica × vendas reais)
 

@@ -187,9 +187,15 @@
             Preço de cada item por canal de venda. Uma planilha nova traz os preços atualizados (o admin pode reimportar a qualquer momento); fotos e ajustes manuais de preço ficam até a próxima planilha reimportada trazer um valor novo pra esse produto.
           </p>
 
-          <!-- CONTEÚDO DA LOJA SELECIONADA -->
-          <div id="cardapio-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+          <!-- CATÁLOGO: SIDEBAR DE CATEGORIAS + PRODUTOS DA CATEGORIA SELECIONADA
+               (mesmo layout do Catálogo da Cardápio Web) -->
+          <div class="cardapio-catalogo-layout">
+            <div class="cardapio-categorias-sidebar" id="cardapio-categorias-sidebar">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+            <div id="cardapio-conteudo">
+              <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+            </div>
           </div>
         </div>
 
@@ -235,8 +241,13 @@
             </div>
           </div>
 
-          <div id="ficha-tecnica-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+          <div class="cardapio-catalogo-layout">
+            <div class="cardapio-categorias-sidebar" id="ficha-tecnica-categorias-sidebar">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+            <div id="ficha-tecnica-conteudo">
+              <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+            </div>
           </div>
         </div>
 

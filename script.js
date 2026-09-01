@@ -5475,6 +5475,7 @@ async function alterarStatusModal() {
 
 let cardapioData = [];
 let cardapioLojaSelecionada = null;
+let cardapioCategoriaSelecionada = null;
 
 async function carregarPrecosCardapio() {
   const tabsEl = document.getElementById('cardapio-tabs');
@@ -5579,6 +5580,19 @@ function _cardapioCorpoHTML(p, canais, isAdmin, editando) {
   `;
 }
 
+function _renderSidebarCategorias(containerId, categorias, categoriaSelecionada, onSelecionar) {
+  const sidebar = document.getElementById(containerId);
+  if (!sidebar) return;
+  sidebar.innerHTML = categorias.map(nome => `
+    <button type="button" class="cardapio-categoria-item ${nome === categoriaSelecionada ? 'active' : ''}" data-categoria="${escaparHtml(nome)}">
+      ${escaparHtml(nome)}
+    </button>
+  `).join('');
+  sidebar.querySelectorAll('.cardapio-categoria-item').forEach(btn => {
+    btn.addEventListener('click', () => onSelecionar(btn.dataset.categoria));
+  });
+}
+
 function renderCardapioLoja(nomeLoja) {
   const conteudoEl = document.getElementById('cardapio-conteudo');
   if (!conteudoEl) return;
@@ -5586,14 +5600,24 @@ function renderCardapioLoja(nomeLoja) {
   const loja = cardapioData.find(l => l.loja === nomeLoja);
   if (!loja) return;
 
+  const nomesCategorias = loja.categorias.map(cat => cat.nome);
+  if (!cardapioCategoriaSelecionada || !nomesCategorias.includes(cardapioCategoriaSelecionada)) {
+    cardapioCategoriaSelecionada = nomesCategorias[0] || null;
+  }
+  _renderSidebarCategorias('cardapio-categorias-sidebar', nomesCategorias, cardapioCategoriaSelecionada, (nome) => {
+    cardapioCategoriaSelecionada = nome;
+    renderCardapioLoja(nomeLoja);
+  });
+
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const temBeefood = loja.categorias.some(cat => cat.produtos.some(p => p.beefood !== null));
   const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
 
-  const cardsPorCategoria = loja.categorias.map(cat => `
-    <div class="cardapio-categoria-titulo">${escaparHtml(cat.nome)}</div>
+  const categoriaAtual = loja.categorias.find(cat => cat.nome === cardapioCategoriaSelecionada);
+  const cardsPorCategoria = !categoriaAtual ? '' : `
+    <div class="cardapio-categoria-titulo">${escaparHtml(categoriaAtual.nome)}</div>
     <div class="cardapio-lista">
-      ${cat.produtos.map(p => `
+      ${categoriaAtual.produtos.map(p => `
         <div class="cardapio-card" data-id="${p.id}">
           <div class="cardapio-card-foto">
             ${p.fotoUrl
@@ -5610,7 +5634,7 @@ function renderCardapioLoja(nomeLoja) {
         </div>
       `).join('')}
     </div>
-  `).join('');
+  `;
 
   conteudoEl.innerHTML = cardsPorCategoria;
   conteudoEl.dataset.canais = JSON.stringify(canais);
@@ -5755,6 +5779,7 @@ let fichaTecnicaEditandoItemId = null;
 const fichaTecnicaExpandidos = new Set();
 const fichaTecnicaInsumosCache = new Map();
 let fichaTecnicaProdutoPendente = null;
+let fichaTecnicaCategoriaSelecionada = null;
 
 async function carregarProdutosFichaTecnica() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
@@ -5781,6 +5806,7 @@ function renderFichaTecnicaProdutos() {
   if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
 
   if (!fichaTecnicaProdutos.length) {
+    document.getElementById('ficha-tecnica-categorias-sidebar').innerHTML = '';
     conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto encontrado pra essa loja em Preços — importe a planilha de preços primeiro.</p>`;
     return;
   }
@@ -5795,14 +5821,28 @@ function renderFichaTecnicaProdutos() {
     porCategoria.get(p.categoria).push(p);
   });
 
-  conteudoEl.innerHTML = categorias.map(categoria => `
-    <div class="cardapio-categoria-titulo">${escaparHtml(categoria)}</div>
+  if (!fichaTecnicaCategoriaSelecionada || !categorias.includes(fichaTecnicaCategoriaSelecionada)) {
+    fichaTecnicaCategoriaSelecionada = categorias[0] || null;
+  }
+  _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categorias, fichaTecnicaCategoriaSelecionada, (nome) => {
+    fichaTecnicaCategoriaSelecionada = nome;
+    renderFichaTecnicaProdutos();
+  });
+
+  const produtosDaCategoria = porCategoria.get(fichaTecnicaCategoriaSelecionada) || [];
+  conteudoEl.innerHTML = !fichaTecnicaCategoriaSelecionada ? '' : `
+    <div class="cardapio-categoria-titulo">${escaparHtml(fichaTecnicaCategoriaSelecionada)}</div>
     <div class="ficha-tecnica-produto-lista">
-      ${porCategoria.get(categoria).map(p => {
+      ${produtosDaCategoria.map(p => {
         const expandido = p.itemCardapioId && fichaTecnicaExpandidos.has(p.itemCardapioId);
         return `
         <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
           <div class="ficha-tecnica-produto-linha" ${p.itemCardapioId ? `data-acao="expandir-produto" data-item-id="${p.itemCardapioId}"` : ''}>
+            <div class="ficha-tecnica-produto-foto">
+              ${p.fotoUrl
+                ? `<img src="${p.fotoUrl}" alt="${escaparHtml(p.nome)}">`
+                : `<div class="ficha-tecnica-produto-foto-vazia"><i data-lucide="image"></i></div>`}
+            </div>
             <div class="ficha-tecnica-produto-nome">${escaparHtml(p.nome)}</div>
             <div class="ficha-tecnica-produto-custo">
               ${isAdmin && p.itemCardapioId
@@ -5821,7 +5861,7 @@ function renderFichaTecnicaProdutos() {
       `;
       }).join('')}
     </div>
-  `).join('');
+  `;
 
   conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
     linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));

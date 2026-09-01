@@ -26,11 +26,33 @@
 
 .ficha-tecnica-produto-linha {
   display: grid;
-  grid-template-columns: 1fr 130px 110px minmax(28px, auto);
+  grid-template-columns: 40px 1fr 130px 110px minmax(28px, auto);
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
 }
+
+.ficha-tecnica-produto-foto {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background-color: var(--surface-muted);
+  flex-shrink: 0;
+}
+
+.ficha-tecnica-produto-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.ficha-tecnica-produto-foto-vazia {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+
+.ficha-tecnica-produto-foto-vazia i, .ficha-tecnica-produto-foto-vazia svg { width: 16px; height: 16px; }
 
 .ficha-tecnica-produto-linha .btn-secondary-sm { white-space: nowrap; justify-self: end; }
 
@@ -110,6 +132,61 @@
   font-size: 0.85rem;
   color: var(--text-dark);
   font-family: inherit;
+}
+
+/* Catálogo com sidebar de categorias (mesmo layout do Catálogo da
+   Cardápio Web) — compartilhado entre Preços e Ficha Técnica. */
+.cardapio-catalogo-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.cardapio-categorias-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardapio-categoria-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cardapio-categoria-item:hover { background-color: var(--surface-muted); color: var(--text-dark); }
+
+.cardapio-categoria-item.active {
+  color: var(--primary);
+  background-color: var(--primary-soft);
+}
+
+#cardapio-conteudo,
+#ficha-tecnica-conteudo {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .cardapio-catalogo-layout { flex-direction: column; }
+  .cardapio-categorias-sidebar {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: var(--space-2);
+    padding-bottom: var(--space-1);
+  }
+  .cardapio-categoria-item { white-space: nowrap; width: auto; }
 }
 
 .cardapio-categoria-titulo {

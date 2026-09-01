@@ -1442,7 +1442,7 @@ def listar_produtos_por_loja(loja):
     oferece cadastrar um item novo com esse nome."""
     with conexao() as conn:
         produtos = conn.execute(
-            "SELECT id, categoria, produto, cardapio_web FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
+            "SELECT id, categoria, produto, cardapio_web, foto_arquivo FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
             (loja,),
         ).fetchall()
         catalogo = {
@@ -1465,6 +1465,7 @@ def listar_produtos_por_loja(loja):
             "valorVenda": p["cardapio_web"],
             "custo": custos.get((item_id, loja)) if item_id else None,
             "temFichaTecnica": item_id in tem_ficha if item_id else False,
+            "fotoArquivo": p["foto_arquivo"],
         })
     return resultado
 
