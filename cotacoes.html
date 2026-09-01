@@ -294,9 +294,27 @@
             </div>
           </div>
 
-          <!-- COMPARAÇÃO POR INSUMO -->
-          <div id="cotacao-comparacao-lista">
-            <!-- Renderizado dinamicamente via JS: um card por insumo -->
+          <!-- COMPARAÇÃO POR INSUMO x FORNECEDOR (grid estilo planilha) -->
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Comparativo de preços</h3>
+                <p class="table-subtitle">Cada coluna é um fornecedor que já lançou preço — clique num preço pra marcar como vencedor</p>
+              </div>
+              <div class="action-controls">
+                <div class="search-box" id="cotacao-comparacao-busca-wrapper" style="max-width: 240px; display:none;">
+                  <i data-lucide="search"></i>
+                  <input type="text" id="cotacao-comparacao-busca" placeholder="Buscar insumo ou categoria...">
+                </div>
+                <button type="button" class="btn-secondary-sm" id="btn-cotacao-destacar-melhores" style="display:none;">
+                  <i data-lucide="star"></i>
+                  Destacar melhores preços
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive" id="cotacao-comparacao-lista">
+              <!-- Renderizado dinamicamente via JS: tabela insumo x fornecedor -->
+            </div>
           </div>
         </div>
 

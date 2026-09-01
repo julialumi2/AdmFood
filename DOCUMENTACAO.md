@@ -677,6 +677,31 @@ de novo. Não apaga o preço já lançado; se o fornecedor reenviar,
 sempre), não duplica linha. Rota: `POST
 /api/cotacoes/convites/<id>/reabrir` (admin).
 
+**Grid comparativa estilo planilha, substituindo os cards** (concluído em
+2026-09-01, pedido da Julia depois de ver a tela de comparativo de preços
+da VMarket — print trazido por ela: matriz insumo × fornecedor, badge
+"Melhor Preço!", check de vencedor, filtro de seção/nome). Decisão de
+escopo dela via pergunta: a grid **substitui** o card-por-insumo por
+completo (não é uma visão a mais), e o "melhor preço" deixou de ser
+automático — agora só aparece quando o botão **"Destacar melhores
+preços"** é clicado (`destacarMelhoresPrecosAtivo`, estado só de tela, não
+persiste). O vencedor marcado manualmente (`selecionado`) continua igual —
+são dois conceitos visuais diferentes: o check verde de vencedor (persiste
+no banco) e a estrela de melhor preço (cálculo na hora, no clique).
+
+Sem mudança nenhuma de schema/endpoint — a grid é só uma forma diferente
+de desenhar os mesmos dados que `GET /api/cotacoes/<id>` já devolvia
+(`grupos`/`itens`). As colunas de fornecedor são inferidas dinamicamente
+(união de todo `fornecedorId` que aparece em algum preço da cotação,
+ordenado por nome) — como não existe uma tabela "quem participa da
+cotação" (ver acima), não dá pra desenhar uma coluna de fornecedor que
+ainda não lançou nenhum preço, nem diferenciar célula vazia de "não vendo"
+(essa distinção nunca existiu, mesma limitação de antes). Primeira coluna
+(nome do insumo) fica fixa (`position: sticky`) pra não se perder ao rolar
+a tabela pros lados com muitos fornecedores. Campo de busca (nome ou
+categoria do insumo) filtra as linhas na hora, cliente-side, mesmo padrão
+das outras telas do sistema.
+
 Tela pública nova `preencher_cotacao.html` (reaproveita o CSS de
 `preencher_contagem.css` — layout genérico de "página pública por token",
 não é específico de contagem apesar do nome do arquivo). Rotas: `POST

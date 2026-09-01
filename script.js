@@ -2103,6 +2103,10 @@ function renderHistoricoCompras(historico) {
 
 async function abrirCotacaoDetalhe(cotacaoId) {
   cotacaoAtualId = cotacaoId;
+  destacarMelhoresPrecosAtivo = false;
+  document.getElementById('btn-cotacao-destacar-melhores')?.classList.remove('ativo');
+  const buscaComparacao = document.getElementById('cotacao-comparacao-busca');
+  if (buscaComparacao) buscaComparacao.value = '';
   document.getElementById('cotacoes-lista-view').style.display = 'none';
   document.getElementById('cotacoes-detalhe-view').style.display = '';
 
@@ -2286,58 +2290,126 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
   }
 });
 
+let cotacaoComparacaoDados = { grupos: [], isAdmin: false, itens: [] };
+let destacarMelhoresPrecosAtivo = false;
+
 function renderCotacaoComparacao(grupos, isAdmin, itens) {
+  cotacaoComparacaoDados = { grupos, isAdmin, itens: itens || [] };
+  _renderTabelaComparacaoCotacao();
+}
+
+function _iniciaisFornecedor(nome) {
+  return nome.trim().split(/\s+/).slice(0, 2).map(parte => parte[0]).join('').toUpperCase();
+}
+
+function _renderTabelaComparacaoCotacao() {
+  const { grupos, isAdmin, itens } = cotacaoComparacaoDados;
   const container = document.getElementById('cotacao-comparacao-lista');
+  const buscaWrapper = document.getElementById('cotacao-comparacao-busca-wrapper');
+  const btnDestacar = document.getElementById('btn-cotacao-destacar-melhores');
+  if (!container) return;
+
   if (!grupos.length) {
+    if (buscaWrapper) buscaWrapper.style.display = 'none';
+    if (btnDestacar) btnDestacar.style.display = 'none';
     container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
     return;
   }
+  if (buscaWrapper) buscaWrapper.style.display = '';
+  if (btnDestacar) btnDestacar.style.display = '';
+
+  const termo = (document.getElementById('cotacao-comparacao-busca')?.value || '').trim().toLowerCase();
+  const gruposFiltrados = grupos.filter(g =>
+    !termo || g.insumoNome.toLowerCase().includes(termo) || g.categoria.toLowerCase().includes(termo)
+  );
+
+  if (!gruposFiltrados.length) {
+    container.innerHTML = `<p class="panel-subtitle">Nenhum insumo encontrado pra essa busca.</p>`;
+    return;
+  }
+
+  const fornecedoresMap = new Map();
+  grupos.forEach(g => g.precos.forEach(p => {
+    if (!fornecedoresMap.has(p.fornecedorId)) fornecedoresMap.set(p.fornecedorId, p.fornecedorNome);
+  }));
+  const fornecedores = [...fornecedoresMap.entries()]
+    .map(([id, nome]) => ({ id, nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
   const itensPorInsumo = {};
-  (itens || []).forEach((item) => { itensPorInsumo[item.insumoId] = item; });
+  itens.forEach(item => { itensPorInsumo[item.insumoId] = item; });
 
-  container.innerHTML = grupos.map((grupo) => {
-    const item = itensPorInsumo[grupo.insumoId];
-    return `
-    <div class="chart-card cotacao-grupo">
-      <div class="cotacao-grupo-header">
-        <h4>${escaparHtml(grupo.insumoNome)}</h4>
-        <span class="text-muted">${escaparHtml(grupo.categoria)}</span>
+  const theadFornecedores = fornecedores.map(f => `
+    <th class="th-comparacao-fornecedor">
+      <div class="comparacao-fornecedor-cabecalho">
+        <span class="avatar avatar-sm">${escaparHtml(_iniciaisFornecedor(f.nome))}</span>
+        <span>${escaparHtml(f.nome)}</span>
       </div>
-      ${item ? `
-        <p class="panel-subtitle" style="margin-bottom: var(--space-2);">
-          Comprar <strong>${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}</strong>
-          — ${item.porLoja.map(pl => `${escaparHtml(pl.loja)}: ${pl.quantidade} ${escaparHtml(item.unidadeMedida)}`).join(' · ')}
-        </p>
-      ` : ''}
-      ${grupo.precos.map((preco, indice) => `
-        <div class="cotacao-preco-linha ${indice === 0 ? 'melhor-preco' : ''} ${preco.selecionado ? 'selecionado' : ''}">
-          <span class="cotacao-preco-fornecedor">${escaparHtml(preco.fornecedorNome)}</span>
-          <span class="cotacao-preco-valor">R$ ${preco.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          ${indice === 0 ? '<span class="badge-pill pos">Melhor preço</span>' : ''}
-          ${isAdmin ? `
-            <button type="button" class="btn-acao-icone" data-acao="selecionar-preco" data-id="${preco.id}" title="Marcar como vencedor">
-              <i data-lucide="check"></i>
-            </button>
-            <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-preco" data-id="${preco.id}" title="Remover">
-              <i data-lucide="trash-2"></i>
-            </button>
-          ` : ''}
-        </div>
-      `).join('')}
-    </div>
-  `;
+    </th>
+  `).join('');
+
+  const linhas = gruposFiltrados.map(grupo => {
+    const item = itensPorInsumo[grupo.insumoId];
+    const precoPorFornecedor = new Map(grupo.precos.map(p => [p.fornecedorId, p]));
+    const menorPreco = Math.min(...grupo.precos.map(p => p.preco));
+
+    const celulas = fornecedores.map(f => {
+      const preco = precoPorFornecedor.get(f.id);
+      if (!preco) {
+        return `<td class="td-comparacao-preco td-sem-preco">—</td>`;
+      }
+      const ehMelhor = destacarMelhoresPrecosAtivo && preco.preco === menorPreco;
+      const classes = ['td-comparacao-preco'];
+      if (preco.selecionado) classes.push('selecionado');
+      if (ehMelhor) classes.push('melhor-preco');
+      return `
+        <td class="${classes.join(' ')}" ${isAdmin ? `data-acao="selecionar-preco" data-id="${preco.id}" title="Marcar como vencedor"` : ''}>
+          <div class="comparacao-preco-conteudo">
+            ${preco.selecionado ? '<i data-lucide="check-circle" class="icone-preco-selecionado"></i>' : ''}
+            <span class="comparacao-preco-valor">R$ ${preco.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          </div>
+          ${ehMelhor ? '<span class="badge-pill pos badge-melhor-preco">★ Melhor preço</span>' : ''}
+          ${isAdmin ? `<button type="button" class="btn-acao-icone btn-excluir btn-remover-preco-comparacao" data-acao="excluir-preco" data-id="${preco.id}" title="Remover preço"><i data-lucide="trash-2"></i></button>` : ''}
+        </td>
+      `;
+    }).join('');
+
+    return `
+      <tr>
+        <td class="td-insumo-fixo">
+          <span class="font-bold">${escaparHtml(grupo.insumoNome)}</span>
+          <span class="text-muted td-insumo-categoria">${escaparHtml(grupo.categoria)}</span>
+        </td>
+        <td class="text-muted">${item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—'}</td>
+        ${celulas}
+      </tr>
+    `;
   }).join('');
 
+  container.innerHTML = `
+    <table class="tabela-comparacao-cotacao">
+      <thead>
+        <tr>
+          <th class="th-insumo-fixo">Insumo</th>
+          <th>Quantidade</th>
+          ${theadFornecedores}
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>
+    </table>
+  `;
+
   if (isAdmin) {
-    document.querySelectorAll('[data-acao="selecionar-preco"]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${btn.dataset.id}/selecionar`, { method: 'PUT' });
+    container.querySelectorAll('[data-acao="selecionar-preco"]').forEach(td => {
+      td.addEventListener('click', async (evento) => {
+        if (evento.target.closest('[data-acao="excluir-preco"]')) return;
+        await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${td.dataset.id}/selecionar`, { method: 'PUT' });
         await recarregarCotacaoDetalhe();
       });
     });
-    document.querySelectorAll('[data-acao="excluir-preco"]').forEach(btn => {
-      btn.addEventListener('click', async () => {
+    container.querySelectorAll('[data-acao="excluir-preco"]').forEach(btn => {
+      btn.addEventListener('click', async (evento) => {
+        evento.stopPropagation();
         await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${btn.dataset.id}`, { method: 'DELETE' });
         await recarregarCotacaoDetalhe();
       });
@@ -2345,6 +2417,14 @@ function renderCotacaoComparacao(grupos, isAdmin, itens) {
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+document.getElementById('cotacao-comparacao-busca')?.addEventListener('input', _renderTabelaComparacaoCotacao);
+
+document.getElementById('btn-cotacao-destacar-melhores')?.addEventListener('click', (evento) => {
+  destacarMelhoresPrecosAtivo = !destacarMelhoresPrecosAtivo;
+  evento.currentTarget.classList.toggle('ativo', destacarMelhoresPrecosAtivo);
+  _renderTabelaComparacaoCotacao();
+});
 
 document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', async () => {
   if (!confirm('Gerar pedido de compra pros insumos já com vencedor escolhido? Quem ainda não tem vencedor fica de fora, sem problema — dá pra gerar de novo depois.')) return;

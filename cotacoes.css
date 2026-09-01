@@ -14,56 +14,123 @@
   gap: var(--space-6);
 }
 
-.cotacao-grupo {
-  margin-bottom: var(--space-4);
+/* Grid comparativa de preços (insumo x fornecedor), estilo planilha —
+   substituiu os cards por insumo em 2026-09. */
+.tabela-comparacao-cotacao {
+  border-collapse: separate;
+  border-spacing: 0;
+  white-space: nowrap;
 }
 
-.cotacao-grupo-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
+.tabela-comparacao-cotacao th,
+.tabela-comparacao-cotacao td {
+  vertical-align: top;
 }
 
-.cotacao-grupo-header h4 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-dark);
+.th-insumo-fixo,
+.td-insumo-fixo {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--card-bg);
+  white-space: normal;
+  min-width: 160px;
 }
 
-.cotacao-preco-linha {
+.td-insumo-categoria {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.th-comparacao-fornecedor {
+  min-width: 150px;
+}
+
+.comparacao-fornecedor-cabecalho {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--surface-muted-border);
-}
-
-.cotacao-preco-linha:last-child {
-  border-bottom: none;
-}
-
-.cotacao-preco-fornecedor {
-  flex: 1;
-  font-weight: 600;
-  color: var(--text-dark);
-}
-
-.cotacao-preco-valor {
+  gap: var(--space-2);
   font-weight: 700;
   color: var(--text-dark);
-  min-width: 90px;
+  white-space: normal;
 }
 
-.cotacao-preco-linha.melhor-preco {
-  background-color: var(--success-soft);
-  border-radius: var(--radius-sm);
-  padding-left: var(--space-3);
-  padding-right: var(--space-3);
+.avatar-sm {
+  width: 26px;
+  height: 26px;
+  font-size: 0.68rem;
+  flex-shrink: 0;
 }
 
-.cotacao-preco-linha.selecionado .cotacao-preco-fornecedor::before {
-  content: "✓ ";
+.td-comparacao-preco {
+  position: relative;
+  padding-right: 36px !important;
+}
+
+.td-sem-preco {
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.comparacao-preco-conteudo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comparacao-preco-valor {
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.icone-preco-selecionado {
+  width: 16px;
+  height: 16px;
   color: var(--success);
-  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.badge-melhor-preco {
+  display: inline-block;
+  margin-top: var(--space-1);
+  font-size: 0.68rem;
+}
+
+.td-comparacao-preco[data-acao="selecionar-preco"] {
+  cursor: pointer;
+}
+
+.td-comparacao-preco[data-acao="selecionar-preco"]:hover {
+  background-color: var(--surface-muted);
+}
+
+.td-comparacao-preco.selecionado {
+  background-color: var(--success-soft);
+}
+
+.td-comparacao-preco.melhor-preco {
+  box-shadow: inset 0 0 0 2px var(--success);
+  border-radius: var(--radius-sm);
+}
+
+.btn-remover-preco-comparacao {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+}
+
+.btn-remover-preco-comparacao i,
+.btn-remover-preco-comparacao svg {
+  width: 13px;
+  height: 13px;
+}
+
+#btn-cotacao-destacar-melhores.ativo {
+  background-color: var(--success-soft);
+  color: var(--success);
+  border-color: var(--success);
 }
