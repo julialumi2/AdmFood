@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Cardápio</title>
+  <title>AdmFood - Recebimentos</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="cardapio.css">
+  <link rel="stylesheet" href="pedidos.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -44,7 +44,7 @@
           <i data-lucide="box"></i>
           <span>Estoque</span>
         </a>
-        <div class="menu-group">
+        <div class="menu-group expandido">
           <button type="button" class="menu-item menu-group-toggle">
             <i data-lucide="shopping-cart"></i>
             <span>Compras</span>
@@ -67,7 +67,7 @@
               <i data-lucide="package-check"></i>
               <span>Pedidos</span>
             </a>
-            <a href="recebimentos.html" class="menu-subitem">
+            <a href="recebimentos.html" class="menu-subitem active">
               <i data-lucide="clipboard-check"></i>
               <span>Recebimentos</span>
             </a>
@@ -134,7 +134,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">CARDÁPIO</span>
+          <span class="header-page-title">RECEBIMENTOS</span>
         </div>
 
         <div class="header-right">
@@ -153,127 +153,111 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE CARDÁPIO -->
+      <!-- PÁGINA DE RECEBIMENTOS -->
       <div class="page-content">
 
         <div class="dashboard-title-area">
           <div class="title-top">
-            <i data-lucide="book-open" class="icon-pin"></i>
-            <span id="cardapio-titulo-eyebrow">COMPARATIVO DE PREÇOS</span>
+            <i data-lucide="clipboard-check" class="icon-pin"></i>
+            <span>CONFERÊNCIA DE ENTREGA</span>
           </div>
           <div class="title-row">
-            <h1 id="cardapio-titulo-h1">Cardápio · Preços</h1>
-            <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
-            <div id="cardapio-importar-area" style="display:none;">
-              <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
-              <button type="button" class="btn-secondary" onclick="document.getElementById('cardapio-importar-arquivo').click()">
-                <i data-lucide="upload"></i>
-                Importar planilha
-              </button>
-            </div>
+            <h1>Recebimentos</h1>
           </div>
         </div>
 
-        <p id="cardapio-importar-status" class="panel-subtitle" style="display:none;"></p>
+        <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
+          Busque o pedido que chegou, confirme quem recebeu e confira se a quantidade e a Nota Fiscal batem — isso já atualiza o estoque de verdade.
+        </p>
 
-        <!-- MODO: PREÇOS -->
-        <div id="cardapio-modo-precos">
-          <!-- ABAS POR LOJA -->
-          <div class="tabs-bar" id="cardapio-tabs">
-            <!-- Renderizado dinamicamente via JS, conforme as lojas que vierem da API -->
-          </div>
+        <div class="chart-card">
+          <div class="table-header-row">
+            <div>
+              <h3 class="table-title">Pedidos aguardando recebimento</h3>
+              <p class="table-subtitle">Busque por fornecedor, valor ou produto</p>
+            </div>
 
-          <p class="panel-subtitle" style="margin-top: var(--space-3);">
-            Preço de cada item por canal de venda. Uma planilha nova traz os preços atualizados (o admin pode reimportar a qualquer momento); fotos e ajustes manuais de preço ficam até a próxima planilha reimportada trazer um valor novo pra esse produto.
-          </p>
-
-          <!-- CONTEÚDO DA LOJA SELECIONADA -->
-          <div id="cardapio-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
-          </div>
-        </div>
-
-        <!-- MODO: FICHA TÉCNICA -->
-        <div id="cardapio-modo-ficha-tecnica" style="display:none;">
-          <div class="content-header">
-            <p class="panel-subtitle">
-              Quais insumos cada item do cardápio usa — alimenta o cálculo de quantidade ideal do Estoque.
-              Quantidade em branco significa que ainda não sabemos a gramatura exata.
-            </p>
-            <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
-              <button type="button" class="btn-secondary" id="btn-novo-item-cardapio">
-                <i data-lucide="plus"></i>
-                Novo item
-              </button>
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" placeholder="Buscar pedido..." id="recebimentos-busca">
             </div>
           </div>
-          <div id="ficha-tecnica-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
+
+          <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Fornecedor</th>
+                <th>Loja</th>
+                <th>Itens</th>
+                <th>Valor</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="recebimentos-tabela-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
           </div>
         </div>
 
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
-
-
-    <!-- MODAL: NOVO ITEM DO CARDÁPIO -->
-    <div class="modal-overlay" id="modal-novo-item-cardapio" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="panel-title">Novo item do cardápio</h3>
-          <button type="button" class="btn-close" id="btn-novo-item-cardapio-fechar" aria-label="Fechar">&times;</button>
-        </div>
-        <form id="form-novo-item-cardapio">
-          <div class="form-group">
-            <label for="novo-item-nome">Nome</label>
-            <input type="text" id="novo-item-nome" required placeholder="Ex: BIG ART">
-          </div>
-          <div class="form-group">
-            <label for="novo-item-categoria">Categoria</label>
-            <input type="text" id="novo-item-categoria" placeholder="Ex: Smash - Exclusivos">
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary-sm" id="btn-novo-item-cardapio-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Cadastrar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL: EDITAR FICHA TÉCNICA DE UM ITEM -->
-    <div class="modal-overlay" id="modal-ficha-tecnica-item" style="display:none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="panel-title" id="ficha-tecnica-item-titulo">Ficha técnica</h3>
-          <button type="button" class="btn-close" id="btn-ficha-tecnica-item-fechar" aria-label="Fechar">&times;</button>
-        </div>
-        <form id="form-ficha-tecnica-item">
-          <details style="margin-bottom: var(--space-3);">
-            <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Colar lista (insumo + quantidade, um por linha)</summary>
-            <div style="margin-top: var(--space-2); display:flex; flex-direction:column; gap: var(--space-2);">
-              <p class="panel-subtitle">Substitui a lista de insumos abaixo pela colada aqui — confira antes de salvar.</p>
-              <textarea id="ficha-tecnica-colar-texto" rows="5" placeholder="Ex: Pão brioche;1&#10;Bacon;50" style="width:100%; font-family: inherit; padding: var(--space-2); border: 1px solid var(--input-border); background-color: var(--input-bg); color: var(--text-dark); border-radius: var(--radius-sm);"></textarea>
-              <div style="display:flex; align-items:center; gap: var(--space-3);">
-                <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-processar-colar">Processar lista</button>
-                <span class="panel-subtitle" id="ficha-tecnica-colar-resultado"></span>
-              </div>
-            </div>
-          </details>
-          <div id="ficha-tecnica-item-linhas" class="ficha-tecnica-linhas">
-            <!-- Renderizado dinamicamente via JS -->
-          </div>
-          <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-add-linha" style="margin-bottom: var(--space-4);">
-            <i data-lucide="plus"></i>
-            Adicionar insumo
-          </button>
-          <div class="modal-actions">
-            <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-item-cancelar">Cancelar</button>
-            <button type="submit" class="btn-primary-sm">Salvar</button>
-          </div>
-        </form>
-      </div>
-    </div>
   </div> <!-- /dashboard-wrapper -->
+
+  <!-- MODAL: CONFIRMAR RECEBIMENTO -->
+  <div class="modal-overlay" id="modal-confirmar-recebimento" style="display:none;">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3 class="panel-title" id="recebimento-titulo">Confirmar recebimento</h3>
+        <button type="button" class="btn-close" id="btn-recebimento-fechar" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-confirmar-recebimento">
+        <div class="form-group">
+          <label for="recebimento-nome">Nome de quem recebeu</label>
+          <input type="text" id="recebimento-nome" required>
+        </div>
+
+        <p class="panel-subtitle" style="margin: var(--space-3) 0 var(--space-2);">
+          Confira a quantidade e o preço de cada item — se algo chegou diferente do pedido, corrige aqui antes de confirmar.
+        </p>
+
+        <div class="table-responsive" style="margin-bottom: var(--space-4);">
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Qtd. pedida</th>
+                <th>Qtd. recebida</th>
+                <th>Preço unitário</th>
+              </tr>
+            </thead>
+            <tbody id="recebimento-itens-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="recebimento-valor-nf">Valor total da Nota Fiscal (R$)</label>
+            <input type="number" step="0.01" min="0" id="recebimento-valor-nf" required>
+          </div>
+          <div class="form-group">
+            <label>Valor calculado dos itens</label>
+            <p class="panel-subtitle" id="recebimento-valor-calculado" style="font-size: 1rem; font-weight: 700; color: var(--text-dark); margin-top: var(--space-2);">R$ 0,00</p>
+          </div>
+        </div>
+
+        <p id="recebimento-erro" style="color:#ef4444; display:none;"></p>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-recebimento-cancelar">Cancelar</button>
+          <button type="submit" class="btn-primary-sm">Confirmar recebimento</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
 </body>
 </html>

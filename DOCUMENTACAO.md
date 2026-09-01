@@ -1061,6 +1061,50 @@ Rotas: `POST /api/cotacoes/<id>/gerar-pedidos` (admin), `GET /api/pedidos`
 /api/pedidos/<id>/avancar` (admin), `POST /api/pedidos/<id>/voltar`
 (admin), `DELETE /api/pedidos/<id>` (admin, cancela).
 
+**Recebimentos** (concluída em 2026-09-01, pedido da Julia/Guilherme —
+fecha de vez o ciclo Requisição → Contagem → Cotação → Pedido →
+**Entrada em estoque**, que antes dependia de "Registrar entrada" manual,
+solto, sem ligação nenhuma com o pedido de verdade). Tela nova
+(`recebimentos.html`), primeira do fluxo de Compras **liberada pra
+qualquer pessoa logada, não só admin** — pensada pra ser a primeira função
+de verdade que a equipe (papel "equipe") vai ter acesso, sem precisar de
+conta admin só pra confirmar que uma entrega chegou.
+
+Busca (por fornecedor, valor ou produto — via `itens_nomes`, concatenado
+com `GROUP_CONCAT` em `listar_pedidos_pendentes_recebimento`, pra não
+precisar de endpoint de busca à parte) entre pedidos ainda não
+`recebido`. Ao confirmar: o colaborador digita o **nome de quem recebeu**
+(data/hora grava sozinha) e pode **corrigir quantidade e preço por item**
+se a entrega vier diferente do pedido — a correção sobrescreve
+`pedido_compra_item` (mesmo espírito de sobrescrita usado em ajustes por
+todo o sistema) e é o valor que soma em `estoque_insumo.quantidade_atual`
+da loja do pedido, não o valor pedido originalmente. Essa é a **primeira
+ação do sistema que atualiza estoque a partir de um pedido de compra** —
+`avancar_status_pedido` (Pedidos, admin) explicitamente nunca mexeu em
+estoque; confirmar recebimento aqui também avança o pedido direto pro
+último estágio (`recebido`).
+
+Tem um campo pro **valor total da Nota Fiscal**; se não bater com o
+calculado dos itens (final, já com correção) além de R$ 0,05 de
+tolerância, `confirmar_recebimento_pedido` cria sozinha uma tarefa no
+ClickUp (categoria "Estoque", prioridade "alta") citando os dois valores
+— o board não tem campo de responsável, então não dá pra atribuir direto
+pra uma pessoa específica (a Julia mencionou a Kethllyn), só deixa bem
+claro no título/descrição. O preço corrigido também fica visível na
+tela pra alguém depois atualizar manualmente o custo do insumo no painel
+da Cardápio Web — confirmado com ela que isso é manual, sem integração
+nova (a API de parceiro que já usamos só lê pedido/venda, nunca
+escreve).
+
+Testado direto com dado real: pedido sem divergência (10 un. recebidas,
+igual ao pedido) somou certo no estoque e não criou tarefa; pedido com
+divergência proposital (recebeu 4 de 5, e valor de NF bem diferente do
+calculado) somou só os 4 recebidos e criou a tarefa automaticamente.
+Rotas, todas exigindo só login (`GET/POST` sem `_exigir_admin`, ao
+contrário de `/api/pedidos/*`): `GET /api/recebimentos` (lista pendente),
+`GET /api/recebimentos/<id>` (detalhe com itens), `POST
+/api/recebimentos/<id>/confirmar` (confirma e atualiza estoque).
+
 **"Zona de perigo" — limpar requisições e cotações** (concluída em
 2026-08-27, pedido do Guilherme pra zerar o histórico de teste antes do
 uso de verdade começar). Card vermelho no fim de `configuracoes.html`

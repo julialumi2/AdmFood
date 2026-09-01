@@ -97,6 +97,8 @@ from backend.armazenamento import (
     avancar_status_pedido,
     voltar_status_pedido,
     excluir_pedido,
+    listar_pedidos_pendentes_recebimento,
+    confirmar_recebimento_pedido,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
     excluir_requisicao,
@@ -1784,6 +1786,87 @@ def api_excluir_pedido(pedido_id):
         return jsonify({"erro": "Pedido não encontrado."}), 404
     excluir_pedido(pedido_id)
     return jsonify({"ok": True})
+
+
+# --- RECEBIMENTOS (confirmar que um pedido chegou — qualquer pessoa logada,
+# não só admin: pedido do Guilherme pra ser a primeira função de verdade que
+# a equipe usa, além do admin) ---------------------------------------------
+
+def _formatar_recebimento_resumo(pedido):
+    return {
+        "id": pedido["id"],
+        "fornecedorId": pedido["fornecedor_id"],
+        "fornecedorNome": pedido["fornecedor_nome"],
+        "loja": pedido["loja"],
+        "status": pedido["status"],
+        "criadoEm": pedido["criado_em"],
+        "totalItens": pedido["total_itens"],
+        "valorTotal": round(pedido["valor_total"], 2),
+        "itensNomes": pedido["itens_nomes"] or "",
+    }
+
+
+@app.route('/api/recebimentos', methods=['GET'])
+def api_listar_recebimentos():
+    return jsonify({"pedidos": [_formatar_recebimento_resumo(p) for p in listar_pedidos_pendentes_recebimento()]})
+
+
+@app.route('/api/recebimentos/<int:pedido_id>', methods=['GET'])
+def api_buscar_recebimento(pedido_id):
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+
+    resposta = _formatar_pedido_resumo(pedido)
+    resposta["itens"] = [
+        {
+            "insumoId": item["insumo_id"],
+            "nome": item["nome"],
+            "unidadeMedida": item["unidade_medida"],
+            "quantidade": item["quantidade"],
+            "precoUnitario": item["preco_unitario"],
+        }
+        for item in pedido["itens"]
+    ]
+    return jsonify(resposta)
+
+
+@app.route('/api/recebimentos/<int:pedido_id>/confirmar', methods=['POST'])
+def api_confirmar_recebimento(pedido_id):
+    usuario = _usuario_logado()
+    dados = request.get_json(silent=True) or {}
+    recebido_por = (dados.get('recebidoPor') or (usuario['nome'] if usuario else '')).strip()
+    if not recebido_por:
+        return jsonify({"erro": "Informe o nome de quem recebeu."}), 400
+
+    try:
+        valor_nf = float(dados.get('valorNf'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Informe o valor da Nota Fiscal."}), 400
+
+    itens_brutos = dados.get('itens') or []
+    if not itens_brutos:
+        return jsonify({"erro": "Informe ao menos um item recebido."}), 400
+    try:
+        itens = [
+            {
+                "insumoId": int(item['insumoId']),
+                "quantidade": float(item['quantidade']),
+                "precoUnitario": float(item['precoUnitario']),
+            }
+            for item in itens_brutos
+        ]
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"erro": "Item inválido na lista."}), 400
+
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    if pedido['status'] == 'recebido':
+        return jsonify({"erro": "Esse pedido já foi confirmado como recebido."}), 400
+
+    resultado = confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens)
+    return jsonify({"ok": True, **resultado})
 
 
 @app.route('/api/admin/limpar-requisicoes-cotacoes', methods=['POST'])

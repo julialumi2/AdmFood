@@ -488,6 +488,20 @@ def inicializar_banco():
             """
         )
 
+        # Tela "Recebimentos" — quem realmente recebeu, quando, e se o valor
+        # da Nota Fiscal bateu com o calculado. Colunas soltas em vez de
+        # tabela própria, mesmo raciocínio de outras migrações neste arquivo:
+        # é 1 recebimento por pedido, não um histórico de vários.
+        colunas_pedido = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra)").fetchall()}
+        if "recebido_por" not in colunas_pedido:
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN recebido_por TEXT")
+        if "recebido_em" not in colunas_pedido:
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN recebido_em TEXT")
+        if "valor_nf" not in colunas_pedido:
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN valor_nf REAL")
+        if "divergencia_nf" not in colunas_pedido:
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN divergencia_nf INTEGER NOT NULL DEFAULT 0")
+
         # Contagem de estoque por link (sem login) — replica o fluxo real da
         # VMarket: Kethllyn abre uma contagem pra uma loja, manda o link pro
         # funcionário preencher (identificado só pelo token, sem senha), e a
@@ -1910,6 +1924,98 @@ def excluir_pedido(pedido_id):
     with conexao() as conn:
         conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
         conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
+
+
+def listar_pedidos_pendentes_recebimento():
+    """Pedidos que ainda não foram confirmados como recebidos — alimenta a
+    tela "Recebimentos" (pedido do Guilherme: colaborador comum, não só
+    admin, busca o pedido por fornecedor/valor/produto e confirma o
+    recebimento, o que atualiza o estoque de verdade — hoje nada faz isso
+    sozinho a partir de um pedido). `itens_nomes` concatena o nome de cada
+    insumo pra dar busca por produto sem precisar de outro endpoint."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pc.id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em,
+                   f.nome AS fornecedor_nome,
+                   COUNT(pi.insumo_id) AS total_itens,
+                   COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS valor_total,
+                   GROUP_CONCAT(i.nome, ', ') AS itens_nomes
+            FROM pedido_compra pc
+            JOIN fornecedor f ON f.id = pc.fornecedor_id
+            LEFT JOIN pedido_compra_item pi ON pi.pedido_id = pc.id
+            LEFT JOIN insumo i ON i.id = pi.insumo_id
+            WHERE pc.status != 'recebido'
+            GROUP BY pc.id
+            ORDER BY pc.criado_em DESC
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens):
+    """Confirma que um pedido chegou — pedido real da Julia: é a única ação
+    que efetivamente soma no estoque a partir de um pedido de compra (hoje
+    "Avançar etapa" só rastreia estágio, e a entrada de verdade é manual,
+    solta, via "Registrar entrada"). `itens`: lista de {insumoId, quantidade,
+    precoUnitario} com o valor FINAL — igual ao pedido original se não teve
+    divergência na entrega, ou corrigido pelo colaborador se veio diferente.
+    A correção sobrescreve `pedido_compra_item` (mesmo espírito de
+    sobrescrita usado em ajustes por todo o sistema) e é o que soma em
+    `estoque_insumo` — não o valor pedido originalmente.
+
+    Se o valor informado da Nota Fiscal não bater com o total calculado dos
+    itens (final, já corrigido), cria uma tarefa no ClickUp pra alguém
+    ligar pro fornecedor e entender a diferença — sem isso, uma divergência
+    de NF passaria batido sem ninguém saber."""
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return None
+
+    agora = datetime.now().isoformat()
+    valor_calculado = 0.0
+    with conexao() as conn:
+        for item in itens:
+            insumo_id = int(item["insumoId"])
+            quantidade = float(item["quantidade"])
+            preco_unitario = float(item["precoUnitario"])
+            valor_calculado += quantidade * preco_unitario
+            conn.execute(
+                "UPDATE pedido_compra_item SET quantidade = ?, preco_unitario = ? WHERE pedido_id = ? AND insumo_id = ?",
+                (quantidade, preco_unitario, pedido_id, insumo_id),
+            )
+            conn.execute(
+                "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual + ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
+                (quantidade, agora, insumo_id, pedido["loja"]),
+            )
+
+        valor_calculado = round(valor_calculado, 2)
+        divergencia = abs(valor_nf - valor_calculado) > 0.05
+
+        conn.execute(
+            """
+            UPDATE pedido_compra
+            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, divergencia_nf = ?, atualizado_em = ?
+            WHERE id = ?
+            """,
+            (ESTAGIOS_PEDIDO[-1], recebido_por, agora, valor_nf, 1 if divergencia else 0, agora, pedido_id),
+        )
+
+    if divergencia:
+        criar_tarefa(
+            titulo=f"Divergência de NF — Pedido #{pedido_id} ({pedido['fornecedor_nome']})",
+            descricao=(
+                f"Valor da Nota Fiscal informado (R$ {valor_nf:.2f}) não bate com o valor "
+                f"calculado dos itens recebidos (R$ {valor_calculado:.2f}). Recebido por "
+                f"{recebido_por} em {agora[:16].replace('T', ' ')}. Ligar pro fornecedor "
+                f"({pedido['fornecedor_nome']}) pra entender a diferença."
+            ),
+            categoria="Estoque",
+            prioridade="alta",
+            data_limite=None,
+        )
+
+    return {"divergencia": divergencia, "valorCalculado": valor_calculado}
 
 
 def limpar_requisicoes_e_cotacoes():

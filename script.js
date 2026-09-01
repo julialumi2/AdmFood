@@ -236,6 +236,11 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarPedidos();
   }
 
+  // 4.0997b TELA DE RECEBIMENTOS (qualquer pessoa logada, não só admin)
+  if (document.getElementById('recebimentos-tabela-body')) {
+    carregarRecebimentos();
+  }
+
   // 4.0996 TELA PÚBLICA DE PREENCHIMENTO DE CONTAGEM (sem login, por token)
   if (document.getElementById('form-contagem-publica')) {
     inicializarContagemPublica();
@@ -3837,6 +3842,159 @@ document.getElementById('btn-insumos-loja-salvar')?.addEventListener('click', as
   } catch (erroCatch) {
     console.error('Falha ao salvar insumos da loja:', erroCatch);
     erro.textContent = erroCatch.message || 'Não foi possível salvar.';
+    erro.style.display = '';
+  }
+});
+
+// --- RECEBIMENTOS (confirmar que um pedido chegou — qualquer pessoa
+// logada, não só admin; pedido do Guilherme/Julia: colaborador busca o
+// pedido, confirma quem recebeu, corrige quantidade/preço se veio
+// diferente, e isso já atualiza o estoque de verdade) ---
+let recebimentosLista = [];
+let recebimentoAtual = null; // detalhe completo (com itens) do pedido aberto no modal
+
+async function carregarRecebimentos() {
+  const tbody = document.getElementById('recebimentos-tabela-body');
+  if (!tbody) return;
+  try {
+    const resposta = await fetch('/api/recebimentos');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    recebimentosLista = dados.pedidos || [];
+    renderRecebimentosTabela();
+  } catch (erro) {
+    console.error('Falha ao carregar recebimentos:', erro);
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+function renderRecebimentosTabela() {
+  const tbody = document.getElementById('recebimentos-tabela-body');
+  if (!tbody) return;
+
+  const termo = (document.getElementById('recebimentos-busca')?.value || '').trim().toLowerCase();
+  const linhas = recebimentosLista.filter((p) => {
+    if (!termo) return true;
+    return (
+      p.fornecedorNome.toLowerCase().includes(termo) ||
+      p.loja.toLowerCase().includes(termo) ||
+      (p.itensNomes || '').toLowerCase().includes(termo) ||
+      String(p.valorTotal).includes(termo) ||
+      _formatarMoedaBR(p.valorTotal).includes(termo)
+    );
+  });
+
+  if (!linhas.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">${recebimentosLista.length ? 'Nenhum pedido bate com essa busca.' : 'Nenhum pedido aguardando recebimento.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = linhas.map((p) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(p.fornecedorNome)}</td>
+      <td>${escaparHtml(p.loja)}</td>
+      <td class="text-muted">${escaparHtml(p.itensNomes || '—')}</td>
+      <td class="font-bold">R$ ${_formatarMoedaBR(p.valorTotal)}</td>
+      <td>
+        <button type="button" class="btn-primary-sm" data-acao="confirmar-recebimento" data-id="${p.id}">Confirmar recebimento</button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('[data-acao="confirmar-recebimento"]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirModalRecebimento(parseInt(btn.dataset.id, 10)));
+  });
+}
+
+document.getElementById('recebimentos-busca')?.addEventListener('input', renderRecebimentosTabela);
+
+function _linhaRecebimentoItemHTML(item) {
+  return `
+    <tr data-insumo-id="${item.insumoId}">
+      <td class="font-bold">${escaparHtml(item.nome)}</td>
+      <td class="text-muted">${item.quantidade} ${escaparHtml(item.unidadeMedida)}</td>
+      <td><input type="number" step="0.01" min="0" class="recebimento-input-quantidade" value="${item.quantidade}"></td>
+      <td><input type="number" step="0.01" min="0" class="recebimento-input-preco" value="${item.precoUnitario}"></td>
+    </tr>
+  `;
+}
+
+function _atualizarValorCalculadoRecebimento() {
+  const linhas = document.querySelectorAll('#recebimento-itens-body tr');
+  let total = 0;
+  linhas.forEach((linha) => {
+    const quantidade = parseFloat(linha.querySelector('.recebimento-input-quantidade').value) || 0;
+    const preco = parseFloat(linha.querySelector('.recebimento-input-preco').value) || 0;
+    total += quantidade * preco;
+  });
+  document.getElementById('recebimento-valor-calculado').textContent = `R$ ${_formatarMoedaBR(Math.round(total * 100) / 100)}`;
+}
+
+async function abrirModalRecebimento(pedidoId) {
+  try {
+    const resposta = await fetch(`/api/recebimentos/${pedidoId}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar pedido');
+    recebimentoAtual = dados;
+
+    document.getElementById('recebimento-titulo').textContent = `Confirmar recebimento — ${dados.fornecedorNome} (${dados.loja})`;
+    document.getElementById('recebimento-nome').value = window.usuarioLogado?.nome || '';
+    document.getElementById('recebimento-valor-nf').value = dados.valorTotal;
+    document.getElementById('recebimento-erro').style.display = 'none';
+    document.getElementById('recebimento-itens-body').innerHTML = dados.itens.map(_linhaRecebimentoItemHTML).join('');
+
+    document.querySelectorAll('#recebimento-itens-body .recebimento-input-quantidade, #recebimento-itens-body .recebimento-input-preco').forEach((input) => {
+      input.addEventListener('input', _atualizarValorCalculadoRecebimento);
+    });
+    _atualizarValorCalculadoRecebimento();
+
+    document.getElementById('modal-confirmar-recebimento').style.display = 'flex';
+  } catch (erro) {
+    console.error('Falha ao abrir recebimento:', erro);
+    alert(erro.message || 'Não foi possível abrir esse pedido.');
+  }
+}
+
+function fecharModalRecebimento() {
+  document.getElementById('modal-confirmar-recebimento').style.display = 'none';
+  recebimentoAtual = null;
+}
+
+document.getElementById('btn-recebimento-fechar')?.addEventListener('click', fecharModalRecebimento);
+document.getElementById('btn-recebimento-cancelar')?.addEventListener('click', fecharModalRecebimento);
+
+document.getElementById('form-confirmar-recebimento')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!recebimentoAtual) return;
+  const erro = document.getElementById('recebimento-erro');
+  erro.style.display = 'none';
+
+  const itens = Array.from(document.querySelectorAll('#recebimento-itens-body tr')).map((linha) => ({
+    insumoId: parseInt(linha.dataset.insumoId, 10),
+    quantidade: parseFloat(linha.querySelector('.recebimento-input-quantidade').value),
+    precoUnitario: parseFloat(linha.querySelector('.recebimento-input-preco').value),
+  }));
+
+  try {
+    const resposta = await fetch(`/api/recebimentos/${recebimentoAtual.id}/confirmar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recebidoPor: document.getElementById('recebimento-nome').value,
+        valorNf: parseFloat(document.getElementById('recebimento-valor-nf').value),
+        itens,
+      }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao confirmar recebimento');
+    fecharModalRecebimento();
+    await carregarRecebimentos();
+    alert(dados.divergencia
+      ? 'Recebimento confirmado, estoque atualizado. O valor da Nota Fiscal não bateu com o calculado — uma tarefa foi criada no ClickUp pra acompanhar.'
+      : 'Recebimento confirmado — estoque atualizado.');
+  } catch (erroCatch) {
+    console.error('Falha ao confirmar recebimento:', erroCatch);
+    erro.textContent = erroCatch.message || 'Não foi possível confirmar o recebimento.';
     erro.style.display = '';
   }
 });
