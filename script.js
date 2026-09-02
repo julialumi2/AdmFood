@@ -220,8 +220,21 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.add('active');
         document.getElementById('cotacoes-painel-cotacoes').style.display = btn.dataset.tab === 'cotacoes' ? '' : 'none';
         document.getElementById('cotacoes-painel-compras').style.display = btn.dataset.tab === 'compras' ? '' : 'none';
+        document.getElementById('cotacoes-painel-comparativo').style.display = btn.dataset.tab === 'comparativo' ? '' : 'none';
         if (btn.dataset.tab === 'compras') carregarHistoricoCompras();
+        if (btn.dataset.tab === 'comparativo') carregarSeletorComparativo();
       });
+    });
+
+    document.getElementById('comparativo-cotacao-select')?.addEventListener('change', (evento) => {
+      const id = parseInt(evento.target.value, 10);
+      if (!id) return;
+      document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((b) => b.classList.remove('active'));
+      document.querySelector('#cotacoes-tabs-bar .tab-btn[data-tab="cotacoes"]')?.classList.add('active');
+      document.getElementById('cotacoes-painel-comparativo').style.display = 'none';
+      document.getElementById('cotacoes-painel-compras').style.display = 'none';
+      document.getElementById('cotacoes-painel-cotacoes').style.display = '';
+      abrirCotacaoDetalhe(id);
     });
   }
 
@@ -1946,6 +1959,29 @@ async function carregarCotacoes() {
   } catch (erro) {
     console.error('Falha ao carregar cotações:', erro);
     tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444;">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
+  }
+}
+
+// Aba "Comparativo de Preços" — atalho pra abrir o comparativo de uma
+// cotação sem precisar entrar pela lista da aba Cotações (pedido da
+// Julia, 2026-09-02). Aberta primeiro que fechada, mais recente primeiro
+// dentro de cada grupo — mesma ordenação que já vem de `/api/cotacoes`.
+async function carregarSeletorComparativo() {
+  const select = document.getElementById('comparativo-cotacao-select');
+  if (!select) return;
+  try {
+    const resposta = await fetch('/api/cotacoes');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const cotacoes = [...(dados.cotacoes || [])].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'aberta' ? -1 : 1;
+      return 0;
+    });
+    select.innerHTML = '<option value="">Selecione uma cotação...</option>' +
+      cotacoes.map((c) => `<option value="${c.id}">${escaparHtml(c.titulo)} — ${STATUS_LABEL_COTACAO[c.status] || c.status}</option>`).join('');
+  } catch (erro) {
+    console.error('Falha ao carregar cotações pro comparativo:', erro);
+    select.innerHTML = '<option value="">Não foi possível carregar as cotações.</option>';
   }
 }
 

@@ -1425,6 +1425,21 @@ convidado), a tela volta a mostrar a grid de comparação normal. Não
 mexeu em nada do backend nem do cálculo — só parou de esconder um dado
 que a rota já devolvia.
 
+**Aba "Comparativo de Preços"** (concluída em 2026-09-02, pedido da
+Julia depois do teste ao vivo com a Kethllyn: ela queria chegar direto
+no comparativo de uma cotação sem precisar entrar pela lista da aba
+Cotações). Terceira aba em `cotacoes.html` (`#cotacoes-tabs-bar`), ao
+lado de Cotações/Compras — não é uma tela nova de verdade, é um atalho:
+mostra só um seletor com todas as cotações (abertas primeiro), e ao
+escolher uma, chama a mesma `abrirCotacaoDetalhe(id)` de sempre — mesma
+tela, mesmos dados, zero duplicação de lógica (decisão consciente:
+generalizar/duplicar a grid de comparação pra viver em dois lugares
+arriscava os dois desalinharem com o tempo). Selecionar uma cotação
+troca visualmente o destaque de volta pra aba "Cotações" (é lá que a
+`#cotacoes-detalhe-view` mora de verdade) — comportamento aceito de
+propósito, simples e sem risco, em vez de duplicar toda a tela só pra
+manter a aba "Comparativo" destacada.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.

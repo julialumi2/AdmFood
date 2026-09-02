@@ -166,6 +166,10 @@
             <i data-lucide="history"></i>
             <span>Compras</span>
           </button>
+          <button type="button" class="tab-btn" data-tab="comparativo">
+            <i data-lucide="scale"></i>
+            <span>Comparativo de Preços</span>
+          </button>
         </div>
 
         <!-- ABA: COTAÇÕES -->
@@ -338,6 +342,30 @@
 
           <div id="cotacoes-compras-lista">
             <!-- Renderizado dinamicamente via JS: um card por cotação fechada -->
+          </div>
+        </div>
+
+        <!-- ABA: COMPARATIVO DE PREÇOS (atalho direto pro comparativo de uma cotação, sem passar pela lista) -->
+        <div id="cotacoes-painel-comparativo" style="display:none;">
+          <div class="dashboard-title-area">
+            <div class="title-top">
+              <i data-lucide="scale" class="icon-pin"></i>
+              <span>COMPARATIVO DE PREÇOS</span>
+            </div>
+            <div class="title-row">
+              <h1>Comparativo de Preços</h1>
+            </div>
+          </div>
+
+          <p class="panel-subtitle" style="margin-top: -8px;">
+            Escolha uma cotação pra ver os insumos a comprar e comparar preço por fornecedor.
+          </p>
+
+          <div class="form-group" style="max-width: 420px;">
+            <label for="comparativo-cotacao-select">Cotação</label>
+            <select id="comparativo-cotacao-select">
+              <option value="">Selecione uma cotação...</option>
+            </select>
           </div>
         </div>
 
