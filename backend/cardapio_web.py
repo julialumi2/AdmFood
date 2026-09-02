@@ -33,54 +33,6 @@ def _formatar_data_hora(dia, momento):
     return f"{dia.strftime('%Y-%m-%d')}T{hora}-03:00"
 
 
-def buscar_catalogo(token):
-    """Catálogo completo da loja (categorias + itens, com preço, foto,
-    status), pra sincronizar o "Comparativo de Preços" (seção 6.1) sem
-    depender da planilha manual. Limite documentado: 5 requisições por
-    minuto — como só chamamos uma vez por loja (4 no total), não precisa
-    de espera entre chamadas."""
-    resposta = requests.get(
-        f"{BASE_URL}/catalog",
-        headers={"X-API-KEY": token},
-        timeout=15,
-    )
-    if not resposta.ok:
-        raise RuntimeError(
-            f"Cardápio Web: falha ao buscar catálogo (status {resposta.status_code})"
-        )
-    return resposta.json()
-
-
-def linhas_e_fotos_do_catalogo(loja, catalogo_json):
-    """Traduz o JSON de buscar_catalogo pro formato de linha que
-    sincronizar_precos_cardapio_da_api espera, e devolve separado um mapa
-    {produto: image_url} — só entra item ACTIVE (pausado/oculto na
-    Cardápio Web fica de fora, mesmo critério de "produto vendável" que a
-    planilha já tinha). `index` vira `ordem`; sem index, usa a posição na
-    lista (mesmo fallback pra categoria e pra item)."""
-    linhas = []
-    fotos_por_produto = {}
-    ordem = 0
-    for categoria in catalogo_json.get("categories", []):
-        nome_categoria = categoria.get("name", "")
-        for item in categoria.get("items", []):
-            if item.get("status") != "ACTIVE":
-                continue
-            indice = item.get("index")
-            linhas.append({
-                "loja": loja,
-                "categoria": nome_categoria,
-                "produto": item["name"],
-                "cardapio_web": item.get("price"),
-                "ordem": indice if indice is not None else ordem,
-            })
-            imagem = item.get("image") or {}
-            if imagem.get("image_url"):
-                fotos_por_produto[item["name"]] = imagem["image_url"]
-            ordem += 1
-    return linhas, fotos_por_produto
-
-
 def buscar_pedidos_do_dia(token, dia):
     """Retorna lista de {"id": int, "sales_channel": str, "status": str} pra
     um dia, com TODOS os status (filtragem de cancelados fica por conta de

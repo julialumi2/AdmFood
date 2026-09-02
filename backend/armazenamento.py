@@ -1004,41 +1004,6 @@ def sincronizar_precos_cardapio(linhas):
             )
 
 
-def sincronizar_precos_cardapio_da_api(loja, linhas):
-    """Upsert por (loja, produto) a partir do catálogo da API da Cardápio
-    Web (ver backend/cardapio_web.py) — mesmo espírito de
-    sincronizar_precos_cardapio, mas só mexe em categoria/preço do canal
-    Cardápio Web/ordem. NÃO toca em ifood/food99/beefood (a API do
-    catálogo não sabe o preço desses outros canais — só a planilha que a
-    Julia compila manualmente tem isso; sobrescrever com NULL apagaria um
-    dado que só existe ali) nem em foto_arquivo (decidido à parte, depois
-    de saber o id de cada produto — ver api_sincronizar_precos_cw em
-    app.py). Não remove produto nenhum (ao contrário da planilha): um
-    item que sumiu do catálogo pode só estar pausado, e apagar aqui
-    esconderia ele também da Ficha Técnica, que lê os produtos daqui.
-    Devolve a lista de ids afetados, na mesma ordem de `linhas`."""
-    ids = []
-    with conexao() as conn:
-        for linha in linhas:
-            conn.execute(
-                """
-                INSERT INTO preco_cardapio (loja, categoria, produto, cardapio_web, ordem)
-                VALUES (:loja, :categoria, :produto, :cardapio_web, :ordem)
-                ON CONFLICT(loja, produto) DO UPDATE SET
-                    categoria = excluded.categoria,
-                    cardapio_web = excluded.cardapio_web,
-                    ordem = excluded.ordem
-                """,
-                linha,
-            )
-            item_id = conn.execute(
-                "SELECT id FROM preco_cardapio WHERE loja = ? AND produto = ?",
-                (loja, linha["produto"]),
-            ).fetchone()["id"]
-            ids.append(item_id)
-    return ids
-
-
 def listar_precos_cardapio():
     with conexao() as conn:
         linhas = conn.execute("SELECT * FROM preco_cardapio ORDER BY loja, ordem").fetchall()

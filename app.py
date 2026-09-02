@@ -2,7 +2,6 @@ import os
 import threading
 import time
 import uuid
-import requests
 from datetime import date, datetime, timedelta
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 
@@ -38,7 +37,6 @@ from backend.armazenamento import (
     excluir_usuario,
     listar_precos_cardapio,
     sincronizar_precos_cardapio,
-    sincronizar_precos_cardapio_da_api,
     buscar_preco_cardapio_por_id,
     atualizar_preco_cardapio,
     PASTA_FOTOS_CARDAPIO,
@@ -115,7 +113,7 @@ from backend.armazenamento import (
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
-from backend.cardapio_web import buscar_resumo_do_dia, buscar_catalogo, linhas_e_fotos_do_catalogo
+from backend.cardapio_web import buscar_resumo_do_dia
 from sincronizar import sincronizar_dia, DIA_FECHADO
 
 app = Flask(__name__)
@@ -859,56 +857,6 @@ def api_importar_precos_cardapio():
 
     sincronizar_precos_cardapio(linhas)
     return jsonify({"sucesso": True, "totalProdutos": len(linhas)})
-
-
-@app.route('/api/precos-cardapio/sincronizar-cw', methods=['POST'])
-def api_sincronizar_precos_cw():
-    """Sincroniza direto da API da Cardápio Web (ver seção 6.1) — não
-    substitui "Importar planilha" (continua existindo como plano B), só
-    dá um jeito mais rápido de atualizar nome/categoria/preço do canal
-    Cardápio Web/foto sem precisar exportar planilha nenhuma. Rodada sob
-    demanda, sem agendamento automático (decisão da Julia)."""
-    erro = _exigir_admin()
-    if erro:
-        return erro
-
-    resultados = []
-    for loja, dados_loja in LOJAS.items():
-        token = dados_loja.get('cardapio_web_token')
-        if not token:
-            continue
-        try:
-            catalogo = buscar_catalogo(token)
-            linhas, fotos_por_produto = linhas_e_fotos_do_catalogo(loja, catalogo)
-            ids = sincronizar_precos_cardapio_da_api(loja, linhas)
-
-            fotos_baixadas = 0
-            for linha, item_id in zip(linhas, ids):
-                image_url = fotos_por_produto.get(linha['produto'])
-                if not image_url:
-                    continue
-                item_atual = buscar_preco_cardapio_por_id(item_id)
-                if item_atual.get('foto_arquivo'):
-                    continue
-                try:
-                    resposta_imagem = requests.get(image_url, timeout=15)
-                    resposta_imagem.raise_for_status()
-                    extensao = os.path.splitext(image_url.split('?')[0])[1].lower()
-                    if extensao not in EXTENSOES_FOTO_CARDAPIO:
-                        continue
-                    nome_arquivo = f"{item_id}_{uuid.uuid4().hex}{extensao}"
-                    with open(os.path.join(PASTA_FOTOS_CARDAPIO, nome_arquivo), 'wb') as arquivo_foto:
-                        arquivo_foto.write(resposta_imagem.content)
-                    atualizar_preco_cardapio(item_id, {'foto_arquivo': nome_arquivo})
-                    fotos_baixadas += 1
-                except requests.RequestException:
-                    pass
-
-            resultados.append({"loja": loja, "produtos": len(linhas), "fotosBaixadas": fotos_baixadas})
-        except Exception as erro_loja:
-            resultados.append({"loja": loja, "erro": str(erro_loja)})
-
-    return jsonify({"resultados": resultados})
 
 
 CAMPOS_PRECO_CARDAPIO_PERMITIDOS = {'ifood', 'food99', 'beefood', 'cardapioWeb'}

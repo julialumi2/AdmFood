@@ -235,53 +235,6 @@ pasta `cardapio_fotos/` do lado do `admfood.db`, **no mesmo volume
 persistente** (mesmo motivo do banco: sem isso, some a cada redeploy).
 Servidas via `/cardapio-fotos/<arquivo>`, só extensões de imagem.
 
-**Sincronizar direto da API da Cardápio Web** (concluído em 2026-09-01,
-pedido da Julia pra puxar essa informação "direto do CW" — cheguei a
-testar acesso via navegador logado nela, mas achei bem melhor usar a
-**API oficial de parceiro** (`docs.cardapioweb.com`), que o AdmFood já
-usa pra buscar pedidos/faturamento — seção 4 — só que até aqui nunca
-tinha sido usada pro catálogo). Botão **"Sincronizar com Cardápio Web"**,
-ao lado de "Importar planilha" (mesmo `#cardapio-importar-area`, mesmo
-`<p id="cardapio-importar-status">` pro resultado). Decisões da Julia:
-**não substitui** a planilha (continua existindo como plano B), **custo
-continua manual** (mesmo a API trazendo `cost_price` por item, não uso
-isso na Ficha Técnica), e **só roda sob demanda** — sem agendamento
-automático, ela decide quando clicar.
-
-`backend/cardapio_web.py` ganhou `buscar_catalogo(token)` (`GET
-/api/partner/v1/catalog`, mesmo padrão de `X-API-KEY` já usado por
-`buscar_pedidos_do_dia`, sem precisar de `X-PARTNER-KEY`) e
-`linhas_e_fotos_do_catalogo(loja, catalogo_json)`, que traduz
-categorias→itens do JSON da API pro formato de linha, pulando item
-`status != "ACTIVE"` (pausado/oculto na Cardápio Web fica de fora) e
-separando `image_url` de cada produto num mapa à parte.
-
-`sincronizar_precos_cardapio_da_api(loja, linhas)`
-(`backend/armazenamento.py`) é uma **variante** de
-`sincronizar_precos_cardapio` — upsert por `(loja, produto)` igual, mas
-só mexe em `categoria`/`cardapio_web`/`ordem`. Deliberadamente **não
-toca** em `ifood`/`food99`/`beefood` (a API do catálogo não sabe o preço
-desses outros canais — só a planilha que ela compila manualmente tem
-isso; sobrescrever com `NULL` apagaria um dado que só existe ali) nem
-remove produto nenhum que sumiu do catálogo (ao contrário da planilha) —
-um item pausado na Cardápio Web pode não ser "produto que não existe
-mais", e apagar da tabela também esconderia ele da Ficha Técnica (que lê
-os produtos daqui, seção 6.5).
-
-Foto é decidida à parte, em `POST /api/precos-cardapio/sincronizar-cw`
-(`app.py`, admin): produto **sem** `foto_arquivo` ainda que veio com
-`image_url` da API tem a imagem baixada (`requests.get`) e salva em
-`PASTA_FOTOS_CARDAPIO` com o mesmo padrão de nome do upload manual
-(`f"{item_id}_{uuid.uuid4().hex}{extensao}"`); produto que já tem foto
-(manual ou de uma sincronização anterior) não é mexido — nunca
-sobrescreve uma foto que já existe. A rota loopa as 4 lojas em `LOJAS`
-(`config.py`) e isola erro por loja (token ausente/inválido numa loja
-não derruba a sincronização das outras 3), devolvendo um resumo
-`{loja, produtos, fotosBaixadas}` (ou `{loja, erro}`) por loja. Testado
-contra cópia do banco: rodar duas vezes seguidas não duplica linha nem
-baixa foto de novo, e preço de canal que só vem de planilha antiga
-continua intacto.
-
 **Sidebar de categorias, igual o Catálogo da Cardápio Web** (concluído em
 2026-09-01, pedido da Julia depois de mostrar print de
 `portal.cardapioweb.com/cardapio/produtos`: categorias numa coluna à
