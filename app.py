@@ -862,16 +862,26 @@ def api_importar_precos_cardapio():
 
 @app.route('/api/precos-cardapio/corrigir-duplicidade-tradica', methods=['POST'])
 def api_corrigir_duplicidade_tradica():
-    """Limpeza pontual, pra rodar uma vez só em produção — apaga os
-    produtos que a sincronização com a API da Cardápio Web (feature
-    revertida) separou em "Tradiça ZN"/"Tradiça Simus", indevidamente,
-    dentro dessa tela só (nas outras telas essas duas continuam duas
-    lojas de verdade). Remover essa rota depois de confirmar que rodou."""
+    """Limpeza pontual, pra rodar uma vez só em produção — apaga qualquer
+    produto que a sincronização com a API da Cardápio Web (feature
+    revertida) tenha criado nas 4 lojas que ela sincronizava. Critério:
+    ela nunca preenchia ifood/food99/beefood (só cardapio_web), então todo
+    produto com os 3 canais em branco é 100% coisa dela — tanto o caso de
+    "Tradiça ZN"/"Tradiça Simus" (que virou tabs duplicadas, já que essa
+    tela sempre tratou como uma loja só, "Tradiças") quanto duplicidade de
+    nome dentro de Hamburgueria Artesanos/Açaí Na Lata (nome da API, ex.
+    "BIG ART", virou produto novo por não bater com o "Big Art" que já
+    existia da planilha). Ela vai reimportar a planilha depois — qualquer
+    produto legítimo que essa limpeza apagar por engano volta sozinho na
+    reimportação. Remover essa rota depois de confirmar que rodou."""
     erro = _exigir_admin()
     if erro:
         return erro
 
-    resultado = remover_precos_cardapio_das_lojas(['Tradiça ZN', 'Tradiça Simus'])
+    resultado = remover_precos_cardapio_das_lojas(
+        ['Tradiça ZN', 'Tradiça Simus', 'Hamburgueria Artesanos', 'Açaí Na Lata'],
+        somente_sem_canais=True,
+    )
     for nome_arquivo in resultado['fotos']:
         try:
             os.remove(os.path.join(PASTA_FOTOS_CARDAPIO, nome_arquivo))

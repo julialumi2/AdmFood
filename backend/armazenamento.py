@@ -1016,23 +1016,30 @@ def buscar_preco_cardapio_por_id(item_id):
         return dict(linha) if linha else None
 
 
-def remover_precos_cardapio_das_lojas(lojas):
+def remover_precos_cardapio_das_lojas(lojas, somente_sem_canais=False):
     """Limpeza pontual: a sincronização com a API da Cardápio Web (feature
-    revertida em 2026-09-02) rodou uma vez em produção e separou "Tradiças"
-    — sempre uma loja só nessa tela, já que Tradiça ZN e Tradiça Simus
-    compartilham a mesma tabela de preços (ver seção 6.1) — em duas
-    entradas novas ("Tradiça ZN"/"Tradiça Simus"). Devolve os nomes de
-    foto (se tiverem) pra quem chamar também apagar o arquivo."""
+    revertida em 2026-09-02) rodou uma vez em produção. Com
+    `somente_sem_canais=True`, só apaga produto com ifood/food99/beefood
+    todos em branco — critério seguro porque essa sincronização nunca
+    preenchia esses 3 canais (só cardapio_web), então uma linha assim só
+    pode ter vindo dela, seja um produto que nunca existia (duplicidade de
+    nome dentro de uma loja, ex. "BIG ART" da API vs "Big Art" da
+    planilha) ou uma loja inteira criada por engano ("Tradiça ZN"/
+    "Tradiça Simus" — essa tela sempre tratou como uma loja só,
+    "Tradiças", já que as duas compartilham a mesma tabela de preços,
+    seção 6.1). Devolve os nomes de foto (se tiverem) pra quem chamar
+    também apagar o arquivo."""
+    condicao_canais = " AND ifood IS NULL AND food99 IS NULL AND beefood IS NULL" if somente_sem_canais else ""
     with conexao() as conn:
         marcadores = ", ".join("?" * len(lojas))
         fotos = [
             l["foto_arquivo"]
             for l in conn.execute(
-                f"SELECT foto_arquivo FROM preco_cardapio WHERE loja IN ({marcadores}) AND foto_arquivo IS NOT NULL",
+                f"SELECT foto_arquivo FROM preco_cardapio WHERE loja IN ({marcadores}) AND foto_arquivo IS NOT NULL{condicao_canais}",
                 lojas,
             ).fetchall()
         ]
-        cursor = conn.execute(f"DELETE FROM preco_cardapio WHERE loja IN ({marcadores})", lojas)
+        cursor = conn.execute(f"DELETE FROM preco_cardapio WHERE loja IN ({marcadores}){condicao_canais}", lojas)
         return {"removidos": cursor.rowcount, "fotos": fotos}
 
 

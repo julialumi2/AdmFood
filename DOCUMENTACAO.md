@@ -269,18 +269,29 @@ configurada — e mesmo assim é só uma lista solta, sem ligação com os
 produtos). Commit revertido (`git revert`, não reescrita de histórico).
 
 **Efeito colateral do teste em produção, corrigido à parte**: enquanto a
-feature esteve no ar, ela rodou pelo menos uma vez de verdade — e como o
-código sincronizava por `loja`, usando as 4 chaves de `LOJAS`
-(`config.py`), separou o que sempre foi **uma loja só** nessa tela
-("Tradiças" — Tradiça ZN e Tradiça Simus compartilham a mesma tabela de
-preços, ver `LOJA_POR_ABA` em `backend/precos_cardapio.py`) em duas
-entradas novas ("Tradiça ZN"/"Tradiça Simus"), fazendo aparecer duas
-abas duplicadas. Reverter o código não desfaz dado já gravado — rota
-temporária `POST /api/precos-cardapio/corrigir-duplicidade-tradica`
-(admin) apaga especificamente essas duas entradas (e a foto de quem
-tiver) via `remover_precos_cardapio_das_lojas`
-(`backend/armazenamento.py`); pra ser removida do código assim que
-confirmar que rodou em produção.
+feature esteve no ar, ela rodou pelo menos uma vez de verdade. Dois
+estragos, mesma causa (sincronizava por `loja`, usando as 4 chaves de
+`LOJAS` em `config.py`, e nunca preenchia `ifood`/`food99`/`beefood` — só
+`cardapio_web`):
+1. Separou o que sempre foi **uma loja só** nessa tela ("Tradiças" —
+   Tradiça ZN e Tradiça Simus compartilham a mesma tabela de preços, ver
+   `LOJA_POR_ABA` em `backend/precos_cardapio.py`) em duas entradas novas
+   ("Tradiça ZN"/"Tradiça Simus"), fazendo aparecer abas duplicadas.
+2. Dentro de Hamburgueria Artesanos e Açaí Na Lata, o nome que vem da API
+   (ex. "BIG ART") não batia exatamente com o nome já cadastrado pela
+   planilha (ex. "Big Art"), então virou produto **duplicado** em vez de
+   atualizar o existente.
+
+Reverter o código não desfaz dado já gravado. Rota temporária `POST
+/api/precos-cardapio/corrigir-duplicidade-tradica` (admin) resolve os
+dois de uma vez: `remover_precos_cardapio_das_lojas(lojas,
+somente_sem_canais=True)` (`backend/armazenamento.py`) apaga, dentro das
+4 lojas que a sincronização tocava, todo produto com os 3 canais em
+branco — critério seguro porque só a sincronização deixava esse padrão;
+produto legítimo que porventura bater nesse critério volta sozinho
+quando a Julia reimportar a planilha em seguida. Rota (e a foto de quem
+tiver) pra ser removida do código assim que confirmar que rodou em
+produção.
 
 ### 6.2 Preparo (indicadores operacionais da cozinha)
 
