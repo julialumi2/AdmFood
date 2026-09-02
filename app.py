@@ -39,6 +39,7 @@ from backend.armazenamento import (
     sincronizar_precos_cardapio,
     buscar_preco_cardapio_por_id,
     atualizar_preco_cardapio,
+    remover_precos_cardapio_das_lojas,
     PASTA_FOTOS_CARDAPIO,
     criar_insumo,
     criar_insumos_em_lote,
@@ -857,6 +858,26 @@ def api_importar_precos_cardapio():
 
     sincronizar_precos_cardapio(linhas)
     return jsonify({"sucesso": True, "totalProdutos": len(linhas)})
+
+
+@app.route('/api/precos-cardapio/corrigir-duplicidade-tradica', methods=['POST'])
+def api_corrigir_duplicidade_tradica():
+    """Limpeza pontual, pra rodar uma vez só em produção — apaga os
+    produtos que a sincronização com a API da Cardápio Web (feature
+    revertida) separou em "Tradiça ZN"/"Tradiça Simus", indevidamente,
+    dentro dessa tela só (nas outras telas essas duas continuam duas
+    lojas de verdade). Remover essa rota depois de confirmar que rodou."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    resultado = remover_precos_cardapio_das_lojas(['Tradiça ZN', 'Tradiça Simus'])
+    for nome_arquivo in resultado['fotos']:
+        try:
+            os.remove(os.path.join(PASTA_FOTOS_CARDAPIO, nome_arquivo))
+        except OSError:
+            pass
+    return jsonify({"ok": True, "produtosRemovidos": resultado['removidos'], "fotosRemovidas": len(resultado['fotos'])})
 
 
 CAMPOS_PRECO_CARDAPIO_PERMITIDOS = {'ifood', 'food99', 'beefood', 'cardapioWeb'}

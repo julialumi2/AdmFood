@@ -235,43 +235,52 @@ pasta `cardapio_fotos/` do lado do `admfood.db`, **no mesmo volume
 persistente** (mesmo motivo do banco: sem isso, some a cada redeploy).
 Servidas via `/cardapio-fotos/<arquivo>`, só extensões de imagem.
 
-**Sidebar de categorias, igual o Catálogo da Cardápio Web** (concluído em
-2026-09-01, pedido da Julia depois de mostrar print de
-`portal.cardapioweb.com/cardapio/produtos`: categorias numa coluna à
-esquerda, clicáveis, mostrando só os produtos da categoria escolhida à
-direita — em vez de empilhar todas as categorias na mesma página).
-`renderCardapioLoja` ganhou uma segunda dimensão de estado
-(`cardapioCategoriaSelecionada`, junto da loja) e passou a desenhar só a
-categoria ativa; a lista de categorias e o clique pra trocar vêm de
-`_renderSidebarCategorias` (`script.js`), uma função pequena e genérica
-que também passou a alimentar a Ficha Técnica (seção 6.5) — mesmo
-componente visual (`.cardapio-categorias-sidebar`/`.cardapio-categoria-item`
-em `cardapio.css`) nas duas telas. Trocar de loja sem categoria em comum
-volta pra primeira categoria da loja nova; categoria com o mesmo nome
-continua selecionada. Em telas estreitas (≤768px) a sidebar vira uma
-fileira horizontal com rolagem, em vez de empilhar embaixo do conteúdo.
+**Sidebar de categorias, igual o Catálogo da Cardápio Web — só na Ficha
+Técnica** (concluído em 2026-09-01, ajustado em 2026-09-02). Nasceu pra
+valer nas duas telas (Preços e Ficha Técnica), depois de um print da
+Julia de `portal.cardapioweb.com/cardapio/produtos`: categorias numa
+coluna à esquerda, clicáveis, mostrando só os produtos da categoria
+escolhida à direita — em vez de empilhar todas as categorias na mesma
+página. Ela aprovou um preview antes de aplicar (feito com a skill
+`frontend-design`, "mais bonita, mais profissional, mantendo as cores da
+marca" — aba ativa com silhueta de **aba de dossiê**, badge de contagem
+por categoria, seletor de loja com ícone em roundel), mas depois de ver
+em produção pediu pra **tirar de Preços** — ficou só na Ficha Técnica.
+`renderCardapioLoja` (Preços) voltou a ser a versão simples, sem sidebar,
+com todas as categorias empilhadas (mesma função de antes de
+2026-09-01). `_renderSidebarCategorias` (`script.js`) continua existindo,
+só que agora só é chamada por `renderFichaTecnicaProdutos` — é ela quem
+mantém a aba de dossiê, o badge de contagem
+(`.cardapio-categoria-contagem`) e o comportamento mobile (≤768px vira
+fileira horizontal). O seletor de loja com ícone em roundel
+(`.loja-select-realce`, escopado só em `#ficha-tecnica-loja-select`, não
+mexe no `.loja-select` simples que o Estoque usa) também ficou só na
+Ficha Técnica, sem mudança.
 
-**Passada de design na sidebar + seletor de loja** (concluído em
-2026-09-01, pedido explícito da Julia — "mais bonita, mais profissional,
-mantendo as cores da minha marca" — usando a skill `frontend-design`;
-aprovou um preview antes de eu aplicar). Sem cor nova nenhuma, só
-`--primary`/`--surface-muted`/etc. que já existiam:
-- Categoria ativa ganhou silhueta de **aba de dossiê** — reta à esquerda,
-  arredondada só à direita, com barra `--primary` à esquerda — em vez do
-  pill cheio de antes. Referência direta ao nome da tela (Ficha
-  **Técnica** = arquivo de fichas).
-- Cada categoria mostra um **badge de contagem** (`.cardapio-categoria-contagem`)
-  com quantos produtos tem ali — `_renderSidebarCategorias` passou a
-  receber `[{nome, contagem}]` em vez de só nomes; os dois call sites
-  (`renderCardapioLoja` e `renderFichaTecnicaProdutos`) calculam a
-  contagem a partir do tamanho da lista de produtos por categoria.
-- No mobile (≤768px), a aba vira um chip com borda em vez do corte
-  assimétrico (que só faz sentido na coluna vertical).
-- O seletor de loja da Ficha Técnica ganhou um ícone num roundel colorido
-  e um rótulo "Loja selecionada" acima do nome — classe nova
-  `.loja-select-realce` em `cardapio.css`, escopada só nesse componente
-  (`#ficha-tecnica-loja-select`) pra não alterar o `.loja-select` simples
-  que o Estoque também usa.
+**Sincronizar direto da API da Cardápio Web — tentado e revertido**
+(2026-09-01 a 2026-09-02). Chegou a ser implementado um botão
+"Sincronizar com Cardápio Web" em Preços, puxando categoria/preço/foto
+direto da API oficial de parceiro (mesmo token já usado pra buscar
+pedidos). Só que **não era isso que a Julia queria** — ela queria a
+*receita* (insumo + quantidade) de cada produto pra Ficha Técnica, não o
+catálogo de preços; e a API da Cardápio Web não expõe isso (a seção de
+insumos existe, mas exige OAuth — não aceita a chave simples já
+configurada — e mesmo assim é só uma lista solta, sem ligação com os
+produtos). Commit revertido (`git revert`, não reescrita de histórico).
+
+**Efeito colateral do teste em produção, corrigido à parte**: enquanto a
+feature esteve no ar, ela rodou pelo menos uma vez de verdade — e como o
+código sincronizava por `loja`, usando as 4 chaves de `LOJAS`
+(`config.py`), separou o que sempre foi **uma loja só** nessa tela
+("Tradiças" — Tradiça ZN e Tradiça Simus compartilham a mesma tabela de
+preços, ver `LOJA_POR_ABA` em `backend/precos_cardapio.py`) em duas
+entradas novas ("Tradiça ZN"/"Tradiça Simus"), fazendo aparecer duas
+abas duplicadas. Reverter o código não desfaz dado já gravado — rota
+temporária `POST /api/precos-cardapio/corrigir-duplicidade-tradica`
+(admin) apaga especificamente essas duas entradas (e a foto de quem
+tiver) via `remover_precos_cardapio_das_lojas`
+(`backend/armazenamento.py`); pra ser removida do código assim que
+confirmar que rodou em produção.
 
 ### 6.2 Preparo (indicadores operacionais da cozinha)
 

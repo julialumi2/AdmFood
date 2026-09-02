@@ -5475,7 +5475,6 @@ async function alterarStatusModal() {
 
 let cardapioData = [];
 let cardapioLojaSelecionada = null;
-let cardapioCategoriaSelecionada = null;
 
 async function carregarPrecosCardapio() {
   const tabsEl = document.getElementById('cardapio-tabs');
@@ -5603,25 +5602,14 @@ function renderCardapioLoja(nomeLoja) {
   const loja = cardapioData.find(l => l.loja === nomeLoja);
   if (!loja) return;
 
-  const nomesCategorias = loja.categorias.map(cat => cat.nome);
-  if (!cardapioCategoriaSelecionada || !nomesCategorias.includes(cardapioCategoriaSelecionada)) {
-    cardapioCategoriaSelecionada = nomesCategorias[0] || null;
-  }
-  const categoriasComContagem = loja.categorias.map(cat => ({ nome: cat.nome, contagem: cat.produtos.length }));
-  _renderSidebarCategorias('cardapio-categorias-sidebar', categoriasComContagem, cardapioCategoriaSelecionada, (nome) => {
-    cardapioCategoriaSelecionada = nome;
-    renderCardapioLoja(nomeLoja);
-  });
-
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const temBeefood = loja.categorias.some(cat => cat.produtos.some(p => p.beefood !== null));
   const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
 
-  const categoriaAtual = loja.categorias.find(cat => cat.nome === cardapioCategoriaSelecionada);
-  const cardsPorCategoria = !categoriaAtual ? '' : `
-    <div class="cardapio-categoria-titulo">${escaparHtml(categoriaAtual.nome)}</div>
+  const cardsPorCategoria = loja.categorias.map(cat => `
+    <div class="cardapio-categoria-titulo">${escaparHtml(cat.nome)}</div>
     <div class="cardapio-lista">
-      ${categoriaAtual.produtos.map(p => `
+      ${cat.produtos.map(p => `
         <div class="cardapio-card" data-id="${p.id}">
           <div class="cardapio-card-foto">
             ${p.fotoUrl
@@ -5638,7 +5626,7 @@ function renderCardapioLoja(nomeLoja) {
         </div>
       `).join('')}
     </div>
-  `;
+  `).join('');
 
   conteudoEl.innerHTML = cardsPorCategoria;
   conteudoEl.dataset.canais = JSON.stringify(canais);

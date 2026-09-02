@@ -1016,6 +1016,26 @@ def buscar_preco_cardapio_por_id(item_id):
         return dict(linha) if linha else None
 
 
+def remover_precos_cardapio_das_lojas(lojas):
+    """Limpeza pontual: a sincronização com a API da Cardápio Web (feature
+    revertida em 2026-09-02) rodou uma vez em produção e separou "Tradiças"
+    — sempre uma loja só nessa tela, já que Tradiça ZN e Tradiça Simus
+    compartilham a mesma tabela de preços (ver seção 6.1) — em duas
+    entradas novas ("Tradiça ZN"/"Tradiça Simus"). Devolve os nomes de
+    foto (se tiverem) pra quem chamar também apagar o arquivo."""
+    with conexao() as conn:
+        marcadores = ", ".join("?" * len(lojas))
+        fotos = [
+            l["foto_arquivo"]
+            for l in conn.execute(
+                f"SELECT foto_arquivo FROM preco_cardapio WHERE loja IN ({marcadores}) AND foto_arquivo IS NOT NULL",
+                lojas,
+            ).fetchall()
+        ]
+        cursor = conn.execute(f"DELETE FROM preco_cardapio WHERE loja IN ({marcadores})", lojas)
+        return {"removidos": cursor.rowcount, "fotos": fotos}
+
+
 def atualizar_preco_cardapio(item_id, campos):
     if not campos:
         return
