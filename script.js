@@ -2743,7 +2743,10 @@ function renderContagemDetalhe() {
   const btnAprovar = document.getElementById('btn-contagem-aprovar');
   const btnReabrir = document.getElementById('btn-contagem-reabrir');
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
-  if (btnAprovar) btnAprovar.disabled = c.status !== 'respondida';
+  if (btnAprovar) {
+    btnAprovar.disabled = c.status === 'aberta';
+    btnAprovar.textContent = c.status === 'aprovada' ? 'Ver Cotação/Pedido' : 'Fazer Cotação/Pedido';
+  }
   if (btnReabrir) btnReabrir.style.display = (isAdmin && c.status !== 'aberta') ? '' : 'none';
 
   const thAcoes = document.getElementById('contagem-detalhe-th-acoes');
@@ -2847,11 +2850,14 @@ document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => 
 
 document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async () => {
   if (!contagemDetalheAtual) return;
-  if (!confirm('Aprovar essa loja? As quantidades preenchidas vão substituir o estoque atual dela. Se for a última loja pendente da requisição, a cotação já é gerada em seguida.')) return;
+  const jaAprovada = contagemDetalheAtual.status === 'aprovada';
+  if (!jaAprovada && !confirm('Aprovar essa loja? As quantidades preenchidas vão substituir o estoque atual dela. Se for a última loja pendente da requisição, a cotação já é gerada em seguida.')) return;
   try {
-    const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+    if (!jaAprovada) {
+      const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+    }
 
     const titulo = contagemDetalheAtual.descricao;
     const prazoValidade = contagemDetalheAtual.prazoValidade;
@@ -2865,16 +2871,16 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
       });
       const gerarDados = await gerarResposta.json();
       if (gerarResposta.ok) {
-        alert('Todas as lojas aprovadas — cotação gerada!' + _avisoInsumosSemIdeal(gerarDados.insumosSemIdeal));
+        if (!jaAprovada) alert('Todas as lojas aprovadas — cotação gerada!' + _avisoInsumosSemIdeal(gerarDados.insumosSemIdeal));
         window.location.href = `cotacoes.html?abrir=${gerarDados.cotacaoId}`;
         return;
       }
-      alert(gerarDados.erro || 'Loja aprovada, mas não foi possível gerar a cotação.');
-    } else {
+      alert(gerarDados.erro || (jaAprovada ? 'Não foi possível abrir a cotação dessa requisição.' : 'Loja aprovada, mas não foi possível gerar a cotação.'));
+    } else if (!jaAprovada) {
       const faltam = conferencia.totalLojas - conferencia.lojasAprovadas;
       alert(`Loja aprovada! Ainda falta${faltam > 1 ? 'm' : ''} ${faltam} loja${faltam > 1 ? 's' : ''} aprovar antes de gerar a cotação.`);
     }
-    await abrirContagemDetalhe(contagemDetalheAtual.id);
+    if (!jaAprovada) await abrirContagemDetalhe(contagemDetalheAtual.id);
   } catch (erro) {
     console.error('Falha ao aprovar requisição:', erro);
     alert(erro.message || 'Não foi possível aprovar essa requisição.');

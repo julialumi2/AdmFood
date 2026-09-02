@@ -1392,6 +1392,21 @@ apagou as 2 contagens, a cotação e os itens dela, sem tocar em nenhum
 outro dado. Rota: `DELETE /api/requisicoes?titulo=&prazoValidade=`
 (admin).
 
+**"Fazer Cotação/Pedido" travado depois de aprovar** (corrigido em
+2026-09-02, bug encontrado pela Julia testando o fluxo de Compras ao
+vivo com a Kethllyn). O botão no detalhe de uma loja (`btn-contagem-aprovar`)
+ficava **desabilitado** assim que a contagem já estava `aprovada` — não
+sobrava nenhum caminho, a partir dessa tela, pra chegar na cotação já
+gerada (só voltando pra lista de Requisições e abrindo a "Ver conferência
+somada" → "Gerar cotação", que já funcionava por ser idempotente).
+Agora o botão só fica desabilitado com status `aberta` (não `respondida`
+nem `aprovada`), troca o texto pra **"Ver Cotação/Pedido"** quando já
+aprovada, e o clique pula a chamada de aprovar (que dava erro "Essa
+contagem já foi aprovada") indo direto checar se a requisição tá
+totalmente aprovada e abrir a cotação — mesma rota
+`gerar_cotacao_do_deficit` de sempre, que devolve a cotação existente em
+vez de duplicar.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
