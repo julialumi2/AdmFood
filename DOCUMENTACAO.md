@@ -283,15 +283,12 @@ estragos, mesma causa (sincronizava por `loja`, usando as 4 chaves de
    atualizar o existente.
 
 Reverter o código não desfaz dado já gravado. Rota temporária `POST
-/api/precos-cardapio/corrigir-duplicidade-tradica` (admin) resolve os
-dois de uma vez: `remover_precos_cardapio_das_lojas(lojas,
-somente_sem_canais=True)` (`backend/armazenamento.py`) apaga, dentro das
-4 lojas que a sincronização tocava, todo produto com os 3 canais em
-branco — critério seguro porque só a sincronização deixava esse padrão;
-produto legítimo que porventura bater nesse critério volta sozinho
-quando a Julia reimportar a planilha em seguida. Rota (e a foto de quem
-tiver) pra ser removida do código assim que confirmar que rodou em
-produção.
+/api/precos-cardapio/corrigir-duplicidade-tradica` (admin) resolveu os
+dois de uma vez: apagou, dentro das 4 lojas que a sincronização tocava,
+todo produto com os 3 canais em branco — critério seguro porque só a
+sincronização deixava esse padrão. Já rodou em produção (a Julia também
+reimportou a planilha, que por conta própria já limpa produto órfão
+igual sempre fez) e a rota foi removida do código.
 
 **Tradiça ZN e Tradiça Simus separadas de vez** (concluído em
 2026-09-02, pedido da Julia depois de mexer nessa tela — quis as duas
@@ -304,14 +301,11 @@ agora gera linha pra `["Tradiça ZN", "Tradiça Simus"]` em vez de uma
 a extração por loja de destino (mesmo preço nas duas, já que ainda é a
 mesma aba/preço na origem — se um dia divergir, dá pra separar a aba
 também). Migração pontual pros dados que já existiam: rota temporária
-`POST /api/precos-cardapio/separar-tradica` (admin) —
-`duplicar_precos_cardapio('Tradiças', ['Tradiça ZN', 'Tradiça Simus'])`
-(`backend/armazenamento.py`) copia cada produto (id novo, mesma
-categoria/preço/ordem) pras duas lojas, a rota copia o arquivo de foto
-de verdade (não a mesma referência — cada cópia tem seu próprio arquivo,
-pra uma não sumir se a outra for excluída depois), e por fim apaga a
-loja `"Tradiças"` original. Rota pra ser removida do código assim que
-confirmar que rodou em produção.
+`POST /api/precos-cardapio/separar-tradica` (admin) copiou cada produto
+(id novo, mesma categoria/preço/ordem, foto copiada de verdade — arquivo
+físico novo, não a mesma referência) pras duas lojas, e por fim apagou a
+loja `"Tradiças"` original. Rodou em produção (23 produtos por loja, 14
+fotos copiadas) e a rota foi removida do código.
 
 ### 6.2 Preparo (indicadores operacionais da cozinha)
 

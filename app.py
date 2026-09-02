@@ -1,5 +1,4 @@
 import os
-import shutil
 import threading
 import time
 import uuid
@@ -40,8 +39,6 @@ from backend.armazenamento import (
     sincronizar_precos_cardapio,
     buscar_preco_cardapio_por_id,
     atualizar_preco_cardapio,
-    remover_precos_cardapio_das_lojas,
-    duplicar_precos_cardapio,
     PASTA_FOTOS_CARDAPIO,
     criar_insumo,
     criar_insumos_em_lote,
@@ -860,86 +857,6 @@ def api_importar_precos_cardapio():
 
     sincronizar_precos_cardapio(linhas)
     return jsonify({"sucesso": True, "totalProdutos": len(linhas)})
-
-
-@app.route('/api/precos-cardapio/corrigir-duplicidade-tradica', methods=['POST'])
-def api_corrigir_duplicidade_tradica():
-    """Limpeza pontual, pra rodar uma vez só em produção — apaga qualquer
-    produto que a sincronização com a API da Cardápio Web (feature
-    revertida) tenha criado nas 4 lojas que ela sincronizava. Critério:
-    ela nunca preenchia ifood/food99/beefood (só cardapio_web), então todo
-    produto com os 3 canais em branco é 100% coisa dela — tanto o caso de
-    "Tradiça ZN"/"Tradiça Simus" (que virou tabs duplicadas, já que essa
-    tela sempre tratou como uma loja só, "Tradiças") quanto duplicidade de
-    nome dentro de Hamburgueria Artesanos/Açaí Na Lata (nome da API, ex.
-    "BIG ART", virou produto novo por não bater com o "Big Art" que já
-    existia da planilha). Ela vai reimportar a planilha depois — qualquer
-    produto legítimo que essa limpeza apagar por engano volta sozinho na
-    reimportação. Remover essa rota depois de confirmar que rodou."""
-    erro = _exigir_admin()
-    if erro:
-        return erro
-
-    resultado = remover_precos_cardapio_das_lojas(
-        ['Tradiça ZN', 'Tradiça Simus', 'Hamburgueria Artesanos', 'Açaí Na Lata'],
-        somente_sem_canais=True,
-    )
-    for nome_arquivo in resultado['fotos']:
-        try:
-            os.remove(os.path.join(PASTA_FOTOS_CARDAPIO, nome_arquivo))
-        except OSError:
-            pass
-    return jsonify({"ok": True, "produtosRemovidos": resultado['removidos'], "fotosRemovidas": len(resultado['fotos'])})
-
-
-@app.route('/api/precos-cardapio/separar-tradica', methods=['POST'])
-def api_separar_tradica():
-    """Migração pontual, pra rodar uma vez só — Tradiça ZN e Tradiça Simus
-    sempre venderam pelo mesmo preço nessa tela, numa loja só ("Tradiças",
-    ver LOJA_POR_ABA em backend/precos_cardapio.py). A pedido da Julia,
-    viram duas lojas de verdade (igual o resto do sistema já trata):
-    duplica o catálogo de "Tradiças" pra "Tradiça ZN" e "Tradiça Simus"
-    (cada produto com id novo, foto copiada de verdade — arquivo físico
-    novo, não é a mesma referência), depois apaga a loja "Tradiças"
-    original. Dali em diante são catálogos independentes; a próxima
-    planilha reimportada já escreve nas duas separadamente (mesma aba
-    única da planilha, ver LOJA_POR_ABA). Remover essa rota depois de
-    confirmar que rodou."""
-    erro = _exigir_admin()
-    if erro:
-        return erro
-
-    copias_por_loja = duplicar_precos_cardapio('Tradiças', ['Tradiça ZN', 'Tradiça Simus'])
-    fotos_copiadas = 0
-    for loja, copias in copias_por_loja.items():
-        for copia in copias:
-            if not copia['fotoOriginal']:
-                continue
-            _, extensao = os.path.splitext(copia['fotoOriginal'])
-            nome_novo = f"{copia['idNovo']}_{uuid.uuid4().hex}{extensao}"
-            try:
-                shutil.copy(
-                    os.path.join(PASTA_FOTOS_CARDAPIO, copia['fotoOriginal']),
-                    os.path.join(PASTA_FOTOS_CARDAPIO, nome_novo),
-                )
-                atualizar_preco_cardapio(copia['idNovo'], {'foto_arquivo': nome_novo})
-                fotos_copiadas += 1
-            except OSError:
-                pass
-
-    resultado = remover_precos_cardapio_das_lojas(['Tradiças'])
-    for nome_arquivo in resultado['fotos']:
-        try:
-            os.remove(os.path.join(PASTA_FOTOS_CARDAPIO, nome_arquivo))
-        except OSError:
-            pass
-
-    return jsonify({
-        "ok": True,
-        "produtosPorLoja": {loja: len(copias) for loja, copias in copias_por_loja.items()},
-        "fotosCopiadas": fotos_copiadas,
-        "tradicasOriginalRemovida": resultado['removidos'],
-    })
 
 
 CAMPOS_PRECO_CARDAPIO_PERMITIDOS = {'ifood', 'food99', 'beefood', 'cardapioWeb'}

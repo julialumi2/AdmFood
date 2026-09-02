@@ -1016,64 +1016,6 @@ def buscar_preco_cardapio_por_id(item_id):
         return dict(linha) if linha else None
 
 
-def duplicar_precos_cardapio(loja_origem, lojas_destino):
-    """Migração pontual: copia o catálogo inteiro de `loja_origem` (preço
-    de cada canal, categoria, ordem) pra cada loja em `lojas_destino`, com
-    id novo por cópia — não mexe na origem. Não duplica `foto_arquivo`
-    aqui (é arquivo físico, fica por conta de quem chama copiar o arquivo
-    e já gravar o nome novo); devolve, por loja de destino, a lista de
-    `{idNovo, fotoOriginal}` pra isso. Usado pra separar "Tradiças" (uma
-    loja só) em "Tradiça ZN"/"Tradiça Simus" (seção 6.1) — a partir daí,
-    viram catálogos independentes, cada um editável na tela sem afetar o
-    outro."""
-    with conexao() as conn:
-        origem = conn.execute(
-            "SELECT categoria, produto, ifood, food99, beefood, cardapio_web, ordem, foto_arquivo FROM preco_cardapio WHERE loja = ?",
-            (loja_origem,),
-        ).fetchall()
-        resultado = {}
-        for loja in lojas_destino:
-            copias = []
-            for linha in origem:
-                cursor = conn.execute(
-                    """
-                    INSERT INTO preco_cardapio (loja, categoria, produto, ifood, food99, beefood, cardapio_web, ordem)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (loja, linha["categoria"], linha["produto"], linha["ifood"], linha["food99"], linha["beefood"], linha["cardapio_web"], linha["ordem"]),
-                )
-                copias.append({"idNovo": cursor.lastrowid, "fotoOriginal": linha["foto_arquivo"]})
-            resultado[loja] = copias
-        return resultado
-
-
-def remover_precos_cardapio_das_lojas(lojas, somente_sem_canais=False):
-    """Limpeza pontual: a sincronização com a API da Cardápio Web (feature
-    revertida em 2026-09-02) rodou uma vez em produção. Com
-    `somente_sem_canais=True`, só apaga produto com ifood/food99/beefood
-    todos em branco — critério seguro porque essa sincronização nunca
-    preenchia esses 3 canais (só cardapio_web), então uma linha assim só
-    pode ter vindo dela, seja um produto que nunca existia (duplicidade de
-    nome dentro de uma loja, ex. "BIG ART" da API vs "Big Art" da
-    planilha) ou uma loja inteira criada por engano ("Tradiça ZN"/
-    "Tradiça Simus" — essa tela sempre tratou como uma loja só,
-    "Tradiças", já que as duas compartilham a mesma tabela de preços,
-    seção 6.1). Devolve os nomes de foto (se tiverem) pra quem chamar
-    também apagar o arquivo."""
-    condicao_canais = " AND ifood IS NULL AND food99 IS NULL AND beefood IS NULL" if somente_sem_canais else ""
-    with conexao() as conn:
-        marcadores = ", ".join("?" * len(lojas))
-        fotos = [
-            l["foto_arquivo"]
-            for l in conn.execute(
-                f"SELECT foto_arquivo FROM preco_cardapio WHERE loja IN ({marcadores}) AND foto_arquivo IS NOT NULL{condicao_canais}",
-                lojas,
-            ).fetchall()
-        ]
-        cursor = conn.execute(f"DELETE FROM preco_cardapio WHERE loja IN ({marcadores}){condicao_canais}", lojas)
-        return {"removidos": cursor.rowcount, "fotos": fotos}
-
-
 def atualizar_preco_cardapio(item_id, campos):
     if not campos:
         return
