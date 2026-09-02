@@ -566,6 +566,16 @@ essa coluna a mais) e a sidebar de categorias (ver seção 6.1) — as duas
 mudanças vieram junto do pedido da Julia de deixar essa tela com a cara
 do Catálogo da Cardápio Web.
 
+**Bebida fora dessa tela** (concluído em 2026-09-02, pedido da Julia —
+bebida é produto pronto comprado assim, não tem receita/ficha técnica de
+verdade). `listar_produtos_por_loja` filtra fora qualquer produto cuja
+categoria seja exatamente "Bebidas" (normalizado, então bate com
+qualquer combinação de acento/caixa) — **match exato, não substring**,
+de propósito: um combo como "Lanche + Batata + Bebida + Maionese" cita
+"bebida" no nome da categoria mas é comida, não pode ser pego junto.
+Só essa lista muda — "Preços" continua mostrando bebida normalmente,
+já que lá o que importa é preço de venda, não receita.
+
 ### 6.6 Consumo estimado de insumo (Ficha Técnica × vendas reais)
 
 Objetivo: estimar quanto de cada insumo a rede realmente consome por dia,

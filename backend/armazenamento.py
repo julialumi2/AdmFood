@@ -1445,6 +1445,14 @@ def listar_produtos_por_loja(loja):
             "SELECT id, categoria, produto, cardapio_web, foto_arquivo FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
             (loja,),
         ).fetchall()
+        # Bebida não tem "ficha técnica" (não é receita, é produto pronto
+        # comprado assim) — fora dessa tela a pedido da Julia, só lanches e
+        # comida. Continuam normalmente em Preços (só essa lista muda).
+        # Match exato (não substring): um combo tipo "Lanche + Batata +
+        # Bebida + Maionese" menciona "bebida" na descrição da categoria,
+        # mas é um combo de comida, não bebida pura — não pode ser pego
+        # junto.
+        produtos = [p for p in produtos if _normalizar_nome_insumo(p["categoria"]) != "bebidas"]
         catalogo = {
             _normalizar_nome_insumo(i["nome"]): i["id"]
             for i in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
