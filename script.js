@@ -2312,9 +2312,48 @@ function _renderTabelaComparacaoCotacao() {
   if (!container) return;
 
   if (!grupos.length) {
-    if (buscaWrapper) buscaWrapper.style.display = 'none';
     if (btnDestacar) btnDestacar.style.display = 'none';
-    container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
+    if (!itens.length) {
+      if (buscaWrapper) buscaWrapper.style.display = 'none';
+      container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
+      return;
+    }
+    // Cotação recém-gerada de uma Requisição: ainda não tem preço nenhum
+    // lançado (nem manual, nem de fornecedor), mas já sabemos os insumos e
+    // quantidades a comprar (déficit) — mostra essa lista em vez de
+    // esconder tudo até o primeiro preço chegar (pergunta da Julia,
+    // 2026-09-02: ela quer ver o que precisa comprar assim que a cotação é
+    // gerada, antes de qualquer fornecedor responder).
+    if (buscaWrapper) buscaWrapper.style.display = '';
+    const termoSemPreco = (document.getElementById('cotacao-comparacao-busca')?.value || '').trim().toLowerCase();
+    const itensFiltrados = itens.filter(item =>
+      !termoSemPreco || item.nome.toLowerCase().includes(termoSemPreco) || item.categoria.toLowerCase().includes(termoSemPreco)
+    );
+    if (!itensFiltrados.length) {
+      container.innerHTML = `<p class="panel-subtitle">Nenhum insumo encontrado pra essa busca.</p>`;
+      return;
+    }
+    container.innerHTML = `
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th>Comprar</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itensFiltrados.map(item => `
+              <tr>
+                <td class="font-bold">${escaparHtml(item.nome)}<span class="text-muted td-insumo-categoria"> · ${escaparHtml(item.categoria)}</span></td>
+                <td>${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="panel-subtitle">Ainda sem preço nenhum lançado — lance na mão acima ou clique em "Convidar fornecedores" pra eles preencherem direto.</p>
+    `;
     return;
   }
   if (buscaWrapper) buscaWrapper.style.display = '';

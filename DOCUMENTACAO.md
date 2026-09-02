@@ -1407,6 +1407,24 @@ totalmente aprovada e abrir a cotação — mesma rota
 `gerar_cotacao_do_deficit` de sempre, que devolve a cotação existente em
 vez de duplicar.
 
+**Insumos a comprar escondidos até o primeiro preço lançado** (corrigido
+em 2026-09-02, mesma sessão de teste com a Kethllyn — a Julia pediu que,
+ao gerar a cotação, já aparecesse "todos os insumos que precisamos
+comprar" na tela). `GET /api/cotacoes/<id>` sempre devolveu os dois:
+`grupos` (agrupado por `cotacao_preco` — só insumo que já tem preço
+lançado, de fornecedor ou manual) e `itens` (o déficit calculado da
+Requisição, com quantidade, sempre presente). O problema era só no
+front: `_renderTabelaComparacaoCotacao` (script.js) ignorava `itens`
+por completo e mostrava só "Nenhum preço lançado ainda — use o
+formulário acima" sempre que `grupos` vinha vazio — escondendo a lista
+de compra numa cotação **recém-gerada**, que é exatamente quando não
+tem preço nenhum ainda. Agora, nesse caso (`grupos` vazio mas `itens`
+não), mostra uma tabela simples Insumo/Comprar com o déficit calculado;
+assim que o primeiro preço for lançado (manual ou por um fornecedor
+convidado), a tela volta a mostrar a grid de comparação normal. Não
+mexeu em nada do backend nem do cálculo — só parou de esconder um dado
+que a rota já devolvia.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
