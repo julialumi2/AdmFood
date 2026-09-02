@@ -293,6 +293,26 @@ quando a Julia reimportar a planilha em seguida. Rota (e a foto de quem
 tiver) pra ser removida do código assim que confirmar que rodou em
 produção.
 
+**Tradiça ZN e Tradiça Simus separadas de vez** (concluído em
+2026-09-02, pedido da Julia depois de mexer nessa tela — quis as duas
+como lojas de verdade nessa tela também, igual o resto do sistema já
+trata, em vez do "Tradiças" compartilhado). `LOJA_POR_ABA`
+(`backend/precos_cardapio.py`) passou a aceitar uma lista de lojas por
+aba — a mesma aba única da planilha ("Comparativo de Preços Tradiças")
+agora gera linha pra `["Tradiça ZN", "Tradiça Simus"]` em vez de uma
+`"Tradiças"` só; `ler_precos_da_planilha` extrai a aba uma vez e repete
+a extração por loja de destino (mesmo preço nas duas, já que ainda é a
+mesma aba/preço na origem — se um dia divergir, dá pra separar a aba
+também). Migração pontual pros dados que já existiam: rota temporária
+`POST /api/precos-cardapio/separar-tradica` (admin) —
+`duplicar_precos_cardapio('Tradiças', ['Tradiça ZN', 'Tradiça Simus'])`
+(`backend/armazenamento.py`) copia cada produto (id novo, mesma
+categoria/preço/ordem) pras duas lojas, a rota copia o arquivo de foto
+de verdade (não a mesma referência — cada cópia tem seu próprio arquivo,
+pra uma não sumir se a outra for excluída depois), e por fim apaga a
+loja `"Tradiças"` original. Rota pra ser removida do código assim que
+confirmar que rodou em produção.
+
 ### 6.2 Preparo (indicadores operacionais da cozinha)
 
 Tela `preparo.html` — nasceu de um pedido de KDS (Kitchen Display System)

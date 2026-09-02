@@ -1016,6 +1016,37 @@ def buscar_preco_cardapio_por_id(item_id):
         return dict(linha) if linha else None
 
 
+def duplicar_precos_cardapio(loja_origem, lojas_destino):
+    """Migração pontual: copia o catálogo inteiro de `loja_origem` (preço
+    de cada canal, categoria, ordem) pra cada loja em `lojas_destino`, com
+    id novo por cópia — não mexe na origem. Não duplica `foto_arquivo`
+    aqui (é arquivo físico, fica por conta de quem chama copiar o arquivo
+    e já gravar o nome novo); devolve, por loja de destino, a lista de
+    `{idNovo, fotoOriginal}` pra isso. Usado pra separar "Tradiças" (uma
+    loja só) em "Tradiça ZN"/"Tradiça Simus" (seção 6.1) — a partir daí,
+    viram catálogos independentes, cada um editável na tela sem afetar o
+    outro."""
+    with conexao() as conn:
+        origem = conn.execute(
+            "SELECT categoria, produto, ifood, food99, beefood, cardapio_web, ordem, foto_arquivo FROM preco_cardapio WHERE loja = ?",
+            (loja_origem,),
+        ).fetchall()
+        resultado = {}
+        for loja in lojas_destino:
+            copias = []
+            for linha in origem:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO preco_cardapio (loja, categoria, produto, ifood, food99, beefood, cardapio_web, ordem)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (loja, linha["categoria"], linha["produto"], linha["ifood"], linha["food99"], linha["beefood"], linha["cardapio_web"], linha["ordem"]),
+                )
+                copias.append({"idNovo": cursor.lastrowid, "fotoOriginal": linha["foto_arquivo"]})
+            resultado[loja] = copias
+        return resultado
+
+
 def remover_precos_cardapio_das_lojas(lojas, somente_sem_canais=False):
     """Limpeza pontual: a sincronização com a API da Cardápio Web (feature
     revertida em 2026-09-02) rodou uma vez em produção. Com

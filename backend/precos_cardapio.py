@@ -14,10 +14,15 @@ A planilha tem uma aba por grupo de loja ("Comparativo de Preços Art",
 
 import openpyxl
 
-# Nome da aba na planilha -> nome de exibição na tela Cardápio.
+# Nome da aba na planilha -> nome de exibição na tela Cardápio (uma aba
+# pode alimentar mais de uma loja — Tradiça ZN e Tradiça Simus vendem pelo
+# mesmo preço hoje, então continuam saindo da mesma aba única da
+# planilha, só que agora como duas lojas de verdade em vez de um
+# "Tradiças" compartilhado, pra ficar igual o resto do sistema; concluído
+# em 2026-09-02, a pedido da Julia).
 LOJA_POR_ABA = {
     "Comparativo de Preços Art": "Hamburgueria Artesanos",
-    "Comparativo de Preços Tradiças": "Tradiças",
+    "Comparativo de Preços Tradiças": ["Tradiça ZN", "Tradiça Simus"],
     "Comparativo de Preços Açaí": "Açaí Na Lata",
 }
 
@@ -81,12 +86,13 @@ def ler_precos_da_planilha(caminho_ou_arquivo):
 
     todas_linhas = []
     abas_encontradas = []
-    for nome_aba, loja in LOJA_POR_ABA.items():
+    for nome_aba, lojas in LOJA_POR_ABA.items():
         aba = next((wb[n] for n in wb.sheetnames if n.strip() == nome_aba.strip()), None)
         if aba is None:
             continue
-        abas_encontradas.append(loja)
-        todas_linhas.extend(_extrair_linhas_da_aba(aba, loja))
+        for loja in (lojas if isinstance(lojas, list) else [lojas]):
+            abas_encontradas.append(loja)
+            todas_linhas.extend(_extrair_linhas_da_aba(aba, loja))
 
     if not abas_encontradas:
         raise ValueError(
