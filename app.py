@@ -50,8 +50,9 @@ from backend.armazenamento import (
     atualizar_estoque_loja,
     distribuir_entrada_insumo,
     criar_item_cardapio,
-    listar_itens_cardapio,
     excluir_item_cardapio,
+    criar_complementos_em_lote,
+    listar_complementos_por_loja,
     definir_ficha_tecnica,
     buscar_ficha_tecnica_item,
     salvar_custo_item_cardapio,
@@ -1297,10 +1298,13 @@ def api_criar_item_cardapio():
     dados = request.get_json(silent=True) or {}
     nome = (dados.get('nome') or '').strip()
     categoria = (dados.get('categoria') or 'Geral').strip() or 'Geral'
+    tipo = dados.get('tipo') or 'produto'
     if not nome:
         return jsonify({"erro": "Informe o nome do item."}), 400
+    if tipo not in ('produto', 'complemento'):
+        return jsonify({"erro": "Tipo inválido."}), 400
 
-    item_id = criar_item_cardapio(nome, categoria)
+    item_id = criar_item_cardapio(nome, categoria, tipo=tipo)
     return jsonify({"id": item_id})
 
 
@@ -1312,6 +1316,30 @@ def api_excluir_item_cardapio(item_id):
 
     excluir_item_cardapio(item_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/complementos', methods=['GET'])
+def api_listar_complementos():
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    return jsonify({"complementos": listar_complementos_por_loja(loja)})
+
+
+@app.route('/api/complementos/lote', methods=['POST'])
+def api_criar_complementos_em_lote():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    texto = dados.get('texto') or ''
+    nomes = [linha.strip() for linha in texto.split('\n') if linha.strip()]
+    if not nomes:
+        return jsonify({"erro": "Cole ao menos um nome."}), 400
+
+    resultado = criar_complementos_em_lote(nomes)
+    return jsonify(resultado)
 
 
 @app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['PUT'])

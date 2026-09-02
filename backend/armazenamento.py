@@ -274,6 +274,13 @@ def inicializar_banco():
             )
             """
         )
+        colunas_item_cardapio = {c["name"] for c in conn.execute("PRAGMA table_info(item_cardapio)").fetchall()}
+        if "tipo" not in colunas_item_cardapio:
+            # Complemento (Granola, Leite em pó...) vira o mesmo tipo de
+            # entidade que produto — só uma tag a mais — pra herdar de
+            # graça a Ficha Técnica por loja já pronta (seção 6.5). Todo
+            # item já cadastrado até aqui é produto (default).
+            conn.execute("ALTER TABLE item_cardapio ADD COLUMN tipo TEXT NOT NULL DEFAULT 'produto'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ficha_tecnica (
@@ -1360,19 +1367,66 @@ def marcar_lote_resolvido(lote_id):
         )
 
 
-def criar_item_cardapio(nome, categoria):
+def criar_item_cardapio(nome, categoria, tipo='produto'):
     with conexao() as conn:
         conn.execute(
-            "INSERT INTO item_cardapio (nome, categoria) VALUES (?, ?) ON CONFLICT(nome) DO UPDATE SET categoria = excluded.categoria",
-            (nome, categoria),
+            "INSERT INTO item_cardapio (nome, categoria, tipo) VALUES (?, ?, ?) ON CONFLICT(nome) DO UPDATE SET categoria = excluded.categoria",
+            (nome, categoria, tipo),
         )
         return conn.execute("SELECT id FROM item_cardapio WHERE nome = ?", (nome,)).fetchone()["id"]
 
 
-def listar_itens_cardapio():
+def criar_complementos_em_lote(nomes):
+    """Cadastra vários complementos novos de uma vez (mesmo espírito de
+    `criar_insumos_em_lote`, Estoque) — pula nome que já existe no
+    catálogo, normalizado, seja produto ou complemento (não faz sentido
+    ter "Granola" duas vezes com tipos diferentes). Complemento não tem
+    loja/estoque/preço nessa fase, só nome — a ficha técnica (por loja)
+    é cadastrada depois, item por item."""
     with conexao() as conn:
-        linhas = conn.execute("SELECT * FROM item_cardapio ORDER BY categoria, nome").fetchall()
-        return [dict(linha) for linha in linhas]
+        existentes = {
+            _normalizar_nome_insumo(l["nome"]) for l in conn.execute("SELECT nome FROM item_cardapio").fetchall()
+        }
+    criados = []
+    duplicados = []
+    vistos_no_lote = set()
+    for nome in nomes:
+        nome = nome.strip()
+        if not nome:
+            continue
+        chave = _normalizar_nome_insumo(nome)
+        if chave in existentes or chave in vistos_no_lote:
+            duplicados.append(nome)
+            continue
+        vistos_no_lote.add(chave)
+        item_id = criar_item_cardapio(nome, 'Geral', tipo='complemento')
+        criados.append({"id": item_id, "nome": nome})
+    return {"criados": criados, "duplicados": duplicados}
+
+
+def listar_complementos_por_loja(loja):
+    """Lista de complementos (Granola, Leite em pó...) pra tela de Ficha
+    Técnica — ao contrário de produto, não vem de `preco_cardapio` (não é
+    vendido/precificado sozinho na Cardápio Web), é só o catálogo de
+    complementos cadastrado direto no AdmFood. Sem custo/valor de
+    venda/foto nessa fase."""
+    with conexao() as conn:
+        itens = conn.execute(
+            "SELECT id, nome, categoria FROM item_cardapio WHERE tipo = 'complemento' ORDER BY categoria, nome"
+        ).fetchall()
+        tem_ficha = {
+            r["item_id"]
+            for r in conn.execute("SELECT DISTINCT item_id FROM ficha_tecnica WHERE loja = ?", (loja,)).fetchall()
+        }
+    return [
+        {
+            "id": item["id"],
+            "nome": item["nome"],
+            "categoria": item["categoria"],
+            "temFichaTecnica": item["id"] in tem_ficha,
+        }
+        for item in itens
+    ]
 
 
 def excluir_item_cardapio(item_id):

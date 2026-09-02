@@ -195,8 +195,19 @@
 
         <!-- MODO: FICHA TÉCNICA -->
         <div id="cardapio-modo-ficha-tecnica" style="display:none;">
+          <div class="tabs-bar" id="ficha-tecnica-tipo-tabs">
+            <button type="button" class="tab-btn active" data-tipo="produto">
+              <i data-lucide="utensils"></i>
+              <span>Produtos</span>
+            </button>
+            <button type="button" class="tab-btn" data-tipo="complemento">
+              <i data-lucide="plus-circle"></i>
+              <span>Complementos</span>
+            </button>
+          </div>
+
           <div class="content-header">
-            <p class="panel-subtitle">
+            <p class="panel-subtitle" id="ficha-tecnica-subtitulo">
               Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade)
               também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra.
               Clique num produto pra ver/editar os insumos.
@@ -231,9 +242,13 @@
                 </div>
               </div>
               <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
+                <button type="button" class="btn-secondary" id="btn-colar-lista-complementos" style="display:none;">
+                  <i data-lucide="clipboard-list"></i>
+                  Colar lista
+                </button>
                 <button type="button" class="btn-secondary" id="btn-novo-item-cardapio">
                   <i data-lucide="plus"></i>
-                  Novo item
+                  <span id="btn-novo-item-cardapio-texto">Novo item</span>
                 </button>
               </div>
             </div>
@@ -271,6 +286,28 @@
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-novo-item-cardapio-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Cadastrar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: COLAR LISTA DE COMPLEMENTOS -->
+    <div class="modal-overlay" id="modal-colar-complementos" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Colar lista de complementos</h3>
+          <button type="button" class="btn-close" id="btn-colar-complementos-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-colar-complementos">
+          <div class="form-group">
+            <label for="colar-complementos-texto">Um nome por linha</label>
+            <textarea id="colar-complementos-texto" rows="10" placeholder="Granola&#10;Leite em pó&#10;Leite condensado&#10;Paçoca"></textarea>
+          </div>
+          <p id="colar-complementos-erro" style="color:#ef4444; display:none;"></p>
+          <p id="colar-complementos-resultado" class="panel-subtitle"></p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-colar-complementos-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm">Cadastrar</button>
           </div>
         </form>

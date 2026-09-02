@@ -576,6 +576,67 @@ de propósito: um combo como "Lanche + Batata + Bebida + Maionese" cita
 Só essa lista muda — "Preços" continua mostrando bebida normalmente,
 já que lá o que importa é preço de venda, não receita.
 
+**Ficha técnica de complemento** (concluído em 2026-09-02, pedido do
+chefe da Julia repassado por ela: a Cardápio Web tem ficha técnica de
+**produto**, mas não de **complemento** — e a Açaí Na Lata é "100%
+complementos" (monta-o-seu, ex. "Morango = 30g de morango", "Leite em pó
+= 30g de leite em pó"), então sem isso não dá pra saber o que baixar do
+estoque quando vende um NaLata montado. Isso é só a fase 1 de um plano
+maior do chefe (puxar venda real da Cardápio Web casando produto **e**
+cada complemento escolhido, baixar estoque automático, comparar com a
+contagem física pra achar "quebra" e gerar pedido de compra certo já
+sozinho) — confirmado ao vivo, testando um pedido real da Açaí Na Lata,
+que a API da Cardápio Web **já devolve** quais complementos o cliente
+escolheu em cada venda (`options` dentro de cada item do pedido); as
+fases seguintes (puxar venda, baixar estoque, comparar quebra) ficam pra
+depois, esse commit é só cadastrar a receita do complemento dentro do
+AdmFood.
+
+Complemento virou só mais um `tipo` de `item_cardapio` (coluna nova,
+`'produto'` por padrão pros itens que já existiam, `'complemento'` pros
+novos) — de propósito, pra herdar de graça toda a infraestrutura de
+Ficha Técnica por loja da subseção acima sem duplicar nada: `ficha_tecnica`
+(insumo + quantidade opcional, por loja) já funciona igual pros dois,
+sem mudar uma linha de schema; `definir_ficha_tecnica`,
+`buscar_ficha_tecnica_item` e as rotas `GET`/`PUT
+/api/itens-cardapio/<id>/ficha-tecnica` não sabem nem precisam saber se o
+`item_id` é produto ou complemento. `criar_item_cardapio` ganhou o
+parâmetro `tipo`; novo `criar_complementos_em_lote` (mesmo espírito do
+"colar lista" de insumos, seção 6.4 — dedupe por nome normalizado contra
+o catálogo inteiro, produto ou complemento, pra não deixar cadastrar
+"Granola" duas vezes com tipos diferentes) e `listar_complementos_por_loja`
+(mesmo formato de `listar_produtos_por_loja`, mas sem
+custo/valor de venda/foto/casamento com `preco_cardapio` — complemento
+não é vendido/precificado sozinho na Cardápio Web, só existe dentro de
+um produto). Rotas novas: `GET /api/complementos?loja=` (leitura livre,
+igual ao resto da Ficha Técnica) e `POST /api/complementos/lote` (admin).
+`POST /api/itens-cardapio` passou a aceitar `tipo` no corpo (default
+`'produto'`).
+
+Na tela, um `.tabs-bar` novo "Produtos"/"Complementos" (mesmo componente
+de Cotações, seção 6.8) logo acima do seletor de loja — trocar de aba só
+troca a lista de baixo, a loja selecionada continua valendo pras duas.
+"Produtos" é a tela de sempre, sem mudança. "Complementos" reusa a mesma
+sidebar de categorias e o mesmo clique-pra-expandir (inclusive o mesmo
+modal de editar insumos, sem mudança nenhuma), só que sem as colunas de
+custo/valor de venda/foto, que não existem pra complemento nessa fase.
+Botão "Novo item" vira "Novo complemento" na aba certa (mesmo modal, só
+manda `tipo:'complemento'`); botão novo "Colar lista" (só nessa aba,
+admin) abre um modal simples — uma textarea com um nome por linha,
+manda pro `/api/complementos/lote`, mostra quantos foram cadastrados e
+quantos já existiam.
+
+**Bônus, mesmo modal reaproveitado acima**: corrigido nessa mesma
+mudança um bug de raiz visual — o modal "Editar ficha técnica" cortava
+título comprido e ganhava barra de scroll horizontal (reportado pela
+Julia por print). Causa: `<select>`/`<input>` dentro de grid/flex
+herdam `min-width: auto`, que pro conteúdo interno pode ser maior que a
+coluna `1fr` disponível, empurrando o modal inteiro pra largura maior.
+Fix: `minmax(0, 1fr)` na coluna do grid (`.ficha-tecnica-linha`) +
+`min-width: 0; width: 100%` explícito nos campos, `overflow-x: hidden`
+no `.modal-content` como cinto de segurança, e `overflow-wrap: break-word;
+min-width: 0` no título do modal.
+
 ### 6.6 Consumo estimado de insumo (Ficha Técnica × vendas reais)
 
 Objetivo: estimar quanto de cada insumo a rede realmente consome por dia,
@@ -1538,6 +1599,8 @@ nome. A correção vale só pra sincronizações novas — dias já sincronizado
 antes se corrigem sozinhos na reconferência automática dos últimos 7
 dias (ver seção 6.3), ou com uma ressincronização manual pra ir mais
 longe no histórico.
+
+10. **Baixa automática de estoque por venda real (produto + complemento) e "quebra"** — 🟡 fase 1 concluída em 2026-09-02 (pedido do chefe da Julia, repassado por ela): plano completo é puxar cada venda da Cardápio Web, casar produto **e** cada complemento escolhido com a Ficha Técnica, descontar o insumo certo do estoque automaticamente, e comparar com a Contagem física (seção 6.9) pra mostrar a "quebra" (diferença entre teórico e real) e já gerar o pedido de compra certo sozinho. **Fase 1** ✅ (ver "Ficha técnica de complemento" na seção 6.5) — só a receita do complemento em si dentro do AdmFood, confirmado ao vivo que a API da Cardápio Web já expõe qual complemento foi escolhido em cada venda. **Fases seguintes, ainda não iniciadas**: (a) puxar a venda real casando produto+complementos com a Ficha Técnica; (b) baixa automática de estoque a partir disso; (c) comparação com a Contagem física mostrando a quebra; (d) gerar pedido de compra automático a partir da quebra. Previsão inteligente de falta de estoque (IA) foi citada pelo chefe como ideia futura, **fora de escopo por enquanto** — nenhuma das fases acima depende disso.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 

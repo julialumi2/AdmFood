@@ -1572,6 +1572,8 @@ tr:hover { background-color: var(--surface-muted); }
   box-shadow: var(--shadow-lg);
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .modal-content.modal-large { max-width: 600px; }
@@ -1648,7 +1650,17 @@ tr:hover { background-color: var(--surface-muted); }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
   margin-bottom: var(--space-5);
+}
+
+.modal-header .panel-title {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.modal-header .btn-close {
+  flex-shrink: 0;
 }
 
 .modal-header-actions {

@@ -4909,6 +4909,9 @@ async function carregarUsuarioLogado() {
     if (usuario.papel === 'admin' && fichaTecnicaProdutos.length) {
       renderFichaTecnicaProdutos();
     }
+    if (usuario.papel === 'admin' && fichaTecnicaComplementos.length) {
+      renderFichaTecnicaComplementos();
+    }
 
     // Tela de Contagens: botão "Nova requisição" e coluna de Ações (só
     // admin) — mesma correção de corrida entre os dois fetches. Reage mesmo
@@ -5765,13 +5768,27 @@ async function importarPlanilhaCardapio(event) {
 // Ficha Técnica virou uma tela por loja (custo + valor de venda de cada
 // produto, receita própria por unidade) — ver seção 6.5 da documentação.
 let fichaTecnicaLojaAtual = 'Hamburgueria Artesanos';
+let fichaTecnicaTipoAtual = 'produto'; // 'produto' | 'complemento'
 let fichaTecnicaProdutos = [];
+let fichaTecnicaComplementos = [];
 let fichaTecnicaInsumosDisponiveis = [];
 let fichaTecnicaEditandoItemId = null;
 const fichaTecnicaExpandidos = new Set();
 const fichaTecnicaInsumosCache = new Map();
 let fichaTecnicaProdutoPendente = null;
 let fichaTecnicaCategoriaSelecionada = null;
+
+// Lista do tipo (produto/complemento) atualmente em tela — os dois usam
+// os mesmos componentes de expandir/editar/excluir ficha técnica, só a
+// fonte dos dados muda.
+function _fichaTecnicaItensAtuais() {
+  return fichaTecnicaTipoAtual === 'complemento' ? fichaTecnicaComplementos : fichaTecnicaProdutos;
+}
+
+function carregarFichaTecnicaAtual() {
+  fichaTecnicaCategoriaSelecionada = null;
+  return fichaTecnicaTipoAtual === 'complemento' ? carregarComplementosFichaTecnica() : carregarProdutosFichaTecnica();
+}
 
 async function carregarProdutosFichaTecnica() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
@@ -5787,6 +5804,33 @@ async function carregarProdutosFichaTecnica() {
   } catch (erro) {
     console.error('Falha ao carregar produtos da ficha técnica:', erro);
     conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os produtos dessa loja.</p>`;
+  }
+}
+
+// Complemento não vem de Preços (não é vendido/precificado sozinho na
+// Cardápio Web) — é um catálogo próprio, cadastrado direto no AdmFood
+// (botão "Novo complemento"/"Colar lista"). Por isso todo complemento já
+// nasce com itemCardapioId (o próprio id dele), sem o caso "sem match"
+// que produto tem.
+async function carregarComplementosFichaTecnica() {
+  const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
+  if (!conteudoEl) return;
+  try {
+    const resposta = await fetch(`/api/complementos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    fichaTecnicaComplementos = (dados.complementos || []).map(c => ({
+      itemCardapioId: c.id,
+      nome: c.nome,
+      categoria: c.categoria,
+      temFichaTecnica: c.temFichaTecnica,
+    }));
+    fichaTecnicaExpandidos.clear();
+    fichaTecnicaInsumosCache.clear();
+    renderFichaTecnicaComplementos();
+  } catch (erro) {
+    console.error('Falha ao carregar complementos da ficha técnica:', erro);
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os complementos.</p>`;
   }
 }
 
@@ -5880,6 +5924,70 @@ function renderFichaTecnicaProdutos() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// Mesma estrutura de renderFichaTecnicaProdutos, bem mais simples: sem
+// foto/custo/valor de venda (complemento não tem isso nessa fase) e sem
+// o caso "sem match" (todo complemento já nasce com ficha técnica
+// vinculável, é cadastrado direto aqui — não vem de Preços).
+function renderFichaTecnicaComplementos() {
+  const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
+  const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
+  if (!conteudoEl) return;
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
+
+  if (!fichaTecnicaComplementos.length) {
+    document.getElementById('ficha-tecnica-categorias-sidebar').innerHTML = '';
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum complemento cadastrado ainda${isAdmin ? ' — use "Novo complemento" ou "Colar lista".' : '.'}</p>`;
+    return;
+  }
+
+  const categorias = [];
+  const porCategoria = new Map();
+  fichaTecnicaComplementos.forEach(c => {
+    if (!porCategoria.has(c.categoria)) {
+      porCategoria.set(c.categoria, []);
+      categorias.push(c.categoria);
+    }
+    porCategoria.get(c.categoria).push(c);
+  });
+
+  if (!fichaTecnicaCategoriaSelecionada || !categorias.includes(fichaTecnicaCategoriaSelecionada)) {
+    fichaTecnicaCategoriaSelecionada = categorias[0] || null;
+  }
+  const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
+  _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
+    fichaTecnicaCategoriaSelecionada = nome;
+    renderFichaTecnicaComplementos();
+  });
+
+  const itensDaCategoria = porCategoria.get(fichaTecnicaCategoriaSelecionada) || [];
+  conteudoEl.innerHTML = !fichaTecnicaCategoriaSelecionada ? '' : `
+    <div class="cardapio-categoria-titulo">${escaparHtml(fichaTecnicaCategoriaSelecionada)}</div>
+    <div class="ficha-tecnica-produto-lista">
+      ${itensDaCategoria.map(c => {
+        const expandido = fichaTecnicaExpandidos.has(c.itemCardapioId);
+        return `
+        <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
+          <div class="ficha-tecnica-produto-linha ficha-tecnica-complemento-linha" data-acao="expandir-produto" data-item-id="${c.itemCardapioId}">
+            <div class="ficha-tecnica-produto-nome">${escaparHtml(c.nome)}</div>
+            <i data-lucide="chevron-down" class="ficha-tecnica-chevron"></i>
+          </div>
+          <div class="ficha-tecnica-produto-expandido" style="display:${expandido ? '' : 'none'};" data-painel-item-id="${c.itemCardapioId}"></div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+  `;
+
+  conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
+    linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));
+  });
+
+  fichaTecnicaExpandidos.forEach(itemId => renderPainelFichaTecnicaExpandido(itemId));
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 async function salvarCustoProduto(itemId, valor) {
   const custo = valor === '' ? null : parseFloat(valor);
   if (custo === null || isNaN(custo)) return;
@@ -5904,7 +6012,8 @@ async function alternarProdutoFichaTecnica(itemId) {
   } else {
     fichaTecnicaExpandidos.add(itemId);
   }
-  renderFichaTecnicaProdutos();
+  if (fichaTecnicaTipoAtual === 'complemento') renderFichaTecnicaComplementos();
+  else renderFichaTecnicaProdutos();
 }
 
 async function renderPainelFichaTecnicaExpandido(itemId) {
@@ -5916,7 +6025,7 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
   try {
     const dados = await _buscarFichaTecnicaItem(itemId);
     const isAdmin = window.usuarioLogado?.papel === 'admin';
-    const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+    const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
     painel.innerHTML = `
       <div class="ficha-tecnica-ingredientes">
         ${dados.insumos.length ? dados.insumos.map(ins => `
@@ -5944,7 +6053,7 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
         const resposta = await fetch(`/api/itens-cardapio/${itemId}`, { method: 'DELETE' });
         if (!resposta.ok) throw new Error('falha ao excluir');
         fichaTecnicaExpandidos.delete(itemId);
-        await carregarProdutosFichaTecnica();
+        await carregarFichaTecnicaAtual();
       } catch (erro) {
         console.error('Falha ao excluir item do cardápio:', erro);
         alert('Não foi possível excluir.');
@@ -5987,15 +6096,37 @@ async function _buscarFichaTecnicaItem(itemId) {
       trigger.querySelector('.loja-select-label').textContent = item.querySelector('span').textContent;
       fichaTecnicaLojaAtual = item.dataset.loja;
       seletor.classList.remove('aberto');
-      carregarProdutosFichaTecnica();
+      carregarFichaTecnicaAtual();
     });
   });
 })();
 
-// --- Modal: Novo item do cardápio ---
+// --- Abas "Produtos" / "Complementos" ---
+document.querySelectorAll('#ficha-tecnica-tipo-tabs .tab-btn').forEach((botao) => {
+  botao.addEventListener('click', () => {
+    if (botao.dataset.tipo === fichaTecnicaTipoAtual) return;
+    document.querySelectorAll('#ficha-tecnica-tipo-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
+    botao.classList.add('active');
+    fichaTecnicaTipoAtual = botao.dataset.tipo;
+
+    const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
+    document.getElementById('ficha-tecnica-subtitulo').textContent = ehComplemento
+      ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
+      : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
+    document.getElementById('btn-novo-item-cardapio-texto').textContent = ehComplemento ? 'Novo complemento' : 'Novo item';
+    const btnColarComplementos = document.getElementById('btn-colar-lista-complementos');
+    if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
+
+    carregarFichaTecnicaAtual();
+  });
+});
+
+// --- Modal: Novo item do cardápio (produto ou complemento, conforme a aba ativa) ---
 function abrirModalNovoItemCardapio() {
   fichaTecnicaProdutoPendente = null;
   document.getElementById('form-novo-item-cardapio').reset();
+  const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
+  document.querySelector('#modal-novo-item-cardapio .panel-title').textContent = ehComplemento ? 'Novo complemento' : 'Novo item do cardápio';
   document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
 }
 function fecharModalNovoItemCardapio() {
@@ -6011,6 +6142,7 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
   const corpo = {
     nome: document.getElementById('novo-item-nome').value,
     categoria: document.getElementById('novo-item-categoria').value,
+    tipo: fichaTecnicaTipoAtual,
   };
   const abriaFichaLogoEmSeguida = fichaTecnicaProdutoPendente;
   try {
@@ -6022,11 +6154,48 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
     fecharModalNovoItemCardapio();
-    await carregarProdutosFichaTecnica();
+    await carregarFichaTecnicaAtual();
     if (abriaFichaLogoEmSeguida) abrirModalFichaTecnicaItem(dados.id);
   } catch (erro) {
     console.error('Falha ao cadastrar item do cardápio:', erro);
     alert(erro.message || 'Não foi possível cadastrar.');
+  }
+});
+
+// --- Modal: Colar lista de complementos ---
+document.getElementById('btn-colar-lista-complementos')?.addEventListener('click', () => {
+  document.getElementById('colar-complementos-texto').value = '';
+  document.getElementById('colar-complementos-erro').style.display = 'none';
+  document.getElementById('colar-complementos-resultado').textContent = '';
+  document.getElementById('modal-colar-complementos').style.display = 'flex';
+});
+function fecharModalColarComplementos() {
+  document.getElementById('modal-colar-complementos').style.display = 'none';
+}
+document.getElementById('btn-colar-complementos-fechar')?.addEventListener('click', fecharModalColarComplementos);
+document.getElementById('btn-colar-complementos-cancelar')?.addEventListener('click', fecharModalColarComplementos);
+
+document.getElementById('form-colar-complementos')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const texto = document.getElementById('colar-complementos-texto').value;
+  const erroEl = document.getElementById('colar-complementos-erro');
+  const resultadoEl = document.getElementById('colar-complementos-resultado');
+  erroEl.style.display = 'none';
+  try {
+    const resposta = await fetch('/api/complementos/lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
+    resultadoEl.textContent = `${dados.criados.length} cadastrado(s)${dados.duplicados.length ? `, ${dados.duplicados.length} já existia(m): ${dados.duplicados.join(', ')}` : '.'}`;
+    await carregarComplementosFichaTecnica();
+    if (!dados.duplicados.length) fecharModalColarComplementos();
+  } catch (erro) {
+    console.error('Falha ao cadastrar complementos em lote:', erro);
+    erroEl.textContent = erro.message || 'Não foi possível cadastrar.';
+    erroEl.style.display = 'block';
   }
 });
 
@@ -6066,7 +6235,7 @@ async function abrirModalFichaTecnicaItem(itemId) {
     alert('Cadastre pelo menos um insumo no Estoque antes de montar a ficha técnica.');
     return;
   }
-  const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+  const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
   fichaTecnicaEditandoItemId = itemId;
   document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${produto?.nome || ''} (${fichaTecnicaLojaAtual})`;
   document.getElementById('ficha-tecnica-colar-texto').value = '';
@@ -6166,7 +6335,7 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
     const itemId = fichaTecnicaEditandoItemId;
     fecharModalFichaTecnicaItem();
     fichaTecnicaInsumosCache.delete(itemId);
-    const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+    const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
     if (produto) produto.temFichaTecnica = insumos.length > 0;
     if (fichaTecnicaExpandidos.has(itemId)) {
       await renderPainelFichaTecnicaExpandido(itemId);
@@ -6200,7 +6369,7 @@ var cardapioAbaAtual = 'precos';
     if (eyebrow) eyebrow.textContent = 'INSUMOS DE CADA ITEM';
     if (titulo) titulo.textContent = 'Cardápio · Ficha Técnica';
     if (itemFicha) itemFicha.classList.add('active');
-    if (!fichaTecnicaProdutos.length) carregarProdutosFichaTecnica();
+    if (!fichaTecnicaProdutos.length && !fichaTecnicaComplementos.length) carregarFichaTecnicaAtual();
   } else {
     modoPrecos.style.display = '';
     modoFicha.style.display = 'none';

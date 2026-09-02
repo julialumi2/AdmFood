@@ -59,6 +59,10 @@
 .ficha-tecnica-produto-linha[data-acao="expandir-produto"] { cursor: pointer; }
 .ficha-tecnica-produto-linha[data-acao="expandir-produto"]:hover { background-color: var(--surface-muted); }
 
+/* Complemento não tem foto/custo/valor de venda nessa fase — só nome +
+   chevron de expandir. */
+.ficha-tecnica-complemento-linha { grid-template-columns: 1fr minmax(28px, auto); }
+
 .ficha-tecnica-produto-nome { font-weight: 700; font-size: 0.9rem; color: var(--text-dark); }
 .ficha-tecnica-produto-custo,
 .ficha-tecnica-produto-venda { font-size: 0.85rem; color: var(--text-dark); }
@@ -118,13 +122,17 @@
 
 .ficha-tecnica-linha {
   display: grid;
-  grid-template-columns: 1fr 110px auto;
+  grid-template-columns: minmax(0, 1fr) 110px auto;
   gap: var(--space-2);
   align-items: center;
 }
 
 .ficha-tecnica-linha select,
 .ficha-tecnica-linha input {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: var(--radius-sm);
@@ -132,6 +140,7 @@
   font-size: 0.85rem;
   color: var(--text-dark);
   font-family: inherit;
+  text-overflow: ellipsis;
 }
 
 /* Catálogo com sidebar de categorias (mesmo layout do Catálogo da
