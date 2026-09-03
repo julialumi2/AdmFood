@@ -388,6 +388,23 @@ já formatado (`_formatarMoedaBR`); ao salvar, desfaz a formatação
 backend — que continua recebendo exatamente o mesmo formato de sempre
 (`float` simples), sem mudança nenhuma na rota `PUT /api/ajuste-canal`.
 
+**`/api/faturamento-mesmo-dia-semana` não aplicava o ajuste manual**
+(corrigido em 2026-09-03, achado pela Julia direto no relatório do
+WhatsApp: o dia 05/08 da Hamburgueria Artesanos aparecia como
+R$ 262.555,62 na lista de comparação, contra R$ 6.307,98 de verdade —
+o mesmo valor que a tela de Insights sempre mostrou certo pra esse dia).
+Causa: essa rota (única consumidora de `faturamento_diario` que nunca
+tinha sido revisada desde que o ajuste manual de canal existe, seção
+acima) montava `linhas` só com `_aplicar_presencial`, sem passar por
+`_aplicar_ajustes_canal` como toda a Home e Insights já fazem — então um
+dia com ajuste ativo aparecia com o valor bruto errado só nessa lista de
+comparação/status do WhatsApp, nunca no resto do sistema. Corrigido
+buscando `_linhas_canais_com_presencial` + `buscar_ajustes_canal_periodo`
+da mesma janela e aplicando `_aplicar_ajustes_canal` antes de filtrar por
+dia da semana — mesmo padrão de sempre, só faltava chamar. Confirmado com
+teste sintético (ajuste de canal propagando o delta certo pro total do
+dia) que o mecanismo funciona igual ao do resto do sistema.
+
 ### 6.4 Estoque (insumos nativos, por loja)
 
 Tela `estoque.html` — antes era só uma maquete estática (dado inventado),

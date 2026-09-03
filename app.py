@@ -2769,6 +2769,15 @@ def api_faturamento_mesmo_dia_semana():
         buscar_faturamento_periodo(inicio_janela.isoformat(), dia),
         buscar_presencial_periodo(inicio_janela.isoformat(), dia),
     )
+    # Ajuste manual de canal (seção 6.3) — sem isso, um dia com painel da
+    # Cardápio Web divergente da API mostra o valor bruto errado aqui, feito
+    # essa rota nunca aplicava a correção que o resto do sistema já aplica
+    # (achado em produção em 2026-09-03: 05/08 da Hamburgueria Artesanos
+    # aparecia como R$ 262.555,62 no relatório, contra R$ 6.307,98 de
+    # verdade em Insights, exatamente por essa rota pular esse passo).
+    linhas_canais = _linhas_canais_com_presencial(inicio_janela.isoformat(), dia)
+    ajustes = buscar_ajustes_canal_periodo(inicio_janela.isoformat(), dia)
+    _, linhas = _aplicar_ajustes_canal(linhas_canais, linhas, ajustes)
     linhas = [
         l for l in linhas
         if l["unidade"] == unidade and date.fromisoformat(l["dia"]).weekday() == data_ref.weekday()
