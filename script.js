@@ -790,7 +790,7 @@ function abrirModalAjusteCanal(unidade, diaIso, canalBruto, canalLabel, faturame
   ajusteCanalContexto = { unidade, diaIso, canalBruto, canalLabel };
   document.getElementById('ajuste-canal-subtitulo').textContent =
     `${unidade} — ${canalLabel} — ${diaIso.split('-').reverse().join('/')}`;
-  document.getElementById('ajuste-canal-faturamento').value = faturamentoAtual.toFixed(2);
+  document.getElementById('ajuste-canal-faturamento').value = _formatarMoedaBR(faturamentoAtual);
   document.getElementById('ajuste-canal-pedidos').value = pedidosAtual;
   document.getElementById('modal-ajuste-canal').style.display = 'flex';
 }
@@ -802,6 +802,23 @@ function fecharModalAjusteCanal() {
 
 document.getElementById('btn-ajuste-canal-fechar')?.addEventListener('click', fecharModalAjusteCanal);
 document.getElementById('btn-ajuste-canal-cancelar')?.addEventListener('click', fecharModalAjusteCanal);
+
+// Máscara fluida de moeda (pedido da Julia, 2026-09-03: digitar
+// "2.588,36" direto, sem precisar converter pra "2588.36" na mão) — mesmo
+// padrão já usado no campo "presencial" do fechamento de caixa: cada
+// dígito digitado entra como centavo, formata sozinho com ponto de milhar
+// e vírgula decimal.
+document.getElementById('ajuste-canal-faturamento')?.addEventListener('input', (evento) => {
+  const apenasNumeros = evento.target.value.replace(/\D/g, '');
+  if (!apenasNumeros) {
+    evento.target.value = '';
+    return;
+  }
+  const valorDecimal = (parseFloat(apenasNumeros) / 100).toFixed(2);
+  const partes = valorDecimal.split('.');
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  evento.target.value = partes.join(',');
+});
 
 // Recarrega tudo depois de salvar/remover um ajuste: primeiro o período
 // inteiro (carregarInsights), pra "Histórico Diário" e os totais agregados
@@ -823,11 +840,15 @@ document.getElementById('form-ajuste-canal')?.addEventListener('submit', async (
   if (!ajusteCanalContexto) return;
 
   const botaoSalvar = document.getElementById('btn-ajuste-canal-salvar');
+  const faturamentoDigitado = document.getElementById('ajuste-canal-faturamento').value;
   const corpo = {
     unidade: ajusteCanalContexto.unidade,
     dia: ajusteCanalContexto.diaIso,
     canal: ajusteCanalContexto.canalBruto,
-    faturamento: document.getElementById('ajuste-canal-faturamento').value,
+    // Campo aceita formato brasileiro (2.588,36) — desfaz o ponto de milhar
+    // e troca a vírgula decimal por ponto antes de mandar pro backend,
+    // mesmo critério já usado no fechamento de caixa (linha ~342).
+    faturamento: faturamentoDigitado.replace(/\./g, '').replace(',', '.'),
     quantidadePedidos: document.getElementById('ajuste-canal-pedidos').value,
   };
 

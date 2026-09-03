@@ -375,6 +375,19 @@ ajuste desse dia específico foi
 aplicado direto via `PUT /api/ajuste-canal` pelo Console do navegador
 (mesma rota que o botão chama) — sem mexer no banco diretamente.
 
+**Campo de faturamento aceita formato brasileiro** (corrigido em
+2026-09-03, pedido da Julia: o campo era um `<input type="number">`
+puro, que só aceita ponto decimal e nem deixa digitar vírgula — ela
+tentou digitar "2.588,36" e não conseguiu). Virou `<input type="text"
+inputmode="decimal">` com a mesma máscara fluida de moeda já usada no
+campo "presencial" do fechamento de caixa: cada dígito digitado entra
+como centavo e o campo se formata sozinho (ponto de milhar, vírgula
+decimal) enquanto digita. Ao abrir o modal, o valor atual também aparece
+já formatado (`_formatarMoedaBR`); ao salvar, desfaz a formatação
+(remove ponto de milhar, troca vírgula por ponto) antes de mandar pro
+backend — que continua recebendo exatamente o mesmo formato de sempre
+(`float` simples), sem mudança nenhuma na rota `PUT /api/ajuste-canal`.
+
 ### 6.4 Estoque (insumos nativos, por loja)
 
 Tela `estoque.html` — antes era só uma maquete estática (dado inventado),
