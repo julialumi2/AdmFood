@@ -977,14 +977,31 @@ async function montarRelatorioWhatsApp() {
         const dadosSemana = await respSemana.json();
         const ocorrencias = dadosSemana.ocorrencias || [];
 
-        // Lista quantas ocorrências desse dia da semana realmente já
-        // passaram no mês (4 ou 5, dependendo do calendário) — nada de
-        // travar em 4, senão o último sábado/domingo de um mês com 5 some
-        // do relatório.
-        bloco += `\n\n`;
-        bloco += ocorrencias
-          .map((ocorrencia) => `- ${ocorrencia.dia}: R$ ${ocorrencia.faturamento}`)
-          .join('\n');
+        // Status vs a média das últimas 4 ocorrências ANTERIORES desse
+        // mesmo dia da semana, atravessando mês livremente (regra do chefe
+        // da Julia, 2026-09-03) — a API já devolve só essas 4 + o próprio
+        // dia; filtra o próprio dia aqui pra nunca entrar na própria média.
+        // Faixa de ±5% conta como "na média" (faturamento raramente bate
+        // exatamente na média).
+        const anteriores = ocorrencias.filter(o => o.diaIso !== inicio);
+        if (anteriores.length) {
+          const media = anteriores.reduce((soma, o) => soma + o.faturamentoNumero, 0) / anteriores.length;
+          if (media > 0) {
+            const variacao = (totalPeriodo - media) / media;
+            const status = variacao > 0.05 ? '✅ CRESCENDO' : variacao < -0.05 ? '🚨 ABAIXO' : '⚠️ NA MÉDIA';
+            bloco += `\nStatus: ${status}`;
+          }
+        }
+
+        // Lista as últimas 4 ocorrências ANTERIORES desse dia da semana
+        // (mesmas usadas na média do status acima) — não repete o próprio
+        // dia, que já apareceu no "Total do dia" logo acima.
+        if (anteriores.length) {
+          bloco += `\n\n`;
+          bloco += anteriores
+            .map((ocorrencia) => `- ${ocorrencia.dia}: R$ ${ocorrencia.faturamento}`)
+            .join('\n');
+        }
       }
     }
 

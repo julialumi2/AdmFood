@@ -1506,6 +1506,57 @@ pendência:
   "Seção", checkboxes "Respondido/Não Respondido") — cosmético, não
   bloqueia comprar de verdade.
 
+### 6.10 Relatório diário via WhatsApp (texto pra copiar)
+
+Botão na tela de Insights monta um texto (um bloco por loja: Presencial/
+iFood/Cardápio Web/99 Food + total) pra ela colar manualmente num grupo
+do WhatsApp — **não é a integração automática com a API do WhatsApp
+Business** (isso é a pendência 2 da seção 9, travada esperando
+credencial). `montarRelatorioWhatsApp()` (script.js) monta o texto;
+copiar exige clique "fresco" sem `await` no meio por causa da política
+de permissão da área de transferência em navegador de celular.
+
+**Status ✅ CRESCENDO / ⚠️ NA MÉDIA / 🚨 ABAIXO** (concluído em
+2026-09-03 — pedido original do chefe da Julia, repassado por ela;
+ficou parado ("só no papel", sem commit) por alguns dias até ela reunir
+as respostas dele). Só entra quando o período selecionado é um único dia
+(não faz sentido pra período de várias semanas). Regra final, confirmada
+com o chefe: compara o faturamento do dia com a **média das últimas 4
+ocorrências ANTERIORES desse mesmo dia da semana**, atravessando virada
+de mês livremente (não é mais "só dentro do mês corrente", que dava
+menos de 4 comparações no início de cada mês) — variação de mais de
+±5% vira CRESCENDO/ABAIXO, dentro da faixa vira NA MÉDIA.
+
+`GET /api/faturamento-mesmo-dia-semana?unidade=&dia=` (app.py) faz a
+janela de busca (12 semanas pra trás, margem de sobra) e já devolve só
+o que interessa: as últimas 4 ocorrências anteriores + o próprio dia,
+em ordem cronológica, cada uma com `diaIso`/`faturamentoNumero` (valor
+cru, pra fazer conta) além do `dia`/`faturamento` já formatados (exibição).
+No front, `anteriores` (ocorrências ¬ próprio dia) alimenta tanto a
+média do status quanto a lista de comparação exibida no fim da mensagem
+— que também deixou de repetir o valor do próprio dia (já aparece
+em "Total do dia" logo acima) e trocou "1ª/2ª/3ª terça do mês" por
+data numérica (dd/mm), formato que a Julia pediu por ficar mais direto
+de ler.
+
+Mensagem final, por loja:
+```
+*Faturamento do dia Artesanos*
+
+💵 Presencial: R$ 1.428,30
+📱 iFood: R$ 510,05
+🌐 Cardápio Web: R$ 1.211,00
+🛵 99 Food: R$ 2.421,19
+
+Total do dia: R$ 5.570,54
+Status: ✅ CRESCENDO
+
+- 05/08: R$ 6.126,82
+- 12/08: R$ 4.958,98
+- 19/08: R$ 3.858,77
+- 26/08: R$ 1.861,86
+```
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.

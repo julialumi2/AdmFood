@@ -2743,9 +2743,11 @@ def api_excluir_ajuste_canal():
 
 @app.route('/api/faturamento-mesmo-dia-semana', methods=['GET'])
 def api_faturamento_mesmo_dia_semana():
-    # Pra montar a comparação "1ª terça do mês", "2ª terça do mês" etc no
-    # relatório do WhatsApp: todas as ocorrências do mesmo dia da semana de
-    # `dia`, dentro do mesmo mês, em ordem cronológica.
+    # Pra montar a comparação do relatório do WhatsApp: o próprio dia +
+    # as últimas 4 ocorrências ANTERIORES desse mesmo dia da semana,
+    # atravessando virada de mês livremente (pedido do chefe da Julia,
+    # 2026-09-03 — antes era só "dentro do mês corrente", o que dava menos
+    # de 4 comparações no início do mês).
     unidade = request.args.get('unidade')
     dia = request.args.get('dia')
 
@@ -2758,27 +2760,33 @@ def api_faturamento_mesmo_dia_semana():
     except ValueError:
         return jsonify({"erro": "Data inválida."}), 400
 
-    primeiro_dia_mes = data_ref.replace(day=1)
-    if primeiro_dia_mes.month == 12:
-        primeiro_dia_prox_mes = primeiro_dia_mes.replace(year=primeiro_dia_mes.year + 1, month=1)
-    else:
-        primeiro_dia_prox_mes = primeiro_dia_mes.replace(month=primeiro_dia_mes.month + 1)
-    ultimo_dia_mes = primeiro_dia_prox_mes - timedelta(days=1)
-
+    # Janela de 12 semanas pra trás é folga de sobra pra sempre achar as
+    # últimas 4 ocorrências mesmo com algum dia sem faturamento registrado
+    # no meio (feriado, loja fechada); só as últimas 4 + o próprio dia
+    # entram na resposta, o resto da janela é só margem de busca.
+    inicio_janela = data_ref - timedelta(weeks=12)
     linhas = _aplicar_presencial(
-        buscar_faturamento_periodo(primeiro_dia_mes.isoformat(), ultimo_dia_mes.isoformat()),
-        buscar_presencial_periodo(primeiro_dia_mes.isoformat(), ultimo_dia_mes.isoformat()),
+        buscar_faturamento_periodo(inicio_janela.isoformat(), dia),
+        buscar_presencial_periodo(inicio_janela.isoformat(), dia),
     )
     linhas = [
         l for l in linhas
         if l["unidade"] == unidade and date.fromisoformat(l["dia"]).weekday() == data_ref.weekday()
     ]
     linhas.sort(key=lambda l: l["dia"])
+    anteriores = [l for l in linhas if l["dia"] < dia][-4:]
+    hoje = [l for l in linhas if l["dia"] == dia]
+    linhas = anteriores + hoje
 
     return jsonify({
         "diaSemana": DIAS_SEMANA_COMPLETO[data_ref.weekday()],
         "ocorrencias": [
-            {"dia": _formatar_data_br(l["dia"]), "faturamento": _formatar_moeda(l["faturamento_dia"])}
+            {
+                "dia": _formatar_data_br(l["dia"]),
+                "diaIso": l["dia"],
+                "faturamento": _formatar_moeda(l["faturamento_dia"]),
+                "faturamentoNumero": l["faturamento_dia"],
+            }
             for l in linhas
         ],
     })
