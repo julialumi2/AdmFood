@@ -205,16 +205,11 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarFornecedores();
   }
 
-  // 4.099 TELA DE COTAÇÕES (e a página Comparativo de Preços, que reaproveita
-  // a mesma lista/detalhe — só não tem `#cotacoes-tabs-bar`, é como
-  // detectamos que é ela e pulamos direto pra grid, sem passar pela lista).
+  // 4.099 TELA DE COTAÇÕES
   if (document.getElementById('cotacoes-tabela-body')) {
     const abrirId = new URLSearchParams(location.search).get('abrir');
-    const paginaComparativoDireto = !document.getElementById('cotacoes-tabs-bar');
     if (abrirId) {
       abrirCotacaoDetalhe(parseInt(abrirId, 10));
-    } else if (paginaComparativoDireto) {
-      abrirOuCriarComparativoAtual();
     } else {
       carregarCotacoes();
     }
@@ -1991,6 +1986,10 @@ async function carregarCotacoes() {
   }
 }
 
+function _formatarMoedaCompacta(valor) {
+  return (valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function renderCotacoesLista() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const tbody = document.getElementById('cotacoes-tabela-body');
@@ -2001,19 +2000,50 @@ function renderCotacoesLista() {
   const acoesTopo = document.getElementById('cotacoes-acoes-admin');
   if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
 
-  if (!cotacoesLista.length) {
-    const colspan = 5 + (isAdmin ? 1 : 0);
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma cotação registrada ainda.</td></tr>`;
+  // Filtros estilo VMarket (print da Julia, 2026-09-04): Mostrar
+  // (aberta/fechada), Tipo (manual × veio de Requisição), Busca (nome ou
+  // nº) e Dias (criada nos últimos N) — tudo client-side, mesma lista já
+  // carregada, sem rota nova.
+  const filtroMostrar = document.getElementById('cotacoes-filtro-mostrar')?.value || '';
+  const filtroTipo = document.getElementById('cotacoes-filtro-tipo')?.value || '';
+  const filtroBusca = (document.getElementById('cotacoes-filtro-busca')?.value || '').trim().toLowerCase();
+  const filtroDias = document.getElementById('cotacoes-filtro-dias')?.value || '';
+
+  const agora = new Date();
+  const lista = cotacoesLista.filter((c) => {
+    if (filtroMostrar && c.status !== filtroMostrar) return false;
+    if (filtroTipo === 'manual' && !c.manual) return false;
+    if (filtroTipo === 'requisicao' && c.manual) return false;
+    if (filtroBusca && !c.titulo.toLowerCase().includes(filtroBusca) && String(c.id) !== filtroBusca) return false;
+    if (filtroDias) {
+      const dias = (agora - new Date(c.criadoEm)) / (1000 * 60 * 60 * 24);
+      if (dias > parseInt(filtroDias, 10)) return false;
+    }
+    return true;
+  });
+
+  const colspan = 9 + (isAdmin ? 1 : 0);
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma cotação encontrada pra esse filtro.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = cotacoesLista.map((c) => `
+  tbody.innerHTML = lista.map((c) => {
+    const respostas = c.percentualRespostas;
+    const celulaRespostas = respostas === null
+      ? '<span class="text-muted">—</span>'
+      : `<div class="progress-container"><div class="progress-bar ${respostas >= 70 ? 'bar-green' : respostas >= 30 ? 'bar-orange' : 'bar-red'}" style="width:${respostas}%"></div></div><span class="text-muted" style="font-size:0.8em;">${respostas}%</span>`;
+    return `
     <tr>
+      <td class="text-muted">${c.id}</td>
       <td class="font-bold">${escaparHtml(c.titulo)}</td>
-      <td><span class="badge-pill ${STATUS_CLASSE_BADGE_COTACAO[c.status]}">${STATUS_LABEL_COTACAO[c.status]}</span></td>
-      <td>${c.totalInsumos}</td>
+      <td>${celulaRespostas}</td>
+      <td>${c.insumosComprados} / ${c.totalInsumos}</td>
       <td>${c.totalFornecedores}</td>
+      <td><span class="badge-pill ${STATUS_CLASSE_BADGE_COTACAO[c.status]}">${STATUS_LABEL_COTACAO[c.status]}</span></td>
       <td class="text-muted">${new Date(c.criadoEm).toLocaleDateString('pt-BR')}</td>
+      <td>R$ ${_formatarMoedaCompacta(c.economia)}</td>
+      <td>R$ ${_formatarMoedaCompacta(c.valorPedido)}</td>
       ${isAdmin ? `
         <td class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="abrir-cotacao" data-id="${c.id}" title="Ver/editar preços">
@@ -2025,7 +2055,8 @@ function renderCotacoesLista() {
         </td>
       ` : ''}
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   document.querySelectorAll('[data-acao="abrir-cotacao"]').forEach(btn => {
     btn.addEventListener('click', () => abrirCotacaoDetalhe(parseInt(btn.dataset.id, 10)));
@@ -2046,6 +2077,11 @@ function renderCotacoesLista() {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+document.getElementById('cotacoes-filtro-mostrar')?.addEventListener('change', renderCotacoesLista);
+document.getElementById('cotacoes-filtro-tipo')?.addEventListener('change', renderCotacoesLista);
+document.getElementById('cotacoes-filtro-busca')?.addEventListener('input', renderCotacoesLista);
+document.getElementById('cotacoes-filtro-dias')?.addEventListener('change', renderCotacoesLista);
 
 document.getElementById('btn-nova-cotacao')?.addEventListener('click', () => {
   document.getElementById('form-nova-cotacao').reset();
@@ -2143,35 +2179,6 @@ function renderHistoricoCompras(historico) {
       ` : `<p class="panel-subtitle">Nenhum vencedor foi escolhido nessa cotação antes de fechar.</p>`}
     </div>
   `).join('');
-}
-
-// Página Comparativo de Preços (pedido da Julia, 2026-09-04: abrir direto
-// na grid, sem precisar escolher/abrir uma cotação na lista primeiro).
-// Acha o comparativo manual (sem Requisição por trás) mais recente ainda
-// aberto e já abre ele; se não existir nenhum, cria um novo na hora — essa
-// página nunca fica esperando ação nenhuma antes de mostrar a grid.
-async function abrirOuCriarComparativoAtual() {
-  try {
-    const resposta = await fetch('/api/cotacoes');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    const abertos = (dados.cotacoes || []).filter((c) => c.manual && c.status === 'aberta');
-    if (abertos.length) {
-      await abrirCotacaoDetalhe(abertos[0].id);
-      return;
-    }
-    const criar = await fetch('/api/cotacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ titulo: `Comparativo de Preços — ${new Date().toLocaleDateString('pt-BR')}` }),
-    });
-    const criado = await criar.json();
-    if (!criar.ok) throw new Error(criado.erro || 'falha ao criar comparativo');
-    await abrirCotacaoDetalhe(criado.id);
-  } catch (erro) {
-    console.error('Falha ao abrir o comparativo de preços:', erro);
-    await carregarCotacoes();
-  }
 }
 
 async function abrirCotacaoDetalhe(cotacaoId) {

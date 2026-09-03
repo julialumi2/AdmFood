@@ -14,6 +14,20 @@
   gap: var(--space-6);
 }
 
+/* Filtros da lista de Cotações (Mostrar/Tipo/Busca/Dias), estilo VMarket —
+   print da Julia, 2026-09-04. */
+.cotacoes-filtros-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.cotacoes-filtros-row .form-group {
+  min-width: 160px;
+  flex: 1 1 160px;
+}
+
 /* Grid comparativa de preços (insumo x fornecedor), estilo planilha —
    substituiu os cards por insumo em 2026-09. */
 .tabela-comparacao-cotacao {

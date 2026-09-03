@@ -1455,39 +1455,17 @@ convidado), a tela volta a mostrar a grid de comparação normal. Não
 mexeu em nada do backend nem do cálculo — só parou de esconder um dado
 que a rota já devolvia.
 
-**Aba "Comparativo de Preços" → página própria no menu** (passou por 3
-formatos em 2 dias, todos a pedido da Julia, até chegar na versão final
-em 2026-09-04). Primeiro virou uma terceira aba dentro de `cotacoes.html`
-(2026-09-02, um seletor que levava pro comparativo sem passar pela
-lista) — ela pediu pra tirar dali e virar item de menu **separado** de
-Cotações. Segunda versão (2026-09-03) já era `comparativo-precos.html`
-como página própria (link novo no submenu "Compras", junto de
-Fornecedores/Cotações/Requisições/Pedidos/Recebimentos/Guia — igual em
-todo `<aside class="sidebar">` do sistema, já que não existe
-sidebar compartilhada, cada página tem a própria cópia), mas ainda
-abria na lista de cotações, exigindo clicar numa pra ver a grid — ela
-pediu pra abrir **direto na grid**, sem esse passo.
-
-Versão final: a página reaproveita 100% o mesmo par lista/detalhe de
-`cotacoes.html` (`#cotacoes-lista-view`/`#cotacoes-detalhe-view`, mesmos
-ids, zero duplicação de lógica) — só que sem `#cotacoes-tabs-bar` e sem
-o painel "Compras" (histórico). É essa ausência da tabs-bar que o
-bootstrap de `script.js` usa pra saber que é essa página (não um
-`data-*` novo) e chamar `abrirOuCriarComparativoAtual()` em vez de
-`carregarCotacoes()`: busca o comparativo **manual** (sem Requisição por
-trás — `cotacao.manual`, novo campo em `GET /api/cotacoes`, calculado de
-`requisicao_titulo IS NULL`, mesma coluna que já existia pra evitar
-cotação duplicada) mais recente ainda aberto e abre ele direto; se não
-existir nenhum, cria um na hora (`Comparativo de Preços — dd/mm/aaaa`) e
-já abre — a página nunca fica esperando ação nenhuma antes de mostrar a
-grid. "Voltar pra lista" continua funcionando como saída manual (mostra
-histórico completo, inclusive cotação de Requisição) pra quem quiser
-outro comparativo ou consultar um antigo.
-
-Cotação vinda de Requisição continua abrindo em `cotacoes.html`
-(`window.location.href = 'cotacoes.html?abrir=' + id`, sem mudança) —
-as duas páginas dividem o mesmo modelo de dado e as mesmas rotas, só
-`comparativo-precos.html` filtra pra só considerar cotação manual.
+**"Comparativo de Preços" — aba, depois página própria, depois removida**
+(3 formatos em 3 dias, todos a pedido da Julia, até ela decidir em
+2026-09-04 que não precisava mais — a lista de Cotações passou a cobrir
+o mesmo caso, ver subseção abaixo). Passou por: aba dentro de
+`cotacoes.html` (2026-09-02) → página própria `comparativo-precos.html`
+no menu, abrindo direto na grid do comparativo manual mais recente sem
+passar por lista (2026-09-03) → removida de vez (2026-09-04, arquivo e
+link de menu apagados das 13 sidebars). O campo `cotacao.manual` (`GET
+/api/cotacoes`, calculado de `requisicao_titulo IS NULL`) que essa
+página usava pra achar o comparativo certo continua na API — passou a
+alimentar o filtro "Tipo" da lista de Cotações em vez disso.
 
 **Cotação manual nasce com o catálogo inteiro, estilo VMarket**
 (concluída em 2026-09-03, pedido da Julia depois de mostrar um print da
@@ -1561,6 +1539,40 @@ marca o vencedor de verdade) e preferiu ficar só com a que tem efeito
 real. O destaque do vencedor continua existindo (fundo verde + ícone de
 check já ligados a `preco.selecionado`, não precisavam do toggle
 removido pra nada).
+
+**Lista de Cotações estilo VMarket** (concluída em 2026-09-04, depois de
+ela mandar o link real de `.../cotacao/listar_cotacoes/` da VMarket
+pedindo pra deixar a lista de Cotações igual). Adaptação, não cópia 1:1
+— algumas colunas da VMarket não têm equivalente no nosso modelo (ex:
+"Tempo Restante" pressupõe prazo por cotação, que não existe aqui; ela
+não pediu explicitamente, então ficou de fora em vez de inventar um
+prazo sem sentido) e outras viraram uma leitura nossa do mesmo conceito.
+
+Colunas novas, todas calculadas em `listar_cotacoes()`
+(armazenamento.py — reescrita pra fazer as contas em Python em vez de
+SQL puro, porque "maior preço por insumo" e "quantidade por insumo"
+vêm de tabelas diferentes e a junção certa em SQL exigiria subquery
+correlacionada por linha; o volume de dados é pequeno o bastante pra
+não importar):
+- **Respostas** — % de convites respondidos sobre o total enviados
+  pra essa cotação (barra de progresso, reaproveitando
+  `.progress-container`/`.progress-bar` que já existia pro Estoque);
+  "—" quando nunca teve convite nenhum.
+- **Produtos / Comprados** — total de insumos com preço lançado / quantos
+  já têm vencedor marcado (`selecionado=1` em pelo menos um preço).
+- **Economia** — soma, por insumo com vencedor marcado, de (maior preço
+  lançado − preço vencedor) × quantidade — quanto compensou comparar em
+  vez de fechar com o primeiro preço.
+- **Valor Pedido** — soma do preço vencedor × quantidade, por insumo com
+  vencedor marcado.
+
+Filtros novos, todos client-side (mesma lista já carregada, sem rota
+nova): **Mostrar** (Todas/Abertas/Fechadas — versão simplificada do
+"Ativos/Desativados" da VMarket, que tem mais estados que a gente
+modela), **Tipo** (Todas/Manual/Requisição, usando o mesmo campo
+`cotacao.manual` que a extinta página Comparativo de Preços usava),
+**Busca** (por nome ou pelo número/id da cotação) e **Dias** (criada nos
+últimos 7/15/30, ou Todos).
 
 **Convite de fornecedor direto pro WhatsApp** (concluído em 2026-09-03,
 pedido da Julia: "clico um botão e já envia os links pros fornecedores").

@@ -71,10 +71,6 @@
               <i data-lucide="clipboard-check"></i>
               <span>Recebimentos</span>
             </a>
-            <a href="comparativo-precos.html" class="menu-subitem">
-              <i data-lucide="scale"></i>
-              <span>Comparativo de Preços</span>
-            </a>
             <a href="guia-compras.html" class="menu-subitem" target="_blank" rel="noopener">
               <i data-lucide="compass"></i>
               <span>Guia</span>
@@ -205,15 +201,51 @@
               </div>
             </div>
 
+            <div class="cotacoes-filtros-row">
+              <div class="form-group">
+                <label for="cotacoes-filtro-mostrar">Mostrar</label>
+                <select id="cotacoes-filtro-mostrar">
+                  <option value="">Todos</option>
+                  <option value="aberta">Apenas abertas</option>
+                  <option value="fechada">Apenas fechadas</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="cotacoes-filtro-tipo">Tipo</label>
+                <select id="cotacoes-filtro-tipo">
+                  <option value="">Todas</option>
+                  <option value="manual">Manual</option>
+                  <option value="requisicao">Requisição</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="cotacoes-filtro-busca">Busca</label>
+                <input type="text" id="cotacoes-filtro-busca" placeholder="Nome ou nº da cotação...">
+              </div>
+              <div class="form-group">
+                <label for="cotacoes-filtro-dias">Dias</label>
+                <select id="cotacoes-filtro-dias">
+                  <option value="">Todos</option>
+                  <option value="7">Últimos 7</option>
+                  <option value="15">Últimos 15</option>
+                  <option value="30">Últimos 30</option>
+                </select>
+              </div>
+            </div>
+
             <div class="table-responsive">
             <table>
               <thead>
                 <tr>
-                  <th>Título</th>
+                  <th>Nº</th>
+                  <th>Cotação</th>
+                  <th>Respostas</th>
+                  <th>Produtos / Comprados</th>
+                  <th>Empresas</th>
                   <th>Status</th>
-                  <th>Insumos</th>
-                  <th>Fornecedores</th>
-                  <th>Criada em</th>
+                  <th>Data de Inclusão</th>
+                  <th>Economia</th>
+                  <th>Valor Pedido</th>
                   <th id="cotacoes-th-acoes" style="display:none;">Ações</th>
                 </tr>
               </thead>

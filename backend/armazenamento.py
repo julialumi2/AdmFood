@@ -1697,22 +1697,85 @@ def criar_cotacao(titulo, requisicao_titulo=None, requisicao_prazo=None):
 
 
 def listar_cotacoes():
-    """Cada cotação com contagem de insumos e fornecedores distintos já
-    com preço lançado — dá pra ter uma cotação "vazia" (criada mas sem
-    nenhum preço ainda), por isso os LEFT JOIN."""
+    """Cada cotação com as métricas mostradas na lista (estilo VMarket,
+    print da Julia 2026-09-04): insumos/fornecedores distintos, quantos
+    insumos já têm vencedor marcado ("Comprados"), % de convites
+    respondidos, e Valor Pedido/Economia — soma do preço vencedor × a
+    quantidade de cada insumo, e quanto isso economizou frente ao maior
+    preço lançado pra esse insumo. Calculado em Python (não em SQL) porque
+    "maior preço por insumo" e "quantidade por insumo" vêm de tabelas
+    diferentes e a junção em SQL puro exigiria subquery correlacionada por
+    linha — mais simples e fácil de testar assim, e o volume de dados é
+    pequeno (poucas centenas de linhas no máximo)."""
     with conexao() as conn:
-        linhas = conn.execute(
-            """
-            SELECT c.id, c.titulo, c.status, c.criado_em, c.requisicao_titulo,
-                   COUNT(DISTINCT p.insumo_id) AS total_insumos,
-                   COUNT(DISTINCT p.fornecedor_id) AS total_fornecedores
-            FROM cotacao c
-            LEFT JOIN cotacao_preco p ON p.cotacao_id = c.id
-            GROUP BY c.id
-            ORDER BY c.criado_em DESC
-            """
+        cotacoes = conn.execute(
+            "SELECT id, titulo, status, criado_em, requisicao_titulo FROM cotacao ORDER BY criado_em DESC"
         ).fetchall()
-        return [dict(linha) for linha in linhas]
+        precos = conn.execute(
+            "SELECT cotacao_id, insumo_id, fornecedor_id, preco, selecionado FROM cotacao_preco"
+        ).fetchall()
+        quantidades = conn.execute(
+            "SELECT cotacao_id, insumo_id, quantidade_total FROM cotacao_item"
+        ).fetchall()
+        convites = conn.execute(
+            "SELECT cotacao_id, status FROM cotacao_convite"
+        ).fetchall()
+
+    quantidade_por_chave = {(q["cotacao_id"], q["insumo_id"]): q["quantidade_total"] for q in quantidades}
+
+    precos_por_cotacao = {}
+    for p in precos:
+        precos_por_cotacao.setdefault(p["cotacao_id"], []).append(p)
+
+    convites_por_cotacao = {}
+    for c in convites:
+        totais = convites_por_cotacao.setdefault(c["cotacao_id"], {"total": 0, "respondidos": 0})
+        totais["total"] += 1
+        if c["status"] == "respondida":
+            totais["respondidos"] += 1
+
+    resultado = []
+    for cotacao in cotacoes:
+        linhas_preco = precos_por_cotacao.get(cotacao["id"], [])
+        por_insumo = {}
+        for p in linhas_preco:
+            por_insumo.setdefault(p["insumo_id"], []).append(p)
+
+        total_insumos = len(por_insumo)
+        total_fornecedores = len({p["fornecedor_id"] for p in linhas_preco})
+        insumos_comprados = 0
+        valor_pedido = 0.0
+        economia = 0.0
+        for insumo_id, lista_precos in por_insumo.items():
+            vencedor = next((p for p in lista_precos if p["selecionado"]), None)
+            if not vencedor:
+                continue
+            insumos_comprados += 1
+            quantidade = quantidade_por_chave.get((cotacao["id"], insumo_id)) or 0
+            valor_pedido += vencedor["preco"] * quantidade
+            maior_preco = max(p["preco"] for p in lista_precos)
+            economia += (maior_preco - vencedor["preco"]) * quantidade
+
+        convite_info = convites_por_cotacao.get(cotacao["id"])
+        percentual_respostas = (
+            round(100 * convite_info["respondidos"] / convite_info["total"])
+            if convite_info and convite_info["total"] else None
+        )
+
+        resultado.append({
+            "id": cotacao["id"],
+            "titulo": cotacao["titulo"],
+            "status": cotacao["status"],
+            "criado_em": cotacao["criado_em"],
+            "requisicao_titulo": cotacao["requisicao_titulo"],
+            "total_insumos": total_insumos,
+            "total_fornecedores": total_fornecedores,
+            "insumos_comprados": insumos_comprados,
+            "percentual_respostas": percentual_respostas,
+            "valor_pedido": round(valor_pedido, 2),
+            "economia": round(economia, 2),
+        })
+    return resultado
 
 
 def buscar_cotacao(cotacao_id):
