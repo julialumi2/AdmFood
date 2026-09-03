@@ -1535,9 +1535,32 @@ pendência:
   em lugar nenhum (nem o "não vendo" do formulário público do
   fornecedor, que é só descartado, nunca gravado) — precisaria de
   schema novo, decidido não fazer às pressas.
-- Paridade visual 1:1 com a VMarket (coluna "Última Compra", filtro de
-  "Seção", checkboxes "Respondido/Não Respondido") — cosmético, não
-  bloqueia comprar de verdade.
+
+**Paridade visual com a VMarket na grid** (concluída em 2026-09-04, print
+trazido pela Julia). Cabeçalho de cada fornecedor ganhou avatar com cor
+própria (`_corAvatarFornecedor`, paleta fixa de 8 cores por `fornecedorId
+% 8` — determinística, não muda a cada render) e um ícone de WhatsApp
+(`_linkWhatsAppContato`, `wa.me/<telefone>` sem mensagem pronta — é
+contato direto pra tirar dúvida sobre o preço já lançado, diferente do
+link de convite) — só aparece se o fornecedor tiver `contato_telefone`
+cadastrado. Nova coluna **"Última Compra"**: preço, data e fornecedor do
+pedido **recebido** mais recente desse insumo
+(`buscar_ultima_compra_por_insumo`, armazenamento.py — lê
+`pedido_compra_item`/`pedido_compra` com `status='recebido'`, valor já
+corrigido no recebimento se tiver divergido do pedido original, não o
+valor pedido). Novo filtro **"Seção"** (categoria, só aparece no catálogo
+completo — numa cotação de Requisição a lista já é pequena, não
+compensa) e **"Respondido"/"Não respondido"** (insumo com pelo menos um
+preço lançado × sem nenhum) — ambos client-side, sem rota nova, filtram
+`linhasFiltradas` junto da busca por nome já existente.
+
+Removido nessa mesma leva, a pedido da Julia: botão **"Destacar melhores
+preços"** — ela notou que fazia a mesma coisa que "Selecionar os
+melhores preços" (uma só destacava visualmente sem gravar nada, a outra
+marca o vencedor de verdade) e preferiu ficar só com a que tem efeito
+real. O destaque do vencedor continua existindo (fundo verde + ícone de
+check já ligados a `preco.selecionado`, não precisavam do toggle
+removido pra nada).
 
 **Convite de fornecedor direto pro WhatsApp** (concluído em 2026-09-03,
 pedido da Julia: "clico um botão e já envia os links pros fornecedores").

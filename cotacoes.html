@@ -306,14 +306,17 @@
                 <p class="table-subtitle">Cada coluna é um fornecedor que já lançou preço — clique num preço pra marcar como vencedor</p>
               </div>
               <div class="action-controls">
+                <span class="filtro-respondido-wrapper" id="cotacao-filtro-respondido-wrapper" style="display:none;">
+                  <label><input type="checkbox" id="cotacao-filtro-respondido" checked> Respondido</label>
+                  <label><input type="checkbox" id="cotacao-filtro-nao-respondido" checked> Não respondido</label>
+                </span>
+                <select id="cotacao-comparacao-categoria" class="input-filtro-categoria" style="display:none;">
+                  <option value="">Todas as seções</option>
+                </select>
                 <div class="search-box" id="cotacao-comparacao-busca-wrapper" style="max-width: 240px; display:none;">
                   <i data-lucide="search"></i>
                   <input type="text" id="cotacao-comparacao-busca" placeholder="Buscar insumo ou categoria...">
                 </div>
-                <button type="button" class="btn-secondary-sm" id="btn-cotacao-destacar-melhores" style="display:none;">
-                  <i data-lucide="star"></i>
-                  Destacar melhores preços
-                </button>
                 <button type="button" class="btn-primary-sm" id="btn-cotacao-selecionar-melhores" style="display:none;">
                   <i data-lucide="check-check"></i>
                   Selecionar os melhores preços

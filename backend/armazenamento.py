@@ -1758,7 +1758,7 @@ def listar_precos_cotacao(cotacao_id):
             """
             SELECT p.id, p.insumo_id, p.fornecedor_id, p.preco, p.selecionado,
                    i.nome AS insumo_nome, i.categoria AS insumo_categoria, i.unidade_medida,
-                   f.nome AS fornecedor_nome
+                   f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone
             FROM cotacao_preco p
             JOIN insumo i ON i.id = p.insumo_id
             JOIN fornecedor f ON f.id = p.fornecedor_id
@@ -1768,6 +1768,40 @@ def listar_precos_cotacao(cotacao_id):
             (cotacao_id,),
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def buscar_ultima_compra_por_insumo():
+    """Preço, data e fornecedor do pedido de compra **recebido** mais
+    recente de cada insumo (ver Recebimentos, seção 6.9) — "Última Compra"
+    na grid do Comparativo de Preços (pedido da Julia, print da VMarket,
+    2026-09-04). Usa o preço/quantidade já corrigidos na hora do
+    recebimento (`pedido_compra_item`), não o valor pedido originalmente."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pci.insumo_id, pci.preco_unitario, pc.recebido_em, pc.fornecedor_id, f.nome AS fornecedor_nome
+            FROM pedido_compra_item pci
+            JOIN pedido_compra pc ON pc.id = pci.pedido_id
+            JOIN fornecedor f ON f.id = pc.fornecedor_id
+            WHERE pc.status = 'recebido'
+            AND pc.recebido_em = (
+                SELECT MAX(pc2.recebido_em)
+                FROM pedido_compra_item pci2
+                JOIN pedido_compra pc2 ON pc2.id = pci2.pedido_id
+                WHERE pci2.insumo_id = pci.insumo_id AND pc2.status = 'recebido'
+            )
+            GROUP BY pci.insumo_id
+            """
+        ).fetchall()
+        return {
+            linha["insumo_id"]: {
+                "preco": linha["preco_unitario"],
+                "dataIso": linha["recebido_em"],
+                "fornecedorId": linha["fornecedor_id"],
+                "fornecedorNome": linha["fornecedor_nome"],
+            }
+            for linha in linhas
+        }
 
 
 def excluir_preco_cotacao(preco_id):

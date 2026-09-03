@@ -2176,8 +2176,6 @@ async function abrirOuCriarComparativoAtual() {
 
 async function abrirCotacaoDetalhe(cotacaoId) {
   cotacaoAtualId = cotacaoId;
-  destacarMelhoresPrecosAtivo = false;
-  document.getElementById('btn-cotacao-destacar-melhores')?.classList.remove('ativo');
   const buscaComparacao = document.getElementById('cotacao-comparacao-busca');
   if (buscaComparacao) buscaComparacao.value = '';
   document.getElementById('cotacoes-lista-view').style.display = 'none';
@@ -2404,7 +2402,6 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
 });
 
 let cotacaoComparacaoDados = { grupos: [], isAdmin: false, itens: [], catalogoCompleto: false };
-let destacarMelhoresPrecosAtivo = false;
 
 function renderCotacaoComparacao(grupos, isAdmin, itens, catalogoCompleto) {
   cotacaoComparacaoDados = { grupos, isAdmin, itens: itens || [], catalogoCompleto: !!catalogoCompleto };
@@ -2415,11 +2412,31 @@ function _iniciaisFornecedor(nome) {
   return nome.trim().split(/\s+/).slice(0, 2).map(parte => parte[0]).join('').toUpperCase();
 }
 
+// Paleta fixa pra dar uma cor de avatar diferente por fornecedor (estilo
+// VMarket, print da Julia 2026-09-04) — determinística pelo id, não muda
+// de cor a cada render.
+const PALETA_AVATAR_FORNECEDOR = ['#e74c3c', '#27ae60', '#8e44ad', '#2980b9', '#f39c12', '#16a085', '#c0392b', '#7f8c8d'];
+function _corAvatarFornecedor(id) {
+  return PALETA_AVATAR_FORNECEDOR[id % PALETA_AVATAR_FORNECEDOR.length];
+}
+
+// Ícone de WhatsApp no cabeçalho do fornecedor na grid — contato direto
+// (sem mensagem pronta, ao contrário do convite), pra ela poder perguntar
+// algo sobre o preço já lançado. Mesmo critério de normalizar telefone
+// de `_linkWhatsAppConvite`.
+function _linkWhatsAppContato(telefone) {
+  const digitos = (telefone || '').replace(/\D/g, '');
+  if (!digitos) return null;
+  const numeroCompleto = digitos.startsWith('55') ? digitos : `55${digitos}`;
+  return `https://wa.me/${numeroCompleto}`;
+}
+
 function _renderTabelaComparacaoCotacao() {
   const { grupos, isAdmin, itens, catalogoCompleto } = cotacaoComparacaoDados;
   const container = document.getElementById('cotacao-comparacao-lista');
   const buscaWrapper = document.getElementById('cotacao-comparacao-busca-wrapper');
-  const btnDestacar = document.getElementById('btn-cotacao-destacar-melhores');
+  const categoriaSelectEl = document.getElementById('cotacao-comparacao-categoria');
+  const respondidoWrapper = document.getElementById('cotacao-filtro-respondido-wrapper');
   const btnSelecionarMelhores = document.getElementById('btn-cotacao-selecionar-melhores');
   if (!container) return;
 
@@ -2427,8 +2444,9 @@ function _renderTabelaComparacaoCotacao() {
   // ainda: mostra só a lista de insumo+quantidade do déficit (comportamento
   // de 2026-09-02, sem mudança).
   if (!catalogoCompleto && !grupos.length) {
-    if (btnDestacar) btnDestacar.style.display = 'none';
     if (btnSelecionarMelhores) btnSelecionarMelhores.style.display = 'none';
+    if (categoriaSelectEl) categoriaSelectEl.style.display = 'none';
+    if (respondidoWrapper) respondidoWrapper.style.display = 'none';
     if (!itens.length) {
       if (buscaWrapper) buscaWrapper.style.display = 'none';
       container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
@@ -2474,10 +2492,14 @@ function _renderTabelaComparacaoCotacao() {
   // menos 1 preço, as linhas continuam vindo só de `grupos` (comportamento
   // de sempre, sem mudança).
   if (buscaWrapper) buscaWrapper.style.display = '';
-  if (btnDestacar) btnDestacar.style.display = grupos.length ? '' : 'none';
+  if (categoriaSelectEl) categoriaSelectEl.style.display = catalogoCompleto ? '' : 'none';
+  if (respondidoWrapper) respondidoWrapper.style.display = '';
   if (btnSelecionarMelhores) btnSelecionarMelhores.style.display = (isAdmin && grupos.length) ? '' : 'none';
 
   const termo = (document.getElementById('cotacao-comparacao-busca')?.value || '').trim().toLowerCase();
+  const categoriaFiltro = document.getElementById('cotacao-comparacao-categoria')?.value || '';
+  const mostrarRespondido = document.getElementById('cotacao-filtro-respondido')?.checked ?? true;
+  const mostrarNaoRespondido = document.getElementById('cotacao-filtro-nao-respondido')?.checked ?? true;
   const gruposPorInsumo = new Map(grupos.map(g => [g.insumoId, g]));
   const linhasBase = catalogoCompleto
     ? itens.map(item => ({
@@ -2487,57 +2509,79 @@ function _renderTabelaComparacaoCotacao() {
         precos: gruposPorInsumo.get(item.insumoId)?.precos || [],
       }))
     : grupos;
-  const linhasFiltradas = linhasBase.filter(l =>
-    !termo || l.insumoNome.toLowerCase().includes(termo) || l.categoria.toLowerCase().includes(termo)
-  );
+
+  // Filtro "Seção" (categoria) — só faz sentido no catálogo completo, onde
+  // a lista é grande o bastante (todo insumo) pra valer a pena filtrar por
+  // categoria; numa cotação de Requisição (déficit, poucos itens) fica
+  // escondido (ver visibilidade abaixo).
+  const categoriaSelect = document.getElementById('cotacao-comparacao-categoria');
+  if (categoriaSelect && catalogoCompleto) {
+    const categoriasUnicas = [...new Set(linhasBase.map(l => l.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const valorAtual = categoriaSelect.value;
+    const opcoesEsperadas = ['', ...categoriasUnicas];
+    const opcoesAtuais = [...categoriaSelect.options].map(o => o.value);
+    if (opcoesAtuais.join('|') !== opcoesEsperadas.join('|')) {
+      categoriaSelect.innerHTML = '<option value="">Todas as seções</option>' +
+        categoriasUnicas.map(c => `<option value="${escaparHtml(c)}">${escaparHtml(c)}</option>`).join('');
+      categoriaSelect.value = opcoesEsperadas.includes(valorAtual) ? valorAtual : '';
+    }
+  }
+
+  const linhasFiltradas = linhasBase.filter(l => {
+    if (termo && !l.insumoNome.toLowerCase().includes(termo) && !l.categoria.toLowerCase().includes(termo)) return false;
+    if (categoriaFiltro && l.categoria !== categoriaFiltro) return false;
+    const respondido = l.precos.length > 0;
+    if (respondido && !mostrarRespondido) return false;
+    if (!respondido && !mostrarNaoRespondido) return false;
+    return true;
+  });
 
   if (!linhasFiltradas.length) {
-    container.innerHTML = `<p class="panel-subtitle">Nenhum insumo encontrado pra essa busca.</p>`;
+    container.innerHTML = `<p class="panel-subtitle">Nenhum insumo encontrado pra esse filtro.</p>`;
     return;
   }
 
   const fornecedoresMap = new Map();
   grupos.forEach(g => g.precos.forEach(p => {
-    if (!fornecedoresMap.has(p.fornecedorId)) fornecedoresMap.set(p.fornecedorId, p.fornecedorNome);
+    if (!fornecedoresMap.has(p.fornecedorId)) fornecedoresMap.set(p.fornecedorId, { nome: p.fornecedorNome, telefone: p.fornecedorTelefone });
   }));
   const fornecedores = [...fornecedoresMap.entries()]
-    .map(([id, nome]) => ({ id, nome }))
+    .map(([id, dados]) => ({ id, nome: dados.nome, telefone: dados.telefone }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
   const itensPorInsumo = {};
   itens.forEach(item => { itensPorInsumo[item.insumoId] = item; });
 
-  const theadFornecedores = fornecedores.map(f => `
+  const theadFornecedores = fornecedores.map(f => {
+    const linkWhats = _linkWhatsAppContato(f.telefone);
+    return `
     <th class="th-comparacao-fornecedor">
       <div class="comparacao-fornecedor-cabecalho">
-        <span class="avatar avatar-sm">${escaparHtml(_iniciaisFornecedor(f.nome))}</span>
+        <span class="avatar avatar-sm" style="background-color: ${_corAvatarFornecedor(f.id)};">${escaparHtml(_iniciaisFornecedor(f.nome))}</span>
         <span>${escaparHtml(f.nome)}</span>
+        ${linkWhats ? `<a href="${escaparHtml(linkWhats)}" target="_blank" rel="noopener" class="icone-whatsapp-fornecedor" title="Chamar ${escaparHtml(f.nome)} no WhatsApp"><i data-lucide="message-circle"></i></a>` : ''}
       </div>
     </th>
-  `).join('');
+  `;
+  }).join('');
 
   const linhas = linhasFiltradas.map(linha => {
     const item = itensPorInsumo[linha.insumoId];
     const precoPorFornecedor = new Map(linha.precos.map(p => [p.fornecedorId, p]));
-    const precosExistentes = linha.precos.map(p => p.preco);
-    const menorPreco = precosExistentes.length ? Math.min(...precosExistentes) : null;
 
     const celulas = fornecedores.map(f => {
       const preco = precoPorFornecedor.get(f.id);
       if (!preco) {
         return `<td class="td-comparacao-preco td-sem-preco">—</td>`;
       }
-      const ehMelhor = destacarMelhoresPrecosAtivo && preco.preco === menorPreco;
       const classes = ['td-comparacao-preco'];
       if (preco.selecionado) classes.push('selecionado');
-      if (ehMelhor) classes.push('melhor-preco');
       return `
         <td class="${classes.join(' ')}" ${isAdmin ? `data-acao="selecionar-preco" data-id="${preco.id}" title="Marcar como vencedor"` : ''}>
           <div class="comparacao-preco-conteudo">
             ${preco.selecionado ? '<i data-lucide="check-circle" class="icone-preco-selecionado"></i>' : ''}
             <span class="comparacao-preco-valor">R$ ${preco.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
-          ${ehMelhor ? '<span class="badge-pill pos badge-melhor-preco">★ Melhor preço</span>' : ''}
           ${isAdmin ? `<button type="button" class="btn-acao-icone btn-excluir btn-remover-preco-comparacao" data-acao="excluir-preco" data-id="${preco.id}" title="Remover preço"><i data-lucide="trash-2"></i></button>` : ''}
         </td>
       `;
@@ -2547,6 +2591,14 @@ function _renderTabelaComparacaoCotacao() {
       ? `<input type="number" step="0.01" min="0" class="input-quantidade-cotacao" data-insumo-id="${linha.insumoId}" value="${item && item.quantidadeTotal !== null ? item.quantidadeTotal : ''}" placeholder="0" ${isAdmin ? '' : 'disabled'}>`
       : (item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—');
 
+    const ultimaCompra = item?.ultimaCompra;
+    const celulaUltimaCompra = ultimaCompra
+      ? `<div class="ultima-compra-conteudo">
+           <span>R$ ${ultimaCompra.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+           <span class="text-muted" style="font-size:0.8em;">${new Date(ultimaCompra.dataIso).toLocaleDateString('pt-BR')} · ${escaparHtml(ultimaCompra.fornecedorNome)}</span>
+         </div>`
+      : '<span class="text-muted">—</span>';
+
     return `
       <tr>
         <td class="td-insumo-fixo">
@@ -2554,6 +2606,7 @@ function _renderTabelaComparacaoCotacao() {
           <span class="text-muted td-insumo-categoria">${escaparHtml(linha.categoria)}</span>
         </td>
         <td class="text-muted td-quantidade-fixa">${quantidadeCelula}</td>
+        <td class="text-muted td-ultima-compra">${celulaUltimaCompra}</td>
         ${celulas}
       </tr>
     `;
@@ -2565,6 +2618,7 @@ function _renderTabelaComparacaoCotacao() {
         <tr>
           <th class="th-insumo-fixo">Insumo</th>
           <th class="th-quantidade-fixa">Quantidade</th>
+          <th class="th-ultima-compra">Última Compra</th>
           ${theadFornecedores}
         </tr>
       </thead>
@@ -2604,12 +2658,9 @@ function _renderTabelaComparacaoCotacao() {
 }
 
 document.getElementById('cotacao-comparacao-busca')?.addEventListener('input', _renderTabelaComparacaoCotacao);
-
-document.getElementById('btn-cotacao-destacar-melhores')?.addEventListener('click', (evento) => {
-  destacarMelhoresPrecosAtivo = !destacarMelhoresPrecosAtivo;
-  evento.currentTarget.classList.toggle('ativo', destacarMelhoresPrecosAtivo);
-  _renderTabelaComparacaoCotacao();
-});
+document.getElementById('cotacao-comparacao-categoria')?.addEventListener('change', _renderTabelaComparacaoCotacao);
+document.getElementById('cotacao-filtro-respondido')?.addEventListener('change', _renderTabelaComparacaoCotacao);
+document.getElementById('cotacao-filtro-nao-respondido')?.addEventListener('change', _renderTabelaComparacaoCotacao);
 
 document.getElementById('btn-cotacao-selecionar-melhores')?.addEventListener('click', async () => {
   if (!confirm('Marcar o menor preço de cada insumo como vencedor? Isso substitui qualquer vencedor já marcado na mão.')) return;

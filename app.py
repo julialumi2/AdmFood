@@ -76,6 +76,7 @@ from backend.armazenamento import (
     selecionar_preco_cotacao,
     selecionar_melhores_precos_cotacao,
     listar_itens_cotacao_catalogo_completo,
+    buscar_ultima_compra_por_insumo,
     salvar_quantidade_item_cotacao,
     criar_contagem,
     listar_contagens,
@@ -1526,6 +1527,7 @@ def _agrupar_precos_por_insumo(precos):
             "id": preco["id"],
             "fornecedorId": preco["fornecedor_id"],
             "fornecedorNome": preco["fornecedor_nome"],
+            "fornecedorTelefone": preco["fornecedor_telefone"],
             "preco": preco["preco"],
             "selecionado": bool(preco["selecionado"]),
         })
@@ -1572,6 +1574,14 @@ def api_detalhe_cotacao(cotacao_id):
     # déficit calculado, sem mudança nenhuma.
     catalogo_completo = cotacao["requisicao_titulo"] is None
     itens = listar_itens_cotacao_catalogo_completo(cotacao_id) if catalogo_completo else listar_itens_cotacao(cotacao_id)
+
+    # "Última Compra" (print da VMarket, pedido da Julia 2026-09-04) — preço
+    # e data do pedido recebido mais recente de cada insumo, calculado uma
+    # vez pra cotação inteira em vez de insumo por insumo.
+    mapa_ultima_compra = buscar_ultima_compra_por_insumo()
+    for item in itens:
+        item["ultimaCompra"] = mapa_ultima_compra.get(item["insumoId"])
+
     return jsonify({
         "cotacao": {
             "id": cotacao["id"],
