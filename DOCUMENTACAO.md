@@ -1511,9 +1511,6 @@ existe pelo menos um preço lançado (senão não tem o que selecionar).
 Ficou de fora dessa entrega, por decisão consciente de prazo (sistema de
 Compras 100% até 2026-09-04, combinado com a Julia) — registrar como
 pendência:
-- Ícone/link de WhatsApp por fornecedor na coluna (dado já existe,
-  `fornecedor.contato_telefone`, só falta plumbing + confirmar com ela
-  se quer ligar em `wa.me`).
 - "Não possui" persistido por fornecedor×insumo (like a VMarket) — hoje
   não existe **nenhum** registro de "fornecedor não vende esse insumo"
   em lugar nenhum (nem o "não vendo" do formulário público do
@@ -1522,6 +1519,33 @@ pendência:
 - Paridade visual 1:1 com a VMarket (coluna "Última Compra", filtro de
   "Seção", checkboxes "Respondido/Não Respondido") — cosmético, não
   bloqueia comprar de verdade.
+
+**Convite de fornecedor direto pro WhatsApp** (concluído em 2026-09-03,
+pedido da Julia: "clico um botão e já envia os links pros fornecedores").
+Sem a API oficial do WhatsApp Business (pendência 2 da seção 9, travada
+esperando credencial), não existe jeito de mandar mensagem **sem
+nenhum toque humano** — é assim que o próprio WhatsApp evita automação
+de spam. O mais próximo disso hoje: `wa.me/<telefone>?text=<mensagem>`
+já abre o WhatsApp (Web ou app) com a mensagem e o link do convite
+prontos, faltando só apertar "Enviar". `listar_convites_cotacao`
+(armazenamento.py) passou a trazer `fornecedor.contato_telefone` junto
+(já existia no cadastro de fornecedor, só não tinha plumbing até aqui);
+`_linkWhatsAppConvite` (script.js) normaliza o telefone (tira tudo que
+não é dígito, garante o "55" na frente) e monta o link.
+
+Botão **"Convidar fornecedores por WhatsApp"** (era só "Convidar
+fornecedores") continua gerando os convites normalmente, mas agora
+também abre uma aba do WhatsApp pra **cada fornecedor ainda aguardando
+resposta** — não só os recém-criados agora, os que já estavam pendentes
+de um convite anterior também recebem a aba (reenvio de lembrete de
+graça). Fornecedor sem telefone cadastrado fica de fora do disparo em
+lote (avisado por alerta com o nome) e continua com "Copiar link" na
+tabela, único caso em que essa opção ainda aparece — pra quem tem
+telefone, "Copiar link" virou "Enviar por WhatsApp" direto na linha.
+Testado com harness estático (3 fornecedores: com telefone, sem
+telefone, já respondido) — confirmado que o disparo em lote abre só a
+aba de quem tem telefone e está pendente, e que o link de cada aba bate
+exatamente com token+telefone certos.
 
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 

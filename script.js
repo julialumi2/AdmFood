@@ -2267,8 +2267,23 @@ async function carregarConvitesCotacao() {
 }
 
 const STATUS_LABEL_CONVITE = { aberta: 'Aguardando resposta', respondida: 'Respondido' };
+let convitesCotacaoAtuais = [];
+
+// Sem API oficial do WhatsApp Business ainda (pendência separada, travada
+// esperando credencial) — wa.me é o jeito de já deixar a mensagem e o link
+// prontos, sem copiar/colar; quem manda de verdade continua sendo a
+// pessoa, apertando "Enviar" dentro do WhatsApp (é assim que o próprio
+// WhatsApp evita automação de spam, não dá pra pular esse clique).
+function _linkWhatsAppConvite(telefone, fornecedorNome, link) {
+  const digitos = (telefone || '').replace(/\D/g, '');
+  if (!digitos) return null;
+  const numeroCompleto = digitos.startsWith('55') ? digitos : `55${digitos}`;
+  const mensagem = `Olá! Segue o link pra você preencher os preços da nossa cotação:\n${link}`;
+  return `https://wa.me/${numeroCompleto}?text=${encodeURIComponent(mensagem)}`;
+}
 
 function renderConvitesCotacao(convites) {
+  convitesCotacaoAtuais = convites;
   const card = document.getElementById('cotacao-convites-card');
   const tbody = document.getElementById('cotacao-convites-tabela-body');
   if (!card || !tbody) return;
@@ -2281,16 +2296,24 @@ function renderConvitesCotacao(convites) {
     const statusTexto = expirado ? 'Prazo vencido' : STATUS_LABEL_CONVITE[c.status];
     const statusClasse = c.status === 'respondida' ? 'pos' : (expirado ? 'neg' : 'neu-orange');
     const link = `${location.origin}/preencher_cotacao.html?token=${c.token}`;
+    const linkWhatsApp = _linkWhatsAppConvite(c.fornecedorTelefone, c.fornecedorNome, link);
     return `
       <tr>
         <td class="font-bold">${escaparHtml(c.fornecedorNome)}</td>
         <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
         <td class="acoes-linha">
-          <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}">
-            <i data-lucide="copy"></i>
-            Copiar link
-          </button>
+          ${linkWhatsApp ? `
+            <a class="btn-secondary-sm" href="${escaparHtml(linkWhatsApp)}" target="_blank" rel="noopener">
+              <i data-lucide="send"></i>
+              Enviar por WhatsApp
+            </a>
+          ` : `
+            <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}" title="Fornecedor sem telefone cadastrado">
+              <i data-lucide="copy"></i>
+              Copiar link
+            </button>
+          `}
           ${c.status === 'respondida' ? `
             <button type="button" class="btn-secondary-sm" data-acao="reabrir-convite" data-id="${c.id}" title="Deixar o fornecedor corrigir o preço enviado">
               <i data-lucide="rotate-ccw"></i>
@@ -2357,8 +2380,25 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao enviar convites');
     document.getElementById('modal-convidar-fornecedores').style.display = 'none';
-    alert(`${dados.convites.length} convite(s) enviado(s) — copie o link de cada fornecedor na tabela abaixo.`);
     await carregarConvitesCotacao();
+
+    // Já abre o WhatsApp pronto (mensagem + link) pra todo fornecedor ainda
+    // aguardando resposta — inclusive quem já tinha convite de antes, não só
+    // o recém-criado agora (pedido da Julia, 2026-09-03: "clico um botão e
+    // já envia os links"). Cada aba ainda precisa do toque final de
+    // "Enviar" dentro do WhatsApp — não tem como pular isso sem a API
+    // oficial (pendência separada, travada esperando credencial).
+    const pendentes = convitesCotacaoAtuais.filter((c) => c.status === 'aberta');
+    const semTelefone = [];
+    for (const c of pendentes) {
+      const link = `${location.origin}/preencher_cotacao.html?token=${c.token}`;
+      const linkWhatsApp = _linkWhatsAppConvite(c.fornecedorTelefone, c.fornecedorNome, link);
+      if (linkWhatsApp) window.open(linkWhatsApp, '_blank', 'noopener');
+      else semTelefone.push(c.fornecedorNome);
+    }
+    if (semTelefone.length) {
+      alert(`${pendentes.length - semTelefone.length} aba(s) do WhatsApp aberta(s). Sem telefone cadastrado (copie o link na tabela): ${semTelefone.join(', ')}.`);
+    }
   } catch (erro) {
     console.error('Falha ao convidar fornecedores:', erro);
     alert(erro.message || 'Não foi possível enviar os convites.');

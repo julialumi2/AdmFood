@@ -1872,7 +1872,7 @@ def listar_convites_cotacao(cotacao_id):
         linhas = conn.execute(
             """
             SELECT cc.id, cc.fornecedor_id, cc.token, cc.prazo_validade, cc.status, cc.criado_em, cc.respondida_em,
-                   f.nome AS fornecedor_nome
+                   f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone
             FROM cotacao_convite cc
             JOIN fornecedor f ON f.id = cc.fornecedor_id
             WHERE cc.cotacao_id = ?

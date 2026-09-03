@@ -1685,6 +1685,7 @@ def _formatar_convite(convite):
         "id": convite["id"],
         "fornecedorId": convite["fornecedor_id"],
         "fornecedorNome": convite["fornecedor_nome"],
+        "fornecedorTelefone": convite["fornecedor_telefone"],
         "prazoValidade": convite["prazo_validade"],
         "status": convite["status"],
         "criadoEm": convite["criado_em"],
