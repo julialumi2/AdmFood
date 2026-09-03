@@ -2520,14 +2520,23 @@ function _renderTabelaComparacaoCotacao() {
   const mostrarRespondido = document.getElementById('cotacao-filtro-respondido')?.checked ?? true;
   const mostrarNaoRespondido = document.getElementById('cotacao-filtro-nao-respondido')?.checked ?? true;
   const gruposPorInsumo = new Map(grupos.map(g => [g.insumoId, g]));
-  const linhasBase = catalogoCompleto
-    ? itens.map(item => ({
-        insumoId: item.insumoId,
-        insumoNome: item.nome,
-        categoria: item.categoria,
-        precos: gruposPorInsumo.get(item.insumoId)?.precos || [],
-      }))
-    : grupos;
+  // Linha por insumo de `itens` (catálogo completo ou déficit calculado da
+  // Requisição) + preço de `grupos` quando já tiver — sem isso, assim que o
+  // PRIMEIRO preço de uma cotação de Requisição era lançado, a lista virava
+  // só `grupos` (que só tem insumo já precificado) e todo o resto do
+  // déficit sumia da tela até ganhar preço também. Achado testando o fluxo
+  // ao vivo nas 4 lojas, 2026-09-04. `grupos` pode ainda ter um insumo fora
+  // do déficit calculado (preço lançado na mão pra algo que não é
+  // `itens`) — esses entram à parte, no fim, sem duplicar.
+  const idsComItem = new Set(itens.map(item => item.insumoId));
+  const linhasDeItens = itens.map(item => ({
+    insumoId: item.insumoId,
+    insumoNome: item.nome,
+    categoria: item.categoria,
+    precos: gruposPorInsumo.get(item.insumoId)?.precos || [],
+  }));
+  const linhasExtrasDeGrupos = grupos.filter(g => !idsComItem.has(g.insumoId));
+  const linhasBase = [...linhasDeItens, ...linhasExtrasDeGrupos];
 
   // Filtro "Seção" (categoria) — só faz sentido no catálogo completo, onde
   // a lista é grande o bastante (todo insumo) pra valer a pena filtrar por

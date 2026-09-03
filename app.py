@@ -1886,7 +1886,12 @@ def _montar_mensagens_whatsapp_pedidos(pedidos_criados):
     for token, ids in ids_por_token.items():
         pedidos = [buscar_pedido(pid) for pid in ids]
         fornecedor = buscar_fornecedor_por_id(pedidos[0]["fornecedor_id"])
-        link = f"{request.host_url.rstrip('/')}/confirmar_pedido.html?token={token}"
+        # `request.host_url` sozinho devolve http:// em produção — o Flask
+        # não sabe que o proxy do Dokploy termina https na frente dele.
+        # Achado testando ao vivo (2026-09-04): o link mandado pro
+        # fornecedor saía http://, inconsistente com o resto do site.
+        esquema = request.headers.get('X-Forwarded-Proto', request.scheme)
+        link = f"{esquema}://{request.host}/confirmar_pedido.html?token={token}"
         saudacao = fornecedor["contato_nome"] or fornecedor["nome"]
         prazo = fornecedor["prazo_pagamento"] or "Não Informado"
         entrega = fornecedor["dias_entrega"] or "Não Informado"

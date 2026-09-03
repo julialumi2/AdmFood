@@ -1711,6 +1711,50 @@ inválido → 404. Harness estático confirmou visualmente a tela
 `confirmar_pedido.html` (tabela por loja, total, botão, e a tela de "já
 confirmado" ao reabrir).
 
+**2 bugs achados testando o fluxo completo ao vivo, nas 4 lojas** (corrigidos
+em 2026-09-04, sessão de teste pedida pela Julia antes do prazo de
+Compras). Diferente do resto dessa entrega (testada com script isolado
+contra cópia do banco), esses só apareceram rodando o fluxo de verdade,
+via requisição real, contagem, cotação e "Gerar pedidos" em produção:
+
+- **Grid escondia todo o resto do déficit assim que o 1º preço era
+  lançado**: numa cotação vinda de Requisição, `_renderTabelaComparacaoCotacao`
+  (script.js) usava `grupos` (só insumo já precificado) como fonte das
+  linhas assim que `grupos.length > 0` — antes do primeiro preço, a tela
+  mostrava certo a lista de déficit (`itens`); depois do primeiro preço,
+  ela trocava pra `grupos` e todo insumo ainda sem preço sumia da tela até
+  também ganhar um. Corrigido unificando: linha por insumo de `itens`
+  (sempre) + preço de `grupos` quando já tiver, igual o catálogo completo
+  já fazia — insumo lançado na mão fora do déficit calculado ainda entra à
+  parte, sem duplicar.
+- **Link de confirmação saía `http://`**: `request.host_url` no Flask não
+  sabe que o proxy do Dokploy termina https na frente — o link mandado
+  pro fornecedor no WhatsApp saía inconsistente com o resto do site
+  (sempre https). Corrigido lendo `X-Forwarded-Proto` (com `request.scheme`
+  de fallback) em vez de confiar só no host_url.
+
+Testado em produção, nas 4 lojas reais (Requisição → Contagem → 4
+lojas aprovadas → Cotação com déficit real de ~65 insumos vindos de
+ajustes já existentes de Tradiça ZN/Simus + 1 ajuste manual novo de
+teste na Artesanos → 2 preços lançados, fornecedores "Julia Lumi Suzuki"
+e "otavio gerente artesanos" — escolhidos de propósito por serem
+cadastros internos, não fornecedor de verdade → "Gerar pedidos" criou 4
+pedidos reais → mensagem de WhatsApp capturada sem abrir aba nenhuma
+via interceptação de `window.open`, texto conferido → link de
+confirmação real aberto e clicado por mim mesma (sem mandar nada pra
+ninguém) → 2 pedidos avançaram pra "Confirmado pelo fornecedor" na tela
+de Pedidos). Tudo apagado depois pela exclusão da Requisição isolada.
+
+**Cuidado registrado pra próximos testes ao vivo**: preencher uma
+contagem de teste com "0" em tudo (único jeito de passar pela validação
+`required` do formulário) e aprovar **grava esse 0 como estoque real**
+em produção — não existe undo. Numa sessão de teste, isso zerou a
+quantidade atual de 533 insumo×loja nas 4 lojas (confirmado com a Julia
+que os números não estavam atualizados mesmo, sem impacto real dessa
+vez, mas o cuidado vale pra sempre: testar fluxo de Requisição/Contagem
+ao vivo em produção, com contagem real, é uma operação que mexe em
+estoque de verdade, não só em Compras).
+
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 
 Botão na tela de Insights monta um texto (um bloco por loja: Presencial/
