@@ -74,6 +74,9 @@ from backend.armazenamento import (
     listar_precos_cotacao,
     excluir_preco_cotacao,
     selecionar_preco_cotacao,
+    selecionar_melhores_precos_cotacao,
+    listar_itens_cotacao_catalogo_completo,
+    salvar_quantidade_item_cotacao,
     criar_contagem,
     listar_contagens,
     listar_requisicoes,
@@ -1558,6 +1561,12 @@ def api_detalhe_cotacao(cotacao_id):
         return jsonify({"erro": "Cotação não encontrada."}), 404
 
     grupos = _agrupar_precos_por_insumo(listar_precos_cotacao(cotacao_id))
+    # Cotação sem Requisição por trás (requisicao_titulo é NULL) mostra o
+    # catálogo inteiro de insumos como linha, estilo VMarket (pedido da
+    # Julia, 2026-09-03) — a que veio de Requisição continua só com o
+    # déficit calculado, sem mudança nenhuma.
+    catalogo_completo = cotacao["requisicao_titulo"] is None
+    itens = listar_itens_cotacao_catalogo_completo(cotacao_id) if catalogo_completo else listar_itens_cotacao(cotacao_id)
     return jsonify({
         "cotacao": {
             "id": cotacao["id"],
@@ -1566,7 +1575,8 @@ def api_detalhe_cotacao(cotacao_id):
             "criadoEm": cotacao["criado_em"],
         },
         "grupos": grupos,
-        "itens": listar_itens_cotacao(cotacao_id),
+        "itens": itens,
+        "catalogoCompleto": catalogo_completo,
     })
 
 
@@ -1639,6 +1649,34 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
         return erro_admin
 
     selecionar_preco_cotacao(preco_id)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/selecionar-melhores-precos', methods=['POST'])
+def api_selecionar_melhores_precos_cotacao(cotacao_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    total = selecionar_melhores_precos_cotacao(cotacao_id)
+    return jsonify({"ok": True, "total": total})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/itens/<int:insumo_id>', methods=['PUT'])
+def api_salvar_quantidade_item_cotacao(cotacao_id, insumo_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    try:
+        quantidade = float(dados.get('quantidade'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Quantidade inválida."}), 400
+    if quantidade < 0:
+        return jsonify({"erro": "Quantidade não pode ser negativa."}), 400
+
+    salvar_quantidade_item_cotacao(cotacao_id, insumo_id, quantidade)
     return jsonify({"ok": True})
 
 

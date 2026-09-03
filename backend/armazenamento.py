@@ -1792,6 +1792,26 @@ def selecionar_preco_cotacao(preco_id):
         conn.execute("UPDATE cotacao_preco SET selecionado = 1 WHERE id = ?", (preco_id,))
 
 
+def selecionar_melhores_precos_cotacao(cotacao_id):
+    """"Selecionar os melhores preços" em lote (pedido da Julia, estilo
+    VMarket) — pra cada insumo dessa cotação com pelo menos um preço
+    lançado, marca o de menor valor como vencedor. Reaproveita
+    `selecionar_preco_cotacao` insumo por insumo em vez de duplicar a
+    regra de "só um vencedor por insumo"; retorna quantos insumos foram
+    processados."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT insumo_id, id FROM cotacao_preco WHERE cotacao_id = ? ORDER BY insumo_id, preco ASC",
+            (cotacao_id,),
+        ).fetchall()
+    melhores = {}
+    for linha in linhas:
+        melhores.setdefault(linha["insumo_id"], linha["id"])
+    for preco_id in melhores.values():
+        selecionar_preco_cotacao(preco_id)
+    return len(melhores)
+
+
 def _insumos_sem_fornecedor_vinculado(cotacao_id):
     """Insumos dessa cotação que ainda não têm nenhum fornecedor vinculado
     — só esses entram no convite aberto pra todo mundo cotar."""
@@ -2659,6 +2679,52 @@ def listar_itens_cotacao(cotacao_id):
         }
         for t in totais
     ]
+
+
+def listar_itens_cotacao_catalogo_completo(cotacao_id):
+    """Mesmo formato de `listar_itens_cotacao`, mas pra cotação manual
+    (sem Requisição por trás) — pedido da Julia (2026-09-03, print da
+    VMarket): quer ver TODO insumo do catálogo já como linha, mesmo sem
+    quantidade nenhuma definida ainda, em vez de só ganhar linha quando
+    alguém digita a primeira quantidade ou lança o primeiro preço.
+    `quantidadeTotal` vem de `cotacao_item` quando já foi preenchida na
+    grid (`salvar_quantidade_item_cotacao`); senão fica `None`."""
+    with conexao() as conn:
+        insumos = conn.execute(
+            "SELECT id, nome, categoria, unidade_medida FROM insumo ORDER BY categoria, nome"
+        ).fetchall()
+        quantidades = conn.execute(
+            "SELECT insumo_id, quantidade_total FROM cotacao_item WHERE cotacao_id = ?",
+            (cotacao_id,),
+        ).fetchall()
+    mapa_quantidade = {q["insumo_id"]: q["quantidade_total"] for q in quantidades}
+    return [
+        {
+            "insumoId": i["id"],
+            "nome": i["nome"],
+            "categoria": i["categoria"],
+            "unidadeMedida": i["unidade_medida"],
+            "quantidadeTotal": mapa_quantidade.get(i["id"]),
+            "porLoja": [],
+        }
+        for i in insumos
+    ]
+
+
+def salvar_quantidade_item_cotacao(cotacao_id, insumo_id, quantidade):
+    """Grava/atualiza a quantidade a comprar de um insumo direto na grid
+    da cotação manual — mesmo `cotacao_item` de sempre (upsert pela PK
+    cotacao_id+insumo_id), só que preenchida na mão em vez de calculada
+    do déficit de uma Requisição."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO cotacao_item (cotacao_id, insumo_id, quantidade_total)
+            VALUES (?, ?, ?)
+            ON CONFLICT (cotacao_id, insumo_id) DO UPDATE SET quantidade_total = excluded.quantidade_total
+            """,
+            (cotacao_id, insumo_id, quantidade),
+        )
 
 
 def responder_contagem(token, valores):

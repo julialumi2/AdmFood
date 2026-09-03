@@ -2209,7 +2209,7 @@ async function recarregarCotacaoDetalhe() {
       convitesCard.style.display = 'none';
     }
 
-    renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || []);
+    renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || [], !!dados.catalogoCompleto);
   } catch (erro) {
     console.error('Falha ao carregar cotação:', erro);
     alert('Não foi possível carregar a cotação.');
@@ -2328,11 +2328,11 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
   }
 });
 
-let cotacaoComparacaoDados = { grupos: [], isAdmin: false, itens: [] };
+let cotacaoComparacaoDados = { grupos: [], isAdmin: false, itens: [], catalogoCompleto: false };
 let destacarMelhoresPrecosAtivo = false;
 
-function renderCotacaoComparacao(grupos, isAdmin, itens) {
-  cotacaoComparacaoDados = { grupos, isAdmin, itens: itens || [] };
+function renderCotacaoComparacao(grupos, isAdmin, itens, catalogoCompleto) {
+  cotacaoComparacaoDados = { grupos, isAdmin, itens: itens || [], catalogoCompleto: !!catalogoCompleto };
   _renderTabelaComparacaoCotacao();
 }
 
@@ -2341,25 +2341,24 @@ function _iniciaisFornecedor(nome) {
 }
 
 function _renderTabelaComparacaoCotacao() {
-  const { grupos, isAdmin, itens } = cotacaoComparacaoDados;
+  const { grupos, isAdmin, itens, catalogoCompleto } = cotacaoComparacaoDados;
   const container = document.getElementById('cotacao-comparacao-lista');
   const buscaWrapper = document.getElementById('cotacao-comparacao-busca-wrapper');
   const btnDestacar = document.getElementById('btn-cotacao-destacar-melhores');
+  const btnSelecionarMelhores = document.getElementById('btn-cotacao-selecionar-melhores');
   if (!container) return;
 
-  if (!grupos.length) {
+  // Cotação vinda de Requisição (não catálogo completo) sem preço nenhum
+  // ainda: mostra só a lista de insumo+quantidade do déficit (comportamento
+  // de 2026-09-02, sem mudança).
+  if (!catalogoCompleto && !grupos.length) {
     if (btnDestacar) btnDestacar.style.display = 'none';
+    if (btnSelecionarMelhores) btnSelecionarMelhores.style.display = 'none';
     if (!itens.length) {
       if (buscaWrapper) buscaWrapper.style.display = 'none';
       container.innerHTML = `<p class="panel-subtitle">Nenhum preço lançado ainda — use o formulário acima.</p>`;
       return;
     }
-    // Cotação recém-gerada de uma Requisição: ainda não tem preço nenhum
-    // lançado (nem manual, nem de fornecedor), mas já sabemos os insumos e
-    // quantidades a comprar (déficit) — mostra essa lista em vez de
-    // esconder tudo até o primeiro preço chegar (pergunta da Julia,
-    // 2026-09-02: ela quer ver o que precisa comprar assim que a cotação é
-    // gerada, antes de qualquer fornecedor responder).
     if (buscaWrapper) buscaWrapper.style.display = '';
     const termoSemPreco = (document.getElementById('cotacao-comparacao-busca')?.value || '').trim().toLowerCase();
     const itensFiltrados = itens.filter(item =>
@@ -2392,15 +2391,32 @@ function _renderTabelaComparacaoCotacao() {
     `;
     return;
   }
+
+  // Daqui pra baixo: grid completa insumo × fornecedor. Em cotação
+  // catálogo-completo (manual, estilo VMarket, pedido da Julia
+  // 2026-09-03) as linhas vêm de TODO o catálogo (`itens`), mesmo sem
+  // preço nenhum lançado ainda; em cotação de Requisição já com pelo
+  // menos 1 preço, as linhas continuam vindo só de `grupos` (comportamento
+  // de sempre, sem mudança).
   if (buscaWrapper) buscaWrapper.style.display = '';
-  if (btnDestacar) btnDestacar.style.display = '';
+  if (btnDestacar) btnDestacar.style.display = grupos.length ? '' : 'none';
+  if (btnSelecionarMelhores) btnSelecionarMelhores.style.display = (isAdmin && grupos.length) ? '' : 'none';
 
   const termo = (document.getElementById('cotacao-comparacao-busca')?.value || '').trim().toLowerCase();
-  const gruposFiltrados = grupos.filter(g =>
-    !termo || g.insumoNome.toLowerCase().includes(termo) || g.categoria.toLowerCase().includes(termo)
+  const gruposPorInsumo = new Map(grupos.map(g => [g.insumoId, g]));
+  const linhasBase = catalogoCompleto
+    ? itens.map(item => ({
+        insumoId: item.insumoId,
+        insumoNome: item.nome,
+        categoria: item.categoria,
+        precos: gruposPorInsumo.get(item.insumoId)?.precos || [],
+      }))
+    : grupos;
+  const linhasFiltradas = linhasBase.filter(l =>
+    !termo || l.insumoNome.toLowerCase().includes(termo) || l.categoria.toLowerCase().includes(termo)
   );
 
-  if (!gruposFiltrados.length) {
+  if (!linhasFiltradas.length) {
     container.innerHTML = `<p class="panel-subtitle">Nenhum insumo encontrado pra essa busca.</p>`;
     return;
   }
@@ -2425,10 +2441,11 @@ function _renderTabelaComparacaoCotacao() {
     </th>
   `).join('');
 
-  const linhas = gruposFiltrados.map(grupo => {
-    const item = itensPorInsumo[grupo.insumoId];
-    const precoPorFornecedor = new Map(grupo.precos.map(p => [p.fornecedorId, p]));
-    const menorPreco = Math.min(...grupo.precos.map(p => p.preco));
+  const linhas = linhasFiltradas.map(linha => {
+    const item = itensPorInsumo[linha.insumoId];
+    const precoPorFornecedor = new Map(linha.precos.map(p => [p.fornecedorId, p]));
+    const precosExistentes = linha.precos.map(p => p.preco);
+    const menorPreco = precosExistentes.length ? Math.min(...precosExistentes) : null;
 
     const celulas = fornecedores.map(f => {
       const preco = precoPorFornecedor.get(f.id);
@@ -2451,13 +2468,17 @@ function _renderTabelaComparacaoCotacao() {
       `;
     }).join('');
 
+    const quantidadeCelula = catalogoCompleto
+      ? `<input type="number" step="0.01" min="0" class="input-quantidade-cotacao" data-insumo-id="${linha.insumoId}" value="${item && item.quantidadeTotal !== null ? item.quantidadeTotal : ''}" placeholder="0" ${isAdmin ? '' : 'disabled'}>`
+      : (item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—');
+
     return `
       <tr>
         <td class="td-insumo-fixo">
-          <span class="font-bold">${escaparHtml(grupo.insumoNome)}</span>
-          <span class="text-muted td-insumo-categoria">${escaparHtml(grupo.categoria)}</span>
+          <span class="font-bold">${escaparHtml(linha.insumoNome)}</span>
+          <span class="text-muted td-insumo-categoria">${escaparHtml(linha.categoria)}</span>
         </td>
-        <td class="text-muted td-quantidade-fixa">${item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—'}</td>
+        <td class="text-muted td-quantidade-fixa">${quantidadeCelula}</td>
         ${celulas}
       </tr>
     `;
@@ -2491,6 +2512,18 @@ function _renderTabelaComparacaoCotacao() {
         await recarregarCotacaoDetalhe();
       });
     });
+    if (catalogoCompleto) {
+      container.querySelectorAll('.input-quantidade-cotacao').forEach(input => {
+        input.addEventListener('change', async () => {
+          if (input.value === '') return;
+          await fetch(`/api/cotacoes/${cotacaoAtualId}/itens/${input.dataset.insumoId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantidade: parseFloat(input.value) }),
+          });
+        });
+      });
+    }
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -2501,6 +2534,19 @@ document.getElementById('btn-cotacao-destacar-melhores')?.addEventListener('clic
   destacarMelhoresPrecosAtivo = !destacarMelhoresPrecosAtivo;
   evento.currentTarget.classList.toggle('ativo', destacarMelhoresPrecosAtivo);
   _renderTabelaComparacaoCotacao();
+});
+
+document.getElementById('btn-cotacao-selecionar-melhores')?.addEventListener('click', async () => {
+  if (!confirm('Marcar o menor preço de cada insumo como vencedor? Isso substitui qualquer vencedor já marcado na mão.')) return;
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/selecionar-melhores-precos`, { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao selecionar melhores preços');
+    await recarregarCotacaoDetalhe();
+  } catch (erro) {
+    console.error('Falha ao selecionar melhores preços:', erro);
+    alert(erro.message || 'Não foi possível selecionar os melhores preços.');
+  }
 });
 
 document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', async () => {

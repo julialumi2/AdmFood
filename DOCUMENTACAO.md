@@ -1440,6 +1440,59 @@ troca visualmente o destaque de volta pra aba "Cotações" (é lá que a
 propósito, simples e sem risco, em vez de duplicar toda a tela só pra
 manter a aba "Comparativo" destacada.
 
+**Cotação manual nasce com o catálogo inteiro, estilo VMarket**
+(concluída em 2026-09-03, pedido da Julia depois de mostrar um print da
+tela de comparativo da VMarket — planilha com todo insumo já na linha,
+sem depender de Requisição nenhuma, e um botão "Selecionar os melhores
+preços" que marca vencedor sozinho). Cotação manual (`POST
+/api/cotacoes`, botão "Nova cotação") já não dependia de Requisição, mas
+nascia **vazia** — só ganhava linha quando alguém lançava o primeiro
+preço. Agora, `GET /api/cotacoes/<id>` detecta cotação manual pela
+mesma coluna que já existia pra evitar cotação duplicada
+(`requisicao_titulo IS NULL` — só vem preenchida quando a cotação nasce
+de `gerar_cotacao_do_deficit`, ver acima) e, nesse caso, `itens` passa a
+listar **todo insumo do catálogo** (`listar_itens_cotacao_catalogo_completo`,
+armazenamento.py) em vez de só quem já tem `cotacao_item`; a resposta
+ganha `catalogoCompleto: true` avisando o front. Cotação vinda de
+Requisição continua exatamente igual (`itens` = só o déficit), zero
+mudança nesse caminho.
+
+Na grid (`_renderTabelaComparacaoCotacao`, script.js), catálogo completo
+usa `itens` como fonte das linhas (não só `grupos`, que só tem quem já
+foi precificado) — assim insumo sem preço nenhum ainda aparece igual,
+com "—" nas colunas de fornecedor. A coluna "Quantidade" vira um campo
+numérico editável nesse modo (salva no `change`, mesmo padrão do custo
+editável da Ficha Técnica) — `PUT /api/cotacoes/<id>/itens/<insumo_id>`
+grava em `cotacao_item` via upsert
+(`salvar_quantidade_item_cotacao`), então a cotação manual também
+acumula `cotacao_item` aos poucos, só que preenchido na mão em vez de
+calculado do déficit.
+
+Botão novo **"Selecionar os melhores preços"** (ao lado de "Destacar
+melhores preços", que já existia mas só pinta a célula sem marcar
+vencedor de verdade) — `POST
+/api/cotacoes/<id>/selecionar-melhores-precos` chama
+`selecionar_melhores_precos_cotacao` (armazenamento.py), que pra cada
+insumo com pelo menos um preço lançado nessa cotação reaproveita a mesma
+`selecionar_preco_cotacao` de sempre no de menor valor — não duplica a
+regra de "só um vencedor por insumo, por cotação". Só aparece quando já
+existe pelo menos um preço lançado (senão não tem o que selecionar).
+
+Ficou de fora dessa entrega, por decisão consciente de prazo (sistema de
+Compras 100% até 2026-09-04, combinado com a Julia) — registrar como
+pendência:
+- Ícone/link de WhatsApp por fornecedor na coluna (dado já existe,
+  `fornecedor.contato_telefone`, só falta plumbing + confirmar com ela
+  se quer ligar em `wa.me`).
+- "Não possui" persistido por fornecedor×insumo (like a VMarket) — hoje
+  não existe **nenhum** registro de "fornecedor não vende esse insumo"
+  em lugar nenhum (nem o "não vendo" do formulário público do
+  fornecedor, que é só descartado, nunca gravado) — precisaria de
+  schema novo, decidido não fazer às pressas.
+- Paridade visual 1:1 com a VMarket (coluna "Última Compra", filtro de
+  "Seção", checkboxes "Respondido/Não Respondido") — cosmético, não
+  bloqueia comprar de verdade.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
