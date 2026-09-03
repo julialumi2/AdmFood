@@ -34,6 +34,11 @@
   border-collapse: separate;
   border-spacing: 0;
   white-space: nowrap;
+  /* Sem isso, o `table { width: 100% }` global força a última coluna sem
+     largura fixa (Última Compra) a esticar até preencher o card inteiro
+     quando ainda não há nenhuma coluna de fornecedor — ficava um cabeçalho
+     enorme e vazio. Print da Julia, 2026-09-03. */
+  width: auto;
 }
 
 .tabela-comparacao-cotacao th,
@@ -146,7 +151,9 @@
    print da Julia 2026-09-04. */
 .th-ultima-compra,
 .td-ultima-compra {
-  min-width: 130px;
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
 }
 
 .ultima-compra-conteudo {

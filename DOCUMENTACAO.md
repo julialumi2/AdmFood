@@ -1601,6 +1601,44 @@ telefone, já respondido) — confirmado que o disparo em lote abre só a
 aba de quem tem telefone e está pendente, e que o link de cada aba bate
 exatamente com token+telefone certos.
 
+**Card "Lançar preço recebido" virou botão + modal, grid reorganizada**
+(concluída em 2026-09-03, pedido da Julia depois de mostrar 2 prints:
+o card fixo ocupando espaço permanente na tela, e a grid com layout
+quebrado numa cotação manual recém-criada sem nenhum preço lançado
+ainda). Duas mudanças:
+
+- O card `Lançar preço recebido` (sempre visível, com Insumo/Fornecedor/
+  Preço) virou o botão **"Lançar preço"** no cabeçalho do card
+  "Comparativo de preços", que abre o modal `modal-lancar-preco-cotacao`
+  com o mesmo formulário (`#form-cotacao-preco`, mesmos ids de campo —
+  zero mudança no submit/backend). Fecha sozinho ao adicionar com
+  sucesso. Só aparece pra admin com a cotação aberta (mesma regra que já
+  controlava a visibilidade do card).
+- Os filtros da grid (Respondido/Não respondido, Seção, Busca) saíram de
+  dentro do `.action-controls` (que dividia espaço com o título "Comparativo
+  de preços" e por isso empilhava cada filtro numa linha própria, feio e
+  gastando altura à toa) e ganharam linha própria (`.cotacoes-filtros-row`,
+  reaproveitando a mesma classe da lista de Cotações). `.action-controls`
+  agora só tem os 2 botões (Lançar preço, Selecionar os melhores preços).
+- A coluna **"Última Compra"** esticava até preencher o card inteiro
+  (ficava um cabeçalho enorme e vazio) sempre que a cotação ainda não
+  tinha nenhuma coluna de fornecedor pra "sobrar" — o `table { width:
+  100% }` global (`theme.css`) força a coluna sem largura fixa a crescer
+  pra preencher o espaço. Corrigido dando `width: 180px` fixo pra
+  `.th-ultima-compra`/`.td-ultima-compra` e `width: auto` pra
+  `.tabela-comparacao-cotacao` — a tabela agora só ocupa a largura real
+  do conteúdo (poucas colunas = tabela estreita, sobra espaço em branco
+  no card em vez de esticar; muitas colunas de fornecedor = mesma
+  rolagem horizontal de sempre via `.table-responsive`).
+
+Testado com harness estático (3 insumos, 2 fornecedores, 1 com telefone
+e 1 sem) nos dois cenários — cotação sem preço nenhum e com preço já
+lançado — confirmando visualmente que a grid não quebra mais em nenhum
+dos dois, e via DOM (`getBoundingClientRect`) que a coluna Última Compra
+fica travada em 180px mesmo com fornecedor lançando preço do lado, e que
+os filtros (Respondido, Seção, Busca) continuam filtrando certo depois
+da mudança de layout.
+
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 
 Botão na tela de Insights monta um texto (um bloco por loja: Presencial/

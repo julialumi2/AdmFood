@@ -2218,8 +2218,8 @@ async function recarregarCotacaoDetalhe() {
 
     const acoesAdmin = document.getElementById('cotacao-detalhe-acoes-admin');
     if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
-    const formCard = document.getElementById('cotacao-form-preco-card');
-    if (formCard) formCard.style.display = isAdmin && dados.cotacao.status === 'aberta' ? '' : 'none';
+    const btnLancarPreco = document.getElementById('btn-cotacao-lancar-preco');
+    if (btnLancarPreco) btnLancarPreco.style.display = isAdmin && dados.cotacao.status === 'aberta' ? '' : 'none';
 
     const btnStatus = document.getElementById('btn-cotacao-alternar-status');
     if (btnStatus) {
@@ -2698,6 +2698,17 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
   }
 });
 
+document.getElementById('btn-cotacao-lancar-preco')?.addEventListener('click', () => {
+  document.getElementById('cotacao-preco-valor').value = '';
+  document.getElementById('modal-lancar-preco-cotacao').style.display = 'flex';
+});
+document.getElementById('btn-lancar-preco-fechar')?.addEventListener('click', () => {
+  document.getElementById('modal-lancar-preco-cotacao').style.display = 'none';
+});
+document.getElementById('btn-lancar-preco-cancelar')?.addEventListener('click', () => {
+  document.getElementById('modal-lancar-preco-cotacao').style.display = 'none';
+});
+
 document.getElementById('form-cotacao-preco')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
   const corpo = {
@@ -2714,6 +2725,7 @@ document.getElementById('form-cotacao-preco')?.addEventListener('submit', async 
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao lançar preço');
     document.getElementById('cotacao-preco-valor').value = '';
+    document.getElementById('modal-lancar-preco-cotacao').style.display = 'none';
     await recarregarCotacaoDetalhe();
   } catch (erro) {
     console.error('Falha ao lançar preço:', erro);
