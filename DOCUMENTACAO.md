@@ -1455,20 +1455,39 @@ convidado), a tela volta a mostrar a grid de comparação normal. Não
 mexeu em nada do backend nem do cálculo — só parou de esconder um dado
 que a rota já devolvia.
 
-**Aba "Comparativo de Preços"** (concluída em 2026-09-02, pedido da
-Julia depois do teste ao vivo com a Kethllyn: ela queria chegar direto
-no comparativo de uma cotação sem precisar entrar pela lista da aba
-Cotações). Terceira aba em `cotacoes.html` (`#cotacoes-tabs-bar`), ao
-lado de Cotações/Compras — não é uma tela nova de verdade, é um atalho:
-mostra só um seletor com todas as cotações (abertas primeiro), e ao
-escolher uma, chama a mesma `abrirCotacaoDetalhe(id)` de sempre — mesma
-tela, mesmos dados, zero duplicação de lógica (decisão consciente:
-generalizar/duplicar a grid de comparação pra viver em dois lugares
-arriscava os dois desalinharem com o tempo). Selecionar uma cotação
-troca visualmente o destaque de volta pra aba "Cotações" (é lá que a
-`#cotacoes-detalhe-view` mora de verdade) — comportamento aceito de
-propósito, simples e sem risco, em vez de duplicar toda a tela só pra
-manter a aba "Comparativo" destacada.
+**Aba "Comparativo de Preços" → página própria no menu** (passou por 3
+formatos em 2 dias, todos a pedido da Julia, até chegar na versão final
+em 2026-09-04). Primeiro virou uma terceira aba dentro de `cotacoes.html`
+(2026-09-02, um seletor que levava pro comparativo sem passar pela
+lista) — ela pediu pra tirar dali e virar item de menu **separado** de
+Cotações. Segunda versão (2026-09-03) já era `comparativo-precos.html`
+como página própria (link novo no submenu "Compras", junto de
+Fornecedores/Cotações/Requisições/Pedidos/Recebimentos/Guia — igual em
+todo `<aside class="sidebar">` do sistema, já que não existe
+sidebar compartilhada, cada página tem a própria cópia), mas ainda
+abria na lista de cotações, exigindo clicar numa pra ver a grid — ela
+pediu pra abrir **direto na grid**, sem esse passo.
+
+Versão final: a página reaproveita 100% o mesmo par lista/detalhe de
+`cotacoes.html` (`#cotacoes-lista-view`/`#cotacoes-detalhe-view`, mesmos
+ids, zero duplicação de lógica) — só que sem `#cotacoes-tabs-bar` e sem
+o painel "Compras" (histórico). É essa ausência da tabs-bar que o
+bootstrap de `script.js` usa pra saber que é essa página (não um
+`data-*` novo) e chamar `abrirOuCriarComparativoAtual()` em vez de
+`carregarCotacoes()`: busca o comparativo **manual** (sem Requisição por
+trás — `cotacao.manual`, novo campo em `GET /api/cotacoes`, calculado de
+`requisicao_titulo IS NULL`, mesma coluna que já existia pra evitar
+cotação duplicada) mais recente ainda aberto e abre ele direto; se não
+existir nenhum, cria um na hora (`Comparativo de Preços — dd/mm/aaaa`) e
+já abre — a página nunca fica esperando ação nenhuma antes de mostrar a
+grid. "Voltar pra lista" continua funcionando como saída manual (mostra
+histórico completo, inclusive cotação de Requisição) pra quem quiser
+outro comparativo ou consultar um antigo.
+
+Cotação vinda de Requisição continua abrindo em `cotacoes.html`
+(`window.location.href = 'cotacoes.html?abrir=' + id`, sem mudança) —
+as duas páginas dividem o mesmo modelo de dado e as mesmas rotas, só
+`comparativo-precos.html` filtra pra só considerar cotação manual.
 
 **Cotação manual nasce com o catálogo inteiro, estilo VMarket**
 (concluída em 2026-09-03, pedido da Julia depois de mostrar um print da

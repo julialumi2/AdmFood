@@ -1504,6 +1504,11 @@ def _formatar_cotacao(linha):
         "criadoEm": linha["criado_em"],
         "totalInsumos": linha["total_insumos"],
         "totalFornecedores": linha["total_fornecedores"],
+        # Sem Requisição por trás — cotação manual, catálogo completo (ver
+        # seção 6.8 da documentação). Usado pela página Comparativo de
+        # Preços pra achar a cotação certa a abrir direto, sem listar as
+        # que vieram de Requisição junto.
+        "manual": linha["requisicao_titulo"] is None,
     }
 
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Cotações</title>
+  <title>AdmFood - Comparativo de Preços</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
@@ -55,7 +55,7 @@
               <i data-lucide="truck"></i>
               <span>Fornecedores</span>
             </a>
-            <a href="cotacoes.html" class="menu-subitem active">
+            <a href="cotacoes.html" class="menu-subitem">
               <i data-lucide="list-checks"></i>
               <span>Cotações</span>
             </a>
@@ -71,7 +71,7 @@
               <i data-lucide="clipboard-check"></i>
               <span>Recebimentos</span>
             </a>
-            <a href="comparativo-precos.html" class="menu-subitem">
+            <a href="comparativo-precos.html" class="menu-subitem active">
               <i data-lucide="scale"></i>
               <span>Comparativo de Preços</span>
             </a>
@@ -138,7 +138,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">COTAÇÕES</span>
+          <span class="header-page-title">COMPARATIVO DE PREÇOS</span>
         </div>
 
         <div class="header-right">
@@ -157,51 +157,40 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE COTAÇÕES -->
+      <!-- PÁGINA DE COMPARATIVO DE PREÇOS (mesmo modelo de dado/rotas de Cotações — -->
+      <!-- ver seção 6.8 da documentação; essa página só dá acesso direto, sem -->
+      <!-- passar pela aba Cotações). -->
       <div class="page-content">
 
-        <!-- NAVEGAÇÃO DE ABAS -->
-        <div class="tabs-bar" id="cotacoes-tabs-bar">
-          <button type="button" class="tab-btn active" data-tab="cotacoes">
-            <i data-lucide="list-checks"></i>
-            <span>Cotações</span>
-          </button>
-          <button type="button" class="tab-btn" data-tab="compras">
-            <i data-lucide="history"></i>
-            <span>Compras</span>
-          </button>
-        </div>
-
-        <!-- ABA: COTAÇÕES -->
         <div id="cotacoes-painel-cotacoes">
 
-        <!-- VISÃO: LISTA DE COTAÇÕES -->
+        <!-- VISÃO: LISTA DE COMPARATIVOS -->
         <div id="cotacoes-lista-view">
           <div class="dashboard-title-area">
             <div class="title-top">
-              <i data-lucide="list-checks" class="icon-pin"></i>
-              <span>COTAÇÃO DE INSUMO COM FORNECEDOR</span>
+              <i data-lucide="scale" class="icon-pin"></i>
+              <span>COMPARATIVO DE PREÇOS</span>
             </div>
             <div class="title-row">
-              <h1>Cotações</h1>
+              <h1>Comparativo de Preços</h1>
               <div class="page-acoes-topo" id="cotacoes-acoes-admin" style="display:none;">
                 <button type="button" class="btn-registrar-entrada" id="btn-nova-cotacao">
                   <i data-lucide="plus"></i>
-                  Nova cotação
+                  Novo comparativo
                 </button>
               </div>
             </div>
           </div>
 
           <p class="panel-subtitle" style="margin-top: var(--space-2);">
-            Registro manual do preço que cada fornecedor passou — sem coleta automática ainda. Compare e marque o vencedor por insumo.
+            Grid de insumos com o preço de cada fornecedor lado a lado — lance preço na mão ou convide fornecedores pelo WhatsApp, compare e marque o vencedor por insumo.
           </p>
 
           <div class="chart-card">
             <div class="table-header-row">
               <div>
-                <h3 class="table-title">Cotações registradas</h3>
-                <p class="table-subtitle">Clique numa cotação pra ver/editar os preços</p>
+                <h3 class="table-title">Comparativos registrados</h3>
+                <p class="table-subtitle">Clique num comparativo pra ver/editar os preços</p>
               </div>
             </div>
 
@@ -225,7 +214,7 @@
           </div>
         </div>
 
-        <!-- VISÃO: DETALHE DA COTAÇÃO (comparação de preços) -->
+        <!-- VISÃO: DETALHE (grid de produtos + cotações dos fornecedores) -->
         <div id="cotacoes-detalhe-view" style="display:none;">
           <button type="button" class="btn-secondary-sm" id="btn-cotacao-voltar" style="margin-bottom: var(--space-4);">
             <i data-lucide="arrow-left"></i>
@@ -328,43 +317,21 @@
 
         </div> <!-- /cotacoes-painel-cotacoes -->
 
-        <!-- ABA: COMPRAS (histórico de cotações fechadas) -->
-        <div id="cotacoes-painel-compras" style="display:none;">
-          <div class="dashboard-title-area">
-            <div class="title-top">
-              <i data-lucide="history" class="icon-pin"></i>
-              <span>HISTÓRICO DE COTAÇÕES FECHADAS</span>
-            </div>
-            <div class="title-row">
-              <h1>Compras</h1>
-            </div>
-          </div>
-
-          <p class="panel-subtitle" style="margin-top: -8px;">
-            O preço vencedor de cada insumo em cada rodada de cotação já fechada — um registro do que foi decidido, sem depender do acompanhamento de entrega dos Pedidos.
-          </p>
-
-          <div id="cotacoes-compras-lista">
-            <!-- Renderizado dinamicamente via JS: um card por cotação fechada -->
-          </div>
-        </div>
-
-
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
 
 
-    <!-- MODAL: NOVA COTAÇÃO -->
+    <!-- MODAL: NOVO COMPARATIVO (cotação manual) -->
     <div class="modal-overlay" id="modal-nova-cotacao" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="panel-title">Nova cotação</h3>
+          <h3 class="panel-title">Novo comparativo</h3>
           <button type="button" class="btn-close" id="btn-nova-cotacao-fechar" aria-label="Fechar">&times;</button>
         </div>
         <form id="form-nova-cotacao">
           <div class="form-group">
             <label for="nova-cotacao-titulo">Título</label>
-            <input type="text" id="nova-cotacao-titulo" required placeholder="Ex: Cotação Bebidas 25/08">
+            <input type="text" id="nova-cotacao-titulo" required placeholder="Ex: Comparativo Setembro">
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-nova-cotacao-cancelar">Cancelar</button>

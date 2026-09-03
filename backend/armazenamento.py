@@ -1703,7 +1703,7 @@ def listar_cotacoes():
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT c.id, c.titulo, c.status, c.criado_em,
+            SELECT c.id, c.titulo, c.status, c.criado_em, c.requisicao_titulo,
                    COUNT(DISTINCT p.insumo_id) AS total_insumos,
                    COUNT(DISTINCT p.fornecedor_id) AS total_fornecedores
             FROM cotacao c

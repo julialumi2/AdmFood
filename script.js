@@ -205,11 +205,16 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarFornecedores();
   }
 
-  // 4.099 TELA DE COTAÇÕES
+  // 4.099 TELA DE COTAÇÕES (e a página Comparativo de Preços, que reaproveita
+  // a mesma lista/detalhe — só não tem `#cotacoes-tabs-bar`, é como
+  // detectamos que é ela e pulamos direto pra grid, sem passar pela lista).
   if (document.getElementById('cotacoes-tabela-body')) {
     const abrirId = new URLSearchParams(location.search).get('abrir');
+    const paginaComparativoDireto = !document.getElementById('cotacoes-tabs-bar');
     if (abrirId) {
       abrirCotacaoDetalhe(parseInt(abrirId, 10));
+    } else if (paginaComparativoDireto) {
+      abrirOuCriarComparativoAtual();
     } else {
       carregarCotacoes();
     }
@@ -220,21 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.add('active');
         document.getElementById('cotacoes-painel-cotacoes').style.display = btn.dataset.tab === 'cotacoes' ? '' : 'none';
         document.getElementById('cotacoes-painel-compras').style.display = btn.dataset.tab === 'compras' ? '' : 'none';
-        document.getElementById('cotacoes-painel-comparativo').style.display = btn.dataset.tab === 'comparativo' ? '' : 'none';
         if (btn.dataset.tab === 'compras') carregarHistoricoCompras();
-        if (btn.dataset.tab === 'comparativo') carregarSeletorComparativo();
       });
-    });
-
-    document.getElementById('comparativo-cotacao-select')?.addEventListener('change', (evento) => {
-      const id = parseInt(evento.target.value, 10);
-      if (!id) return;
-      document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((b) => b.classList.remove('active'));
-      document.querySelector('#cotacoes-tabs-bar .tab-btn[data-tab="cotacoes"]')?.classList.add('active');
-      document.getElementById('cotacoes-painel-comparativo').style.display = 'none';
-      document.getElementById('cotacoes-painel-compras').style.display = 'none';
-      document.getElementById('cotacoes-painel-cotacoes').style.display = '';
-      abrirCotacaoDetalhe(id);
     });
   }
 
@@ -1999,29 +1991,6 @@ async function carregarCotacoes() {
   }
 }
 
-// Aba "Comparativo de Preços" — atalho pra abrir o comparativo de uma
-// cotação sem precisar entrar pela lista da aba Cotações (pedido da
-// Julia, 2026-09-02). Aberta primeiro que fechada, mais recente primeiro
-// dentro de cada grupo — mesma ordenação que já vem de `/api/cotacoes`.
-async function carregarSeletorComparativo() {
-  const select = document.getElementById('comparativo-cotacao-select');
-  if (!select) return;
-  try {
-    const resposta = await fetch('/api/cotacoes');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    const cotacoes = [...(dados.cotacoes || [])].sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'aberta' ? -1 : 1;
-      return 0;
-    });
-    select.innerHTML = '<option value="">Selecione uma cotação...</option>' +
-      cotacoes.map((c) => `<option value="${c.id}">${escaparHtml(c.titulo)} — ${STATUS_LABEL_COTACAO[c.status] || c.status}</option>`).join('');
-  } catch (erro) {
-    console.error('Falha ao carregar cotações pro comparativo:', erro);
-    select.innerHTML = '<option value="">Não foi possível carregar as cotações.</option>';
-  }
-}
-
 function renderCotacoesLista() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const tbody = document.getElementById('cotacoes-tabela-body');
@@ -2174,6 +2143,35 @@ function renderHistoricoCompras(historico) {
       ` : `<p class="panel-subtitle">Nenhum vencedor foi escolhido nessa cotação antes de fechar.</p>`}
     </div>
   `).join('');
+}
+
+// Página Comparativo de Preços (pedido da Julia, 2026-09-04: abrir direto
+// na grid, sem precisar escolher/abrir uma cotação na lista primeiro).
+// Acha o comparativo manual (sem Requisição por trás) mais recente ainda
+// aberto e já abre ele; se não existir nenhum, cria um novo na hora — essa
+// página nunca fica esperando ação nenhuma antes de mostrar a grid.
+async function abrirOuCriarComparativoAtual() {
+  try {
+    const resposta = await fetch('/api/cotacoes');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const abertos = (dados.cotacoes || []).filter((c) => c.manual && c.status === 'aberta');
+    if (abertos.length) {
+      await abrirCotacaoDetalhe(abertos[0].id);
+      return;
+    }
+    const criar = await fetch('/api/cotacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo: `Comparativo de Preços — ${new Date().toLocaleDateString('pt-BR')}` }),
+    });
+    const criado = await criar.json();
+    if (!criar.ok) throw new Error(criado.erro || 'falha ao criar comparativo');
+    await abrirCotacaoDetalhe(criado.id);
+  } catch (erro) {
+    console.error('Falha ao abrir o comparativo de preços:', erro);
+    await carregarCotacoes();
+  }
 }
 
 async function abrirCotacaoDetalhe(cotacaoId) {
