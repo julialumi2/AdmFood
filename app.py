@@ -106,6 +106,9 @@ from backend.armazenamento import (
     excluir_pedido,
     listar_pedidos_pendentes_recebimento,
     confirmar_recebimento_pedido,
+    buscar_fornecedor_por_id,
+    buscar_pedidos_por_token,
+    confirmar_pedidos_por_token,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
     excluir_requisicao,
@@ -221,7 +224,7 @@ _criar_equipe_inicial_se_necessario()
 
 # --- LOGIN ------------------------------------------------------------------
 
-PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html", "preencher_cotacao.html"}
+PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html", "preencher_cotacao.html", "confirmar_pedido.html"}
 ROTAS_API_PUBLICAS = {"/api/login"}
 
 
@@ -244,6 +247,7 @@ def _exigir_login():
             caminho in ROTAS_API_PUBLICAS
             or caminho.startswith('/api/contagens/token/')
             or caminho.startswith('/api/cotacoes/convite/')
+            or caminho.startswith('/api/pedidos/confirmar/')
         ):
             return
         if not _usuario_logado():
@@ -1826,7 +1830,93 @@ def api_gerar_pedidos_cotacao(cotacao_id):
     resultado = gerar_pedidos_de_cotacao(cotacao_id)
     if not resultado["pedidosCriados"]:
         return jsonify({"erro": "Nenhum insumo com vencedor escolhido e quantidade pra virar pedido."}), 400
-    return jsonify({"ok": True, **resultado})
+    mensagens = _montar_mensagens_whatsapp_pedidos(resultado["pedidosCriados"])
+    return jsonify({"ok": True, **resultado, "mensagensWhatsApp": mensagens})
+
+
+def _fmt_quantidade_pedido(quantidade):
+    """35.0 -> '35', 998.2 -> '998.2' — a VMarket mostra a quantidade como
+    número cru, sem separador de milhar nem vírgula decimal (diferente do
+    valor em R$, que usa _formatar_moeda) — replicado igual no print real
+    que a Julia mandou."""
+    if quantidade == int(quantidade):
+        return str(int(quantidade))
+    return str(round(quantidade, 2))
+
+
+def _texto_bloco_loja_pedido(pedido):
+    loja_info = LOJAS.get(pedido["loja"], {})
+    nome_fantasia = loja_info.get("nome_fantasia") or pedido["loja"]
+    razao_social = loja_info.get("razao_social") or "Não informado"
+    cnpj = loja_info.get("cnpj") or "Não informado"
+
+    itens_texto = "\n\n".join(
+        f"*{item['nome']}* - \n"
+        f"Unidade: {item['unidade_medida']}\n"
+        f"Preço Unitário: R$ {_formatar_moeda(item['preco_unitario'])}\n"
+        f"Quantidade: {_fmt_quantidade_pedido(item['quantidade'])}\n"
+        f"Preço Total:  R$ {_formatar_moeda(item['quantidade'] * item['preco_unitario'])}"
+        for item in pedido["itens"]
+    )
+
+    return (
+        f"Nome Fantasia: *{nome_fantasia}*\n"
+        f"Razão Social: {razao_social}\n"
+        f"CNPJ: {cnpj}\n"
+        f"OC: {pedido['id']}\n\n"
+        f"Produtos:\n\n"
+        f"{itens_texto}\n\n"
+        f"Quantidade de produtos: {pedido['total_itens']}\n"
+        f"*Valor Total: R$ {_formatar_moeda(pedido['valor_total'])}*"
+    )
+
+
+def _montar_mensagens_whatsapp_pedidos(pedidos_criados):
+    """Agrupa os pedidos recém-criados por token (= por fornecedor, mesma
+    leva de "Gerar pedidos") e monta o texto pronto pro WhatsApp — estilo
+    VMarket, print de um pedido real que a Julia mandou em 2026-09-03. Um
+    bloco por loja quando o mesmo fornecedor ganhou insumo em mais de uma
+    loja de uma vez ("Esse pedido foi feito em conjunto")."""
+    ids_por_token = {}
+    for pedido_criado in pedidos_criados:
+        ids_por_token.setdefault(pedido_criado["token"], []).append(pedido_criado["id"])
+
+    divisor = "------------------------"
+    mensagens = []
+    for token, ids in ids_por_token.items():
+        pedidos = [buscar_pedido(pid) for pid in ids]
+        fornecedor = buscar_fornecedor_por_id(pedidos[0]["fornecedor_id"])
+        link = f"{request.host_url.rstrip('/')}/confirmar_pedido.html?token={token}"
+        saudacao = fornecedor["contato_nome"] or fornecedor["nome"]
+        prazo = fornecedor["prazo_pagamento"] or "Não Informado"
+        entrega = fornecedor["dias_entrega"] or "Não Informado"
+
+        partes = [
+            f"Olá {saudacao},  gostaria de realizar o pedido que fiz com a *{fornecedor['nome']}*",
+            f"*Prazo de Faturamento: {prazo}*\n*Entrega: {entrega}*",
+            f"*✅ Confirme esse pedido aqui: {link}*",
+        ]
+        if len(pedidos) > 1:
+            blocos_loja = "\n\n\n".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}" for p in pedidos)
+            valor_total_geral = sum(p["valor_total"] for p in pedidos)
+            partes.append(
+                "*Esse pedido foi feito em conjunto.*\n"
+                "Abaixo seguem os pedidos separados de cada uma das empresas:"
+            )
+            partes.append(f"{blocos_loja}\n\n\n{divisor}")
+            partes.append(f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*")
+            partes.append(f"*✅ Confirme esse pedido aqui: {link}*")
+        else:
+            partes.append(f"{divisor}\n{_texto_bloco_loja_pedido(pedidos[0])}")
+
+        mensagens.append({
+            "fornecedorId": fornecedor["id"],
+            "fornecedorNome": fornecedor["nome"],
+            "telefone": fornecedor["contato_telefone"],
+            "mensagem": "\n\n".join(partes),
+        })
+
+    return mensagens
 
 
 def _formatar_pedido_resumo(pedido):
@@ -1918,6 +2008,49 @@ def api_excluir_pedido(pedido_id):
         return jsonify({"erro": "Pedido não encontrado."}), 404
     excluir_pedido(pedido_id)
     return jsonify({"ok": True})
+
+
+def _formatar_pedido_confirmacao(pedido):
+    return {
+        "id": pedido["id"],
+        "loja": pedido["loja"],
+        "status": pedido["status"],
+        "valorTotal": round(pedido["valor_total"], 2),
+        "itens": [
+            {
+                "nome": item["nome"],
+                "unidadeMedida": item["unidade_medida"],
+                "quantidade": item["quantidade"],
+                "precoUnitario": item["preco_unitario"],
+                "precoTotal": round(item["quantidade"] * item["preco_unitario"], 2),
+            }
+            for item in pedido["itens"]
+        ],
+    }
+
+
+@app.route('/api/pedidos/confirmar/<token>', methods=['GET'])
+def api_buscar_pedidos_por_token(token):
+    # Pública (sem login) — link mandado pro fornecedor confirmar que
+    # recebeu o pedido (ver exceção em _exigir_login).
+    pedidos = buscar_pedidos_por_token(token)
+    if not pedidos:
+        return jsonify({"erro": "Link inválido."}), 404
+    return jsonify({
+        "fornecedorNome": pedidos[0]["fornecedor_nome"],
+        "pedidos": [_formatar_pedido_confirmacao(p) for p in pedidos],
+        "valorTotal": round(sum(p["valor_total"] for p in pedidos), 2),
+        "jaConfirmado": all(p["status"] != "enviado" for p in pedidos),
+    })
+
+
+@app.route('/api/pedidos/confirmar/<token>', methods=['POST'])
+def api_confirmar_pedidos_por_token(token):
+    # Pública (sem login) — mesma exceção acima.
+    resultado = confirmar_pedidos_por_token(token)
+    if resultado is None:
+        return jsonify({"erro": "Link inválido."}), 404
+    return jsonify({"ok": True, **resultado})
 
 
 # --- RECEBIMENTOS (confirmar que um pedido chegou — qualquer pessoa logada,

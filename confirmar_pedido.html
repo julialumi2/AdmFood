@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - Confirmar pedido</title>
+  <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
+  <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="preencher_contagem.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <div class="contagem-publica-wrap">
+    <div class="contagem-publica-header">
+      <div class="logo-icon">
+        <i data-lucide="utensils-crossed"></i>
+      </div>
+      <span class="brand-name">
+        <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+      </span>
+    </div>
+
+    <div id="pedido-publico-carregando" class="contagem-publica-card">
+      <p class="panel-subtitle">Carregando...</p>
+    </div>
+
+    <div id="pedido-publico-erro" class="contagem-publica-card" style="display:none;">
+      <p id="pedido-publico-erro-texto" class="form-erro">—</p>
+    </div>
+
+    <div id="pedido-publico-confirmado" class="contagem-publica-card" style="display:none;">
+      <i data-lucide="check-circle-2" class="contagem-publica-icone-ok"></i>
+      <h2>Pedido confirmado!</h2>
+      <p class="panel-subtitle">Já avisamos que você confirmou o recebimento desse pedido.</p>
+    </div>
+
+    <div id="pedido-publico-conteudo" class="contagem-publica-card" style="display:none;">
+      <h2>Confirmar pedido — <span id="pedido-publico-fornecedor">—</span></h2>
+      <p class="panel-subtitle">Confira os itens de cada loja abaixo e confirme que recebeu esse pedido.</p>
+
+      <div id="pedido-publico-lojas"><!-- Renderizado dinamicamente via JS --></div>
+
+      <p class="contagem-publica-prazo">Valor total: <strong id="pedido-publico-valor-total">—</strong></p>
+
+      <button type="button" class="btn-primary" id="btn-pedido-publico-confirmar">Confirmar pedido</button>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -164,3 +164,26 @@ body {
   font-size: 0.9rem;
   text-align: center;
 }
+
+/* Tela pública de confirmação de pedido (fornecedor, sem login, por
+   token) — um bloco por loja quando o pedido foi feito em conjunto. */
+.pedido-publico-loja-bloco {
+  margin-bottom: var(--space-5);
+}
+
+.pedido-publico-loja-bloco h3 {
+  font-size: 1rem;
+  color: var(--text-dark);
+  margin-bottom: var(--space-2);
+}
+
+.pedido-publico-loja-bloco .panel-subtitle {
+  text-align: right;
+  font-weight: 700;
+  margin-top: var(--space-2);
+}
+
+#btn-pedido-publico-confirmar {
+  width: 100%;
+  margin-top: var(--space-4);
+}

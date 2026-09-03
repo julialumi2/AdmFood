@@ -551,6 +551,15 @@ def inicializar_banco():
         if "divergencia_nf" not in colunas_pedido:
             conn.execute("ALTER TABLE pedido_compra ADD COLUMN divergencia_nf INTEGER NOT NULL DEFAULT 0")
 
+        # Link sem login pra fornecedor confirmar o pedido recebido — mesmo
+        # token pra todo pedido nascido da mesma leva de "Gerar pedidos" pro
+        # mesmo fornecedor (pedido pode ter loja(s) diferente(s), "feito em
+        # conjunto" na mensagem de WhatsApp), pra confirmar todos com um só
+        # clique. Pedido antigo, gerado antes dessa coluna existir, fica com
+        # token nulo — nunca teve link mandado, não precisa de um agora.
+        if "token" not in colunas_pedido:
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN token TEXT")
+
         # Contagem de estoque por link (sem login) — replica o fluxo real da
         # VMarket: Kethllyn abre uma contagem pra uma loja, manda o link pro
         # funcionário preencher (identificado só pelo token, sem senha), e a
@@ -1597,6 +1606,12 @@ def listar_fornecedores():
         return [dict(linha) for linha in linhas]
 
 
+def buscar_fornecedor_por_id(fornecedor_id):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM fornecedor WHERE id = ?", (fornecedor_id,)).fetchone()
+        return dict(linha) if linha else None
+
+
 def buscar_fornecedor_por_cnpj(cnpj):
     """Usado pra importação em lote (ex: importar_fornecedores_vmarket.py)
     ser idempotente por CNPJ, mesmo raciocínio de buscar_insumo_por_nome."""
@@ -2105,11 +2120,18 @@ def gerar_pedidos_de_cotacao(cotacao_id):
 
     agora = datetime.now().isoformat()
     pedidos_criados = []
+    # Mesmo token pra todo pedido do mesmo fornecedor nessa leva (pode ter
+    # loja(s) diferente(s) — "feito em conjunto" na mensagem de WhatsApp),
+    # pra um só link/clique confirmar todos de uma vez.
+    token_por_fornecedor = {}
     with conexao() as conn:
         for (fornecedor_id, loja), itens in grupos.items():
+            if fornecedor_id not in token_por_fornecedor:
+                token_por_fornecedor[fornecedor_id] = secrets.token_urlsafe(24)
+            token = token_por_fornecedor[fornecedor_id]
             cursor = conn.execute(
-                "INSERT INTO pedido_compra (cotacao_id, fornecedor_id, loja, status, criado_em) VALUES (?, ?, ?, 'enviado', ?)",
-                (cotacao_id, fornecedor_id, loja, agora),
+                "INSERT INTO pedido_compra (cotacao_id, fornecedor_id, loja, status, criado_em, token) VALUES (?, ?, ?, 'enviado', ?, ?)",
+                (cotacao_id, fornecedor_id, loja, agora, token),
             )
             pedido_id = cursor.lastrowid
             for item in itens:
@@ -2117,7 +2139,7 @@ def gerar_pedidos_de_cotacao(cotacao_id):
                     "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
                     (pedido_id, item['insumoId'], item['quantidade'], item['precoUnitario']),
                 )
-            pedidos_criados.append(pedido_id)
+            pedidos_criados.append({"id": pedido_id, "fornecedorId": fornecedor_id, "loja": loja, "token": token})
 
     return {"pedidosCriados": pedidos_criados, "insumosSemVencedor": insumos_sem_vencedor}
 
@@ -2224,6 +2246,38 @@ def excluir_pedido(pedido_id):
     with conexao() as conn:
         conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
         conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
+
+
+def buscar_pedidos_por_token(token):
+    """Link sem login mandado pro fornecedor confirmar o pedido — mesmo
+    token agrupa todo pedido nascido da mesma leva de "Gerar pedidos" pro
+    mesmo fornecedor (pode ter mais de uma loja, "feito em conjunto").
+    Devolve None só quando o token não existe (link inválido); token de
+    pedido antigo (nulo) nunca bate aqui, já que o WHERE exige não-nulo."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT id FROM pedido_compra WHERE token = ? AND token IS NOT NULL", (token,)
+        ).fetchall()
+    if not linhas:
+        return None
+    return [buscar_pedido(linha["id"]) for linha in linhas]
+
+
+def confirmar_pedidos_por_token(token):
+    """Fornecedor confirma o recebimento do(s) pedido(s) dessa leva de uma
+    vez só. Avança cada pedido ainda em 'enviado' pro estágio 'confirmado'
+    — reaproveita avancar_status_pedido, não duplica a máquina de
+    estágios. Pedido que já passou desse estágio (alguém já avançou pela
+    tela interna) fica como está, não anda pra trás nem dá erro."""
+    pedidos = buscar_pedidos_por_token(token)
+    if pedidos is None:
+        return None
+    confirmados = 0
+    for pedido in pedidos:
+        if pedido["status"] == "enviado":
+            avancar_status_pedido(pedido["id"])
+            confirmados += 1
+    return {"confirmados": confirmados, "total": len(pedidos)}
 
 
 def listar_pedidos_pendentes_recebimento():

@@ -251,6 +251,11 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarPreencherCotacao();
   }
 
+  // 4.0996c TELA PÚBLICA DE CONFIRMAÇÃO DE PEDIDO (fornecedor, sem login, por token)
+  if (document.getElementById('pedido-publico-conteudo')) {
+    inicializarConfirmarPedido();
+  }
+
   // 4.1 TELA DE CONFIGURAÇÕES
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
@@ -2438,6 +2443,13 @@ function _linkWhatsAppContato(telefone) {
   return `https://wa.me/${numeroCompleto}`;
 }
 
+function _linkWhatsAppTexto(telefone, mensagem) {
+  const digitos = (telefone || '').replace(/\D/g, '');
+  if (!digitos) return null;
+  const numeroCompleto = digitos.startsWith('55') ? digitos : `55${digitos}`;
+  return `https://wa.me/${numeroCompleto}?text=${encodeURIComponent(mensagem)}`;
+}
+
 function _renderTabelaComparacaoCotacao() {
   const { grupos, isAdmin, itens, catalogoCompleto } = cotacaoComparacaoDados;
   const container = document.getElementById('cotacao-comparacao-lista');
@@ -2690,6 +2702,19 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar pedidos');
     let mensagem = `${dados.pedidosCriados.length} pedido(s) gerado(s).`;
     if (dados.insumosSemVencedor > 0) mensagem += ` ${dados.insumosSemVencedor} insumo(s) ainda sem vencedor escolhido ficaram de fora.`;
+
+    // Já abre o WhatsApp pronto (mensagem + link de confirmação) pra cada
+    // fornecedor que ganhou pedido nessa leva — mesmo padrão semi-automático
+    // do convite de cotação (falta só apertar "Enviar" em cada aba; sem a
+    // API oficial não tem como pular esse toque final).
+    const semTelefone = [];
+    for (const grupo of dados.mensagensWhatsApp || []) {
+      const linkWhatsApp = _linkWhatsAppTexto(grupo.telefone, grupo.mensagem);
+      if (linkWhatsApp) window.open(linkWhatsApp, '_blank', 'noopener');
+      else semTelefone.push(grupo.fornecedorNome);
+    }
+    if (semTelefone.length) mensagem += ` Sem telefone cadastrado, avise na mão: ${semTelefone.join(', ')}.`;
+
     alert(mensagem);
     window.location.href = 'pedidos.html';
   } catch (erro) {
@@ -3715,6 +3740,90 @@ async function inicializarPreencherCotacao() {
   } catch (erro) {
     console.error('Falha ao carregar cotação pública:', erro);
     mostrarErro('Não foi possível carregar essa cotação agora.');
+  }
+}
+
+async function inicializarConfirmarPedido() {
+  const token = new URLSearchParams(location.search).get('token');
+  const elCarregando = document.getElementById('pedido-publico-carregando');
+  const elErro = document.getElementById('pedido-publico-erro');
+  const elErroTexto = document.getElementById('pedido-publico-erro-texto');
+  const elConteudo = document.getElementById('pedido-publico-conteudo');
+  const elConfirmado = document.getElementById('pedido-publico-confirmado');
+
+  function mostrarErro(mensagem) {
+    elCarregando.style.display = 'none';
+    elErroTexto.textContent = mensagem;
+    elErro.style.display = '';
+  }
+
+  if (!token) {
+    mostrarErro('Link inválido — falta o token de acesso.');
+    return;
+  }
+
+  try {
+    const resposta = await fetch(`/api/pedidos/confirmar/${encodeURIComponent(token)}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      mostrarErro(dados.erro || 'Link inválido.');
+      return;
+    }
+
+    elCarregando.style.display = 'none';
+
+    if (dados.jaConfirmado) {
+      elConfirmado.style.display = '';
+      return;
+    }
+
+    document.getElementById('pedido-publico-fornecedor').textContent = dados.fornecedorNome;
+    document.getElementById('pedido-publico-lojas').innerHTML = dados.pedidos.map((pedido) => `
+      <div class="pedido-publico-loja-bloco">
+        <h3>${escaparHtml(pedido.loja)}</h3>
+        <div class="table-responsive">
+        <table>
+          <thead>
+            <tr><th>Produto</th><th>Quantidade</th><th>Preço Unit.</th><th>Total</th></tr>
+          </thead>
+          <tbody>
+            ${pedido.itens.map((item) => `
+              <tr>
+                <td class="font-bold">${escaparHtml(item.nome)}</td>
+                <td>${item.quantidade} ${escaparHtml(item.unidadeMedida)}</td>
+                <td>R$ ${item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                <td>R$ ${item.precoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
+        <p class="panel-subtitle">Total dessa loja: R$ ${pedido.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+      </div>
+    `).join('');
+    document.getElementById('pedido-publico-valor-total').textContent =
+      `R$ ${dados.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+    elConteudo.style.display = '';
+
+    document.getElementById('btn-pedido-publico-confirmar').addEventListener('click', async (evento) => {
+      const btn = evento.target;
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`/api/pedidos/confirmar/${encodeURIComponent(token)}`, { method: 'POST' });
+        const respDados = await resp.json();
+        if (!resp.ok) throw new Error(respDados.erro || 'falha ao confirmar');
+        elConteudo.style.display = 'none';
+        elConfirmado.style.display = '';
+      } catch (erro) {
+        console.error('Falha ao confirmar pedido:', erro);
+        alert(erro.message || 'Não foi possível confirmar o pedido.');
+        btn.disabled = false;
+      }
+    });
+  } catch (erro) {
+    console.error('Falha ao carregar pedido público:', erro);
+    mostrarErro('Não foi possível carregar esse pedido agora.');
   }
 }
 

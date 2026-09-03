@@ -1304,13 +1304,25 @@ nunca a cotação inteira: o mesmo insumo pode fechar com fornecedores
 diferentes na mesma cotação (pergunta 22), e o pedido mínimo do fornecedor
 conta por loja, não somado na rede (pergunta 29) — juntar tudo numa
 cotação só faria sentido se o mínimo fosse por rede. `gerar_pedidos_de_cotacao`
-roda a partir do botão "Gerar pedidos" na tela de Cotações (aparece só
-quando a cotação tem `itens`, ou seja, veio de uma Requisição) — é uma
-etapa manual, separada de marcar o vencedor por insumo (pergunta 23: ela
-não quer isso automático). Considera só insumo com preço `selecionado`;
-quem ainda não tem vencedor fica de fora (avisa quantos, não é erro — dá
-pra clicar "Gerar pedidos" de novo depois que marcar mais vencedores, sem
+roda a partir do botão "Gerar pedidos" na tela de Cotações — é uma etapa
+manual, separada de marcar o vencedor por insumo (pergunta 23: ela não
+quer isso automático). Considera só insumo com preço `selecionado`; quem
+ainda não tem vencedor fica de fora (avisa quantos, não é erro — dá pra
+clicar "Gerar pedidos" de novo depois que marcar mais vencedores, sem
 duplicar pedido de quem já foi pra evitar comprar em dobro).
+
+**Nota (2026-09-03, respondendo "como eu faço pra gerar o pedido"):** o
+botão "Gerar pedidos" aparece sempre que a cotação tem `itens` — e desde
+que a cotação manual passou a nascer com o catálogo completo (seção
+6.8), **toda** cotação manual tem `itens`, não só as vindas de
+Requisição. Mas `gerar_pedidos_de_cotacao` só cria pedido de verdade pra
+quem tem quebra por loja em `cotacao_item_loja`, que **só existe numa
+cotação gerada a partir de uma Requisição** — clicar "Gerar pedidos"
+numa cotação manual não dá erro, só não cria pedido nenhum (0 pedidos,
+silenciosamente), porque não tem como saber pra qual loja mandar. Ainda
+não decidido como resolver (cotação manual não tem loja nenhuma
+associada hoje) — opções levantadas: pedir a loja já no "Nova cotação",
+ou por linha na grid.
 
 Acompanhamento de entrega é uma sequência simples de 4 estágios
 (`ESTAGIOS_PEDIDO` em `armazenamento.py`): Pedido enviado → Confirmado
@@ -1638,6 +1650,66 @@ dos dois, e via DOM (`getBoundingClientRect`) que a coluna Última Compra
 fica travada em 180px mesmo com fornecedor lançando preço do lado, e que
 os filtros (Respondido, Seção, Busca) continuam filtrando certo depois
 da mudança de layout.
+
+**"Gerar pedidos" já manda o pedido pro fornecedor confirmar, via WhatsApp**
+(concluída em 2026-09-03, pedido da Julia depois de mandar o texto exato
+de um pedido real que ela fez pela VMarket, pra replicar formato e dado).
+Antes, "Gerar pedidos" só criava os registros internos (`pedido_compra`);
+avisar o fornecedor era manual, fora do sistema. Agora, depois de criar
+os pedidos, o backend também monta o texto pronto pra WhatsApp e devolve
+pro front, que abre uma aba `wa.me` por fornecedor (mesmo padrão
+semi-automático do convite de cotação — falta só apertar "Enviar", sem a
+API oficial não tem como pular esse toque).
+
+Pedidos da mesma leva de "Gerar pedidos" pro **mesmo fornecedor** (pode
+acontecer de ganhar insumo em mais de uma loja de uma vez) viram **uma
+mensagem só**, com um bloco por loja — "Esse pedido foi feito em
+conjunto", igual o texto real que ela mandou. Cada `pedido_compra` ganhou
+uma coluna `token` (mesmo padrão de link-sem-login já usado em
+`contagem`/`cotacao_convite`); pedidos do mesmo fornecedor na mesma leva
+compartilham o mesmo token, criado em `gerar_pedidos_de_cotacao`
+(armazenamento.py). `_montar_mensagens_whatsapp_pedidos` (app.py) agrupa
+por token e monta o texto; `_texto_bloco_loja_pedido` monta o bloco de
+uma loja (Nome Fantasia/Razão Social/CNPJ — de `config.LOJAS`, "Não
+informado" quando a loja ainda não tem esse dado cadastrado — mais "OC"
+= o próprio id do `pedido_compra`, sem correspondência com a numeração da
+VMarket, e a lista de produtos). Valor em R$ usa o `_formatar_moeda` que
+já existia; quantidade usa `_fmt_quantidade_pedido` **sem** formatação
+brasileira (número cru, tipo "998.2") — reflete exatamente o print real
+que ela mandou, onde quantidade e valor têm formatos diferentes.
+
+`config.LOJAS` ganhou `nome_fantasia`/`razao_social`/`cnpj` por loja —
+Artesanos, Tradiça ZN ("Tradiça Dog" — nome fantasia diferente do nome
+interno) e Tradiça Simus vieram literal do print real que ela mandou;
+**Açaí Na Lata ainda está em branco** (nunca apareceu num pedido dela até
+agora) — a mensagem cai pra "Não informado" nesse caso, funciona mas sem
+os dados legais até ela passar.
+
+**Link de confirmação pro fornecedor** — página nova `confirmar_pedido.html`
+(sem login, token na URL — mesmo padrão de `preencher_contagem.html`/
+`preencher_cotacao.html`, adicionada em `PAGINAS_PUBLICAS`), mostra o(s)
+pedido(s) daquele token com os itens de cada loja e um botão "Confirmar
+pedido". `GET/POST /api/pedidos/confirmar/<token>` (rotas públicas, ver
+exceção em `_exigir_login`) — o GET devolve os dados pra montar a tela
+(`jaConfirmado: true` se reabrir depois de já ter confirmado, mostra só a
+tela de "Pedido confirmado!"); o POST (`confirmar_pedidos_por_token`)
+avança todo pedido daquele token que ainda estiver em `enviado` pro
+estágio **"Confirmado pelo fornecedor"** — reaproveita `avancar_status_pedido`
+de sempre (Pedidos, seção 6.9), não cria estágio novo nem mexe em
+estoque. É essa a interpretação de "confirmar o recebimento do pedido"
+que ela pediu: o fornecedor confirmando que recebeu o *pedido de compra*
+(aceite), não a chegada física da mercadoria — isso continua sendo o
+fluxo de Recebimentos, sem mudança.
+
+Testado com script isolado contra cópia do banco: fornecedor ganhando
+insumo em 2 lojas na mesma leva → 1 mensagem, 2 blocos, "feito em
+conjunto", valores/CNPJ batendo por loja; fornecedor ganhando só 1 loja
+→ mensagem sem o "conjunto"; link de confirmação sem sessão nenhuma
+(simulando o fornecedor) → GET mostra os 2 pedidos certos, POST avança
+os 2 pra "confirmado", reabrir o GET depois mostra `jaConfirmado`; token
+inválido → 404. Harness estático confirmou visualmente a tela
+`confirmar_pedido.html` (tabela por loja, total, botão, e a tela de "já
+confirmado" ao reabrir).
 
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 
