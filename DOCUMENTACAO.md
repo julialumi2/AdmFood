@@ -1793,6 +1793,67 @@ vez, mas o cuidado vale pra sempre: testar fluxo de Requisição/Contagem
 ao vivo em produção, com contagem real, é uma operação que mexe em
 estoque de verdade, não só em Compras).
 
+**Importação de estoque mínimo/atual da VMarket + separação de insumos por
+loja** (concluída em 2026-09-04). A Julia pediu pra trazer do painel da
+VMarket (`estoque_sisfood/exibir`, concorrente que ela também usa) o
+estoque mínimo (coluna EI) e atual (coluna QE) de cada insumo, por loja,
+e aproveitar pra corrigir quais insumos pertencem a cada loja (`insumo_loja`
+tinha, em alguns casos, insumo marcado em loja que não vende aquilo).
+Sem API — dado extraído manualmente (`get_page_text` por filial) e tratado
+com script Python (normalização de nome, `_normalizarNomeInsumo`/
+`_normalizar_nome_insumo` — os mesmos usados pelas 3 features "Colar
+lista"). Aplicado via UI (nunca escrita direta no banco): "Insumos da
+loja" → "Colar lista" pras 4 lojas (Artesanos 130 insumos, Tradiça ZN e
+Simus com a mesma lista de 83 — a Julia pediu pra ficarem iguais — e
+Açaí Na Lata, que não tem filial na VMarket, então usou uma planilha
+separada que ela mandou) + "Atualizar estoque em lote" com a extensão de
+mínimo (ver 6.4) pro Açaí (48 itens, `nome;atual;mínimo` por linha).
+6 nomes da Artesanos não bateram na primeira tentativa por causa de
+parênteses aninhados na VMarket (ex: "Coca Cola Ks (Coca) (fd (24un))"
+vs o nome real no catálogo "Coca Cola Ks (Coca)", sem o sufixo de
+unidade) — corrigidos manualmente, um por um, depois de conferir o nome
+real via busca no modal.
+
+### 6.9b Sugestão de compra no formulário público de Contagem/Requisição
+
+**Sugestão passa a recalcular ao vivo enquanto o funcionário digita**
+(concluída em 2026-09-04, pedido da Julia visando o uso real a partir de
+09/2026). Antes, a coluna "Sugestão" do formulário público
+(`preencher_contagem.html`, função `inicializarContagemPublica` em
+script.js) só mostrava a quantidade ideal cadastrada, parada — não tinha
+relação nenhuma com o que o funcionário ia digitando em "Qtde em
+Estoque" ao lado. Agora, a cada tecla digitada nesse campo, a célula de
+Sugestão ao lado recalcula: `sugestão = máx(0, quantidade ideal −
+quantidade em estoque digitada)` — mesma fórmula já usada em
+`sugestaoCompra` na tela de Insumos (nunca fica negativa: se o
+funcionário já tem mais em estoque do que o ideal, sugestão vira 0).
+Campo vazio volta a mostrar a quantidade ideal cheia (como se nada
+tivesse sido contado ainda); insumo sem quantidade ideal cadastrada
+mostra "—" sempre, não tenta calcular. Testado com harness estático
+(mock de fetch, 2 insumos — um com ideal 1000, outro sem ideal
+cadastrado): sugestão inicial bate com o ideal, digitar 900 vira
+sugestão 100, digitar acima do ideal (1200) trava em 0, limpar o campo
+volta pro ideal — todos os casos conferidos.
+
+**"Gerar pedidos" escondido na cotação manual** (2026-09-04, achado no
+reteste ao vivo depois da entrega do catálogo completo). `gerar_pedidos_de_cotacao`
+(armazenamento.py) sempre dependeu de `cotacao_item_loja` — a quebra de
+quantidade por loja que só existe quando a cotação nasce do déficit de
+uma Requisição (`gerar_cotacao_do_deficit`). Cotação manual (catálogo
+completo) só grava uma quantidade única, sem loja nenhuma associada —
+então clicar "Gerar pedidos" nela sempre voltava o erro "Nenhum insumo
+com vencedor escolhido e quantidade pra virar pedido", mesmo com
+vencedor marcado e quantidade preenchida, o que confundia (parecia erro
+de dado faltando, mas era arquitetural). Corrigido escondendo o botão
+quando `dados.catalogoCompleto` é `true` (`recarregarCotacaoDetalhe`,
+script.js) — pedido de compra de verdade continua saindo só do fluxo
+Requisição → Contagem → Cotação por enquanto. **Pendência real, registrada
+como decisão em aberto**: perguntei pra Julia se a cotação manual
+precisa gerar pedido de verdade também (precisaria de uma etapa nova pra
+escolher quantidade por loja) ou se ela é só pra pesquisa de preço/marcar
+vencedor — ela repassou a pergunta pra Kethllyn (quem faz a compra das
+lojas) e vai avisar a resposta.
+
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 
 Botão na tela de Insights monta um texto (um bloco por loja: Presencial/
@@ -2053,6 +2114,17 @@ dias (ver seção 6.3), ou com uma ressincronização manual pra ir mais
 longe no histórico.
 
 10. **Baixa automática de estoque por venda real (produto + complemento) e "quebra"** — 🟡 fase 1 concluída em 2026-09-02 (pedido do chefe da Julia, repassado por ela): plano completo é puxar cada venda da Cardápio Web, casar produto **e** cada complemento escolhido com a Ficha Técnica, descontar o insumo certo do estoque automaticamente, e comparar com a Contagem física (seção 6.9) pra mostrar a "quebra" (diferença entre teórico e real) e já gerar o pedido de compra certo sozinho. **Fase 1** ✅ (ver "Ficha técnica de complemento" na seção 6.5) — só a receita do complemento em si dentro do AdmFood, confirmado ao vivo que a API da Cardápio Web já expõe qual complemento foi escolhido em cada venda. **Fases seguintes, ainda não iniciadas**: (a) puxar a venda real casando produto+complementos com a Ficha Técnica; (b) baixa automática de estoque a partir disso; (c) comparação com a Contagem física mostrando a quebra; (d) gerar pedido de compra automático a partir da quebra. Previsão inteligente de falta de estoque (IA) foi citada pelo chefe como ideia futura, **fora de escopo por enquanto** — nenhuma das fases acima depende disso.
+
+11. **Cotação manual gerar pedido de compra de verdade** — 🟡 decisão em
+aberto (2026-09-04). Hoje "Gerar pedidos" só funciona pra cotação que
+nasceu de uma Requisição (tem quebra de quantidade por loja em
+`cotacao_item_loja`); cotação manual/catálogo completo (estilo VMarket,
+ver 6.9) não tem essa quebra, então o botão fica escondido nela. Julia
+perguntou pra Kethllyn se isso precisa mudar (cotação manual virando
+pedido real também, o que exigiria uma etapa nova de "quantidade por
+loja" antes de gerar) ou se cotação manual fica só pra pesquisa de
+preço/marcar vencedor, com o pedido real sempre saindo da Requisição —
+aguardando resposta.
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 

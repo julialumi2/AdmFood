@@ -2244,7 +2244,10 @@ async function recarregarCotacaoDetalhe() {
 
     const btnGerarPedidos = document.getElementById('btn-cotacao-gerar-pedidos');
     if (btnGerarPedidos) {
-      btnGerarPedidos.style.display = isAdmin && (dados.itens || []).length > 0 ? '' : 'none';
+      // Cotação manual (catalogoCompleto) não tem quantidade por loja — "Gerar
+      // pedidos" nunca acha o que gerar nesse modo, então nem mostra o botão
+      // (pedido de compra de verdade sai pela Requisição → Cotação por enquanto).
+      btnGerarPedidos.style.display = isAdmin && !dados.catalogoCompleto && (dados.itens || []).length > 0 ? '' : 'none';
     }
 
     const btnConvidar = document.getElementById('btn-cotacao-convidar-fornecedores');
@@ -3582,7 +3585,7 @@ async function inicializarContagemPublica() {
                 <td><div class="contagem-item-somente-leitura">${escaparHtml(item.unidadeMedida)}</div></td>
                 <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '')}</div></td>
                 <td><input type="number" step="0.01" min="0" placeholder="0" data-insumo-id="${item.insumoId}" required></td>
-                <td><div class="contagem-item-somente-leitura">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div></td>
+                <td><div class="contagem-item-somente-leitura" data-sugestao-insumo-id="${item.insumoId}" data-ideal="${item.quantidadeIdeal !== null ? item.quantidadeIdeal : ''}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div></td>
               </tr>
             `).join('')}
           </tbody>
@@ -3594,6 +3597,16 @@ async function inicializarContagemPublica() {
     container.querySelectorAll('input[data-insumo-id]').forEach((input) => {
       input.addEventListener('input', () => {
         input.closest('tr').classList.toggle('preenchido', input.value !== '');
+        const elSugestao = container.querySelector(`[data-sugestao-insumo-id="${input.dataset.insumoId}"]`);
+        const ideal = elSugestao.dataset.ideal;
+        if (ideal === '') {
+          elSugestao.textContent = '—';
+        } else if (input.value === '') {
+          elSugestao.textContent = ideal;
+        } else {
+          const sugestao = Math.max(0, Math.round((parseFloat(ideal) - parseFloat(input.value)) * 100) / 100);
+          elSugestao.textContent = sugestao;
+        }
         atualizarProgresso();
       });
     });
