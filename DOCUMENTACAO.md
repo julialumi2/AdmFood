@@ -1183,6 +1183,16 @@ ponto a ponto. Sobrescreve o valor (não soma, ao contrário de "Registrar
 entrada") — pensado pra importar uma contagem/relatório de fora que já é
 o valor final, não um recebimento.
 
+Ganhou também a coluna **"Novo mínimo"** (2026-09-04, mesma leva) quando
+a Julia mandou a planilha do Açaí Na Lata, que traz estoque atual e
+quantidade mínima lado a lado. O "Colar lista" aceita as duas formas:
+`nome;atual` (só o estoque, como antes) ou `nome;atual;mínimo` (os dois
+de uma vez) — decide pelo número de campos numéricos no fim da linha. No
+backend, `minimos` é opcional em `salvar_quantidades_atuais_em_lote`/
+`POST /api/insumos/quantidades-atuais/lote`: insumo sem mínimo na lista
+tem só a quantidade atual tocada, e a coluna `estoque_minimo` fica como
+estava.
+
 **"Colar lista" no "Insumos da loja"** (concluído em 2026-09-04, mesma
 leva do import da VMarket). Terceira "colar lista" da tela de Estoque, e
 a única que **substitui** em vez de preencher: cola um nome por linha, e

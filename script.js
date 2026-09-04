@@ -4256,9 +4256,11 @@ document.getElementById('btn-ajuste-lote-salvar')?.addEventListener('click', asy
 });
 
 let atualizarEstoqueLoteValores = {};
+let atualizarEstoqueLoteMinimos = {};
 
 function abrirModalAtualizarEstoqueLote() {
   atualizarEstoqueLoteValores = {};
+  atualizarEstoqueLoteMinimos = {};
   document.getElementById('atualizar-estoque-lote-loja-nome').textContent = estoqueTabAtual;
   document.getElementById('atualizar-estoque-lote-busca').value = '';
   document.getElementById('atualizar-estoque-lote-erro').style.display = 'none';
@@ -4278,6 +4280,8 @@ function processarColarListaAtualizarEstoqueLote() {
   let casados = 0;
   const naoEncontrados = [];
 
+  // Aceita `nome;atual` (só estoque) ou `nome;atual;mínimo` (os dois de
+  // uma vez, formato da planilha que a Julia mandou do Açaí Na Lata).
   texto.split('\n').forEach((linhaTexto) => {
     const bruta = linhaTexto.trim();
     if (!bruta) return;
@@ -4285,13 +4289,19 @@ function processarColarListaAtualizarEstoqueLote() {
     const partes = bruta.split(separador);
     if (partes.length < 2) { naoEncontrados.push(bruta); return; }
 
-    const valor = partes[partes.length - 1].trim().replace(',', '.');
-    const nome = partes.slice(0, -1).join(separador).trim();
+    const ultimo = partes[partes.length - 1].trim().replace(',', '.');
+    const penultimo = partes.length > 2 ? partes[partes.length - 2].trim().replace(',', '.') : null;
+    const temMinimo = penultimo !== null && !isNaN(parseFloat(penultimo));
+
+    const valor = temMinimo ? penultimo : ultimo;
+    const minimo = temMinimo ? ultimo : null;
+    const nome = partes.slice(0, temMinimo ? -2 : -1).join(separador).trim();
     if (!nome || isNaN(parseFloat(valor))) { naoEncontrados.push(bruta); return; }
 
     const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
     if (insumoId) {
       atualizarEstoqueLoteValores[insumoId] = valor;
+      if (minimo !== null) atualizarEstoqueLoteMinimos[insumoId] = minimo;
       casados++;
     } else {
       naoEncontrados.push(nome);
@@ -4322,6 +4332,7 @@ function renderAtualizarEstoqueLoteTabela(filtro) {
       <td class="text-muted">${escaparHtml(linha.insumo.categoria)}</td>
       <td>${linha.dados.quantidadeAtual} ${escaparHtml(linha.insumo.unidadeMedida)}</td>
       <td><input type="number" step="0.01" min="0" placeholder="—" data-insumo-id="${linha.insumo.id}" value="${atualizarEstoqueLoteValores[linha.insumo.id] ?? ''}" style="width:100px;"></td>
+      <td><input type="number" step="0.01" min="0" placeholder="—" data-minimo-id="${linha.insumo.id}" value="${atualizarEstoqueLoteMinimos[linha.insumo.id] ?? ''}" style="width:100px;"></td>
     </tr>
   `).join('');
 
@@ -4329,6 +4340,13 @@ function renderAtualizarEstoqueLoteTabela(filtro) {
     input.addEventListener('input', () => {
       if (input.value === '') delete atualizarEstoqueLoteValores[input.dataset.insumoId];
       else atualizarEstoqueLoteValores[input.dataset.insumoId] = input.value;
+    });
+  });
+
+  tbody.querySelectorAll('input[data-minimo-id]').forEach((input) => {
+    input.addEventListener('input', () => {
+      if (input.value === '') delete atualizarEstoqueLoteMinimos[input.dataset.minimoId];
+      else atualizarEstoqueLoteMinimos[input.dataset.minimoId] = input.value;
     });
   });
 }
@@ -4354,7 +4372,7 @@ document.getElementById('btn-atualizar-estoque-lote-salvar')?.addEventListener('
     const resposta = await fetch('/api/insumos/quantidades-atuais/lote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loja: estoqueTabAtual, valores: atualizarEstoqueLoteValores }),
+      body: JSON.stringify({ loja: estoqueTabAtual, valores: atualizarEstoqueLoteValores, minimos: atualizarEstoqueLoteMinimos }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');

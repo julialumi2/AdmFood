@@ -443,12 +443,12 @@
           <button type="button" class="btn-close" id="btn-atualizar-estoque-lote-fechar" aria-label="Fechar">&times;</button>
         </div>
         <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
-          Preencha só os insumos que quiser atualizar — o resto continua como está. Sobrescreve a quantidade atual (não é entrada nem saída, é o valor final).
+          Preencha só os insumos que quiser atualizar — o resto continua como está. Sobrescreve a quantidade atual (não é entrada nem saída, é o valor final) e, se você preencher, também o estoque mínimo.
         </p>
         <details style="margin-bottom: var(--space-3);">
-          <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Colar lista (nome + quantidade, um por linha)</summary>
+          <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Colar lista (nome + quantidade, um por linha — pode incluir o mínimo no fim)</summary>
           <div style="margin-top: var(--space-2); display:flex; flex-direction:column; gap: var(--space-2);">
-            <textarea id="atualizar-estoque-lote-colar-texto" rows="5" placeholder="Ex: Alho Descascado 1Kg;1&#10;Bacon Fatiado;50" style="width:100%; font-family: inherit; padding: var(--space-2); border: 1px solid var(--input-border); background-color: var(--input-bg); color: var(--text-dark); border-radius: var(--radius-sm);"></textarea>
+            <textarea id="atualizar-estoque-lote-colar-texto" rows="5" placeholder="Ex: Alho Descascado 1Kg;1&#10;Bacon Fatiado;50;20" style="width:100%; font-family: inherit; padding: var(--space-2); border: 1px solid var(--input-border); background-color: var(--input-bg); color: var(--text-dark); border-radius: var(--radius-sm);"></textarea>
             <div style="display:flex; align-items:center; gap: var(--space-3);">
               <button type="button" class="btn-secondary-sm" id="btn-atualizar-estoque-lote-processar-colar">Processar lista</button>
               <span class="panel-subtitle" id="atualizar-estoque-lote-colar-resultado"></span>
@@ -467,6 +467,7 @@
                 <th>Categoria</th>
                 <th>Atual</th>
                 <th>Novo valor</th>
+                <th>Novo mínimo</th>
               </tr>
             </thead>
             <tbody id="atualizar-estoque-lote-tabela-body">

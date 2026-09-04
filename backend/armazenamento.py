@@ -2574,28 +2574,40 @@ def salvar_ajustes_quantidade_ideal_em_lote(loja, valores):
     return len(valores)
 
 
-def salvar_quantidade_atual_insumo(loja, insumo_id, quantidade):
+def salvar_quantidade_atual_insumo(loja, insumo_id, quantidade, estoque_minimo=None):
     """Sobrescreve a quantidade atual em estoque de um insumo numa loja —
     mesmo UPDATE do modal individual "Editar estoque", só que chamado em
-    lote (ver salvar_quantidades_atuais_em_lote)."""
+    lote (ver salvar_quantidades_atuais_em_lote). `estoque_minimo` é
+    opcional: quando vem None, só a quantidade atual é tocada (a coluna do
+    mínimo fica como está)."""
     agora = datetime.now().isoformat()
     with conexao() as conn:
-        conn.execute(
-            "UPDATE estoque_insumo SET quantidade_atual = ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
-            (quantidade, agora, insumo_id, loja),
-        )
+        if estoque_minimo is None:
+            conn.execute(
+                "UPDATE estoque_insumo SET quantidade_atual = ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
+                (quantidade, agora, insumo_id, loja),
+            )
+        else:
+            conn.execute(
+                "UPDATE estoque_insumo SET quantidade_atual = ?, estoque_minimo = ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
+                (quantidade, estoque_minimo, agora, insumo_id, loja),
+            )
 
 
-def salvar_quantidades_atuais_em_lote(loja, valores):
-    """`valores` = {insumo_id: quantidade} — atualiza a quantidade em
-    estoque de vários insumos de uma vez (mesmo espírito de
+def salvar_quantidades_atuais_em_lote(loja, valores, minimos=None):
+    """`valores` = {insumo_id: quantidade} e `minimos` = {insumo_id:
+    estoque_minimo} (opcional) — atualiza a quantidade em estoque (e o
+    mínimo, quando vier) de vários insumos de uma vez (mesmo espírito de
     salvar_ajustes_quantidade_ideal_em_lote, mas pra quantidade atual, não
     ideal) — pensado pra importar uma contagem física ou um relatório
     externo (ex: exportação de outro sistema) de uma vez, em vez de editar
     um por um pelo lápis. Construído em 2026-09-04 a pedido da Julia, pra
-    trazer QE (quantidade em estoque) da VMarket pro AdmFood."""
+    trazer QE (quantidade em estoque) da VMarket pro AdmFood; a coluna do
+    mínimo entrou junto quando ela mandou a planilha do Açaí Na Lata, que
+    tem estoque atual e quantidade mínima lado a lado."""
+    minimos = minimos or {}
     for insumo_id, valor in valores.items():
-        salvar_quantidade_atual_insumo(loja, insumo_id, valor)
+        salvar_quantidade_atual_insumo(loja, insumo_id, valor, minimos.get(insumo_id))
     return len(valores)
 
 
