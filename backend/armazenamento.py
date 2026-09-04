@@ -2000,7 +2000,7 @@ def buscar_convite_por_token(token):
         linha = conn.execute(
             """
             SELECT cc.id, cc.cotacao_id, cc.fornecedor_id, cc.token, cc.prazo_validade, cc.status, cc.criado_em, cc.respondida_em,
-                   f.nome AS fornecedor_nome, c.titulo AS cotacao_titulo
+                   f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone, c.titulo AS cotacao_titulo
             FROM cotacao_convite cc
             JOIN fornecedor f ON f.id = cc.fornecedor_id
             JOIN cotacao c ON c.id = cc.cotacao_id
