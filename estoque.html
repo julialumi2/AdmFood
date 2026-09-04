@@ -344,7 +344,7 @@
                 <th>Categoria</th>
                 <th class="col-atual-destaque">Atual</th>
                 <th title="Média diária estimada nos últimos 30 dias, a partir da Ficha Técnica × vendas">Consumo médio/dia</th>
-                <th title="Consumo médio/dia × 7 — quanto precisa ter pra cobrir uma semana">Qtd. ideal (7 dias)</th>
+                <th title="Estoque mínimo cadastrado, ou o ajuste manual quando existir">Qtd. mínima</th>
                 <th>Nível</th>
                 <th>Status</th>
                 <th id="estoque-th-acoes" style="display:none;">Ações</th>
@@ -428,9 +428,12 @@
           </table>
         </div>
         <p id="ajuste-lote-erro" class="panel-subtitle" style="display:none; color: var(--danger); margin-top: var(--space-2);"></p>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary-sm" id="btn-ajuste-lote-cancelar">Cancelar</button>
-          <button type="button" class="btn-primary-sm" id="btn-ajuste-lote-salvar">Salvar ajustes</button>
+        <div class="modal-actions" style="justify-content: space-between;">
+          <button type="button" class="btn-secondary-sm" id="btn-ajuste-lote-remover-todos" title="Remove todo ajuste manual desta loja de uma vez — volta tudo pro cálculo automático (mínimo, ou o ajuste de outra loja se você copiar de novo)" style="color: var(--danger);">Remover todos os ajustes desta loja</button>
+          <div style="display:flex; gap: var(--space-2);">
+            <button type="button" class="btn-secondary-sm" id="btn-ajuste-lote-cancelar">Cancelar</button>
+            <button type="button" class="btn-primary-sm" id="btn-ajuste-lote-salvar">Salvar ajustes</button>
+          </div>
         </div>
       </div>
     </div>

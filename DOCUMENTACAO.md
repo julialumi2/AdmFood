@@ -1854,6 +1854,71 @@ escolher quantidade por loja) ou se ela é só pra pesquisa de preço/marcar
 vencedor — ela repassou a pergunta pra Kethllyn (quem faz a compra das
 lojas) e vai avisar a resposta.
 
+**"Quantidade ideal" passa a ser baseada em estoque mínimo, não mais
+consumo médio** (2026-09-04, pedido direto da Julia depois de notar
+valores errados no Açaí Na Lata). Motivo raiz do valor errado: ao
+importar a planilha do Açaí (ver acima), o mesmo número da coluna
+"Qtd. Mínima" foi gravado tanto em `estoque_minimo` (certo) quanto,
+por engano, como um **ajuste manual de quantidade ideal** pra cada um
+dos 50 insumos — então "Qtd. ideal" aparecia igual ao mínimo em vez de
+refletir consumo real (ou ficar em "—"). Ao investigar, a Julia decidiu
+ir além do conserto pontual: como a Ficha Técnica ainda não cobre a
+maioria dos insumos em nenhuma loja (`consumo_medio_insumo` retorna
+`None` na prática pra quase tudo), ela pediu pra trocar a **base do
+cálculo inteira**, em todas as lojas: `quantidade ideal = estoque
+mínimo` (ajuste manual da Kethllyn continua podendo sobrescrever,
+como sempre) — no lugar de `consumo médio × 7 dias`. Muda em 3 lugares
+que liam a mesma conta:
+- `listar_itens_contagem` (armazenamento.py) — Conferência da
+  Requisição e formulário público de Contagem.
+- `gerar_cotacao_do_deficit` (armazenamento.py) — **não precisou mudar
+  o código dela**, só herda o novo cálculo por já ler
+  `item['quantidadeIdeal']` de `listar_itens_contagem`; isso significa
+  que o déficit que vira cotação/pedido de compra de verdade também
+  passa a usar mínimo, não só o que aparece na tela (confirmado que era
+  esse o alcance que ela queria).
+- `_quantidadeIdealParaLoja` (script.js) — tela de Estoque.
+- `copiar_quantidade_ideal` (armazenamento.py, "Copiar de outra loja")
+  também trocou pra copiar o mínimo efetivo da loja de origem em vez do
+  consumo médio dela, pra não sobrar dois critérios diferentes no
+  sistema.
+
+`DIAS_COBERTURA_IDEAL` (constante 7) continua existindo só pra duas
+coisas sem relação com a compra de verdade: a janela de "data especial"
+(`multiplicador_quantidade_ideal`) e a "tendência" informativa
+(`_sugestaoTendenciaParaLoja`, compara consumo recente × médio — nunca
+influenciou o cálculo de déficit, só um alerta visual).
+
+Coluna renomeada de "Qtd. ideal (7 dias)" pra **"Qtd. mínima"**
+(estoque.html, contagens.html — pedido da própria Julia, pra não
+confundir já que não é mais baseada em 7 dias de consumo).
+
+Testado isolado contra cópia do banco (3 cenários): sem ajuste manual →
+ideal vira igual ao mínimo cadastrado; com ajuste manual → ajuste ganha
+do mínimo (comportamento antigo preservado); mínimo zerado/não
+cadastrado → ideal fica `None` (mostra "—", nunca "compre 0"); "copiar
+de outra loja" → copia o ajuste-ou-mínimo efetivo certo.
+
+**Limpeza dos ajustes indevidos do Açaí**: os 50 ajustes manuais criados
+por engano na importação (ver acima) precisavam ser removidos um por um
+pela UI (não existe endpoint de escrita direta no banco liberado pro
+Claude — por design, todas as mutações passam pela UI/API de verdade).
+Depois de remover ~3 manualmente pra confirmar que funcionava, ficou
+claro que não valia a pena remover as ~47 restantes uma por vez (cada
+remoção recarrega a tabela inteira, invalidando as referências dos
+outros botões). Em vez disso, criada uma ferramenta nova, pareada com o
+"Ajustar em lote" que já existia: **"Remover todos os ajustes desta
+loja"** — `DELETE /api/insumos/ajustes-quantidade-ideal?loja=X`
+(`excluir_ajustes_quantidade_ideal_da_loja`, armazenamento.py, um único
+`DELETE ... WHERE loja = ?`) — botão dentro do próprio modal "Ajustar
+quantidade ideal em lote" (canto esquerdo, vermelho, com `confirm()`).
+Testado isolado: remove só a loja pedida, não mexe nas outras. Ainda
+falta a Julia (ou alguém) clicar esse botão pra Açaí Na Lata depois do
+deploy — como o valor final não muda mais nada (ajuste e mínimo já eram
+o mesmo número), isso agora é só higiene de dado (evita que uma
+atualização futura do mínimo do Açaí fique presa atrás de um ajuste
+manual esquecido), não corrige nada visível na tela.
+
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 
 Botão na tela de Insights monta um texto (um bloco por loja: Presencial/

@@ -2441,6 +2441,15 @@ def _mapa_consumo_medio_loja(loja, dias_historico=30):
     return {linha["insumoId"]: linha["consumoMedioDiario"] for linha in linhas}
 
 
+def _mapa_minimo_loja(loja):
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT insumo_id, estoque_minimo FROM estoque_insumo WHERE loja = ?",
+            (loja,),
+        ).fetchall()
+    return {linha["insumo_id"]: linha["estoque_minimo"] for linha in linhas}
+
+
 def criar_contagem(loja, descricao, prazo_validade, categorias=None):
     """Abre uma contagem pra uma loja — gera um token opaco (o link que vai
     pro funcionário, sem precisar de login) e já grava uma linha só pros
@@ -2620,6 +2629,17 @@ def excluir_ajuste_quantidade_ideal(loja, insumo_id):
         )
 
 
+def excluir_ajustes_quantidade_ideal_da_loja(loja):
+    """Remove TODOS os ajustes manuais de uma loja de uma vez — pra desfazer
+    em lote um import que acabou virando ajuste sem querer (caso real: a
+    planilha do Açaí foi importada tanto como estoque mínimo quanto,
+    por engano, como ajuste manual de quantidade ideal, 2026-09-04).
+    Retorna quantos ajustes foram removidos."""
+    with conexao() as conn:
+        cursor = conn.execute("DELETE FROM ajuste_quantidade_ideal WHERE loja = ?", (loja,))
+        return cursor.rowcount
+
+
 def mapa_ajustes_quantidade_ideal(loja):
     with conexao() as conn:
         linhas = conn.execute(
@@ -2632,11 +2652,11 @@ def mapa_ajustes_quantidade_ideal(loja):
 def copiar_quantidade_ideal(loja_origem, loja_destino):
     """'Loja nova sem histórico' (seção 9, roteiro de compras respondido
     pela Kethllyn) — copia a quantidade ideal EFETIVA (o ajuste manual da
-    loja de origem quando existir, senão a calculada a partir do consumo
-    médio dela) pra loja de destino, virando um ajuste manual lá. Não é
-    mágica: é só um jeito rápido de começar com um número razoável antes
-    da loja nova ter venda suficiente pra calcular sozinha."""
-    mapa_consumo_origem = _mapa_consumo_medio_loja(loja_origem)
+    loja de origem quando existir, senão o estoque mínimo dela) pra loja
+    de destino, virando um ajuste manual lá. Não é mágica: é só um jeito
+    rápido de começar com um número razoável antes da loja nova ter
+    venda suficiente pra calcular sozinha."""
+    mapa_minimo_origem = _mapa_minimo_loja(loja_origem)
     mapa_ajustes_origem = mapa_ajustes_quantidade_ideal(loja_origem)
     with conexao() as conn:
         insumo_ids = [linha["id"] for linha in conn.execute("SELECT id FROM insumo").fetchall()]
@@ -2646,8 +2666,7 @@ def copiar_quantidade_ideal(loja_origem, loja_destino):
         if insumo_id in mapa_ajustes_origem:
             valor = mapa_ajustes_origem[insumo_id]
         else:
-            consumo = mapa_consumo_origem.get(insumo_id)
-            valor = round(consumo * DIAS_COBERTURA_IDEAL, 2) if consumo is not None else None
+            valor = mapa_minimo_origem.get(insumo_id) or None
         if valor is not None:
             salvar_ajuste_quantidade_ideal(loja_destino, insumo_id, valor)
             copiados += 1
@@ -2704,13 +2723,17 @@ def multiplicador_quantidade_ideal(loja):
 
 
 def listar_itens_contagem(contagem_id, loja):
-    """Itens da contagem + quantidade ideal (consumo médio × 7 dias × o
+    """Itens da contagem + quantidade ideal (estoque mínimo cadastrado × o
     multiplicador de alguma data especial ativa, ou o ajuste manual da
     Kethllyn quando existir um pra esse insumo/loja — o ajuste sempre
     ganha da data especial, é a palavra final dela) pra servir de
     referência tanto na tela pública de preenchimento quanto na
-    conferência — mesmo cálculo de DIAS_COBERTURA_IDEAL do front."""
-    mapa_consumo = _mapa_consumo_medio_loja(loja)
+    conferência. Usava consumo médio × 7 dias antes (2026-08-27), mas a
+    Julia pediu pra trocar pra estoque mínimo (2026-09-04) — a Ficha
+    Técnica ainda não cobre a maioria dos insumos, então o consumo médio
+    ficava "—" quase sempre; mínimo é um número que já existe e em que
+    ela confia."""
+    mapa_minimo = _mapa_minimo_loja(loja)
     mapa_ajustes = mapa_ajustes_quantidade_ideal(loja)
     multiplicador = multiplicador_quantidade_ideal(loja)
     with conexao() as conn:
@@ -2732,8 +2755,8 @@ def listar_itens_contagem(contagem_id, loja):
         if ajustada:
             quantidade_ideal = mapa_ajustes[linha["insumo_id"]]
         else:
-            consumo_medio = mapa_consumo.get(linha["insumo_id"])
-            quantidade_ideal = round(consumo_medio * DIAS_COBERTURA_IDEAL * multiplicador, 2) if consumo_medio is not None else None
+            minimo = mapa_minimo.get(linha["insumo_id"])
+            quantidade_ideal = round(minimo * multiplicador, 2) if minimo else None
         itens.append({
             "insumoId": linha["insumo_id"],
             "nome": linha["nome"],

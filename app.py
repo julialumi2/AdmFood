@@ -91,6 +91,7 @@ from backend.armazenamento import (
     salvar_ajustes_quantidade_ideal_em_lote,
     salvar_quantidades_atuais_em_lote,
     excluir_ajuste_quantidade_ideal,
+    excluir_ajustes_quantidade_ideal_da_loja,
     mapa_ajustes_quantidade_ideal,
     copiar_quantidade_ideal,
     multiplicador_quantidade_ideal,
@@ -2446,6 +2447,23 @@ def api_remover_ajuste_quantidade_ideal(insumo_id):
 
     excluir_ajuste_quantidade_ideal(loja, insumo_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/ajustes-quantidade-ideal', methods=['DELETE'])
+def api_remover_ajustes_quantidade_ideal_da_loja():
+    """Remove todos os ajustes manuais de quantidade ideal de uma loja de
+    uma vez — pra desfazer em lote um import que virou ajuste sem
+    querer, em vez de precisar remover um por um."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    removidos = excluir_ajustes_quantidade_ideal_da_loja(loja)
+    return jsonify({"ok": True, "removidos": removidos})
 
 
 @app.route('/api/insumos/ajustes-quantidade-ideal/lote', methods=['POST'])

@@ -1248,8 +1248,9 @@ function renderPreparoTab(tab) {
 
 // --- ESTOQUE (insumos nativos, catálogo único + quantidade por loja) ---
 const LOJAS_ESTOQUE = ['Hamburgueria Artesanos', 'Açaí Na Lata', 'Tradiça ZN', 'Tradiça Simus'];
-// Cotação é semanal (ver processo real da VMarket na documentação, seção 9)
-// — quantidade ideal cobre 7 dias de consumo médio a partir daqui.
+// Ainda usada pela "tendência" (consumo recente × 14 dias vs médio de 30) —
+// quantidade ideal em si passou a usar estoque mínimo, não mais isso
+// (2026-09-04, ver _quantidadeIdealParaLoja).
 const DIAS_COBERTURA_IDEAL = 7;
 const STATUS_LABEL_ESTOQUE = { ok: 'OK', baixo: 'Baixo', critico: 'Crítico' };
 const STATUS_CLASSE_BADGE_ESTOQUE = { ok: 'pos', baixo: 'neu-orange', critico: 'neg' };
@@ -1336,15 +1337,17 @@ function _consumoMedioParaLinha(insumoId, loja) {
 }
 
 // Quantidade ideal efetiva de uma loja: o ajuste manual quando existir,
-// senão o calculado (consumo médio × DIAS_COBERTURA_IDEAL). null = nenhum
-// dos dois disponível ainda.
+// senão o estoque mínimo cadastrado (pedido da Julia, 2026-09-04 — antes
+// usava consumo médio × DIAS_COBERTURA_IDEAL, mas a Ficha Técnica ainda
+// não cobre a maioria dos insumos). null = nenhum dos dois disponível.
 function _quantidadeIdealParaLoja(insumoId, loja) {
   const ajuste = estoqueAjustesIdeal[insumoId]?.[loja];
   if (ajuste !== undefined) return { valor: ajuste, ajustado: true };
-  const consumo = _consumoMedioParaLinha(insumoId, loja);
-  if (consumo === null) return { valor: null, ajustado: false };
+  const insumo = estoqueInsumos.find((i) => i.id === insumoId);
+  const minimo = insumo?.porLoja[loja]?.estoqueMinimo;
+  if (!minimo) return { valor: null, ajustado: false };
   const multiplicador = estoqueMultiplicadorEspecial[loja] || 1;
-  return { valor: Math.round(consumo * DIAS_COBERTURA_IDEAL * multiplicador * 100) / 100, ajustado: false };
+  return { valor: Math.round(minimo * multiplicador * 100) / 100, ajustado: false };
 }
 
 // "Geral" soma a quantidade ideal efetiva (ajuste ou calculada) de cada
@@ -1522,7 +1525,7 @@ function renderEstoqueTab() {
         <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
           ${dados.consumoMedio === null ? '—' : `${Math.round(dados.consumoMedio * 100) / 100} ${escaparHtml(insumo.unidadeMedida)}/dia`}
         </td>
-        <td ${quantidadeIdeal === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
+        <td ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
           ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
             <div class="qtd-ideal-cell">
               <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
@@ -4264,6 +4267,24 @@ document.getElementById('btn-ajuste-lote-salvar')?.addEventListener('click', asy
   } catch (erroCatch) {
     console.error('Falha ao ajustar quantidade ideal em lote:', erroCatch);
     erro.textContent = erroCatch.message || 'Não foi possível salvar.';
+    erro.style.display = '';
+  }
+});
+
+document.getElementById('btn-ajuste-lote-remover-todos')?.addEventListener('click', async () => {
+  const erro = document.getElementById('ajuste-lote-erro');
+  erro.style.display = 'none';
+  if (!confirm(`Remover TODOS os ajustes manuais de quantidade ideal de ${estoqueTabAtual}? Volta tudo pro cálculo automático (mínimo, ou o ajuste de outra loja se copiar de novo). Não afeta as outras lojas.`)) return;
+  try {
+    const resposta = await fetch(`/api/insumos/ajustes-quantidade-ideal?loja=${encodeURIComponent(estoqueTabAtual)}`, { method: 'DELETE' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao remover ajustes');
+    fecharModalAjusteLote();
+    await carregarInsumos();
+    alert(`Pronto — ${dados.removidos} ajuste(s) removido(s).`);
+  } catch (erroCatch) {
+    console.error('Falha ao remover ajustes em lote:', erroCatch);
+    erro.textContent = erroCatch.message || 'Não foi possível remover os ajustes.';
     erro.style.display = '';
   }
 });
