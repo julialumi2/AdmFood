@@ -1183,6 +1183,17 @@ ponto a ponto. Sobrescreve o valor (não soma, ao contrário de "Registrar
 entrada") — pensado pra importar uma contagem/relatório de fora que já é
 o valor final, não um recebimento.
 
+**"Colar lista" no "Insumos da loja"** (concluído em 2026-09-04, mesma
+leva do import da VMarket). Terceira "colar lista" da tela de Estoque, e
+a única que **substitui** em vez de preencher: cola um nome por linha, e
+o modal marca só esses insumos e **desmarca todo o resto** — é assim que
+dá pra montar a lista de uma loja a partir de uma fonte externa sem
+clicar em ~200 checkboxes um por um. Mesmo `_normalizarNomeInsumo` e
+mesmo match exato-após-normalizar das outras duas (nome que não bate vai
+pra "não encontrado", nunca aproximação). Se nenhum nome da lista bater,
+não mexe em nada (evita desmarcar a loja inteira por causa de uma lista
+colada errada).
+
 **Datas especiais** (concluído em 2026-08-27, terceira e última peça —
 resposta da Kethllyn: feriado/evento marcado manualmente com antecedência,
 sem o sistema tentar adivinhar sozinho). Tabela `data_especial`

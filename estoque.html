@@ -492,6 +492,16 @@
         <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
           Desmarque os insumos que essa loja não usa — eles deixam de aparecer na aba dela aqui em Estoque e no link de Requisição (continuam existindo normalmente no catálogo e nas outras lojas).
         </p>
+        <details style="margin-bottom: var(--space-3);">
+          <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Colar lista (um nome por linha — marca esses e desmarca o resto)</summary>
+          <div style="margin-top: var(--space-2); display:flex; flex-direction:column; gap: var(--space-2);">
+            <textarea id="insumos-loja-colar-texto" rows="5" placeholder="Ex: Alho Descascado 1Kg&#10;Bacon Fatiado Smoke-MR BEEF" style="width:100%; font-family: inherit; padding: var(--space-2); border: 1px solid var(--input-border); background-color: var(--input-bg); color: var(--text-dark); border-radius: var(--radius-sm);"></textarea>
+            <div style="display:flex; align-items:center; gap: var(--space-3);">
+              <button type="button" class="btn-secondary-sm" id="btn-insumos-loja-processar-colar">Processar lista</button>
+              <span class="panel-subtitle" id="insumos-loja-colar-resultado"></span>
+            </div>
+          </div>
+        </details>
         <div style="display:flex; gap: var(--space-3); align-items:center; margin-bottom: var(--space-3); flex-wrap: wrap;">
           <div class="search-box" style="flex:1; min-width:180px;">
             <i data-lucide="search"></i>

@@ -4375,6 +4375,8 @@ async function abrirModalInsumosLoja() {
   document.getElementById('insumos-loja-nome').textContent = estoqueTabAtual;
   document.getElementById('insumos-loja-busca').value = '';
   document.getElementById('insumos-loja-erro').style.display = 'none';
+  document.getElementById('insumos-loja-colar-texto').value = '';
+  document.getElementById('insumos-loja-colar-resultado').textContent = '';
   document.getElementById('insumos-loja-tabela-body').innerHTML = '<tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>';
   document.getElementById('modal-insumos-loja').style.display = 'flex';
   try {
@@ -4415,6 +4417,44 @@ function renderInsumosLojaTabela(filtro) {
     });
   });
 }
+
+// Colar a lista de insumos que a loja usa (um nome por linha) — marca só
+// esses e desmarca todo o resto, pra montar a lista da loja de uma vez a
+// partir de uma fonte externa (ex: relatório de outro sistema) em vez de
+// clicar em ~200 checkboxes. Mesmo `_normalizarNomeInsumo`/match exato das
+// outras duas "colar lista" da tela.
+function processarColarListaInsumosLoja() {
+  const texto = document.getElementById('insumos-loja-colar-texto').value;
+  const porNomeNormalizado = new Map();
+  insumosLojaTodos.forEach((i) => {
+    porNomeNormalizado.set(_normalizarNomeInsumo(i.nome), i.id);
+  });
+
+  const encontrados = new Set();
+  const naoEncontrados = [];
+
+  texto.split('\n').forEach((linhaTexto) => {
+    const nome = linhaTexto.trim();
+    if (!nome) return;
+    const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
+    if (insumoId) encontrados.add(insumoId);
+    else naoEncontrados.push(nome);
+  });
+
+  if (!encontrados.size) {
+    document.getElementById('insumos-loja-colar-resultado').textContent =
+      'Nenhum nome da lista bateu com o catálogo — nada foi alterado.';
+    return;
+  }
+
+  insumosLojaSelecionados = encontrados;
+  renderInsumosLojaTabela(document.getElementById('insumos-loja-busca').value);
+  document.getElementById('insumos-loja-colar-resultado').textContent = naoEncontrados.length
+    ? `${encontrados.size} marcado(s), o resto desmarcado. Não encontrado (confira o nome): ${naoEncontrados.join(', ')}`
+    : `${encontrados.size} marcado(s), o resto desmarcado — todos encontrados.`;
+}
+
+document.getElementById('btn-insumos-loja-processar-colar')?.addEventListener('click', processarColarListaInsumosLoja);
 
 document.getElementById('btn-insumos-loja')?.addEventListener('click', abrirModalInsumosLoja);
 document.getElementById('btn-insumos-loja-fechar')?.addEventListener('click', fecharModalInsumosLoja);
