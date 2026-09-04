@@ -1466,6 +1466,9 @@ function renderEstoqueTab() {
   const btnAjusteLote = document.getElementById('btn-ajuste-lote');
   if (btnAjusteLote) btnAjusteLote.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
+  const btnAtualizarEstoqueLote = document.getElementById('btn-atualizar-estoque-lote');
+  if (btnAtualizarEstoqueLote) btnAtualizarEstoqueLote.style.display = (isAdmin && !ehGeral) ? '' : 'none';
+
   const btnInsumosLoja = document.getElementById('btn-insumos-loja');
   if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
@@ -4247,6 +4250,119 @@ document.getElementById('btn-ajuste-lote-salvar')?.addEventListener('click', asy
     alert(`Pronto — ${dados.salvos} insumo(s) ajustado(s).`);
   } catch (erroCatch) {
     console.error('Falha ao ajustar quantidade ideal em lote:', erroCatch);
+    erro.textContent = erroCatch.message || 'Não foi possível salvar.';
+    erro.style.display = '';
+  }
+});
+
+let atualizarEstoqueLoteValores = {};
+
+function abrirModalAtualizarEstoqueLote() {
+  atualizarEstoqueLoteValores = {};
+  document.getElementById('atualizar-estoque-lote-loja-nome').textContent = estoqueTabAtual;
+  document.getElementById('atualizar-estoque-lote-busca').value = '';
+  document.getElementById('atualizar-estoque-lote-erro').style.display = 'none';
+  document.getElementById('atualizar-estoque-lote-colar-texto').value = '';
+  document.getElementById('atualizar-estoque-lote-colar-resultado').textContent = '';
+  renderAtualizarEstoqueLoteTabela('');
+  document.getElementById('modal-atualizar-estoque-lote').style.display = 'flex';
+}
+
+function processarColarListaAtualizarEstoqueLote() {
+  const texto = document.getElementById('atualizar-estoque-lote-colar-texto').value;
+  const porNomeNormalizado = new Map();
+  _linhasEstoqueParaTab(estoqueTabAtual).forEach((linha) => {
+    porNomeNormalizado.set(_normalizarNomeInsumo(linha.insumo.nome), linha.insumo.id);
+  });
+
+  let casados = 0;
+  const naoEncontrados = [];
+
+  texto.split('\n').forEach((linhaTexto) => {
+    const bruta = linhaTexto.trim();
+    if (!bruta) return;
+    const separador = bruta.includes('\t') ? '\t' : (bruta.includes(';') ? ';' : ',');
+    const partes = bruta.split(separador);
+    if (partes.length < 2) { naoEncontrados.push(bruta); return; }
+
+    const valor = partes[partes.length - 1].trim().replace(',', '.');
+    const nome = partes.slice(0, -1).join(separador).trim();
+    if (!nome || isNaN(parseFloat(valor))) { naoEncontrados.push(bruta); return; }
+
+    const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
+    if (insumoId) {
+      atualizarEstoqueLoteValores[insumoId] = valor;
+      casados++;
+    } else {
+      naoEncontrados.push(nome);
+    }
+  });
+
+  renderAtualizarEstoqueLoteTabela(document.getElementById('atualizar-estoque-lote-busca').value);
+  document.getElementById('atualizar-estoque-lote-colar-resultado').textContent = naoEncontrados.length
+    ? `${casados} casado(s). Não encontrado (confira o nome e ajuste na mão): ${naoEncontrados.join(', ')}`
+    : `${casados} casado(s), todos encontrados.`;
+}
+
+document.getElementById('btn-atualizar-estoque-lote-processar-colar')?.addEventListener('click', processarColarListaAtualizarEstoqueLote);
+
+function fecharModalAtualizarEstoqueLote() {
+  document.getElementById('modal-atualizar-estoque-lote').style.display = 'none';
+}
+
+function renderAtualizarEstoqueLoteTabela(filtro) {
+  const tbody = document.getElementById('atualizar-estoque-lote-tabela-body');
+  const termo = filtro.trim().toLowerCase();
+  const linhas = _linhasEstoqueParaTab(estoqueTabAtual)
+    .filter((linha) => !termo || linha.insumo.nome.toLowerCase().includes(termo));
+
+  tbody.innerHTML = linhas.map((linha) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(linha.insumo.nome)}</td>
+      <td class="text-muted">${escaparHtml(linha.insumo.categoria)}</td>
+      <td>${linha.dados.quantidadeAtual} ${escaparHtml(linha.insumo.unidadeMedida)}</td>
+      <td><input type="number" step="0.01" min="0" placeholder="—" data-insumo-id="${linha.insumo.id}" value="${atualizarEstoqueLoteValores[linha.insumo.id] ?? ''}" style="width:100px;"></td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('input[data-insumo-id]').forEach((input) => {
+    input.addEventListener('input', () => {
+      if (input.value === '') delete atualizarEstoqueLoteValores[input.dataset.insumoId];
+      else atualizarEstoqueLoteValores[input.dataset.insumoId] = input.value;
+    });
+  });
+}
+
+document.getElementById('btn-atualizar-estoque-lote')?.addEventListener('click', abrirModalAtualizarEstoqueLote);
+document.getElementById('btn-atualizar-estoque-lote-fechar')?.addEventListener('click', fecharModalAtualizarEstoqueLote);
+document.getElementById('btn-atualizar-estoque-lote-cancelar')?.addEventListener('click', fecharModalAtualizarEstoqueLote);
+
+document.getElementById('atualizar-estoque-lote-busca')?.addEventListener('input', (evento) => {
+  renderAtualizarEstoqueLoteTabela(evento.target.value);
+});
+
+document.getElementById('btn-atualizar-estoque-lote-salvar')?.addEventListener('click', async () => {
+  const erro = document.getElementById('atualizar-estoque-lote-erro');
+  erro.style.display = 'none';
+
+  if (!Object.keys(atualizarEstoqueLoteValores).length) {
+    erro.textContent = 'Preencha pelo menos um insumo.';
+    erro.style.display = '';
+    return;
+  }
+  try {
+    const resposta = await fetch('/api/insumos/quantidades-atuais/lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loja: estoqueTabAtual, valores: atualizarEstoqueLoteValores }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    fecharModalAtualizarEstoqueLote();
+    await carregarInsumos();
+    alert(`Pronto — ${dados.salvos} insumo(s) atualizado(s).`);
+  } catch (erroCatch) {
+    console.error('Falha ao atualizar estoque em lote:', erroCatch);
     erro.textContent = erroCatch.message || 'Não foi possível salvar.';
     erro.style.display = '';
   }

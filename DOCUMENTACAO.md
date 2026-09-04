@@ -1166,6 +1166,23 @@ Processa 100% no navegador (só usa os insumos já carregados da própria
 tela) — nenhuma rota nova, só popula os mesmos campos que já existem
 no modal.
 
+**"Atualizar estoque em lote"** (concluído em 2026-09-04, pedido da Julia
+pra trazer a quantidade atual em estoque (QE) de um relatório externo —
+no caso, um export da VMarket — de uma vez, em vez de editar insumo por
+insumo pelo "Editar estoque"). Espelha exatamente o "Ajustar em lote" da
+quantidade ideal (mesmo botão "Colar lista", mesmo `_normalizarNomeInsumo`,
+mesma regra de match exato-após-normalizar ou "não encontrado" pra
+conferir na mão — nunca aproximação), só que grava em
+`estoque_insumo.quantidade_atual` em vez de `ajuste_quantidade_ideal`.
+Botão novo "Atualizar estoque em lote" ao lado do "Ajustar em lote" na
+tela de Estoque (mesma visibilidade: só admin, só numa aba de loja
+específica). `salvar_quantidades_atuais_em_lote(loja, valores)`
+(armazenamento.py) e rota `POST /api/insumos/quantidades-atuais/lote`
+(admin) espelham `salvar_ajustes_quantidade_ideal_em_lote`/`/lote`
+ponto a ponto. Sobrescreve o valor (não soma, ao contrário de "Registrar
+entrada") — pensado pra importar uma contagem/relatório de fora que já é
+o valor final, não um recebimento.
+
 **Datas especiais** (concluído em 2026-08-27, terceira e última peça —
 resposta da Kethllyn: feriado/evento marcado manualmente com antecedência,
 sem o sistema tentar adivinhar sozinho). Tabela `data_especial`

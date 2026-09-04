@@ -89,6 +89,7 @@ from backend.armazenamento import (
     reabrir_contagem,
     salvar_ajuste_quantidade_ideal,
     salvar_ajustes_quantidade_ideal_em_lote,
+    salvar_quantidades_atuais_em_lote,
     excluir_ajuste_quantidade_ideal,
     mapa_ajustes_quantidade_ideal,
     copiar_quantidade_ideal,
@@ -2478,6 +2479,40 @@ def api_ajustar_quantidade_ideal_lote():
         return jsonify({"erro": "Preencha pelo menos um insumo."}), 400
 
     salvos = salvar_ajustes_quantidade_ideal_em_lote(loja, valores)
+    return jsonify({"ok": True, "salvos": salvos})
+
+
+@app.route('/api/insumos/quantidades-atuais/lote', methods=['POST'])
+def api_atualizar_quantidades_atuais_lote():
+    """Atualiza a quantidade EM ESTOQUE (não a ideal) de vários insumos de
+    uma vez — pra importar contagem física ou relatório externo sem
+    editar um por um pelo lápis."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+
+    valores_brutos = dados.get('valores') or {}
+    valores = {}
+    try:
+        for insumo_id, valor in valores_brutos.items():
+            if valor is None or valor == '':
+                continue
+            valor_float = float(valor)
+            if valor_float < 0:
+                return jsonify({"erro": "Nenhum valor pode ser negativo."}), 400
+            valores[int(insumo_id)] = valor_float
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Valor inválido."}), 400
+
+    if not valores:
+        return jsonify({"erro": "Preencha pelo menos um insumo."}), 400
+
+    salvos = salvar_quantidades_atuais_em_lote(loja, valores)
     return jsonify({"ok": True, "salvos": salvos})
 
 

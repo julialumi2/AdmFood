@@ -2574,6 +2574,31 @@ def salvar_ajustes_quantidade_ideal_em_lote(loja, valores):
     return len(valores)
 
 
+def salvar_quantidade_atual_insumo(loja, insumo_id, quantidade):
+    """Sobrescreve a quantidade atual em estoque de um insumo numa loja —
+    mesmo UPDATE do modal individual "Editar estoque", só que chamado em
+    lote (ver salvar_quantidades_atuais_em_lote)."""
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE estoque_insumo SET quantidade_atual = ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
+            (quantidade, agora, insumo_id, loja),
+        )
+
+
+def salvar_quantidades_atuais_em_lote(loja, valores):
+    """`valores` = {insumo_id: quantidade} — atualiza a quantidade em
+    estoque de vários insumos de uma vez (mesmo espírito de
+    salvar_ajustes_quantidade_ideal_em_lote, mas pra quantidade atual, não
+    ideal) — pensado pra importar uma contagem física ou um relatório
+    externo (ex: exportação de outro sistema) de uma vez, em vez de editar
+    um por um pelo lápis. Construído em 2026-09-04 a pedido da Julia, pra
+    trazer QE (quantidade em estoque) da VMarket pro AdmFood."""
+    for insumo_id, valor in valores.items():
+        salvar_quantidade_atual_insumo(loja, insumo_id, valor)
+    return len(valores)
+
+
 def excluir_ajuste_quantidade_ideal(loja, insumo_id):
     """Remove o ajuste manual — volta a mostrar o valor calculado."""
     with conexao() as conn:
