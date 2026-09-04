@@ -2168,7 +2168,7 @@ def buscar_pedido(pedido_id):
     with conexao() as conn:
         linha = conn.execute(
             """
-            SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
+            SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em, pc.token,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo
             FROM pedido_compra pc

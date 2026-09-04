@@ -1873,57 +1873,59 @@ def _texto_bloco_loja_pedido(pedido):
     )
 
 
+def _mensagem_whatsapp_pedido_token(token, ids):
+    """Monta o texto pronto pro WhatsApp de todos os pedidos que
+    compartilham esse token (= mesmo fornecedor, mesma leva de "Gerar
+    pedidos") — estilo VMarket, print de um pedido real que a Julia
+    mandou em 2026-09-03. Um bloco por loja quando o mesmo fornecedor
+    ganhou insumo em mais de uma loja de uma vez ("Esse pedido foi feito
+    em conjunto")."""
+    divisor = "------------------------"
+    pedidos = [buscar_pedido(pid) for pid in ids]
+    fornecedor = buscar_fornecedor_por_id(pedidos[0]["fornecedor_id"])
+    # `request.host_url` sozinho devolve http:// em produção — o Flask
+    # não sabe que o proxy do Dokploy termina https na frente dele.
+    # Achado testando ao vivo (2026-09-04): o link mandado pro
+    # fornecedor saía http://, inconsistente com o resto do site.
+    esquema = request.headers.get('X-Forwarded-Proto', request.scheme)
+    link = f"{esquema}://{request.host}/confirmar_pedido.html?token={token}"
+    saudacao = fornecedor["contato_nome"] or fornecedor["nome"]
+    prazo = fornecedor["prazo_pagamento"] or "Não Informado"
+    entrega = fornecedor["dias_entrega"] or "Não Informado"
+
+    partes = [
+        f"Olá {saudacao},  gostaria de realizar o pedido que fiz com a *{fornecedor['nome']}*",
+        f"*Prazo de Faturamento: {prazo}*\n*Entrega: {entrega}*",
+        f"*✅ Confirme esse pedido aqui: {link}*",
+    ]
+    if len(pedidos) > 1:
+        blocos_loja = "\n\n\n".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}" for p in pedidos)
+        valor_total_geral = sum(p["valor_total"] for p in pedidos)
+        partes.append(
+            "*Esse pedido foi feito em conjunto.*\n"
+            "Abaixo seguem os pedidos separados de cada uma das empresas:"
+        )
+        partes.append(f"{blocos_loja}\n\n\n{divisor}")
+        partes.append(f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*")
+        partes.append(f"*✅ Confirme esse pedido aqui: {link}*")
+    else:
+        partes.append(f"{divisor}\n{_texto_bloco_loja_pedido(pedidos[0])}")
+
+    return {
+        "fornecedorId": fornecedor["id"],
+        "fornecedorNome": fornecedor["nome"],
+        "telefone": fornecedor["contato_telefone"],
+        "mensagem": "\n\n".join(partes),
+    }
+
+
 def _montar_mensagens_whatsapp_pedidos(pedidos_criados):
-    """Agrupa os pedidos recém-criados por token (= por fornecedor, mesma
-    leva de "Gerar pedidos") e monta o texto pronto pro WhatsApp — estilo
-    VMarket, print de um pedido real que a Julia mandou em 2026-09-03. Um
-    bloco por loja quando o mesmo fornecedor ganhou insumo em mais de uma
-    loja de uma vez ("Esse pedido foi feito em conjunto")."""
+    """Agrupa os pedidos recém-criados por token e monta a mensagem de
+    cada um (ver `_mensagem_whatsapp_pedido_token`)."""
     ids_por_token = {}
     for pedido_criado in pedidos_criados:
         ids_por_token.setdefault(pedido_criado["token"], []).append(pedido_criado["id"])
-
-    divisor = "------------------------"
-    mensagens = []
-    for token, ids in ids_por_token.items():
-        pedidos = [buscar_pedido(pid) for pid in ids]
-        fornecedor = buscar_fornecedor_por_id(pedidos[0]["fornecedor_id"])
-        # `request.host_url` sozinho devolve http:// em produção — o Flask
-        # não sabe que o proxy do Dokploy termina https na frente dele.
-        # Achado testando ao vivo (2026-09-04): o link mandado pro
-        # fornecedor saía http://, inconsistente com o resto do site.
-        esquema = request.headers.get('X-Forwarded-Proto', request.scheme)
-        link = f"{esquema}://{request.host}/confirmar_pedido.html?token={token}"
-        saudacao = fornecedor["contato_nome"] or fornecedor["nome"]
-        prazo = fornecedor["prazo_pagamento"] or "Não Informado"
-        entrega = fornecedor["dias_entrega"] or "Não Informado"
-
-        partes = [
-            f"Olá {saudacao},  gostaria de realizar o pedido que fiz com a *{fornecedor['nome']}*",
-            f"*Prazo de Faturamento: {prazo}*\n*Entrega: {entrega}*",
-            f"*✅ Confirme esse pedido aqui: {link}*",
-        ]
-        if len(pedidos) > 1:
-            blocos_loja = "\n\n\n".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}" for p in pedidos)
-            valor_total_geral = sum(p["valor_total"] for p in pedidos)
-            partes.append(
-                "*Esse pedido foi feito em conjunto.*\n"
-                "Abaixo seguem os pedidos separados de cada uma das empresas:"
-            )
-            partes.append(f"{blocos_loja}\n\n\n{divisor}")
-            partes.append(f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*")
-            partes.append(f"*✅ Confirme esse pedido aqui: {link}*")
-        else:
-            partes.append(f"{divisor}\n{_texto_bloco_loja_pedido(pedidos[0])}")
-
-        mensagens.append({
-            "fornecedorId": fornecedor["id"],
-            "fornecedorNome": fornecedor["nome"],
-            "telefone": fornecedor["contato_telefone"],
-            "mensagem": "\n\n".join(partes),
-        })
-
-    return mensagens
+    return [_mensagem_whatsapp_pedido_token(token, ids) for token, ids in ids_por_token.items()]
 
 
 def _formatar_pedido_resumo(pedido):
@@ -1976,6 +1978,29 @@ def api_buscar_pedido(pedido_id):
     ]
     resposta["estagios"] = ESTAGIOS_PEDIDO
     return jsonify(resposta)
+
+
+@app.route('/api/pedidos/<int:pedido_id>/whatsapp', methods=['GET'])
+def api_mensagem_whatsapp_pedido(pedido_id):
+    """Reconstrói a mensagem de WhatsApp (com o link de confirmação) de um
+    pedido já existente — pro botão "Enviar por WhatsApp" da tela de
+    Pedidos. Existe separado de `_montar_mensagens_whatsapp_pedidos`
+    porque aquele só roda uma vez, na hora de "Gerar pedidos"; esse serve
+    pra reabrir a mensagem depois (o `window.open` automático de lá pode
+    ser bloqueado pelo navegador — achado testando ao vivo, 2026-09-04 —
+    então esse link precisa poder ser reconstruído a qualquer momento,
+    não só na hora da criação)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    pedido = buscar_pedido(pedido_id)
+    if not pedido or not pedido["token"]:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+
+    pedidos_do_token = buscar_pedidos_por_token(pedido["token"]) or [pedido]
+    mensagem = _mensagem_whatsapp_pedido_token(pedido["token"], [p["id"] for p in pedidos_do_token])
+    return jsonify(mensagem)
 
 
 @app.route('/api/pedidos/<int:pedido_id>/avancar', methods=['POST'])

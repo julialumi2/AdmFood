@@ -2399,23 +2399,16 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
     document.getElementById('modal-convidar-fornecedores').style.display = 'none';
     await carregarConvitesCotacao();
 
-    // Já abre o WhatsApp pronto (mensagem + link) pra todo fornecedor ainda
-    // aguardando resposta — inclusive quem já tinha convite de antes, não só
-    // o recém-criado agora (pedido da Julia, 2026-09-03: "clico um botão e
-    // já envia os links"). Cada aba ainda precisa do toque final de
-    // "Enviar" dentro do WhatsApp — não tem como pular isso sem a API
-    // oficial (pendência separada, travada esperando credencial).
+    // Não tenta mais abrir o WhatsApp automático aqui — window.open() depois
+    // de um fetch/await perde a permissão do navegador e fica bloqueado sem
+    // avisar nada (achado ao vivo, 2026-09-04). Cada convite pendente já tem
+    // o botão "Enviar por WhatsApp" na tabela logo abaixo (link de verdade,
+    // nunca bloqueado) — é só clicar um por um ali.
     const pendentes = convitesCotacaoAtuais.filter((c) => c.status === 'aberta');
-    const semTelefone = [];
-    for (const c of pendentes) {
-      const link = `${location.origin}/preencher_cotacao.html?token=${c.token}`;
-      const linkWhatsApp = _linkWhatsAppConvite(c.fornecedorTelefone, c.fornecedorNome, link);
-      if (linkWhatsApp) window.open(linkWhatsApp, '_blank', 'noopener');
-      else semTelefone.push(c.fornecedorNome);
-    }
-    if (semTelefone.length) {
-      alert(`${pendentes.length - semTelefone.length} aba(s) do WhatsApp aberta(s). Sem telefone cadastrado (copie o link na tabela): ${semTelefone.join(', ')}.`);
-    }
+    const semTelefone = pendentes.filter((c) => !c.fornecedorTelefone).map((c) => c.fornecedorNome);
+    let mensagem = `${pendentes.length} convite(s) pendente(s) — clique em "Enviar por WhatsApp" na tabela abaixo, um por fornecedor.`;
+    if (semTelefone.length) mensagem += ` Sem telefone cadastrado (copie o link na tabela): ${semTelefone.join(', ')}.`;
+    alert(mensagem);
   } catch (erro) {
     console.error('Falha ao convidar fornecedores:', erro);
     alert(erro.message || 'Não foi possível enviar os convites.');
@@ -2720,18 +2713,12 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar pedidos');
     let mensagem = `${dados.pedidosCriados.length} pedido(s) gerado(s).`;
     if (dados.insumosSemVencedor > 0) mensagem += ` ${dados.insumosSemVencedor} insumo(s) ainda sem vencedor escolhido ficaram de fora.`;
-
-    // Já abre o WhatsApp pronto (mensagem + link de confirmação) pra cada
-    // fornecedor que ganhou pedido nessa leva — mesmo padrão semi-automático
-    // do convite de cotação (falta só apertar "Enviar" em cada aba; sem a
-    // API oficial não tem como pular esse toque final).
-    const semTelefone = [];
-    for (const grupo of dados.mensagensWhatsApp || []) {
-      const linkWhatsApp = _linkWhatsAppTexto(grupo.telefone, grupo.mensagem);
-      if (linkWhatsApp) window.open(linkWhatsApp, '_blank', 'noopener');
-      else semTelefone.push(grupo.fornecedorNome);
-    }
-    if (semTelefone.length) mensagem += ` Sem telefone cadastrado, avise na mão: ${semTelefone.join(', ')}.`;
+    // Não tenta mais abrir o WhatsApp automático aqui — window.open() depois
+    // de um fetch/await perde a permissão do navegador e fica bloqueado sem
+    // avisar nada (achado ao vivo, 2026-09-04). Cada pedido na tela de
+    // Pedidos agora tem seu próprio botão "Enviar por WhatsApp" (link de
+    // verdade, nunca bloqueado).
+    mensagem += ' Envie pelo WhatsApp direto na tela de Pedidos.';
 
     alert(mensagem);
     window.location.href = 'pedidos.html';
@@ -2784,6 +2771,30 @@ let pedidosLista = [];
 let pedidoDetalheAtual = null;
 let pedidoEstagios = ['enviado', 'confirmado', 'a_caminho', 'recebido'];
 
+let pedidosWhatsAppLinks = {}; // { [pedidoId]: linkWhatsApp } — só pedidos ainda "enviado"
+
+// Reconstrói o link de WhatsApp de cada pedido pendente ANTES de renderizar
+// a tabela, pra virar um <a href> de verdade — clique direto num link nunca
+// é bloqueado pelo navegador, diferente de window.open() disparado depois
+// de um fetch (é exatamente o que quebrava o auto-envio de "Gerar pedidos"
+// silenciosamente: o navegador derruba a permissão de abrir aba assim que
+// passa por um await, achado ao vivo em 2026-09-04).
+async function carregarLinksWhatsAppPedidos(lista) {
+  pedidosWhatsAppLinks = {};
+  const pendentes = lista.filter((p) => p.status === 'enviado');
+  await Promise.all(pendentes.map(async (p) => {
+    try {
+      const resposta = await fetch(`/api/pedidos/${p.id}/whatsapp`);
+      if (!resposta.ok) return;
+      const dados = await resposta.json();
+      const link = _linkWhatsAppTexto(dados.telefone, dados.mensagem);
+      if (link) pedidosWhatsAppLinks[p.id] = link;
+    } catch (erro) {
+      console.error('Falha ao montar link de WhatsApp do pedido', p.id, erro);
+    }
+  }));
+}
+
 async function carregarPedidos() {
   const tbody = document.getElementById('pedidos-tabela-body');
   if (!tbody) return;
@@ -2793,6 +2804,7 @@ async function carregarPedidos() {
     const dados = await resposta.json();
     pedidosLista = dados.pedidos || [];
     if (dados.estagios) pedidoEstagios = dados.estagios;
+    await carregarLinksWhatsAppPedidos(pedidosLista);
     renderPedidosTabela();
   } catch (erro) {
     console.error('Falha ao carregar pedidos:', erro);
@@ -2818,6 +2830,11 @@ function renderPedidosTabela() {
       <td>R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${p.abaixoDoMinimo ? ' <span class="badge-pill neu-orange" title="Abaixo do pedido mínimo do fornecedor">abaixo do mínimo</span>' : ''}</td>
       <td><span class="badge-pill ${STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${ESTAGIO_LABEL_PEDIDO[p.status]}</span></td>
       <td class="acoes-linha">
+        ${pedidosWhatsAppLinks[p.id] ? `
+          <a class="btn-acao-icone" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp">
+            <i data-lucide="send"></i>
+          </a>
+        ` : ''}
         <button type="button" class="btn-acao-icone" data-acao="abrir-pedido" data-id="${p.id}" title="Ver itens e acompanhar entrega">
           <i data-lucide="arrow-right"></i>
         </button>
@@ -2839,6 +2856,18 @@ async function abrirPedidoDetalhe(pedidoId) {
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar pedido');
     pedidoDetalheAtual = dados;
     if (dados.estagios) pedidoEstagios = dados.estagios;
+    pedidoDetalheAtual.linkWhatsApp = pedidosWhatsAppLinks[pedidoId] || null;
+    if (!pedidoDetalheAtual.linkWhatsApp && dados.status === 'enviado') {
+      try {
+        const respWhats = await fetch(`/api/pedidos/${pedidoId}/whatsapp`);
+        if (respWhats.ok) {
+          const dadosWhats = await respWhats.json();
+          pedidoDetalheAtual.linkWhatsApp = _linkWhatsAppTexto(dadosWhats.telefone, dadosWhats.mensagem);
+        }
+      } catch (erroWhats) {
+        console.error('Falha ao montar link de WhatsApp do pedido:', erroWhats);
+      }
+    }
     renderPedidoDetalhe();
     document.getElementById('pedidos-lista-view').style.display = 'none';
     document.getElementById('pedido-detalhe-view').style.display = '';
@@ -2854,6 +2883,16 @@ function renderPedidoDetalhe() {
 
   document.getElementById('pedido-detalhe-titulo').textContent = `${p.fornecedorNome} — ${p.loja}`;
   document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}`;
+
+  const linkWhats = document.getElementById('link-pedido-whatsapp');
+  if (linkWhats) {
+    if (p.linkWhatsApp) {
+      linkWhats.href = p.linkWhatsApp;
+      linkWhats.style.display = '';
+    } else {
+      linkWhats.style.display = 'none';
+    }
+  }
 
   const aviso = document.getElementById('pedido-aviso-minimo');
   if (p.abaixoDoMinimo) {

@@ -1919,6 +1919,44 @@ o mesmo número), isso agora é só higiene de dado (evita que uma
 atualização futura do mínimo do Açaí fique presa atrás de um ajuste
 manual esquecido), não corrige nada visível na tela.
 
+**2 bugs achados testando o fluxo de fornecedor/pedido ao vivo** (2026-09-04,
+Julia clicando de verdade nos links mandados por WhatsApp):
+
+- **Link público de cotação pro fornecedor sempre quebrava (erro 500)**:
+  `buscar_convite_por_token` (armazenamento.py) não selecionava o
+  telefone do fornecedor (`f.contato_telefone`), mas `_formatar_convite`
+  (app.py) sempre tentava ler `convite["fornecedor_telefone"]` —
+  `KeyError` não tratado, Flask devolvia 500 em vez de abrir o
+  formulário. Bug pré-existente (não era de hoje), só nunca tinha sido
+  clicado de verdade por um fornecedor até a Julia testar. Corrigido
+  adicionando a coluna que faltava na consulta. Testado isolado:
+  criar convite real → `GET /api/cotacoes/convite/<token>` → 200 com
+  `fornecedorTelefone` preenchido (antes: 500).
+- **"Gerar pedidos" e "Convidar fornecedores" abriam aba de WhatsApp só
+  às vezes, sem avisar quando falhava**: os dois disparavam
+  `window.open()` num loop **depois** de um `await fetch(...)` — no
+  Chrome (e a maioria dos navegadores), a permissão de abrir aba sem
+  bloqueio só existe durante o clique original; um `await` no meio
+  perde essa permissão, e o navegador bloqueia a aba **silenciosamente**
+  (sem erro no console, sem aviso na tela). A Julia clicou "Gerar
+  pedidos" e nenhuma aba abriu. Corrigido tirando esse `window.open`
+  automático dos dois lugares e trocando por um link de verdade
+  (`<a href="wa.me/...">`), sempre clicável na hora, sem depender de
+  nenhuma permissão de pop-up:
+  - Tela de **Pedidos**: cada pedido ainda "enviado" ganha um botão
+    "Enviar por WhatsApp" (lista e detalhe) — o link é reconstruído sob
+    demanda por `GET /api/pedidos/<id>/whatsapp` (novo,
+    `_mensagem_whatsapp_pedido_token` extraído de
+    `_montar_mensagens_whatsapp_pedidos` pra poder reconstruir a
+    mensagem a qualquer momento, não só na hora de gerar).
+  - Tela de **Cotações**: a tabela de convites (`renderConvitesCotacao`)
+    já tinha esse padrão certo desde antes (link de verdade por
+    fornecedor) — só removido o `window.open` automático que tentava
+    (e falhava) rodar em cima disso.
+  Testado isolado: `GET /api/pedidos/<id>/whatsapp` devolve telefone +
+  mensagem com o link de confirmação, mesmo pra um pedido criado antes
+  (simulando "abri a tela dias depois").
+
 ### 6.10 Relatório diário via WhatsApp (texto pra copiar)
 
 Botão na tela de Insights monta um texto (um bloco por loja: Presencial/
