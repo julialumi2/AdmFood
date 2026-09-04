@@ -354,17 +354,24 @@
           </div>
           <div class="guia-ferramenta-linha">
             <div>
+              <div class="guia-ferramenta-nome">Atualizar estoque em lote + colar lista</div>
+              <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
+            </div>
+            <div class="guia-ferramenta-desc">Atualiza a quantidade atual (e o estoque mínimo, se quiser) de vários insumos de uma vez — pra importar contagem física ou relatório de outro sistema.</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
               <div class="guia-ferramenta-nome">Ajustar em lote + colar lista</div>
               <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
             </div>
-            <div class="guia-ferramenta-desc">Corrige a quantidade ideal de vários insumos de uma vez — inclusive colando uma lista pronta de outro sistema.</div>
+            <div class="guia-ferramenta-desc">Corrige a "quantidade ideal" de vários insumos de uma vez, sobrescrevendo o estoque mínimo pra esse cálculo — inclusive colando uma lista pronta de outro sistema. O botão "Remover todos os ajustes desta loja", dentro do mesmo modal, desfaz tudo de uma vez e volta pro cálculo automático.</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
               <div class="guia-ferramenta-nome">Ficha técnica + colar lista</div>
               <span class="guia-ferramenta-local">Cardápio → Ficha Técnica</span>
             </div>
-            <div class="guia-ferramenta-desc">Define quais insumos cada prato usa e em que quantidade — é o que faz a "quantidade ideal" calcular sozinha em vez de vir sempre em branco.</div>
+            <div class="guia-ferramenta-desc">Define quais insumos cada prato usa e em que quantidade — alimenta o "Consumo médio/dia" mostrado no Estoque como referência. Não decide mais a "quantidade ideal" (isso hoje vem do estoque mínimo, ver pergunta abaixo).</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
@@ -393,6 +400,10 @@
           <li>
             <p class="guia-faq-p">Preciso ter medo de clicar duas vezes em algum botão importante?</p>
             <p class="guia-faq-r">Não em "Gerar cotação" — ele é protegido contra duplicidade. As ações realmente irreversíveis (como a Zona de Perigo) pedem confirmação por texto antes de deixar continuar.</p>
+          </li>
+          <li>
+            <p class="guia-faq-p">De onde vem a "quantidade ideal" mostrada na tela?</p>
+            <p class="guia-faq-r">Hoje é sempre o estoque mínimo cadastrado do insumo naquela loja, a não ser que exista um ajuste manual (esse ganha do mínimo). Antes era calculada pelo consumo médio × Ficha Técnica, mas isso ficava em branco pra quase todo insumo enquanto a Ficha Técnica não estivesse completa — por isso a troca. "Gerar cotação" trava esse número no momento em que é clicado; gerar de novo numa requisição antiga não recalcula, só reabre a cotação que já existe.</p>
           </li>
         </ul>
 
