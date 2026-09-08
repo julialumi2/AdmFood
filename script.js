@@ -922,8 +922,8 @@ tabButtons.forEach(btn => {
 // pra um único dia, então só entra quando início e fim são o mesmo dia.
 const NOMES_CURTOS_WHATSAPP = {
   'Hamburgueria Artesanos': 'Artesanos',
-  'Tradiça ZN': 'Tradiça',
-  'Tradiça Simus': 'Simus',
+  'Tradiça ZN': 'Tradiça ZN',
+  'Tradiça Simus': 'Tradiça Simus',
   'Açaí Na Lata': 'Açaí NaLata',
 };
 
