@@ -1745,7 +1745,7 @@ def listar_produtos_por_loja(loja):
 
     resultado = []
     for p in produtos:
-        item_id = _casar_item_cardapio(p["produto"], catalogo)
+        item_id, _ = _casar_item_cardapio(p["produto"], catalogo)
         resultado.append({
             "itemCardapioId": item_id,
             "nome": p["produto"],
