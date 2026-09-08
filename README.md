@@ -24,4 +24,4 @@ Em produção, usado no dia a dia pela equipe de compras e pela gestão da rede.
 
 ## Sobre o desenvolvimento
 
-Projeto conduzido com desenvolvimento assistido por IA: especificação de requisito, revisão e teste de cada entrega antes de ir pra produção, e decisão técnica registrada em documentação — não só geração de código.
+Projeto conduzido com desenvolvimento assistido por IA: especificação de requisito, revisão e teste de cada entrega antes de ir pra produção, e decisão técnica registrada em documentação.
