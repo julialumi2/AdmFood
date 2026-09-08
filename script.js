@@ -952,7 +952,7 @@ async function montarRelatorioWhatsApp() {
     const rotulo = mesmoDia ? 'do dia' : 'do período';
     const cabecalho = mesmoDia
       ? `Faturamento do dia ${NOMES_CURTOS_WHATSAPP[unidade]}`
-      : `Faturamento do período ${NOMES_CURTOS_WHATSAPP[unidade]}`;
+      : `Faturamento do período ${NOMES_CURTOS_WHATSAPP[unidade]} — ${data.canalDataLabel}`;
 
     let bloco = `*${cabecalho}*\n\n`;
     bloco += `💵 Presencial: R$ ${valorPorNome['Presencial'] || '0,00'}\n`;
