@@ -109,23 +109,52 @@ def _total_com_desconto_ifood(detalhes, sales_channel):
 
 def _itens_vendidos(detalhes):
     """Achata `detalhes["items"]` numa lista [{"nome", "quantidade"}] — usado
-    pra estimar consumo de insumo (ficha técnica × vendas reais, ver seção
-    6.6 da documentação). Combo não tem receita própria na Ficha Técnica (que
-    é por prato), então é desmontado nos itens internos; a quantidade de
-    cada um é MULTIPLICADA pela quantidade do combo em si (assumindo que a
-    quantidade do item interno é "por combo" — não confirmado com exemplo
-    real de combo com quantidade > 1, revisar se aparecer inconsistência)."""
+    pra estimar consumo de insumo (ficha técnica × vendas reais, seção 6.6) e
+    pra baixa automática de estoque (Etapa 0 do motor de compra, seção 6.11).
+
+    Investigado ao vivo em 2026-09-08 (a Julia pediu pra "combo" não
+    precisar de Ficha Técnica própria, só descontar o(s) lanche(s) de
+    dentro): `kind == "combo"` NUNCA aparece na prática pra essa loja — todo
+    combo/kit vem como `kind == "regular_item"` só mesmo, e existem 3
+    formatos reais diferentes, tratados nessa ordem:
+
+    1. Tem `options` com um grupo de escolha de lanche (nome do grupo
+       contém "burger", ex: "SEUS BURGERS" no COMBO CASAL) — cada opção
+       desse grupo É um lanche vendido, com a quantidade certa já vindo
+       separada (dá pra ter 2 lanches diferentes num combo pra duas
+       pessoas). Não entra bebida/batata/maionese aqui de propósito —
+       complemento escolhido fica fora desta entrega (ver seção 6.11).
+    2. Sem esse grupo, mas o nome do item tem um "Lanche + Extra + Extra"
+       colado (ex: "Tasty + Batata + Bebida + Maionese") — o lanche é a
+       parte antes do primeiro " + ".
+    3. Nem uma coisa nem outra (ex: "Combo de sexta 99 Food - 2 smash's
+       tradicionais", sem `options` e sem "+" no nome) — não dá pra
+       decompor sozinho; cai como produto pendente pro vínculo manual
+       resolver (que aceita "quantos lanches" além de "qual lanche")."""
     itens = []
     for item in detalhes.get("items") or []:
         quantidade = item.get("quantity") or 0
-        if item.get("kind") == "combo":
-            for interno in item.get("items") or []:
+        if not quantidade:
+            continue
+
+        opcoes_lanche = [
+            opcao for opcao in (item.get("options") or [])
+            if "burger" in (opcao.get("option_group_name") or "").lower()
+        ]
+        if opcoes_lanche:
+            for opcao in opcoes_lanche:
                 itens.append({
-                    "nome": interno.get("name", ""),
-                    "quantidade": (interno.get("quantity") or 0) * quantidade,
+                    "nome": opcao.get("name", ""),
+                    "quantidade": (opcao.get("quantity") or 0) * quantidade,
                 })
-        else:
-            itens.append({"nome": item.get("name", ""), "quantidade": quantidade})
+            continue
+
+        nome = item.get("name") or ""
+        if " + " in nome:
+            itens.append({"nome": nome.split(" + ", 1)[0], "quantidade": quantidade})
+            continue
+
+        itens.append({"nome": nome, "quantidade": quantidade})
     return [i for i in itens if i["nome"] and i["quantidade"]]
 
 

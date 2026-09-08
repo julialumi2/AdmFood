@@ -356,11 +356,62 @@ def inicializar_banco():
             )
             """
         )
+        colunas_venda_item = {c["name"] for c in conn.execute("PRAGMA table_info(venda_item)").fetchall()}
+        if "multiplicador" not in colunas_venda_item:
+            # "Quantos lanches" um nome_produto pendente representa quando
+            # vinculado na mão (Etapa 0, seção 6.11 — ex: "Combo de sexta 99
+            # Food - 2 smash's tradicionais" = 2). 1 pra tudo que já casa
+            # sozinho (o normal). Aplicado na hora de gravar (vem do vínculo
+            # manual vigente então), não recalculado depois — resincronizar
+            # o dia de novo já usa o vínculo atualizado.
+            conn.execute("ALTER TABLE venda_item ADD COLUMN multiplicador REAL NOT NULL DEFAULT 1")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_venda_item_dia ON venda_item(dia)"
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_venda_item_item_cardapio ON venda_item(item_cardapio_id)"
+        )
+
+        # Vínculo manual permanente entre um nome de produto vendido (como
+        # vem cru da Cardápio Web) e um item_cardapio — Etapa 0 do motor de
+        # compra (2026-09-08). _casar_item_cardapio consulta essa tabela
+        # ANTES do algoritmo de normalização automática: uma vez vinculado
+        # na mão, fica valendo pra sempre pra esse nome, mesmo que a
+        # normalização automática nunca teria batido sozinha.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vinculo_produto_venda (
+                nome_produto_normalizado TEXT PRIMARY KEY,
+                item_cardapio_id INTEGER NOT NULL,
+                criado_em TEXT NOT NULL,
+                criado_por TEXT
+            )
+            """
+        )
+        colunas_vinculo = {c["name"] for c in conn.execute("PRAGMA table_info(vinculo_produto_venda)").fetchall()}
+        if "quantidade_por_unidade" not in colunas_vinculo:
+            # Pra combo/kit sem estrutura nenhuma na API (ex: "Combo de
+            # sexta 99 Food - 2 smash's tradicionais") — a pessoa que
+            # vincula manualmente também diz quantos lanches aquilo
+            # representa, não só qual lanche.
+            conn.execute("ALTER TABLE vinculo_produto_venda ADD COLUMN quantidade_por_unidade REAL NOT NULL DEFAULT 1")
+
+        # Ledger de quanto já foi descontado de cada insumo, em cada loja,
+        # em cada dia, pela baixa automática de estoque por venda (Etapa 0).
+        # Existe só pra sincronização repetida do mesmo dia (acontece a cada
+        # 15 min pra hoje, e toda madrugada pra ontem) não descontar em
+        # dobro — aplicar_baixa_estoque_dia sempre aplica a DIFERENÇA entre
+        # o consumo teórico recém-calculado e o que já estava aqui.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS baixa_estoque_venda (
+                unidade TEXT NOT NULL,
+                dia TEXT NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                quantidade_baixada REAL NOT NULL,
+                PRIMARY KEY (unidade, dia, insumo_id)
+            )
+            """
         )
 
         # Cadastro de fornecedor — semente do futuro módulo de Compras/
@@ -1069,21 +1120,35 @@ def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):
             )
 
 
-def _casar_item_cardapio(nome_vendido, catalogo_normalizado):
-    """catalogo_normalizado: {nome_normalizado: id}. Tenta o nome vendido
-    inteiro primeiro (tira acento/maiúscula/pontuação, mesmo critério de
+def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=None):
+    """catalogo_normalizado: {nome_normalizado: id}. vinculos_manuais (Etapa
+    0 do motor de compra, 2026-09-08): {nome_normalizado: {"itemCardapioId",
+    "quantidadePorUnidade"}} vindo de `vinculo_produto_venda` — checado ANTES
+    de qualquer coisa, porque é uma decisão humana e ganha do algoritmo
+    automático mesmo que ele também acertasse. Sem vínculo manual, tenta o
+    nome vendido inteiro (tira acento/maiúscula/pontuação, mesmo critério de
     _normalizar_nome_insumo — nomes vêm da Cardápio Web, cadastro na Ficha
     Técnica é manual, não bate exatamente). Se não bater e o nome vendido
     tiver um "- subtítulo" de marketing colado (comum na Cardápio Web, ex:
     "Tasty Bacon - releitura do Big Tasty"), tenta de novo só com a parte
-    antes do traço."""
-    candidato = catalogo_normalizado.get(_normalizar_nome_insumo(nome_vendido))
+    antes do traço.
+
+    Retorna (item_cardapio_id ou None, multiplicador) — multiplicador só é
+    diferente de 1 quando vem de um vínculo manual (ex: "2 smash's
+    tradicionais" = multiplicador 2)."""
+    nome_normalizado = _normalizar_nome_insumo(nome_vendido)
+    if vinculos_manuais and nome_normalizado in vinculos_manuais:
+        vinculo = vinculos_manuais[nome_normalizado]
+        return vinculo["itemCardapioId"], vinculo["quantidadePorUnidade"]
+    candidato = catalogo_normalizado.get(nome_normalizado)
     if candidato:
-        return candidato
+        return candidato, 1
     if " - " in nome_vendido:
         prefixo = nome_vendido.split(" - ", 1)[0]
-        return catalogo_normalizado.get(_normalizar_nome_insumo(prefixo))
-    return None
+        candidato = catalogo_normalizado.get(_normalizar_nome_insumo(prefixo))
+        if candidato:
+            return candidato, 1
+    return None, 1
 
 
 def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
@@ -1093,11 +1158,25 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     bater exatamente). Mesmo padrão de salvar_pedidos_do_dia: resincroniza o
     dia inteiro. Sem match, item_cardapio_id fica NULL mas a linha é salva
     do mesmo jeito, com o nome bruto — vira histórico utilizável assim que
-    o item for cadastrado na Ficha Técnica."""
+    o item for cadastrado na Ficha Técnica.
+
+    Etapa 0 do motor de compra (2026-09-08): depois de gravar, dispara a
+    baixa automática de estoque pra Hamburgueria Artesanos (única loja com
+    Ficha Técnica completa o suficiente por enquanto — ver
+    aplicar_baixa_estoque_dia)."""
     with conexao() as conn:
         catalogo = {
             _normalizar_nome_insumo(linha["nome"]): linha["id"]
             for linha in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+        }
+        vinculos_manuais = {
+            linha["nome_produto_normalizado"]: {
+                "itemCardapioId": linha["item_cardapio_id"],
+                "quantidadePorUnidade": linha["quantidade_por_unidade"],
+            }
+            for linha in conn.execute(
+                "SELECT nome_produto_normalizado, item_cardapio_id, quantidade_por_unidade FROM vinculo_produto_venda"
+            ).fetchall()
         }
         conn.execute(
             "DELETE FROM venda_item WHERE unidade = ? AND dia = ?",
@@ -1105,12 +1184,12 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
         )
         for pedido in pedidos_detalhados:
             for indice, item in enumerate(pedido.get("itens", [])):
-                item_cardapio_id = _casar_item_cardapio(item["nome"], catalogo)
+                item_cardapio_id, multiplicador = _casar_item_cardapio(item["nome"], catalogo, vinculos_manuais)
                 conn.execute(
                     """
                     INSERT INTO venda_item
-                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id, multiplicador)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         unidade,
@@ -1121,8 +1200,133 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                         item["nome"],
                         item["quantidade"],
                         item_cardapio_id,
+                        multiplicador,
                     ),
                 )
+
+    if unidade == "Hamburgueria Artesanos":
+        aplicar_baixa_estoque_dia(unidade, dia_iso)
+
+
+def aplicar_baixa_estoque_dia(unidade, dia_iso):
+    """Etapa 0 do motor de compra (2026-09-08): desconta de
+    estoque_insumo.quantidade_atual o consumo teórico do dia (venda ×
+    Ficha Técnica — mesmo JOIN de consumo_medio_insumo, só que pra um dia
+    só). Idempotente: guarda o total já descontado em baixa_estoque_venda
+    e só aplica a DIFERENÇA em relação à última vez — resincronizar o
+    mesmo dia (acontece a cada 15 min pra hoje, toda madrugada pra ontem)
+    não desconta em dobro, e uma venda cancelada/corrigida entre
+    sincronizações corrige o estoque pra cima ou pra baixo sozinha.
+
+    Deixa o estoque ir negativo de propósito — é sinal real de
+    divergência entre teórico e físico (quebra, porcionamento diferente,
+    Ficha Técnica desatualizada), não é erro pra esconder."""
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        consumo_novo = {
+            linha["insumo_id"]: linha["total"]
+            for linha in conn.execute(
+                """
+                SELECT f.insumo_id AS insumo_id, SUM(v.quantidade * v.multiplicador * f.quantidade) AS total
+                FROM venda_item v
+                JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id AND f.loja = v.unidade
+                WHERE v.unidade = ? AND v.dia = ? AND f.quantidade IS NOT NULL
+                GROUP BY f.insumo_id
+                """,
+                (unidade, dia_iso),
+            ).fetchall()
+        }
+        consumo_anterior = {
+            linha["insumo_id"]: linha["quantidade_baixada"]
+            for linha in conn.execute(
+                "SELECT insumo_id, quantidade_baixada FROM baixa_estoque_venda WHERE unidade = ? AND dia = ?",
+                (unidade, dia_iso),
+            ).fetchall()
+        }
+        for insumo_id in set(consumo_novo) | set(consumo_anterior):
+            novo = consumo_novo.get(insumo_id, 0.0)
+            anterior = consumo_anterior.get(insumo_id, 0.0)
+            diferenca = novo - anterior
+            if diferenca:
+                conn.execute(
+                    "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual - ?, atualizado_em = ? "
+                    "WHERE insumo_id = ? AND loja = ?",
+                    (diferenca, agora, insumo_id, unidade),
+                )
+            conn.execute(
+                """
+                INSERT INTO baixa_estoque_venda (unidade, dia, insumo_id, quantidade_baixada)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (unidade, dia, insumo_id) DO UPDATE SET quantidade_baixada = excluded.quantidade_baixada
+                """,
+                (unidade, dia_iso, insumo_id, novo),
+            )
+
+
+def listar_produtos_pendentes(unidade, dias=30):
+    """Produtos vendidos nos últimos N dias que não casaram com nenhum
+    item_cardapio ainda — fila de pendência da Etapa 0 (painel de
+    integrações do estoque). Agrupado por nome (o mesmo prato costuma
+    aparecer várias vezes)."""
+    inicio = (datetime.now().date() - timedelta(days=dias)).isoformat()
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT nome_produto, COUNT(*) AS vendas, SUM(quantidade) AS quantidade_total, MIN(dia) AS primeira_vez
+            FROM venda_item
+            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NULL
+            GROUP BY nome_produto
+            ORDER BY vendas DESC
+            """,
+            (unidade, inicio),
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def vincular_produto_venda_manualmente(nome_produto, item_cardapio_id, criado_por, quantidade_por_unidade=1):
+    """Grava o vínculo manual permanente (Etapa 0) e já re-casa qualquer
+    venda_item existente com esse mesmo nome (histórico de consumo/relatório
+    passa a contar certo) — não reaplica baixa de estoque retroativa nos
+    dias já passados, só o casamento pra leitura (ver decisão no plano:
+    baixa automática só vale daqui pra frente).
+
+    `quantidade_por_unidade` é "quantos lanches" esse nome representa quando
+    ele mesmo não tem estrutura nenhuma pra decompor sozinho (ex: "Combo de
+    sexta 99 Food - 2 smash's tradicionais" = 2, vinculado a TRADICIONAL) —
+    1 é o normal (produto único)."""
+    nome_normalizado = _normalizar_nome_insumo(nome_produto)
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO vinculo_produto_venda (nome_produto_normalizado, item_cardapio_id, criado_em, criado_por, quantidade_por_unidade)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (nome_produto_normalizado) DO UPDATE SET
+                item_cardapio_id = excluded.item_cardapio_id,
+                criado_em = excluded.criado_em,
+                criado_por = excluded.criado_por,
+                quantidade_por_unidade = excluded.quantidade_por_unidade
+            """,
+            (nome_normalizado, item_cardapio_id, agora, criado_por, quantidade_por_unidade),
+        )
+        conn.execute(
+            "UPDATE venda_item SET item_cardapio_id = ?, multiplicador = ? WHERE nome_produto = ?",
+            (item_cardapio_id, quantidade_por_unidade, nome_produto),
+        )
+
+
+def listar_vinculos_manuais():
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT vp.nome_produto_normalizado, vp.item_cardapio_id, vp.criado_em, vp.criado_por,
+                   vp.quantidade_por_unidade, ic.nome AS item_cardapio_nome
+            FROM vinculo_produto_venda vp
+            JOIN item_cardapio ic ON ic.id = vp.item_cardapio_id
+            ORDER BY vp.criado_em DESC
+            """
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
 
 
 def buscar_pedidos_preparo_periodo(inicio_iso, fim_iso, unidade=None):
@@ -1376,6 +1580,19 @@ def marcar_lote_resolvido(lote_id):
         )
 
 
+def listar_itens_cardapio_todos():
+    """Todo item_cardapio (produto + complemento), de toda loja — pro
+    seletor de "vincular manualmente" da Etapa 0 (painel de pendências).
+    Diferente de listar_produtos_por_loja/listar_complementos_por_loja,
+    não filtra por preço cadastrado numa loja: a Ficha Técnica é o que
+    importa aqui, não o cardápio de venda."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT id, nome, categoria, tipo FROM item_cardapio ORDER BY tipo, categoria, nome"
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
 def criar_item_cardapio(nome, categoria, tipo='produto'):
     with conexao() as conn:
         conn.execute(
@@ -1560,7 +1777,7 @@ def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
         linhas = conn.execute(
             f"""
             SELECT v.unidade, f.insumo_id, i.nome AS insumo_nome, i.unidade_medida,
-                   SUM(v.quantidade * f.quantidade) AS total_consumido
+                   SUM(v.quantidade * v.multiplicador * f.quantidade) AS total_consumido
             FROM venda_item v
             JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id AND f.loja = v.unidade
             JOIN insumo i ON i.id = f.insumo_id

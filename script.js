@@ -1258,6 +1258,9 @@ const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', crit
 
 let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
+let integracoesEstoqueUltimaLoja = null;
+let itensCardapioTodosCache = null;
+let vincularProdutoContexto = null; // nome do produto vendido pendente, enquanto o modal está aberto
 let estoqueEditandoContexto = null; // { insumoId, loja }
 let estoqueConsumoMedio = {}; // { [insumoId]: { [loja]: consumoMedioDiario } } — média dos últimos 30 dias
 let estoqueConsumoRecente = {}; // { [insumoId]: { [loja]: consumoMedioDiario } } — média dos últimos 14 dias, pra enxergar tendência
@@ -1475,6 +1478,20 @@ function renderEstoqueTab() {
   const btnInsumosLoja = document.getElementById('btn-insumos-loja');
   if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
+  // Painel de Integrações do Estoque (Etapa 0 do motor de compra) — só
+  // Hamburgueria Artesanos por enquanto, única loja com a baixa
+  // automática ligada (ver plano). Carrega uma vez por troca de loja, não
+  // a cada tecla da busca (que também chama renderEstoqueTab).
+  const cardIntegracoes = document.getElementById('integracoes-estoque-card');
+  if (cardIntegracoes) {
+    const mostrarIntegracoes = isAdmin && estoqueTabAtual === 'Hamburgueria Artesanos';
+    cardIntegracoes.style.display = mostrarIntegracoes ? '' : 'none';
+    if (mostrarIntegracoes && integracoesEstoqueUltimaLoja !== estoqueTabAtual) {
+      integracoesEstoqueUltimaLoja = estoqueTabAtual;
+      carregarIntegracoesEstoque();
+    }
+  }
+
   let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
 
   const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
@@ -1564,6 +1581,115 @@ function renderEstoqueTab() {
   if (isAdmin) wireEstoqueTableEvents();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// --- Painel de Integrações do Estoque (Etapa 0 do motor de compra) ---
+async function carregarIntegracoesEstoque() {
+  try {
+    const [respPendentes, respVinculos] = await Promise.all([
+      fetch(`/api/produtos-pendentes?unidade=${encodeURIComponent(estoqueTabAtual)}`),
+      fetch('/api/vinculos-manuais'),
+    ]);
+    const dadosPendentes = await respPendentes.json();
+    const dadosVinculos = await respVinculos.json();
+    renderProdutosPendentesTabela(dadosPendentes.pendentes || []);
+    renderVinculosManuaisTabela(dadosVinculos.vinculos || []);
+  } catch (erro) {
+    console.error('Falha ao carregar integrações do estoque:', erro);
+  }
+}
+
+function renderProdutosPendentesTabela(pendentes) {
+  const tbody = document.getElementById('produtos-pendentes-tabela-body');
+  if (!tbody) return;
+
+  if (!pendentes.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhum produto pendente — tudo que foi vendido já casou com a Ficha Técnica.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = pendentes.map((p) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(p.nome_produto)}</td>
+      <td>${p.vendas}</td>
+      <td>${p.quantidade_total}</td>
+      <td class="text-muted">${p.primeira_vez.split('-').reverse().join('/')}</td>
+      <td class="acoes-linha">
+        <button type="button" class="btn-secondary-sm" data-acao="vincular-produto" data-nome="${escaparHtml(p.nome_produto)}">Vincular</button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('[data-acao="vincular-produto"]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirModalVincularProduto(btn.dataset.nome));
+  });
+}
+
+function renderVinculosManuaisTabela(vinculos) {
+  const tbody = document.getElementById('vinculos-manuais-tabela-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = vinculos.length
+    ? vinculos.map((v) => `
+      <tr>
+        <td class="font-bold">${escaparHtml(v.nome_produto_normalizado)}</td>
+        <td>${v.quantidade_por_unidade && v.quantidade_por_unidade !== 1 ? `${v.quantidade_por_unidade}× ` : ''}${escaparHtml(v.item_cardapio_nome)}</td>
+        <td class="text-muted">${escaparHtml(v.criado_por || '—')}</td>
+        <td class="text-muted">${new Date(v.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="4" class="panel-subtitle">Nenhum vínculo manual ainda.</td></tr>`;
+}
+
+async function abrirModalVincularProduto(nomeProduto) {
+  vincularProdutoContexto = nomeProduto;
+  document.getElementById('vincular-produto-nome').textContent = nomeProduto;
+
+  const select = document.getElementById('vincular-produto-item-select');
+  if (!itensCardapioTodosCache) {
+    const resposta = await fetch('/api/itens-cardapio/todos');
+    const dados = await resposta.json();
+    itensCardapioTodosCache = dados.itens || [];
+  }
+  select.innerHTML = itensCardapioTodosCache
+    .map((item) => `<option value="${item.id}">${escaparHtml(item.nome)} ${item.tipo === 'complemento' ? '(complemento)' : ''}</option>`)
+    .join('');
+
+  document.getElementById('modal-vincular-produto').style.display = 'flex';
+}
+
+function fecharModalVincularProduto() {
+  document.getElementById('modal-vincular-produto').style.display = 'none';
+  document.getElementById('vincular-produto-quantidade').value = '1';
+  vincularProdutoContexto = null;
+}
+
+document.getElementById('btn-vincular-produto-fechar')?.addEventListener('click', fecharModalVincularProduto);
+document.getElementById('btn-vincular-produto-cancelar')?.addEventListener('click', fecharModalVincularProduto);
+
+document.getElementById('form-vincular-produto')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!vincularProdutoContexto) return;
+  const itemCardapioId = document.getElementById('vincular-produto-item-select').value;
+  const quantidadePorUnidade = document.getElementById('vincular-produto-quantidade').value;
+  try {
+    const resposta = await fetch('/api/produtos-pendentes/vincular', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nomeProduto: vincularProdutoContexto,
+        itemCardapioId: parseInt(itemCardapioId, 10),
+        quantidadePorUnidade: parseFloat(quantidadePorUnidade),
+      }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao vincular');
+    fecharModalVincularProduto();
+    await carregarIntegracoesEstoque();
+  } catch (erro) {
+    console.error('Falha ao vincular produto:', erro);
+    alert(erro.message || 'Não foi possível vincular esse produto.');
+  }
+});
 
 function wireEstoqueTableEvents() {
   document.querySelectorAll('[data-acao="editar-estoque"]').forEach(btn => {

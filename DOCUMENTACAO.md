@@ -2008,6 +2008,130 @@ Status: ✅ CRESCENDO
 - 26/08: R$ 1.861,86
 ```
 
+### 6.11 Motor de Compra Inteligente — Etapa 0 (baixa automática de estoque)
+
+Concluída em 2026-09-08, a partir do documento "Motor de Sugestão de
+Compra Inteligente" que o chefe da Julia preparou (9 etapas encadeadas —
+plano completo salvo em `C:\Users\Guilherme\.claude\plans\zazzy-booping-nest.md`,
+a decidir com a Julia por onde continuar depois dessa). A Etapa 0 é a
+fundação: sem estoque real refletindo a venda de verdade, nenhuma das
+etapas seguintes (consumo médio, margem de segurança, calendário de
+eventos etc.) calcula em cima de dado confiável. Escopo combinado com a
+Julia: só **Hamburgueria Artesanos** por enquanto (única loja com Ficha
+Técnica completa — o chefe mandou a planilha nova nesse mesmo dia, 72
+insumos + 9 sub-receitas + 127 linhas cobrindo 25 produtos).
+
+**Vínculo manual permanente** (`vinculo_produto_venda`, armazenamento.py
+— nome do produto normalizado → `item_cardapio_id`). `_casar_item_cardapio`
+passa a consultar essa tabela **antes** do algoritmo automático de
+sempre (normalização + corte de "- subtítulo" de marketing) — uma vez
+vinculado na mão, vale pra sempre pra esse nome, mesmo que a
+normalização nunca teria batido sozinha. `vincular_produto_venda_manualmente`
+grava o vínculo e já re-casa qualquer `venda_item` existente com esse
+nome (pro histórico/relatório de consumo ficar certo), mas **não**
+reaplica baixa de estoque nos dias já passados — ver decisão abaixo.
+
+**Baixa automática** (`aplicar_baixa_estoque_dia`, chamada de dentro de
+`salvar_itens_vendidos_do_dia` só quando `unidade == 'Hamburgueria
+Artesanos'`) — calcula o consumo teórico do dia (mesmo JOIN de
+`consumo_medio_insumo`, só que pra um dia só) e desconta de
+`estoque_insumo.quantidade_atual`. **Idempotente**: guarda o total já
+descontado por dia/insumo num ledger novo (`baixa_estoque_venda`) e só
+aplica a *diferença* em relação à última vez — resincronizar o mesmo dia
+(acontece a cada 15 min pra hoje, toda madrugada pra ontem) não desconta
+em dobro, e uma venda cancelada/corrigida entre sincronizações
+corrige o estoque sozinha (pra cima ou pra baixo).
+
+**Decisões de design registradas**:
+- Estoque pode ficar **negativo** — é sinal real de divergência entre
+  teórico e físico (quebra, porcionamento diferente, Ficha Técnica
+  desatualizada), fica visível em vez de escondido atrás de um `max(0, ...)`.
+  Vira dado de entrada pro "Índice de Quebra" (Etapa 7 do documento,
+  ainda não construída).
+- **Só vale pra vendas de agora em diante** — não reprocessa
+  retroativamente as ~600 linhas de `venda_item` já sincronizadas antes
+  dessa data. Aplicar baixa retroativa mexeria no estoque *atual* com
+  base em consumo de semanas atrás, cujo efeito real já foi corrigido
+  manualmente via Contagem desde então — arriscado demais sem supervisão
+  linha a linha.
+- **Complementos escolhidos por venda ficam de fora desta entrega** — a
+  API da Cardápio Web já expõe isso (`options` de cada item, confirmado
+  ao vivo), mas `_itens_vendidos` (backend/cardapio_web.py) só lê
+  `items`/combo hoje. Fica pra um passo seguinte.
+- **Sub-receitas da planilha nova** (Tempero Smash, Molho Especial etc.)
+  entram no catálogo de insumo como item normal, com estoque próprio
+  contado à parte — não viram uma decomposição automática em
+  sal/pimenta/etc. quando alguém "produz" um lote. Isso exigiria um
+  conceito novo de "produção interna", fora do que a Etapa 0 pede.
+
+**Combo não precisa de Ficha Técnica própria** (achado investigando ao
+vivo em 2026-09-08, pedido da Julia: "não precisamos fazer a ficha
+técnica deles, só puxar quais lanches foram pedidos"). Puxei pedidos
+reais da Cardápio Web pra ver como ela representa combo/kit — `kind ==
+"combo"` (que `_itens_vendidos` já sabia tratar) **nunca aparece na
+prática** pra essa loja; existem 3 formatos reais, tratados nessa ordem
+em `_itens_vendidos` (backend/cardapio_web.py):
+1. **`options` com um grupo de escolha de lanche** (nome do grupo contém
+   "burger", ex: "SEUS BURGERS" no "COMBO CASAL") — cada opção desse
+   grupo é um lanche vendido, com a quantidade certa já separada (dá pra
+   ter 2 lanches diferentes, ex: 1 TRADICIONAL + 1 CLÁSSICO). Bebida/
+   batata/maionese ficam de fora de propósito (são outros grupos de
+   `options` — complemento continua fora do escopo, ver acima).
+2. **Sem esse grupo, mas o nome tem "Lanche + Extra + Extra" colado**
+   (ex: "Tasty + Batata + Bebida + Maionese") — o lanche é a parte antes
+   do primeiro " + ".
+3. **Nem uma coisa nem outra** (ex: "Combo de sexta 99 Food - 2 smash's
+   tradicionais", sem `options` e sem "+" no nome — confirmado com
+   pedido real) — não dá pra decompor sozinho, cai como pendente.
+
+Pro caso 3, o vínculo manual (Parte B) ganhou um campo a mais:
+**`quantidade_por_unidade`** (`vinculo_produto_venda`, novo, default 1)
+— "quantos lanches" aquele nome representa, não só "qual lanche". Vira
+a coluna nova `venda_item.multiplicador` na hora de gravar (aplicado
+tanto em `aplicar_baixa_estoque_dia` quanto em `consumo_medio_insumo` —
+`SUM(v.quantidade * v.multiplicador * f.quantidade)`). Modal "Vincular"
+no painel ganhou o campo correspondente ("Quantos 'unidade do item
+acima' cada venda representa", default 1).
+
+Testado isolado: os 3 padrões reais de combo (usando o JSON de verdade
+puxado da API) decompõem certo; vínculo manual com
+`quantidade_por_unidade=2` (simulando "2 smash's tradicionais") desconta
+o dobro depois de resincronizar; testes anteriores (produto simples,
+sem combo) continuam passando sem mudança de comportamento.
+
+**Painel de Integrações do Estoque** (novo card em Estoque, só admin +
+só na aba Hamburgueria Artesanos) mostra:
+- **Pendências**: produtos vendidos sem `item_cardapio_id` nos últimos
+  30 dias (`listar_produtos_pendentes`), com quantas vendas, quantidade
+  total e desde quando — e um botão "Vincular" que abre um modal pra
+  escolher qual item do cardápio (produto ou complemento) aquele nome
+  corresponde.
+- **Histórico de vínculos manuais** (`listar_vinculos_manuais`,
+  colapsável) — quem vinculou o quê e quando, pra auditoria.
+
+Novo endpoint de apoio `GET /api/itens-cardapio/todos`
+(`listar_itens_cardapio_todos`) — lista produto+complemento de toda
+loja, pro seletor do modal (diferente de `listar_produtos_por_loja`/
+`listar_complementos_por_loja`, que filtram por preço cadastrado numa
+loja — aqui o que importa é a Ficha Técnica, não o cardápio de venda).
+
+Testado isolado contra cópia do banco (script dedicado, não fica no
+repo): consumo teórico descontando certo; resincronizar o mesmo dia sem
+mudança não desconta em dobro; venda corrigida pra baixo devolve a
+diferença pro estoque; produto pendente sai da fila depois do vínculo
+manual e passa a ser reconhecido nas sincronizações seguintes; rotas
+HTTP (`/api/produtos-pendentes`, `/vincular`, `/api/vinculos-manuais`,
+`/api/itens-cardapio/todos`) responderam certo via `test_client`,
+incluindo 401 sem login pra vincular.
+
+**Ainda falta** (próximo passo, fora desta entrega): importar a Ficha
+Técnica nova de verdade pra dentro do AdmFood (reconciliar os 72
+insumos + 9 sub-receitas contra o catálogo atual, e colar a receita dos
+25 produtos usando a ferramenta "colar lista" que já existe em
+Ficha Técnica) — sem isso, a maioria das vendas do Artesanos ainda cai
+em "sem quantidade ideal" (`f.quantidade IS NULL`) e a baixa automática
+não desconta nada de verdade ainda, só a mecânica está pronta e testada.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -2216,7 +2340,7 @@ antes se corrigem sozinhos na reconferência automática dos últimos 7
 dias (ver seção 6.3), ou com uma ressincronização manual pra ir mais
 longe no histórico.
 
-10. **Baixa automática de estoque por venda real (produto + complemento) e "quebra"** — 🟡 fase 1 concluída em 2026-09-02 (pedido do chefe da Julia, repassado por ela): plano completo é puxar cada venda da Cardápio Web, casar produto **e** cada complemento escolhido com a Ficha Técnica, descontar o insumo certo do estoque automaticamente, e comparar com a Contagem física (seção 6.9) pra mostrar a "quebra" (diferença entre teórico e real) e já gerar o pedido de compra certo sozinho. **Fase 1** ✅ (ver "Ficha técnica de complemento" na seção 6.5) — só a receita do complemento em si dentro do AdmFood, confirmado ao vivo que a API da Cardápio Web já expõe qual complemento foi escolhido em cada venda. **Fases seguintes, ainda não iniciadas**: (a) puxar a venda real casando produto+complementos com a Ficha Técnica; (b) baixa automática de estoque a partir disso; (c) comparação com a Contagem física mostrando a quebra; (d) gerar pedido de compra automático a partir da quebra. Previsão inteligente de falta de estoque (IA) foi citada pelo chefe como ideia futura, **fora de escopo por enquanto** — nenhuma das fases acima depende disso.
+10. **Baixa automática de estoque por venda real (produto + complemento) e "quebra"** — 🟡 fase 2 concluída em 2026-09-08 (documento "Motor de Sugestão de Compra Inteligente" do chefe da Julia — ver seção 6.11). **Fase 1** ✅ (ver "Ficha técnica de complemento" na seção 6.5) — só a receita do complemento em si dentro do AdmFood. **Fase 2 (Etapa 0 do motor)** ✅ — baixa automática de estoque a partir da venda do **produto principal**, casado com a Ficha Técnica, com fila de pendência + vínculo manual permanente (seção 6.11); por enquanto só Hamburgueria Artesanos. **Fases seguintes, ainda não iniciadas**: (a) casar também cada **complemento** escolhido (a API da Cardápio Web já expõe isso, confirmado ao vivo — só falta capturar); (b) comparação com a Contagem física mostrando a quebra; (c) gerar pedido de compra automático a partir da quebra; (d) expandir a Etapa 0 pras outras 3 lojas, quando tiverem Ficha Técnica completa. Etapas 1-9 do documento do chefe (médias ponderadas, margem de segurança variável, calendário de eventos, arredondamento de embalagem, Índice de Quebra, Curva ABC, Sugestão Tripla) dependem da Etapa 0 rodando e coletando dado real primeiro — plano completo salvo, a decidir com a Julia por onde continuar.
 
 11. **Cotação manual gerar pedido de compra de verdade** — 🟡 decisão em
 aberto (2026-09-04). Hoje "Gerar pedidos" só funciona pra cotação que

@@ -58,6 +58,10 @@ from backend.armazenamento import (
     salvar_custo_item_cardapio,
     listar_produtos_por_loja,
     consumo_medio_insumo,
+    listar_produtos_pendentes,
+    vincular_produto_venda_manualmente,
+    listar_vinculos_manuais,
+    listar_itens_cardapio_todos,
     listar_lotes_vencendo,
     marcar_lote_resolvido,
     criar_fornecedor,
@@ -1207,6 +1211,55 @@ def api_consumo_medio_insumo():
 
     consumo = consumo_medio_insumo(inicio.isoformat(), fim.isoformat(), unidade)
     return jsonify({"consumo": consumo})
+
+
+@app.route('/api/produtos-pendentes', methods=['GET'])
+def api_listar_produtos_pendentes():
+    """Painel de integrações do estoque (Etapa 0 do motor de compra) —
+    produtos vendidos que ainda não casaram com nenhum item da Ficha
+    Técnica. Por enquanto só Hamburgueria Artesanos, única loja com a
+    baixa automática ligada."""
+    unidade = request.args.get('unidade', 'Hamburgueria Artesanos')
+    if unidade not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    dias = request.args.get('dias', 30, type=int)
+    pendentes = listar_produtos_pendentes(unidade, dias)
+    return jsonify({"pendentes": pendentes})
+
+
+@app.route('/api/produtos-pendentes/vincular', methods=['POST'])
+def api_vincular_produto_pendente():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    nome_produto = (dados.get('nomeProduto') or '').strip()
+    item_cardapio_id = dados.get('itemCardapioId')
+    if not nome_produto or not item_cardapio_id:
+        return jsonify({"erro": "Informe o produto vendido e o item do cardápio."}), 400
+    try:
+        quantidade_por_unidade = float(dados.get('quantidadePorUnidade') or 1)
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Quantidade por unidade inválida."}), 400
+    if quantidade_por_unidade <= 0:
+        return jsonify({"erro": "Quantidade por unidade precisa ser maior que zero."}), 400
+
+    usuario = _usuario_logado()
+    vincular_produto_venda_manualmente(
+        nome_produto, item_cardapio_id, usuario['nome'] if usuario else None, quantidade_por_unidade
+    )
+    return jsonify({"ok": True})
+
+
+@app.route('/api/vinculos-manuais', methods=['GET'])
+def api_listar_vinculos_manuais():
+    return jsonify({"vinculos": listar_vinculos_manuais()})
+
+
+@app.route('/api/itens-cardapio/todos', methods=['GET'])
+def api_listar_itens_cardapio_todos():
+    return jsonify({"itens": listar_itens_cardapio_todos()})
 
 
 @app.route('/api/insumos/lotes-vencendo', methods=['GET'])
