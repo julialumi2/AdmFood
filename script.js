@@ -192,6 +192,18 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    const seletorAcoes = document.getElementById('estoque-acoes-menu');
+    const triggerAcoes = document.getElementById('estoque-acoes-trigger');
+    if (seletorAcoes && triggerAcoes) {
+      triggerAcoes.addEventListener('click', () => seletorAcoes.classList.toggle('aberto'));
+      seletorAcoes.querySelectorAll('.acoes-menu-item').forEach((item) => {
+        item.addEventListener('click', () => seletorAcoes.classList.remove('aberto'));
+      });
+      document.addEventListener('click', (evento) => {
+        if (!seletorAcoes.contains(evento.target)) seletorAcoes.classList.remove('aberto');
+      });
+    }
+
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     carregarInsumos();
     carregarLotesVencendo();
@@ -1255,6 +1267,7 @@ const DIAS_COBERTURA_IDEAL = 7;
 const STATUS_LABEL_ESTOQUE = { ok: 'OK', baixo: 'Baixo', critico: 'Crítico' };
 const STATUS_CLASSE_BADGE_ESTOQUE = { ok: 'pos', baixo: 'neu-orange', critico: 'neg' };
 const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', critico: 'bar-red' };
+const STATUS_ICONE_ESTOQUE = { ok: 'check', baixo: 'trending-down', critico: 'alert-triangle' };
 
 let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
@@ -1506,8 +1519,15 @@ function renderEstoqueTab() {
   document.getElementById('estoque-val-baixo').textContent = contagem.baixo;
   document.getElementById('estoque-val-critico').textContent = contagem.critico;
 
+  const totalSaude = linhas.length || 1;
+  const pctOk = Math.round((contagem.ok / totalSaude) * 100);
+  document.getElementById('estoque-saude-seg-ok').style.width = `${(contagem.ok / totalSaude) * 100}%`;
+  document.getElementById('estoque-saude-seg-baixo').style.width = `${(contagem.baixo / totalSaude) * 100}%`;
+  document.getElementById('estoque-saude-seg-critico').style.width = `${(contagem.critico / totalSaude) * 100}%`;
+  document.getElementById('estoque-saude-pct-ideal').textContent = `${pctOk}% em nível ideal`;
+
   if (!linhas.length) {
-    const colspan = 7 + (isAdmin ? 1 : 0);
+    const colspan = 6 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum insumo encontrado.</td></tr>`;
     return;
   }
@@ -1537,28 +1557,31 @@ function renderEstoqueTab() {
             </div>
           </div>
         </td>
-        <td class="text-muted">${escaparHtml(insumo.categoria)}</td>
+        <td><span class="badge badge-neutral tag-categoria">${escaparHtml(insumo.categoria)}</span></td>
         <td class="font-bold col-atual-destaque">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
         <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
           ${dados.consumoMedio === null ? '—' : `${Math.round(dados.consumoMedio * 100) / 100} ${escaparHtml(insumo.unidadeMedida)}/dia`}
         </td>
-        <td ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
+        <td class="col-nivel" ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
           ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
-            <div class="qtd-ideal-cell">
-              <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
-              ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
-              ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${sugestaoCompra} ${escaparHtml(insumo.unidadeMedida)}</span>` : ''}
+            <div class="nivel-cell">
+              <div class="nivel-valor-linha">
+                <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
+                ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
+                ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${sugestaoCompra} ${escaparHtml(insumo.unidadeMedida)}</span>` : ''}
+              </div>
+              <div class="nivel-gauge" title="Estoque atual em relação ao mínimo — o traço marca o limite mínimo">
+                <div class="progress-container">
+                  <div class="progress-bar ${STATUS_CLASSE_BARRA_ESTOQUE[dados.status]}" style="width: ${percentual}%;"></div>
+                </div>
+                <span class="nivel-gauge-tick"></span>
+              </div>
+              <span class="min-label">mínimo ${dados.estoqueMinimo} ${escaparHtml(insumo.unidadeMedida)}</span>
               ${tendencia ? `<span class="tendencia-texto" title="Consumo médio dos últimos 14 dias comparado com a média de 30 dias — não muda o cálculo de déficit, é só um alerta">${tendencia.subindo ? '↑' : '↓'} tendência: ${tendencia.valor} ${escaparHtml(insumo.unidadeMedida)} (${tendencia.subindo ? '+' : ''}${tendencia.desvioPercentual}%)</span>` : ''}
             </div>
           `}
         </td>
-        <td>
-          <div class="progress-container">
-            <div class="progress-bar ${STATUS_CLASSE_BARRA_ESTOQUE[dados.status]}" style="width: ${percentual}%;"></div>
-          </div>
-          <span class="min-label">mínimo ${dados.estoqueMinimo} ${escaparHtml(insumo.unidadeMedida)}</span>
-        </td>
-        <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}">${STATUS_LABEL_ESTOQUE[dados.status]}</span></td>
+        <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"><i data-lucide="${STATUS_ICONE_ESTOQUE[dados.status]}"></i>${STATUS_LABEL_ESTOQUE[dados.status]}</span></td>
         ${isAdmin ? `
           <td class="acoes-linha">
             ${loja ? `

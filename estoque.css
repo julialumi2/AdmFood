@@ -119,3 +119,220 @@
 .col-atual-destaque {
   background-color: var(--primary-soft);
 }
+
+/* Menu "Mais ações" — junta 6 ações de admin pouco frequentes (setup de
+   catálogo + atualização em lote) que antes eram 6 botões soltos na tela,
+   difíceis de lembrar o que cada um fazia. Só "Registrar entrada" (a ação
+   do dia a dia) continua sempre visível. Mesmo padrão visual do dropdown
+   de loja ao lado (.loja-select), pra reaproveitar a linguagem já
+   aprendida nesta mesma tela — só abre pro lado direito. */
+.acoes-menu {
+  position: relative;
+}
+
+.acoes-menu-lista {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 300px;
+  z-index: 20;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-2);
+}
+
+.acoes-menu.aberto .acoes-menu-lista { display: flex; flex-direction: column; gap: 2px; }
+.acoes-menu.aberto .loja-select-chevron { transform: rotate(180deg); }
+
+.acoes-menu-grupo-titulo {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-2) var(--space-3) 4px;
+}
+
+.acoes-menu-grupo-titulo:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--surface-muted-border);
+  padding-top: var(--space-3);
+}
+
+.acoes-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.acoes-menu-item:hover { background-color: var(--surface-muted); }
+
+.acoes-menu-item i,
+.acoes-menu-item svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.acoes-menu-item-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.acoes-menu-item-titulo {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.acoes-menu-item small {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Acento lateral nos 4 cards de resumo — cada um "puxa" a cor do que
+   representa, sem brigar com o furo de comanda (que fica no topo). */
+.store-card--total { border-left: 3px solid var(--primary); }
+.store-card--ideal { border-left: 3px solid var(--success); }
+.store-card--baixo { border-left: 3px solid var(--warning); }
+.store-card--critico { border-left: 3px solid var(--danger); }
+
+/* Saúde do estoque — faixa proporcional (ideal/baixo/crítico sobre o
+   total), como o fechamento de subtotal de uma comanda: os 4 cards acima
+   são as partes, esta barra é a leitura de conjunto. */
+.estoque-saude {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.estoque-saude-rotulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-2);
+}
+
+.estoque-saude-rotulo-pct {
+  color: var(--success);
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0;
+}
+
+.estoque-saude-barra {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  background-color: var(--surface-muted);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.estoque-saude-segmento {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.estoque-saude-segmento.seg-ok { background-color: var(--success); }
+.estoque-saude-segmento.seg-baixo { background-color: var(--warning); }
+.estoque-saude-segmento.seg-critico { background-color: var(--danger); }
+
+/* Tag de categoria — reaproveita .badge/.badge-neutral (mesma cor neutra
+   de sempre), só um respiro de padding a mais pra não colidir com o
+   nome do insumo do lado. */
+.tag-categoria {
+  white-space: nowrap;
+}
+
+/* Coluna "Qtd. mínima" — absorveu o antigo "Nível" (barra de progresso)
+   junto, então empilha valor ideal, gauge e legenda do mínimo num só
+   lugar em vez de duas colunas fazendo a mesma leitura. */
+.col-nivel { min-width: 180px; }
+
+.nivel-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.nivel-valor-linha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* O gauge é a barra de progresso de sempre (.progress-container/.progress-bar,
+   de theme.css) com um traço fixo em 66,7% — como a barra sempre vai de 0 até
+   1,5x o mínimo (ver renderEstoqueTab), o mínimo cai sempre nesse mesmo ponto,
+   não precisa calcular posição em JS. */
+.nivel-gauge {
+  position: relative;
+  width: 100%;
+  max-width: 160px;
+}
+
+.nivel-gauge-tick {
+  position: absolute;
+  left: 66.6667%;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background-color: var(--text-dark);
+  opacity: 0.28;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* Ícone dentro do badge de status (OK/Baixo/Crítico) */
+.inventory-table .badge-pill i,
+.inventory-table .badge-pill svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* Cabeçalho fixo só na tabela grande de Itens em estoque (pode passar de
+   150 linhas) — 64px é a altura do .top-header, pra não ficar por baixo
+   dele ao rolar. As outras tabelas da página (Lotes vencendo, Datas
+   especiais, Integrações) são curtas e não precisam disso. */
+#estoque-tabela-scroll thead th {
+  position: sticky;
+  top: 64px;
+  z-index: 2;
+}
+
+@media (max-width: 768px) {
+  #estoque-tabela-scroll thead th {
+    position: static;
+  }
+
+  .estoque-saude-rotulo {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}

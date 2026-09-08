@@ -168,30 +168,59 @@
           <div class="title-row">
             <h1>Insumos da Rede</h1>
             <div class="page-acoes-topo" id="estoque-acoes-admin" style="display:none;">
-              <button type="button" class="btn-secondary" id="btn-copiar-ideal" style="display:none;">
-                <i data-lucide="copy"></i>
-                Copiar de outra loja
-              </button>
-              <button type="button" class="btn-secondary" id="btn-ajuste-lote" style="display:none;">
-                <i data-lucide="table"></i>
-                Ajustar em lote
-              </button>
-              <button type="button" class="btn-secondary" id="btn-atualizar-estoque-lote" style="display:none;">
-                <i data-lucide="clipboard-list"></i>
-                Atualizar estoque em lote
-              </button>
-              <button type="button" class="btn-secondary" id="btn-insumos-loja" style="display:none;">
-                <i data-lucide="list-checks"></i>
-                Insumos da loja
-              </button>
-              <button type="button" class="btn-secondary" id="btn-importar-insumos">
-                <i data-lucide="upload"></i>
-                Importar insumos
-              </button>
-              <button type="button" class="btn-secondary" id="btn-novo-insumo">
-                <i data-lucide="plus"></i>
-                Novo insumo
-              </button>
+              <div class="acoes-menu" id="estoque-acoes-menu">
+                <button type="button" class="btn-secondary acoes-menu-trigger" id="estoque-acoes-trigger">
+                  <i data-lucide="sliders-horizontal"></i>
+                  Mais ações
+                  <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+                </button>
+                <div class="acoes-menu-lista" id="estoque-acoes-menu-lista">
+                  <span class="acoes-menu-grupo-titulo">Catálogo de insumos</span>
+                  <button type="button" class="acoes-menu-item" id="btn-novo-insumo">
+                    <i data-lucide="plus"></i>
+                    <span class="acoes-menu-item-texto">
+                      <span class="acoes-menu-item-titulo">Novo insumo</span>
+                      <small>Cadastra um insumo novo pra rede toda</small>
+                    </span>
+                  </button>
+                  <button type="button" class="acoes-menu-item" id="btn-importar-insumos">
+                    <i data-lucide="upload"></i>
+                    <span class="acoes-menu-item-texto">
+                      <span class="acoes-menu-item-titulo">Importar insumos</span>
+                      <small>Cola uma lista de nomes novos de uma vez</small>
+                    </span>
+                  </button>
+                  <button type="button" class="acoes-menu-item" id="btn-insumos-loja" style="display:none;">
+                    <i data-lucide="list-checks"></i>
+                    <span class="acoes-menu-item-texto">
+                      <span class="acoes-menu-item-titulo">Insumos da loja</span>
+                      <small>Escolhe quais insumos essa loja usa</small>
+                    </span>
+                  </button>
+                  <span class="acoes-menu-grupo-titulo">Atualizar números em lote</span>
+                  <button type="button" class="acoes-menu-item" id="btn-atualizar-estoque-lote" style="display:none;">
+                    <i data-lucide="clipboard-list"></i>
+                    <span class="acoes-menu-item-texto">
+                      <span class="acoes-menu-item-titulo">Atualizar estoque em lote</span>
+                      <small>Cola uma contagem física ou de outro sistema</small>
+                    </span>
+                  </button>
+                  <button type="button" class="acoes-menu-item" id="btn-ajuste-lote" style="display:none;">
+                    <i data-lucide="table"></i>
+                    <span class="acoes-menu-item-texto">
+                      <span class="acoes-menu-item-titulo">Ajustar quantidade ideal em lote</span>
+                      <small>Corrige o mínimo calculado, insumo por insumo</small>
+                    </span>
+                  </button>
+                  <button type="button" class="acoes-menu-item" id="btn-copiar-ideal" style="display:none;">
+                    <i data-lucide="copy"></i>
+                    <span class="acoes-menu-item-texto">
+                      <span class="acoes-menu-item-titulo">Copiar de outra loja</span>
+                      <small>Usa o ajuste de outra loja como ponto de partida</small>
+                    </span>
+                  </button>
+                </div>
+              </div>
               <button class="btn-registrar-entrada" id="btn-registrar-entrada">Registrar entrada</button>
             </div>
           </div>
@@ -232,7 +261,7 @@
 
         <!-- CARDS DE RESUMO DO ESTOQUE -->
         <div class="cards-grid cards-grid-2x2-mobile">
-          <div class="store-card">
+          <div class="store-card store-card--total">
             <span class="card-subtitle">ITENS CADASTRADOS</span>
             <div class="metric-card-content">
               <i data-lucide="box" class="metric-icon icon-red"></i>
@@ -240,7 +269,7 @@
             </div>
           </div>
 
-          <div class="store-card">
+          <div class="store-card store-card--ideal">
             <span class="card-subtitle">EM NÍVEL IDEAL</span>
             <div class="metric-card-content">
               <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
@@ -248,7 +277,7 @@
             </div>
           </div>
 
-          <div class="store-card">
+          <div class="store-card store-card--baixo">
             <span class="card-subtitle">ESTOQUE BAIXO</span>
             <div class="metric-card-content">
               <i data-lucide="trending-down" class="metric-icon icon-dark"></i>
@@ -256,12 +285,25 @@
             </div>
           </div>
 
-          <div class="store-card">
+          <div class="store-card store-card--critico">
             <span class="card-subtitle">NÍVEL CRÍTICO</span>
             <div class="metric-card-content">
               <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
               <span class="store-value" id="estoque-val-critico">0</span>
             </div>
+          </div>
+        </div>
+
+        <!-- SAÚDE DO ESTOQUE — faixa proporcional (ideal/baixo/crítico do total), tipo um fechamento de comanda -->
+        <div class="estoque-saude" id="estoque-saude" title="Proporção de insumos em cada situação, sobre o total cadastrado">
+          <div class="estoque-saude-rotulo">
+            <span>Saúde do estoque</span>
+            <span class="estoque-saude-rotulo-pct" id="estoque-saude-pct-ideal">0% em nível ideal</span>
+          </div>
+          <div class="estoque-saude-barra">
+            <div class="estoque-saude-segmento seg-ok" id="estoque-saude-seg-ok" style="width: 0%;"></div>
+            <div class="estoque-saude-segmento seg-baixo" id="estoque-saude-seg-baixo" style="width: 0%;"></div>
+            <div class="estoque-saude-segmento seg-critico" id="estoque-saude-seg-critico" style="width: 0%;"></div>
           </div>
         </div>
 
@@ -380,7 +422,7 @@
           </div>
 
           <!-- TABELA DE INSUMOS -->
-          <div class="table-responsive">
+          <div class="table-responsive" id="estoque-tabela-scroll">
           <table class="inventory-table">
             <thead>
               <tr>
@@ -388,8 +430,7 @@
                 <th>Categoria</th>
                 <th class="col-atual-destaque">Atual</th>
                 <th title="Média diária estimada nos últimos 30 dias, a partir da Ficha Técnica × vendas">Consumo médio/dia</th>
-                <th title="Estoque mínimo cadastrado, ou o ajuste manual quando existir">Qtd. mínima</th>
-                <th>Nível</th>
+                <th title="Estoque mínimo cadastrado (ou ajuste manual), com o nível atual em relação a ele">Qtd. mínima</th>
                 <th>Status</th>
                 <th id="estoque-th-acoes" style="display:none;">Ações</th>
               </tr>
