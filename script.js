@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const btnSincronizarAgora = document.getElementById('btn-sincronizar-agora');
   if (btnSincronizarAgora) {
-    btnSincronizarAgora.addEventListener('click', sincronizarAgora);
+    btnSincronizarAgora.addEventListener('click', () => sincronizarAgora());
   }
 
   // 5. INICIALIZAÇÃO DE DATAS DA INTERFACE
@@ -5239,7 +5239,7 @@ async function carregarConfigLojas() {
  * por uma resposta); os números atualizam sozinhos assim que terminar,
  * graças à atualização automática já existente na tela.
  */
-async function sincronizarAgora() {
+async function sincronizarAgora(forcar) {
   const botao = document.getElementById('btn-sincronizar-agora');
   const resultadoElem = document.getElementById('sync-resultado');
   if (!botao) return;
@@ -5250,13 +5250,23 @@ async function sincronizarAgora() {
   if (resultadoElem) resultadoElem.innerHTML = '';
 
   try {
-    const resposta = await fetch('/api/sincronizar-agora', { method: 'POST' });
+    const resposta = await fetch(`/api/sincronizar-agora${forcar ? '?forcar=1' : ''}`, { method: 'POST' });
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
 
     if (resultadoElem) {
       if (dados.fechado) {
-        resultadoElem.innerHTML = `<div class="sync-resultado-item">${dados.diaLabel} é segunda-feira — lojas fechadas, nada a sincronizar.</div>`;
+        // Segunda-feira normal fica só o aviso; mas pode ter sido feriado
+        // com a loja aberta mesmo assim — deixa forçar sem precisar mexer
+        // em código de novo (achado ao vivo, 2026-09-08).
+        resultadoElem.innerHTML = `
+          <div class="sync-resultado-item">
+            ${dados.diaLabel} é segunda-feira — lojas fechadas, nada a sincronizar.
+            Se abriu mesmo assim (feriado, por exemplo),
+            <button type="button" class="btn-secondary-sm" id="btn-sincronizar-forcar" style="display:inline;">sincronize aqui</button>.
+          </div>
+        `;
+        document.getElementById('btn-sincronizar-forcar')?.addEventListener('click', () => sincronizarAgora(true));
       } else {
         resultadoElem.innerHTML = `<div class="sync-resultado-item">Sincronização de ${dados.diaLabel} iniciada em segundo plano — pode levar alguns minutos. Os números atualizam sozinhos aqui.</div>`;
       }

@@ -2825,7 +2825,13 @@ def api_sincronizar_agora():
     else:
         dia_alvo = date.today() - timedelta(days=1)
 
-    if dia_alvo.weekday() == DIA_FECHADO:
+    # `forcar=1` ignora o "segunda-feira é sempre fechado" — feriado que cai
+    # numa segunda e a loja abre mesmo assim (achado ao vivo, 2026-09-08: a
+    # Julia pediu pra sincronizar 07/09, Independência, que caiu numa
+    # segunda e a loja funcionou). Sem isso não tinha jeito nenhum de puxar
+    # esse dia pela tela, nem escolhendo a data.
+    forcar = request.args.get('forcar') == '1'
+    if dia_alvo.weekday() == DIA_FECHADO and not forcar:
         return jsonify({
             "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
             "fechado": True,
