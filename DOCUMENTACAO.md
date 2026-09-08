@@ -2124,13 +2124,50 @@ HTTP (`/api/produtos-pendentes`, `/vincular`, `/api/vinculos-manuais`,
 `/api/itens-cardapio/todos`) responderam certo via `test_client`,
 incluindo 401 sem login pra vincular.
 
-**Ainda falta** (próximo passo, fora desta entrega): importar a Ficha
-Técnica nova de verdade pra dentro do AdmFood (reconciliar os 72
-insumos + 9 sub-receitas contra o catálogo atual, e colar a receita dos
-25 produtos usando a ferramenta "colar lista" que já existe em
-Ficha Técnica) — sem isso, a maioria das vendas do Artesanos ainda cai
-em "sem quantidade ideal" (`f.quantidade IS NULL`) e a baixa automática
-não desconta nada de verdade ainda, só a mecânica está pronta e testada.
+**Importação da Ficha Técnica nova — concluída em 2026-09-08.** Os 44
+insumos que a planilha referencia direto em linha de produto (dos 72 da
+aba "Insumos" — o restante só é usado internamente dentro do cálculo de
+custo de uma sub-receita, e como sub-receita não é decomposta, esses
+não precisam existir no catálogo) foram conferidos contra o catálogo já
+cadastrado: 4 já existiam (Alface Americana, Cebola Roxa, Pão Brioche,
+Rúcula), os outros 40 foram criados via "Importar insumos em lote"
+(estoque.html), agrupados por unidade — g (27), kg (4), ml (2), unid
+(7) — todos vinculados só à Hamburgueria Artesanos. Um erro de digitação
+introduzido no próprio lote ("aBacon (fatia crua)" em vez de "Bacon
+(fatia crua)") foi pego na conferência final e corrigido antes de
+qualquer receita usar o nome errado.
+
+Os 25 produtos (já existentes como preço/cardápio, mas sem
+`item_cardapio` próprio pra Ficha Técnica desde a virada pra "receita
+por loja" em 2026-09) foram cadastrados e tiveram a receita colada via
+"colar lista", confirmando com `checkValidity()` que cada linha bateu
+(nenhum "não encontrado") antes de salvar. Duas conversões de unidade
+por já existir o insumo num formato diferente do da planilha: **Cebola
+Roxa** e **Rúcula** já estavam cadastradas em `kg`, a planilha usa
+gramas — convertido (`÷1000`) em cada linha, com uma casa a mais
+arredondada pro `step="0.01"` do campo de quantidade (ex: 27g → 0,03kg,
+15g → 0,02kg — a receita muito precisa por g fracionário de um item
+contado em kg perde uma casa decimal irrelevante no dia a dia). "Massa
+Dadinho de Tapioca" tinha uma quantidade calculada com 15 casas decimais
+na planilha (`0.418058798937718` kg) — também arredondado pra 0,42kg
+pelo mesmo motivo (o campo rejeita qualquer valor que não seja múltiplo
+de 0,01 e barra o salvamento silenciosamente, sem mensagem visível, até
+o valor ser corrigido).
+
+**Pendência real, não resolvida — decisão da Julia**: **Alface
+Americana** está cadastrada como `un` (contada por cabeça/unidade), mas
+a planilha nova consome ela em **gramas** (80g no Clássico/Chicken/Veg/
+Big Art/Tasty Bacon, 100g no Smash Bowl) — como não são a mesma grandeza
+física, não dá pra converter sem assumir um peso médio por unidade, e
+por isso a linha de Alface Americana ficou **de fora** da Ficha Técnica
+desses 6 produtos (o resto da receita entrou normal). Falta perguntar
+pra Julia se a loja pesa a alface em gramas na prática (aí muda a
+unidade do insumo pra `g` e recadastra o consumo médio) ou se conta por
+folha/cabeça (aí a planilha precisa de um peso médio assumido, ex:
+"1 unidade = Xg", documentado como fonte). Enquanto isso não for
+decidido, a baixa automática desses 6 produtos simplesmente não desconta
+alface nenhuma (não é um erro silencioso de quantidade errada — é a
+ausência da linha, visível abrindo a Ficha Técnica de qualquer um deles).
 
 ## 7. API — principais endpoints
 
