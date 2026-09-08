@@ -5679,11 +5679,8 @@ async function carregarUsuarioLogado() {
     // Tela de Cardápio → sub-aba Ficha Técnica: botão "Novo item", custo
     // editável e ações de editar/excluir (só admin) — mesma correção de
     // corrida entre os dois fetches.
-    if (usuario.papel === 'admin' && fichaTecnicaProdutos.length) {
-      renderFichaTecnicaProdutos();
-    }
-    if (usuario.papel === 'admin' && fichaTecnicaComplementos.length) {
-      renderFichaTecnicaComplementos();
+    if (usuario.papel === 'admin' && (fichaTecnicaProdutos.length || fichaTecnicaComplementos.length)) {
+      renderFichaTecnicaConteudo();
     }
 
     // Tela de Contagens: botão "Nova requisição" e coluna de Ações (só
@@ -6558,41 +6555,25 @@ function _fichaTecnicaItensAtuais() {
   return fichaTecnicaTipoAtual === 'complemento' ? fichaTecnicaComplementos : fichaTecnicaProdutos;
 }
 
+// Complemento só existe pro Açaí Na Lata (único que vende "monte o seu").
+// "Complementos" entra como mais um item no MESMO menu de categorias dos
+// produtos (em vez de uma aba separada lá em cima) — ver
+// renderFichaTecnicaConteudo. Precisa buscar as duas listas de uma vez
+// pra montar esse menu com o item extra desde o primeiro render.
+const FICHA_TECNICA_COMPLEMENTOS_ITEM = 'Complementos';
+
 function carregarFichaTecnicaAtual() {
-  fichaTecnicaCategoriaSelecionada = null;
-  return fichaTecnicaTipoAtual === 'complemento' ? carregarComplementosFichaTecnica() : carregarProdutosFichaTecnica();
-}
-
-async function carregarProdutosFichaTecnica() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   if (!conteudoEl) return;
-  try {
-    const resposta = await fetch(`/api/cardapio/produtos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    fichaTecnicaProdutos = dados.produtos || [];
-    fichaTecnicaExpandidos.clear();
-    fichaTecnicaInsumosCache.clear();
-    renderFichaTecnicaProdutos();
-  } catch (erro) {
-    console.error('Falha ao carregar produtos da ficha técnica:', erro);
-    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os produtos dessa loja.</p>`;
-  }
-}
-
-// Complemento não vem de Preços (não é vendido/precificado sozinho na
-// Cardápio Web) — é um catálogo próprio, cadastrado direto no AdmFood
-// (botão "Novo complemento"/"Colar lista"). Por isso todo complemento já
-// nasce com itemCardapioId (o próprio id dele), sem o caso "sem match"
-// que produto tem.
-async function carregarComplementosFichaTecnica() {
-  const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
-  if (!conteudoEl) return;
-  try {
-    const resposta = await fetch(`/api/complementos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    fichaTecnicaComplementos = (dados.complementos || []).map(c => ({
+  const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
+  return Promise.all([
+    fetch(`/api/cardapio/produtos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => r.json()),
+    temComplementos
+      ? fetch(`/api/complementos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => r.json())
+      : Promise.resolve({ complementos: [] }),
+  ]).then(([dadosProdutos, dadosComplementos]) => {
+    fichaTecnicaProdutos = dadosProdutos.produtos || [];
+    fichaTecnicaComplementos = (dadosComplementos.complementos || []).map(c => ({
       itemCardapioId: c.id,
       nome: c.nome,
       categoria: c.categoria,
@@ -6600,16 +6581,146 @@ async function carregarComplementosFichaTecnica() {
     }));
     fichaTecnicaExpandidos.clear();
     fichaTecnicaInsumosCache.clear();
-    renderFichaTecnicaComplementos();
-  } catch (erro) {
-    console.error('Falha ao carregar complementos da ficha técnica:', erro);
-    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os complementos.</p>`;
-  }
+    if (!temComplementos && fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM) {
+      fichaTecnicaCategoriaSelecionada = null;
+    }
+    renderFichaTecnicaConteudo();
+  }).catch((erro) => {
+    console.error('Falha ao carregar ficha técnica:', erro);
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os produtos dessa loja.</p>`;
+  });
 }
 
-function renderFichaTecnicaProdutos() {
+// Uma linha da lista de insumos dentro do cartão de receita — nome e
+// quantidade ligados por uma linha pontilhada, como numa receita impressa.
+function _receitaInsumoLinhaHTML(ins) {
+  const qtd = ins.quantidade != null ? `${ins.quantidade}${escaparHtml(ins.unidadeMedida || '')}` : '—';
+  return `
+    <div class="receita-insumo-linha">
+      <span class="receita-insumo-nome">${escaparHtml(ins.nome)}</span>
+      <span class="receita-insumo-pontilhado"></span>
+      <span class="receita-insumo-qtd">${qtd}</span>
+    </div>
+  `;
+}
+
+// Cartão de receita de um produto. `dadosInsumos` é null enquanto ainda
+// não buscou (mostra "Carregando..."), ou o resultado de
+// _buscarFichaTecnicaItem depois de pronto.
+function _receitaCardHTML(p, isAdmin, dadosInsumos) {
+  const semItemCardapio = !p.itemCardapioId;
+  const foto = p.fotoUrl
+    ? `<img src="${p.fotoUrl}" alt="${escaparHtml(p.nome)}">`
+    : `<div class="receita-foto-vazia"><i data-lucide="utensils"></i></div>`;
+
+  const acoes = isAdmin && p.itemCardapioId ? `
+    <div class="receita-card-acoes">
+      <button type="button" class="btn-icon" data-acao="receita-editar-insumos" data-item-id="${p.itemCardapioId}" title="Editar insumos">
+        <i data-lucide="pencil"></i>
+      </button>
+      <button type="button" class="btn-icon danger" data-acao="receita-excluir-item" data-item-id="${p.itemCardapioId}" data-nome="${escaparHtml(p.nome)}" title="Excluir item">
+        <i data-lucide="trash-2"></i>
+      </button>
+    </div>
+  ` : '';
+
+  const precoLateral = `
+    <div class="receita-card-lateral">
+      <span class="receita-preco-venda">${p.valorVenda != null ? 'R$ ' + p.valorVenda.toFixed(2) : '—'}</span>
+      ${isAdmin && p.itemCardapioId
+        ? `<input type="number" step="0.01" min="0" class="receita-input-custo" data-acao="receita-editar-custo" data-item-id="${p.itemCardapioId}" value="${p.custo ?? ''}" placeholder="Custo">`
+        : (p.custo != null ? `<span class="receita-preco-custo-rotulo">custo R$ ${p.custo.toFixed(2)}</span>` : '')}
+      ${acoes}
+    </div>
+  `;
+
+  let miolo;
+  if (semItemCardapio) {
+    miolo = isAdmin ? `
+      <div class="receita-vazio-bloco">
+        <span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>
+        <button type="button" class="btn-secondary-sm" data-acao="receita-criar-ficha" data-nome="${escaparHtml(p.nome)}" data-categoria="${escaparHtml(p.categoria)}">Cadastrar ficha técnica</button>
+      </div>
+    ` : `<span class="ficha-tecnica-vazio">sem ficha técnica</span>`;
+  } else if (!dadosInsumos) {
+    miolo = `<p class="panel-subtitle">Carregando...</p>`;
+  } else if (!dadosInsumos.insumos.length) {
+    miolo = `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`;
+  } else {
+    miolo = `
+      <div class="receita-eyebrow">Insumos</div>
+      <div class="receita-insumos">
+        ${dadosInsumos.insumos.map(_receitaInsumoLinhaHTML).join('')}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="receita-card-topo">
+      <div class="receita-card-nome-bloco">
+        <div class="receita-card-nome">${escaparHtml(p.nome)}</div>
+      </div>
+      ${precoLateral}
+    </div>
+    ${miolo}
+  `;
+}
+
+// Um único listener delegado no container cuida de todos os cartões — evita
+// reanexar N listeners a cada re-render (troca de categoria, salvar custo,
+// etc.). Nomes de data-acao com prefixo "receita-" pra nunca colidir com os
+// data-acao (sem prefixo) que o painel de Complementos ainda usa no mesmo
+// container — ver renderPainelFichaTecnicaExpandido.
+function _wireReceitaCardsEventos(conteudoEl) {
+  if (conteudoEl.dataset.receitaWired) return;
+  conteudoEl.dataset.receitaWired = '1';
+
+  conteudoEl.addEventListener('click', (evento) => {
+    const btnEditar = evento.target.closest('[data-acao="receita-editar-insumos"]');
+    if (btnEditar) { abrirModalFichaTecnicaItem(parseInt(btnEditar.dataset.itemId, 10)); return; }
+
+    const btnCriar = evento.target.closest('[data-acao="receita-criar-ficha"]');
+    if (btnCriar) {
+      fichaTecnicaProdutoPendente = { nome: btnCriar.dataset.nome, categoria: btnCriar.dataset.categoria };
+      document.getElementById('novo-item-nome').value = btnCriar.dataset.nome;
+      document.getElementById('novo-item-categoria').value = btnCriar.dataset.categoria;
+      document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
+      return;
+    }
+
+    const btnExcluir = evento.target.closest('[data-acao="receita-excluir-item"]');
+    if (btnExcluir) {
+      const itemId = parseInt(btnExcluir.dataset.itemId, 10);
+      if (!confirm(`Excluir "${btnExcluir.dataset.nome}" e sua ficha técnica (em todas as lojas)?`)) return;
+      (async () => {
+        try {
+          const resposta = await fetch(`/api/itens-cardapio/${itemId}`, { method: 'DELETE' });
+          if (!resposta.ok) throw new Error('falha ao excluir');
+          await carregarFichaTecnicaAtual();
+        } catch (erro) {
+          console.error('Falha ao excluir item do cardápio:', erro);
+          alert('Não foi possível excluir.');
+        }
+      })();
+    }
+  });
+
+  conteudoEl.addEventListener('change', (evento) => {
+    const input = evento.target.closest('[data-acao="receita-editar-custo"]');
+    if (input) salvarCustoProduto(parseInt(input.dataset.itemId, 10), input.value);
+  });
+}
+
+// Orquestrador único: monta o menu de categorias (categorias de produto +
+// "Complementos" no fim, só quando a loja é Açaí Na Lata) e decide se o
+// conteúdo é a grade de receitas ou a lista de complementos, conforme o
+// que tá selecionado nesse menu.
+function renderFichaTecnicaConteudo() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
+  const subtitulo = document.getElementById('ficha-tecnica-subtitulo');
+  const btnNovoTexto = document.getElementById('btn-novo-item-cardapio-texto');
+  const btnColarComplementos = document.getElementById('btn-colar-lista-complementos');
   if (!conteudoEl) return;
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
@@ -6630,86 +6741,71 @@ function renderFichaTecnicaProdutos() {
     porCategoria.get(p.categoria).push(p);
   });
 
-  if (!fichaTecnicaCategoriaSelecionada || !categorias.includes(fichaTecnicaCategoriaSelecionada)) {
-    fichaTecnicaCategoriaSelecionada = categorias[0] || null;
+  const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
+  const categoriaValida = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM
+    ? temComplementos
+    : categorias.includes(fichaTecnicaCategoriaSelecionada);
+  if (!fichaTecnicaCategoriaSelecionada || !categoriaValida) {
+    fichaTecnicaCategoriaSelecionada = categorias[0] || (temComplementos ? FICHA_TECNICA_COMPLEMENTOS_ITEM : null);
   }
+  fichaTecnicaTipoAtual = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM ? 'complemento' : 'produto';
+
   const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
+  if (temComplementos) categoriasComContagem.push({ nome: FICHA_TECNICA_COMPLEMENTOS_ITEM, contagem: fichaTecnicaComplementos.length });
   _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
     fichaTecnicaCategoriaSelecionada = nome;
-    renderFichaTecnicaProdutos();
+    renderFichaTecnicaConteudo();
   });
 
-  const produtosDaCategoria = porCategoria.get(fichaTecnicaCategoriaSelecionada) || [];
-  conteudoEl.innerHTML = !fichaTecnicaCategoriaSelecionada ? '' : `
+  const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
+  if (subtitulo) subtitulo.textContent = ehComplemento
+    ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
+    : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
+  if (btnNovoTexto) btnNovoTexto.textContent = ehComplemento ? 'Novo complemento' : 'Novo item';
+  if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
+
+  if (ehComplemento) {
+    _renderComplementosConteudo(conteudoEl, isAdmin);
+  } else {
+    _renderProdutosConteudo(conteudoEl, isAdmin, porCategoria.get(fichaTecnicaCategoriaSelecionada) || []);
+  }
+}
+
+async function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria) {
+  // Primeiro cartão em "Carregando...", depois busca os insumos de todo
+  // mundo em paralelo (com cache) e atualiza cada cartão — mais rápido do
+  // que buscar um item de cada vez, um atrás do outro.
+  conteudoEl.innerHTML = `
     <div class="cardapio-categoria-titulo">${escaparHtml(fichaTecnicaCategoriaSelecionada)}</div>
-    <div class="ficha-tecnica-produto-lista">
-      ${produtosDaCategoria.map(p => {
-        const expandido = p.itemCardapioId && fichaTecnicaExpandidos.has(p.itemCardapioId);
-        return `
-        <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
-          <div class="ficha-tecnica-produto-linha" ${p.itemCardapioId ? `data-acao="expandir-produto" data-item-id="${p.itemCardapioId}"` : ''}>
-            <div class="ficha-tecnica-produto-foto">
-              ${p.fotoUrl
-                ? `<img src="${p.fotoUrl}" alt="${escaparHtml(p.nome)}">`
-                : `<div class="ficha-tecnica-produto-foto-vazia"><i data-lucide="image"></i></div>`}
-            </div>
-            <div class="ficha-tecnica-produto-nome">${escaparHtml(p.nome)}</div>
-            <div class="ficha-tecnica-produto-custo">
-              ${isAdmin && p.itemCardapioId
-                ? `<input type="number" step="0.01" min="0" class="input-custo-produto" data-acao="editar-custo" data-item-id="${p.itemCardapioId}" value="${p.custo ?? ''}" placeholder="Custo">`
-                : `<span>${p.custo != null ? 'R$ ' + p.custo.toFixed(2) : '—'}</span>`}
-            </div>
-            <div class="ficha-tecnica-produto-venda">${p.valorVenda != null ? 'R$ ' + p.valorVenda.toFixed(2) : '—'}</div>
-            ${p.itemCardapioId
-              ? `<i data-lucide="chevron-down" class="ficha-tecnica-chevron"></i>`
-              : (isAdmin
-                  ? `<button type="button" class="btn-secondary-sm" data-acao="criar-ficha-produto" data-nome="${escaparHtml(p.nome)}" data-categoria="${escaparHtml(p.categoria)}">Cadastrar ficha técnica</button>`
-                  : `<span class="ficha-tecnica-vazio">sem ficha técnica</span>`)}
-          </div>
-          <div class="ficha-tecnica-produto-expandido" style="display:${expandido ? '' : 'none'};" data-painel-item-id="${p.itemCardapioId ?? ''}"></div>
-        </div>
-      `;
-      }).join('')}
+    <div class="receita-grid">
+      ${produtosDaCategoria.map(p => `<div class="receita-card" data-card-item-id="${p.itemCardapioId ?? ''}">${_receitaCardHTML(p, isAdmin, null)}</div>`).join('')}
     </div>
   `;
+  _wireReceitaCardsEventos(conteudoEl);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 
-  conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
-    linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));
-  });
-  conteudoEl.querySelectorAll('[data-acao="editar-custo"]').forEach(input => {
-    input.addEventListener('click', (evento) => evento.stopPropagation());
-    input.addEventListener('change', () => salvarCustoProduto(parseInt(input.dataset.itemId, 10), input.value));
-  });
-  conteudoEl.querySelectorAll('[data-acao="criar-ficha-produto"]').forEach(btn => {
-    btn.addEventListener('click', (evento) => {
-      evento.stopPropagation();
-      fichaTecnicaProdutoPendente = { nome: btn.dataset.nome, categoria: btn.dataset.categoria };
-      document.getElementById('novo-item-nome').value = btn.dataset.nome;
-      document.getElementById('novo-item-categoria').value = btn.dataset.categoria;
-      document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
-    });
-  });
-
-  // Reabre o painel de quem já estava expandido antes de re-renderizar
-  // (ex: depois de salvar o custo) — sem isso, cada render fecharia tudo.
-  fichaTecnicaExpandidos.forEach(itemId => renderPainelFichaTecnicaExpandido(itemId));
-
+  const comFicha = produtosDaCategoria.filter(p => p.itemCardapioId);
+  await Promise.all(comFicha.map(async (p) => {
+    try {
+      const dados = await _buscarFichaTecnicaItem(p.itemCardapioId);
+      const card = conteudoEl.querySelector(`[data-card-item-id="${p.itemCardapioId}"]`);
+      if (card) card.innerHTML = _receitaCardHTML(p, isAdmin, dados);
+    } catch (erro) {
+      console.error('Falha ao carregar ficha técnica do item:', erro);
+      const card = conteudoEl.querySelector(`[data-card-item-id="${p.itemCardapioId}"]`);
+      if (card) card.innerHTML = `<p class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar os insumos.</p>`;
+    }
+  }));
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// Mesma estrutura de renderFichaTecnicaProdutos, bem mais simples: sem
-// foto/custo/valor de venda (complemento não tem isso nessa fase) e sem
-// o caso "sem match" (todo complemento já nasce com ficha técnica
-// vinculável, é cadastrado direto aqui — não vem de Preços).
-function renderFichaTecnicaComplementos() {
-  const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
-  const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
-  if (!conteudoEl) return;
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
-  if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
-
+// Complemento não tem foto/custo/valor de venda (fora de escopo nessa
+// fase) e, diferente de produto, não tem um seletor de categoria só dele
+// no menu lateral (esse índice agora é compartilhado com Produtos) — por
+// isso mostra TODAS as categorias de complemento de uma vez, uma embaixo
+// da outra, em vez de uma escolhida por vez.
+function _renderComplementosConteudo(conteudoEl, isAdmin) {
   if (!fichaTecnicaComplementos.length) {
-    document.getElementById('ficha-tecnica-categorias-sidebar').innerHTML = '';
     conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum complemento cadastrado ainda${isAdmin ? ' — use "Novo complemento" ou "Colar lista".' : '.'}</p>`;
     return;
   }
@@ -6724,20 +6820,10 @@ function renderFichaTecnicaComplementos() {
     porCategoria.get(c.categoria).push(c);
   });
 
-  if (!fichaTecnicaCategoriaSelecionada || !categorias.includes(fichaTecnicaCategoriaSelecionada)) {
-    fichaTecnicaCategoriaSelecionada = categorias[0] || null;
-  }
-  const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
-  _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
-    fichaTecnicaCategoriaSelecionada = nome;
-    renderFichaTecnicaComplementos();
-  });
-
-  const itensDaCategoria = porCategoria.get(fichaTecnicaCategoriaSelecionada) || [];
-  conteudoEl.innerHTML = !fichaTecnicaCategoriaSelecionada ? '' : `
-    <div class="cardapio-categoria-titulo">${escaparHtml(fichaTecnicaCategoriaSelecionada)}</div>
+  conteudoEl.innerHTML = categorias.map(categoria => `
+    <div class="cardapio-categoria-titulo">${escaparHtml(categoria)}</div>
     <div class="ficha-tecnica-produto-lista">
-      ${itensDaCategoria.map(c => {
+      ${porCategoria.get(categoria).map(c => {
         const expandido = fichaTecnicaExpandidos.has(c.itemCardapioId);
         return `
         <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
@@ -6750,7 +6836,7 @@ function renderFichaTecnicaComplementos() {
       `;
       }).join('')}
     </div>
-  `;
+  `).join('');
 
   conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
     linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));
@@ -6785,8 +6871,7 @@ async function alternarProdutoFichaTecnica(itemId) {
   } else {
     fichaTecnicaExpandidos.add(itemId);
   }
-  if (fichaTecnicaTipoAtual === 'complemento') renderFichaTecnicaComplementos();
-  else renderFichaTecnicaProdutos();
+  renderFichaTecnicaConteudo();
 }
 
 async function renderPainelFichaTecnicaExpandido(itemId) {
@@ -6868,31 +6953,12 @@ async function _buscarFichaTecnicaItem(itemId) {
       item.classList.add('active');
       trigger.querySelector('.loja-select-label').textContent = item.querySelector('span').textContent;
       fichaTecnicaLojaAtual = item.dataset.loja;
+      fichaTecnicaCategoriaSelecionada = null;
       seletor.classList.remove('aberto');
       carregarFichaTecnicaAtual();
     });
   });
 })();
-
-// --- Abas "Produtos" / "Complementos" ---
-document.querySelectorAll('#ficha-tecnica-tipo-tabs .tab-btn').forEach((botao) => {
-  botao.addEventListener('click', () => {
-    if (botao.dataset.tipo === fichaTecnicaTipoAtual) return;
-    document.querySelectorAll('#ficha-tecnica-tipo-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
-    botao.classList.add('active');
-    fichaTecnicaTipoAtual = botao.dataset.tipo;
-
-    const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
-    document.getElementById('ficha-tecnica-subtitulo').textContent = ehComplemento
-      ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
-      : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
-    document.getElementById('btn-novo-item-cardapio-texto').textContent = ehComplemento ? 'Novo complemento' : 'Novo item';
-    const btnColarComplementos = document.getElementById('btn-colar-lista-complementos');
-    if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
-
-    carregarFichaTecnicaAtual();
-  });
-});
 
 // --- Modal: Novo item do cardápio (produto ou complemento, conforme a aba ativa) ---
 function abrirModalNovoItemCardapio() {
@@ -6963,7 +7029,7 @@ document.getElementById('form-colar-complementos')?.addEventListener('submit', a
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao cadastrar');
     resultadoEl.textContent = `${dados.criados.length} cadastrado(s)${dados.duplicados.length ? `, ${dados.duplicados.length} já existia(m): ${dados.duplicados.join(', ')}` : '.'}`;
-    await carregarComplementosFichaTecnica();
+    await carregarFichaTecnicaAtual();
     if (!dados.duplicados.length) fecharModalColarComplementos();
   } catch (erro) {
     console.error('Falha ao cadastrar complementos em lote:', erro);
@@ -7110,8 +7176,13 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
     fichaTecnicaInsumosCache.delete(itemId);
     const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
     if (produto) produto.temFichaTecnica = insumos.length > 0;
-    if (fichaTecnicaExpandidos.has(itemId)) {
-      await renderPainelFichaTecnicaExpandido(itemId);
+    if (fichaTecnicaTipoAtual === 'complemento') {
+      if (fichaTecnicaExpandidos.has(itemId)) await renderPainelFichaTecnicaExpandido(itemId);
+    } else {
+      // Produto não usa mais o acordeão (fichaTecnicaExpandidos) — o
+      // cartão de receita mostra os insumos sempre, então precisa
+      // re-renderizar a grade pra puxar a lista já atualizada.
+      renderFichaTecnicaConteudo();
     }
   } catch (erro) {
     console.error('Falha ao salvar ficha técnica:', erro);
