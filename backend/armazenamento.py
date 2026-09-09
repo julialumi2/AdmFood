@@ -197,6 +197,13 @@ def inicializar_banco():
         colunas_insumo = {c["name"] for c in conn.execute("PRAGMA table_info(insumo)").fetchall()}
         if "favorito" not in colunas_insumo:
             conn.execute("ALTER TABLE insumo ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
+        if "unidade_compra" not in colunas_insumo:
+            conn.execute("ALTER TABLE insumo ADD COLUMN unidade_compra TEXT NOT NULL DEFAULT ''")
+        if "fator_conversao_compra" not in colunas_insumo:
+            # Quantas unidade_medida (kg/L/un...) tem em 1 unidade_compra (caixa/fardo/pacote...).
+            # NULL = insumo ainda não configurado pra arredondamento de embalagem — cai no
+            # arredondamento antigo (só precisão de centavo), ver arredondar_quantidade_compra.
+            conn.execute("ALTER TABLE insumo ADD COLUMN fator_conversao_compra REAL")
         if "marca_homologada" not in colunas_insumo:
             conn.execute("ALTER TABLE insumo ADD COLUMN marca_homologada TEXT NOT NULL DEFAULT ''")
 
@@ -1440,7 +1447,7 @@ def listar_insumos():
         linhas = conn.execute(
             """
             SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
-                   i.marca_homologada,
+                   i.marca_homologada, i.unidade_compra, i.fator_conversao_compra,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em,
                    EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = e.loja) AS aplica
             FROM insumo i
@@ -2965,7 +2972,8 @@ def listar_itens_contagem(contagem_id, loja):
         linhas = conn.execute(
             """
             SELECT ci.insumo_id, ci.quantidade_preenchida,
-                   i.nome, i.categoria, i.unidade_medida, i.marca_homologada
+                   i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
+                   i.fator_conversao_compra
             FROM contagem_item ci
             JOIN insumo i ON i.id = ci.insumo_id
             WHERE ci.contagem_id = ?
@@ -2991,8 +2999,26 @@ def listar_itens_contagem(contagem_id, loja):
             "quantidadePreenchida": linha["quantidade_preenchida"],
             "quantidadeIdeal": quantidade_ideal,
             "quantidadeIdealAjustada": ajustada,
+            "fatorConversaoCompra": linha["fator_conversao_compra"],
         })
     return itens
+
+
+def arredondar_quantidade_compra(deficit, fator_conversao_compra=None):
+    """Arredonda uma quantidade a comprar pra cima — pro múltiplo inteiro da
+    embalagem do fornecedor quando o insumo tem `fator_conversao_compra`
+    cadastrado (ex: queijo em peça de 2,24kg → fator 2.24, precisando de
+    3kg vira 4,48kg = 2 peças), ou só pra precisão de centavo quando não
+    tem (comportamento de sempre, pra insumo ainda não configurado não
+    quebrar). Espelhada em `arredondarQuantidadeCompra` no script.js —
+    mesma regra, backend calcula pra Contagem/Cotação, front calcula pro
+    que é só exibido na hora (Estoque, Contagem antes de salvar)."""
+    if deficit is None or deficit <= 0:
+        return 0
+    if not fator_conversao_compra or fator_conversao_compra <= 0:
+        return math.ceil(deficit * 100) / 100
+    pacotes = math.ceil(round(deficit / fator_conversao_compra, 6))
+    return round(pacotes * fator_conversao_compra, 2)
 
 
 def gerar_cotacao_do_deficit(titulo, prazo_validade):
@@ -3047,10 +3073,9 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
                 sem_ideal[item['insumoId']] = item['nome']
                 continue
             atual = item['quantidadePreenchida'] if item['quantidadePreenchida'] is not None else 0
-            deficit = item['quantidadeIdeal'] - atual
+            deficit = arredondar_quantidade_compra(item['quantidadeIdeal'] - atual, item.get('fatorConversaoCompra'))
             if deficit <= 0:
                 continue
-            deficit = math.ceil(deficit * 100) / 100
             info = deficits.setdefault(item['insumoId'], {
                 "nome": item['nome'],
                 "categoria": item['categoria'],

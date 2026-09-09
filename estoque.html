@@ -715,6 +715,19 @@
             <label for="novo-insumo-marca">Marca homologada (opcional)</label>
             <input type="text" id="novo-insumo-marca" placeholder="Ex: Cargill — deixe em branco se aceita qualquer marca">
           </div>
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="novo-insumo-unidade-compra">Unidade de compra (opcional)</label>
+              <input type="text" id="novo-insumo-unidade-compra" placeholder="Ex: Caixa, Fardo, Peça">
+            </div>
+            <div class="form-group">
+              <label for="novo-insumo-fator-compra">Quantidade por unidade de compra</label>
+              <input type="number" step="0.01" min="0" id="novo-insumo-fator-compra" placeholder="Ex: 12 (1 caixa = 12kg)">
+            </div>
+          </div>
+          <p class="panel-subtitle" style="margin-top: calc(-1 * var(--space-2)); margin-bottom: var(--space-3);">
+            Preencha os dois pra sugestão de compra arredondar pro múltiplo fechado da embalagem — deixe em branco se compra solto.
+          </p>
           <div class="form-group">
             <label>Fornecedores que cotam esse insumo</label>
             <div class="checklist-fornecedores" id="novo-insumo-fornecedores">

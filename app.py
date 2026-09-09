@@ -103,6 +103,7 @@ from backend.armazenamento import (
     excluir_data_especial,
     listar_datas_especiais,
     gerar_cotacao_do_deficit,
+    arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
     listar_pedidos,
@@ -982,6 +983,8 @@ def _formatar_insumos(linhas):
             "unidadeMedida": linha['unidade_medida'],
             "favorito": bool(linha['favorito']),
             "marcaHomologada": linha['marca_homologada'],
+            "unidadeCompra": linha['unidade_compra'],
+            "fatorConversaoCompra": linha['fator_conversao_compra'],
             "fornecedorIds": mapa_fornecedores.get(linha['insumo_id'], []),
             "porLoja": {},
         })
@@ -1018,6 +1021,15 @@ def api_criar_insumo():
     marca_homologada = dados.get('marcaHomologada')
     if marca_homologada is not None:
         atualizar_insumo(insumo_id, {"marca_homologada": marca_homologada.strip()})
+    unidade_compra = dados.get('unidadeCompra')
+    if unidade_compra is not None:
+        atualizar_insumo(insumo_id, {"unidade_compra": unidade_compra.strip()})
+    if 'fatorConversaoCompra' in dados:
+        try:
+            fator = float(dados['fatorConversaoCompra']) if dados['fatorConversaoCompra'] not in (None, '') else None
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Fator de conversão inválido."}), 400
+        atualizar_insumo(insumo_id, {"fator_conversao_compra": fator if fator and fator > 0 else None})
     fornecedor_ids = dados.get('fornecedorIds')
     if fornecedor_ids is not None:
         definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
@@ -1102,6 +1114,14 @@ def api_atualizar_insumo(insumo_id):
         campos['favorito'] = 1 if dados['favorito'] else 0
     if 'marcaHomologada' in dados:
         campos['marca_homologada'] = (dados['marcaHomologada'] or '').strip()
+    if 'unidadeCompra' in dados:
+        campos['unidade_compra'] = (dados['unidadeCompra'] or '').strip()
+    if 'fatorConversaoCompra' in dados:
+        try:
+            fator = float(dados['fatorConversaoCompra']) if dados['fatorConversaoCompra'] not in (None, '') else None
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Fator de conversão inválido."}), 400
+        campos['fator_conversao_compra'] = fator if fator and fator > 0 else None
 
     atualizar_insumo(insumo_id, campos)
 
@@ -2338,6 +2358,7 @@ def api_conferencia_requisicao():
                 "nome": item['nome'],
                 "categoria": item['categoria'],
                 "unidadeMedida": item['unidadeMedida'],
+                "fatorConversaoCompra": item.get('fatorConversaoCompra'),
                 "preenchidoTotal": 0.0,
                 "idealTotal": 0.0,
                 "temIdeal": False,
@@ -2353,7 +2374,9 @@ def api_conferencia_requisicao():
 
     itens = []
     for agregado in agregados.values():
-        deficit = round(agregado['idealTotal'] - agregado['preenchidoTotal'], 2) if agregado['temIdeal'] else None
+        deficit = arredondar_quantidade_compra(
+            agregado['idealTotal'] - agregado['preenchidoTotal'], agregado['fatorConversaoCompra']
+        ) if agregado['temIdeal'] else None
         itens.append({
             "insumoId": agregado['insumoId'],
             "nome": agregado['nome'],
@@ -2362,7 +2385,7 @@ def api_conferencia_requisicao():
             "preenchidoTotal": round(agregado['preenchidoTotal'], 2),
             "idealTotal": round(agregado['idealTotal'], 2) if agregado['temIdeal'] else None,
             "idealAjustado": agregado['algumAjustado'],
-            "deficit": max(deficit, 0) if deficit is not None else None,
+            "deficit": deficit,
         })
     itens.sort(key=lambda i: (i['deficit'] is None, -(i['deficit'] or 0), i['nome']))
 

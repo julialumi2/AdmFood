@@ -1480,6 +1480,21 @@ function _linhasEstoqueParaTab(tab) {
     });
 }
 
+// Arredonda uma quantidade a comprar pra cima — pro múltiplo inteiro da
+// embalagem do fornecedor quando o insumo tem fatorConversaoCompra
+// cadastrado, ou só pra precisão de centavo quando não tem. Espelhada em
+// arredondar_quantidade_compra no backend/armazenamento.py — mesma regra,
+// esta versão é só pro que o front calcula na hora (Estoque, Contagem
+// antes de salvar); Contagem/Cotação já vêm arredondadas do servidor.
+function arredondarQuantidadeCompra(deficit, fatorConversaoCompra) {
+  if (deficit === null || deficit === undefined || deficit <= 0) return 0;
+  if (!fatorConversaoCompra || fatorConversaoCompra <= 0) {
+    return Math.ceil(deficit * 100) / 100;
+  }
+  const pacotes = Math.ceil(Math.round((deficit / fatorConversaoCompra) * 1e6) / 1e6);
+  return Math.round(pacotes * fatorConversaoCompra * 100) / 100;
+}
+
 function renderEstoqueTab() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const tbody = document.getElementById('estoque-tabela-body');
@@ -1554,7 +1569,7 @@ function renderEstoqueTab() {
       ? Math.min(100, Math.round((dados.quantidadeAtual / (dados.estoqueMinimo * 1.5)) * 100))
       : 100;
     const quantidadeIdeal = dados.quantidadeIdeal;
-    const sugestaoCompra = quantidadeIdeal === null ? null : Math.max(0, Math.round((quantidadeIdeal - dados.quantidadeAtual) * 100) / 100);
+    const sugestaoCompra = quantidadeIdeal === null ? null : arredondarQuantidadeCompra(quantidadeIdeal - dados.quantidadeAtual, insumo.fatorConversaoCompra);
     const tendencia = loja ? _sugestaoTendenciaParaLoja(insumo.id, loja) : null;
     const estrela = isAdmin
       ? `<button type="button" class="btn-favorito ${insumo.favorito ? 'ativo' : ''}" data-acao="favoritar" data-insumo-id="${insumo.id}" data-favorito="${insumo.favorito ? '1' : '0'}" title="${insumo.favorito ? 'Remover dos favoritos' : 'Marcar como favorito'}">
@@ -3268,7 +3283,7 @@ function renderContagemDetalhe() {
   tbody.innerHTML = c.itens.map((item) => {
     const preenchido = item.quantidadePreenchida;
     const ideal = item.quantidadeIdeal;
-    const deficit = (preenchido !== null && ideal !== null) ? Math.max(0, Math.round((ideal - preenchido) * 100) / 100) : null;
+    const deficit = (preenchido !== null && ideal !== null) ? arredondarQuantidadeCompra(ideal - preenchido, item.fatorConversaoCompra) : null;
     return `
       <tr>
         <td class="font-bold">${escaparHtml(item.nome)}</td>
@@ -3791,7 +3806,7 @@ async function inicializarContagemPublica() {
                 <td><div class="contagem-item-somente-leitura">${escaparHtml(item.unidadeMedida)}</div></td>
                 <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '')}</div></td>
                 <td><input type="number" step="0.01" min="0" placeholder="0" data-insumo-id="${item.insumoId}" required></td>
-                <td><div class="contagem-item-somente-leitura" data-sugestao-insumo-id="${item.insumoId}" data-ideal="${item.quantidadeIdeal !== null ? item.quantidadeIdeal : ''}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div></td>
+                <td><div class="contagem-item-somente-leitura" data-sugestao-insumo-id="${item.insumoId}" data-ideal="${item.quantidadeIdeal !== null ? item.quantidadeIdeal : ''}" data-fator="${item.fatorConversaoCompra || ''}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div></td>
               </tr>
             `).join('')}
           </tbody>
@@ -3810,8 +3825,8 @@ async function inicializarContagemPublica() {
         } else if (input.value === '') {
           elSugestao.textContent = ideal;
         } else {
-          const sugestao = Math.max(0, Math.round((parseFloat(ideal) - parseFloat(input.value)) * 100) / 100);
-          elSugestao.textContent = sugestao;
+          const fator = parseFloat(elSugestao.dataset.fator) || null;
+          elSugestao.textContent = arredondarQuantidadeCompra(parseFloat(ideal) - parseFloat(input.value), fator);
         }
         atualizarProgresso();
       });
@@ -4126,6 +4141,8 @@ function abrirModalNovoInsumo(insumo) {
   document.getElementById('novo-insumo-categoria').value = insumo ? insumo.categoria : '';
   document.getElementById('novo-insumo-unidade').value = insumo ? insumo.unidadeMedida : 'un';
   document.getElementById('novo-insumo-marca').value = insumo ? (insumo.marcaHomologada || '') : '';
+  document.getElementById('novo-insumo-unidade-compra').value = insumo ? (insumo.unidadeCompra || '') : '';
+  document.getElementById('novo-insumo-fator-compra').value = insumo && insumo.fatorConversaoCompra ? insumo.fatorConversaoCompra : '';
   _renderChecklistFornecedores(insumo ? insumo.fornecedorIds : []);
   document.getElementById('modal-novo-insumo').style.display = 'flex';
 }
@@ -4147,6 +4164,8 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     categoria: document.getElementById('novo-insumo-categoria').value,
     unidadeMedida: document.getElementById('novo-insumo-unidade').value,
     marcaHomologada: document.getElementById('novo-insumo-marca').value,
+    unidadeCompra: document.getElementById('novo-insumo-unidade-compra').value,
+    fatorConversaoCompra: document.getElementById('novo-insumo-fator-compra').value,
     fornecedorIds,
   };
   try {
