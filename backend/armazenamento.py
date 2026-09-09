@@ -2109,6 +2109,19 @@ def buscar_ficha_tecnica_item(item_id, loja):
         return [dict(linha) for linha in linhas]
 
 
+def remover_custo_item_cardapio(item_id, loja):
+    """Tira o custo digitado à mão e devolve o produto pro custo calculado
+    pela Ficha Técnica. Existe porque custo à mão é permanente até alguém
+    apagar: um valor errado ali (a Batata Individual estava com o preço do
+    quilo no lugar do da porção, 10x pra cima) fica escondendo o cálculo
+    pra sempre, e a tela não tinha como desfazer."""
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM item_cardapio_custo WHERE item_id = ? AND loja = ?",
+            (item_id, loja),
+        )
+
+
 def salvar_custo_item_cardapio(item_id, loja, custo):
     with conexao() as conn:
         conn.execute(

@@ -103,24 +103,31 @@ def importar(caminho, aplicar=False):
         alvo = itens.get(_normalizar_nome_insumo(produto)) or itens.get(_normalizar_nome_insumo(_sem_sufixo(produto)))
 
         existentes = ficha_atual.get(alvo["id"], []) if alvo else []
-        ja_na_receita = {l["insumoId"] for l in existentes}
+        por_insumo = {l["insumoId"]: l for l in existentes}
 
-        # Só entra o insumo que a receita ainda não tem. O que já está
-        # cadastrado fica intocado, inclusive a quantidade — pode ter sido
-        # ajustada à mão depois da importação, e a planilha não sabe disso.
-        faltantes = []
+        # Insumo que a receita ainda não tem entra novo. Quantidade que já
+        # está preenchida fica intocada — pode ter sido ajustada à mão, e a
+        # planilha não sabe disso. Mas quantidade NULA é preenchida: linha
+        # sem gramatura não desconta estoque nem entra no custo, então ela
+        # é indistinguível de não existir, e a planilha tem o número.
+        faltantes, completar = [], []
         for i in info["insumos"]:
             insumo = _resolver_insumo(i["nome"], insumos_cadastrados)
-            if insumo and insumo["id"] in ja_na_receita:
-                continue
-            faltantes.append(i)
+            atual = por_insumo.get(insumo["id"]) if insumo else None
+            if atual is None:
+                faltantes.append(i)
+            elif atual["quantidade"] is None and i["quantidade"] is not None:
+                completar.append((atual, i))
 
-        if not faltantes:
+        if not faltantes and not completar:
             continue  # receita completa — nada a fazer
 
         origem = f"{produto!r}"
         if alvo and existentes:
-            destino = f"completa {alvo['nome']!r} ({len(existentes)} insumo(s) já lá, +{len(faltantes)})"
+            partes = []
+            if faltantes: partes.append(f"+{len(faltantes)} insumo(s)")
+            if completar: partes.append(f"{len(completar)} gramatura(s)")
+            destino = f"completa {alvo['nome']!r} ({', '.join(partes)})"
         elif alvo:
             destino = f"item já cadastrado {alvo['nome']!r}"
         else:
@@ -130,6 +137,8 @@ def importar(caminho, aplicar=False):
         faltando = [i["nome"] for i in faltantes if not _resolver_insumo(i["nome"], insumos_cadastrados)]
         criados_insumo += len(faltando)
         print(f"\n  {origem} -> {destino}  ({len(info['insumos'])} insumos)")
+        for atual, da_planilha in completar:
+            print(f"     gramatura de {da_planilha['nome']!r}: — -> {da_planilha['quantidade']} {da_planilha['unidade']}")
         for nome_faltante in faltando:
             # Mostra o mais parecido que já existe: se for a mesma coisa com
             # outro nome, é melhor corrigir a planilha do que criar um insumo
@@ -147,6 +156,8 @@ def importar(caminho, aplicar=False):
             continue
 
         item_id = alvo["id"] if alvo else criar_item_cardapio(_sem_sufixo(produto), info["categoria"])
+        for atual, da_planilha in completar:
+            atual["quantidade"] = da_planilha["quantidade"]
         links = list(existentes)
         for i in faltantes:
             insumo = _resolver_insumo(i["nome"], insumos_cadastrados)

@@ -61,6 +61,7 @@ from backend.armazenamento import (
     definir_ficha_tecnica,
     buscar_ficha_tecnica_item,
     salvar_custo_item_cardapio,
+    remover_custo_item_cardapio,
     listar_produtos_por_loja,
     curva_abc_cardapio,
     curva_abc_insumos,
@@ -1549,6 +1550,12 @@ def api_salvar_custo_item_cardapio(item_id):
     loja = dados.get('loja')
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
+    # Campo em branco apaga o custo à mão e devolve o produto pro cálculo
+    # da Ficha Técnica — sem isso, um valor errado fica pra sempre.
+    if dados.get('custo') in (None, ''):
+        remover_custo_item_cardapio(item_id, loja)
+        return jsonify({"ok": True, "removido": True})
+
     try:
         custo = float(dados.get('custo'))
     except (TypeError, ValueError):

@@ -6853,8 +6853,10 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
 }
 
 async function salvarCustoProduto(itemId, valor) {
+  // Campo em branco apaga o custo à mão (o produto volta a usar o custo
+  // calculado pela receita); texto invalido é ignorado.
   const custo = valor === '' ? null : parseFloat(valor);
-  if (custo === null || isNaN(custo)) return;
+  if (custo !== null && isNaN(custo)) return;
   try {
     const resposta = await fetch(`/api/itens-cardapio/${itemId}/custo`, {
       method: 'PUT',
