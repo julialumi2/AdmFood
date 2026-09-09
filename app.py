@@ -57,6 +57,8 @@ from backend.armazenamento import (
     buscar_ficha_tecnica_item,
     salvar_custo_item_cardapio,
     listar_produtos_por_loja,
+    curva_abc_cardapio,
+    definir_produto_protegido,
     consumo_medio_insumo,
     listar_produtos_pendentes,
     vincular_produto_venda_manualmente,
@@ -1338,6 +1340,31 @@ def api_listar_produtos_cardapio():
         foto_arquivo = p.pop('fotoArquivo', None)
         p['fotoUrl'] = f"/cardapio-fotos/{foto_arquivo}" if foto_arquivo else None
     return jsonify({"produtos": produtos})
+
+
+@app.route('/api/curva-abc', methods=['GET'])
+def api_curva_abc():
+    """Curva ABC de Cardápio (Etapa 10 do motor de compra) — volume ×
+    margem × CMV real por produto, no período pedido."""
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        dias = int(request.args.get('dias', 30))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Período inválido."}), 400
+    dias = max(1, min(dias, 365))
+    return jsonify(curva_abc_cardapio(loja, dias))
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/protegido', methods=['PUT'])
+def api_definir_produto_protegido(item_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    definir_produto_protegido(item_id, bool(dados.get('protegido')))
+    return jsonify({"ok": True})
 
 
 @app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['GET'])

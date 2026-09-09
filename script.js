@@ -211,6 +211,41 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarFornecedores();
   }
 
+  // 4.097c TELA DE CURVA ABC DE CARDÁPIO (Etapa 10 do motor de compra —
+  // volume × margem × CMV real por produto)
+  if (document.getElementById('curva-loja-select')) {
+    const seletorLoja = document.getElementById('curva-loja-select');
+    const trigger = document.getElementById('curva-loja-trigger');
+    const menu = document.getElementById('curva-loja-menu');
+
+    trigger.addEventListener('click', () => seletorLoja.classList.toggle('aberto'));
+    document.addEventListener('click', (evento) => {
+      if (!seletorLoja.contains(evento.target)) seletorLoja.classList.remove('aberto');
+    });
+
+    menu.querySelectorAll('.loja-select-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        menu.querySelectorAll('.loja-select-item').forEach((i) => i.classList.remove('active'));
+        item.classList.add('active');
+        trigger.querySelector('.loja-select-label').textContent = item.querySelector('span').textContent;
+        curvaAbcLoja = item.dataset.loja;
+        seletorLoja.classList.remove('aberto');
+        carregarCurvaAbc();
+      });
+    });
+
+    document.querySelectorAll('#curva-periodo .curva-periodo-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#curva-periodo .curva-periodo-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        curvaAbcDias = parseInt(btn.dataset.dias, 10);
+        carregarCurvaAbc();
+      });
+    });
+
+    carregarCurvaAbc();
+  }
+
   // 4.098 TELA DE FORNECEDORES
   if (document.getElementById('fornecedores-tabela-body')) {
     document.getElementById('fornecedores-busca')?.addEventListener('input', () => renderFornecedoresTabela());
@@ -7212,3 +7247,125 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
 // Preços e Ficha Técnica eram duas abas (?aba=) — viraram uma tela só em
 // 2026-09-09 (ver _receitaCardHTML/_renderProdutosConteudo). O carregamento
 // inicial agora acontece direto na seção "4.095 TELA DE CARDÁPIO", lá em cima.
+
+/* ---------------------------------------------------------------------
+   CURVA ABC DE CARDÁPIO (Etapa 10 do motor de compra)
+   Cruza volume vendido × margem × CMV real por produto. O cálculo mora no
+   backend (curva_abc_cardapio) — aqui é só apresentação.
+   --------------------------------------------------------------------- */
+let curvaAbcLoja = 'Hamburgueria Artesanos';
+let curvaAbcDias = 30;
+let curvaAbcDados = null;
+
+async function carregarCurvaAbc() {
+  try {
+    const resposta = await fetch(`/api/curva-abc?loja=${encodeURIComponent(curvaAbcLoja)}&dias=${curvaAbcDias}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
+    curvaAbcDados = dados;
+    renderCurvaAbc();
+  } catch (erro) {
+    console.error('Falha ao carregar Curva ABC:', erro);
+    document.getElementById('curva-tabela-body').innerHTML =
+      `<tr><td colspan="8" class="panel-subtitle">Não foi possível carregar a análise.</td></tr>`;
+  }
+}
+
+function _curvaCmvHTML(item) {
+  if (item.cmvPercent === null) return '<span class="curva-sem-dado">—</span>';
+  const classe = item.cmvPercent >= 30 ? 'curva-cmv-alto' : 'curva-cmv-ok';
+  return `<span class="curva-num ${classe}">${item.cmvPercent.toString().replace('.', ',')}%</span>`;
+}
+
+function _curvaMargemHTML(item) {
+  if (item.margem === null) return '<span class="curva-sem-dado">—</span>';
+  return `<span class="curva-num">R$ ${_formatarMoedaBR(item.margem)}</span>`;
+}
+
+function _curvaCheckProtegidoHTML(item) {
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  if (!isAdmin) {
+    return item.protegido ? '<span class="curva-badge-protegido">protegido</span>' : '<span class="curva-sem-dado">—</span>';
+  }
+  return `<input type="checkbox" class="curva-check-protegido" data-item-id="${item.itemCardapioId}" ${item.protegido ? 'checked' : ''} title="Nunca sugerir corte desse produto">`;
+}
+
+function renderCurvaAbc() {
+  const d = curvaAbcDados;
+  if (!d) return;
+
+  const aviso = document.getElementById('curva-aviso');
+  const semCmv = d.itens.filter(i => i.margem === null).length;
+  const partes = [];
+  if (d.vendasNaoCasadas) {
+    partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em Insumos → Integrações do Estoque.`);
+  }
+  if (semCmv) {
+    partes.push(`${semCmv} produto(s) aparecem sem CMV: falta preço de algum insumo da receita (ou a receita não está cadastrada), então a margem não dá pra calcular.`);
+  }
+  aviso.innerHTML = partes.join(' ');
+  aviso.style.display = partes.length ? '' : 'none';
+
+  document.getElementById('curva-tabela-subtitulo').textContent =
+    `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos · R$ ${_formatarMoedaBR(d.totalReceita)} de receita`;
+
+  const curvaA = d.itens.filter(i => i.curva === 'A');
+  const curvaC = d.itens.filter(i => i.curva === 'C');
+
+  document.getElementById('curva-a-body').innerHTML = curvaA.length ? curvaA.map(i => `
+    <tr>
+      <td class="font-bold">${escaparHtml(i.nome)}</td>
+      <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
+      <td>${_curvaCmvHTML(i)}</td>
+      <td>${_curvaMargemHTML(i)}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="4" class="curva-vazio">Nenhum produto com margem calculável ainda no período.</td></tr>`;
+
+  document.getElementById('curva-c-body').innerHTML = curvaC.length ? curvaC.map(i => `
+    <tr>
+      <td class="font-bold">${escaparHtml(i.nome)}</td>
+      <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
+      <td>${_curvaCmvHTML(i)}</td>
+      <td>${_curvaMargemHTML(i)}</td>
+      <td>${_curvaCheckProtegidoHTML(i)}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="5" class="curva-vazio">Nada pra repensar no período — nenhum produto junta baixo volume com CMV ruim.</td></tr>`;
+
+  const rotuloCurva = { 'A': ['curva-tag-a', 'Curva A'], 'C': ['curva-tag-c', 'C fraca'], 'sem-cmv': ['curva-tag-sem-cmv', 'sem CMV'], 'normal': ['curva-tag-normal', '—'] };
+  document.getElementById('curva-tabela-body').innerHTML = d.itens.length ? d.itens.map(i => {
+    const [classe, texto] = rotuloCurva[i.curva] || rotuloCurva['normal'];
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(i.nome)}</td>
+        <td class="text-muted">${escaparHtml(i.categoria)}</td>
+        <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
+        <td><span class="curva-num">R$ ${_formatarMoedaBR(i.receita)}</span></td>
+        <td>${_curvaCmvHTML(i)}</td>
+        <td>${_curvaMargemHTML(i)}</td>
+        <td><span class="curva-tag ${classe}">${texto}</span></td>
+        <td>${_curvaCheckProtegidoHTML(i)}</td>
+      </tr>
+    `;
+  }).join('') : `<tr><td colspan="8" class="curva-vazio">Nenhuma venda casada com a Ficha Técnica nesse período.</td></tr>`;
+
+  document.querySelectorAll('.curva-check-protegido').forEach((check) => {
+    check.addEventListener('change', async () => {
+      const itemId = parseInt(check.dataset.itemId, 10);
+      try {
+        const resposta = await fetch(`/api/itens-cardapio/${itemId}/protegido`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ protegido: check.checked }),
+        });
+        if (!resposta.ok) throw new Error('falha ao salvar');
+        await carregarCurvaAbc();
+      } catch (erro) {
+        console.error('Falha ao marcar produto como protegido:', erro);
+        alert('Não foi possível salvar.');
+        check.checked = !check.checked;
+      }
+    });
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}

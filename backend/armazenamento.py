@@ -288,6 +288,13 @@ def inicializar_banco():
             # graça a Ficha Técnica por loja já pronta (seção 6.5). Todo
             # item já cadastrado até aqui é produto (default).
             conn.execute("ALTER TABLE item_cardapio ADD COLUMN tipo TEXT NOT NULL DEFAULT 'produto'")
+        if "protegido" not in colunas_item_cardapio:
+            # Curva ABC de Cardápio (Etapa 10): produto marcado como
+            # protegido nunca entra na lista de corte por baixo volume —
+            # é o caso da opção vegetariana, item de assinatura, presença
+            # histórica no cardápio. A análise continua mostrando os
+            # números dele, só não sugere cortar.
+            conn.execute("ALTER TABLE item_cardapio ADD COLUMN protegido INTEGER NOT NULL DEFAULT 0")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ficha_tecnica (
@@ -1710,6 +1717,206 @@ def salvar_custo_item_cardapio(item_id, loja, custo):
                 atualizado_em = excluded.atualizado_em
             """,
             (item_id, loja, custo, datetime.now().isoformat()),
+        )
+
+
+def _mapa_preco_insumo():
+    """Preço de referência de cada insumo pro cálculo de CMV real. Ordem de
+    confiança: preço da última compra efetivamente recebida (é o que saiu
+    do caixa); sem compra recebida, o preço mais recente cotado por algum
+    fornecedor. Insumo sem nenhum dos dois fica de fora — quem consome
+    trata como custo desconhecido em vez de assumir zero."""
+    precos = {}
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT insumo_id, preco FROM cotacao_preco ORDER BY criado_em"
+        ).fetchall()
+    for linha in linhas:
+        precos[linha["insumo_id"]] = linha["preco"]
+    for insumo_id, info in buscar_ultima_compra_por_insumo().items():
+        precos[insumo_id] = info["preco"]
+    return precos
+
+
+def _custo_por_item_da_ficha(loja, precos_insumo):
+    """CMV real de cada produto: soma de quantidade × preço de cada insumo
+    da Ficha Técnica dessa loja. Só devolve o custo quando TODOS os insumos
+    da receita têm preço — receita meio precificada daria um custo menor
+    que o real, e um produto pareceria mais lucrativo do que é justamente
+    na tela que serve pra decidir corte de cardápio."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT item_id, insumo_id, quantidade FROM ficha_tecnica WHERE loja = ?",
+            (loja,),
+        ).fetchall()
+
+    parciais = {}
+    for linha in linhas:
+        info = parciais.setdefault(linha["item_id"], {"custo": 0.0, "completo": True, "insumos": 0})
+        info["insumos"] += 1
+        preco = precos_insumo.get(linha["insumo_id"])
+        if preco is None or linha["quantidade"] is None:
+            info["completo"] = False
+            continue
+        info["custo"] += linha["quantidade"] * preco
+
+    return {
+        item_id: round(info["custo"], 4)
+        for item_id, info in parciais.items()
+        if info["completo"] and info["insumos"] > 0
+    }
+
+
+# Canal gravado em venda_item → coluna de preço em preco_cardapio. "portal"
+# é a venda presencial/balcão, que usa o mesmo preço do Cardápio Web.
+_CANAL_VENDA_PARA_PRECO = {
+    "ifood": "ifood",
+    "food99": "food99",
+    "99food": "food99",
+    "catalog": "cardapioWeb",
+    "portal": "cardapioWeb",
+}
+
+
+def curva_abc_cardapio(loja, dias=30):
+    """Etapa 10 do motor de compra — cruza volume vendido × margem gerada ×
+    CMV real de cada produto do cardápio, pra orientar decisão de cardápio
+    com dado em vez de intuição.
+
+    Curva A = os produtos que sustentam o faturamento (entram no acumulado
+    de 80% da margem E vendem acima da mediana). Curva C fraca = vendem
+    pouco E têm o pior CMV ao mesmo tempo — nunca só por um dos dois, e
+    nunca produto marcado como protegido (opção vegetariana, item de
+    assinatura). Produto sem custo confiável fica como "sem CMV": aparece
+    com volume e receita, mas fora das duas listas, porque não dá pra
+    julgar margem sem saber o custo."""
+    corte = (datetime.now() - timedelta(days=dias)).date().isoformat()
+
+    with conexao() as conn:
+        vendas = conn.execute(
+            """
+            SELECT item_cardapio_id, canal, SUM(quantidade) AS quantidade
+            FROM venda_item
+            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NOT NULL
+            GROUP BY item_cardapio_id, canal
+            """,
+            (loja, corte),
+        ).fetchall()
+        protegidos = {
+            l["id"] for l in conn.execute("SELECT id FROM item_cardapio WHERE protegido = 1").fetchall()
+        }
+        nao_casadas = conn.execute(
+            """
+            SELECT COUNT(*) AS vendas, COUNT(DISTINCT nome_produto) AS produtos
+            FROM venda_item
+            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NULL
+            """,
+            (loja, corte),
+        ).fetchone()
+
+    produtos_loja = {p["itemCardapioId"]: p for p in listar_produtos_por_loja(loja) if p["itemCardapioId"]}
+    custos_ficha = _custo_por_item_da_ficha(loja, _mapa_preco_insumo())
+    custos_manuais = mapa_custos_item_cardapio()
+
+    itens = {}
+    for venda in vendas:
+        item_id = venda["item_cardapio_id"]
+        produto = produtos_loja.get(item_id)
+        if not produto:
+            continue
+        item = itens.setdefault(item_id, {
+            "itemCardapioId": item_id,
+            "nome": produto["nome"],
+            "categoria": produto["categoria"],
+            "volume": 0.0,
+            "receita": 0.0,
+            "protegido": item_id in protegidos,
+        })
+        item["volume"] += venda["quantidade"]
+        preco = produto.get(_CANAL_VENDA_PARA_PRECO.get(venda["canal"], "cardapioWeb"))
+        if preco is not None:
+            item["receita"] += venda["quantidade"] * preco
+
+    for item in itens.values():
+        item_id = item["itemCardapioId"]
+        # Custo digitado à mão ganha do calculado: é a palavra final dela
+        # sobre aquele produto naquela loja.
+        custo = custos_manuais.get((item_id, loja))
+        if custo is None:
+            custo = custos_ficha.get(item_id)
+        item["custoUnitario"] = round(custo, 2) if custo is not None else None
+        item["volume"] = round(item["volume"], 2)
+        item["receita"] = round(item["receita"], 2)
+        precoMedio = item["receita"] / item["volume"] if item["volume"] else 0
+        item["precoMedio"] = round(precoMedio, 2)
+        if custo is None or not precoMedio:
+            item["cmvPercent"] = None
+            item["margem"] = None
+        else:
+            item["cmvPercent"] = round((custo / precoMedio) * 100, 1)
+            item["margem"] = round(item["receita"] - custo * item["volume"], 2)
+
+    lista = sorted(itens.values(), key=lambda i: -i["volume"])
+    com_margem = [i for i in lista if i["margem"] is not None]
+
+    # Curva A: acumulado de 80% da margem, cruzado com volume acima da
+    # mediana — precisa dos dois, senão um item caro de giro baixo entraria
+    # como pilar do negócio só pela margem unitária.
+    curva_a = set()
+    if com_margem:
+        volumes = sorted(i["volume"] for i in com_margem)
+        mediana = volumes[len(volumes) // 2]
+        total_margem = sum(i["margem"] for i in com_margem if i["margem"] > 0)
+        acumulado = 0.0
+        for item in sorted(com_margem, key=lambda i: -i["margem"]):
+            if item["margem"] <= 0:
+                continue
+            if acumulado < total_margem * 0.8 and item["volume"] >= mediana:
+                curva_a.add(item["itemCardapioId"])
+            acumulado += item["margem"]
+
+    # Curva C fraca: terço de menor volume E terço de pior CMV ao mesmo
+    # tempo (a regra do documento — nunca um isolado), fora os protegidos.
+    curva_c = set()
+    if len(com_margem) >= 3:
+        por_volume = sorted(com_margem, key=lambda i: i["volume"])
+        por_cmv = sorted(com_margem, key=lambda i: -i["cmvPercent"])
+        corte_terco = max(1, len(com_margem) // 3)
+        pior_volume = {i["itemCardapioId"] for i in por_volume[:corte_terco]}
+        pior_cmv = {i["itemCardapioId"] for i in por_cmv[:corte_terco]}
+        curva_c = {
+            item_id for item_id in (pior_volume & pior_cmv)
+            if item_id not in protegidos
+        }
+
+    for item in lista:
+        if item["itemCardapioId"] in curva_a:
+            item["curva"] = "A"
+        elif item["itemCardapioId"] in curva_c:
+            item["curva"] = "C"
+        elif item["margem"] is None:
+            item["curva"] = "sem-cmv"
+        else:
+            item["curva"] = "normal"
+
+    return {
+        "loja": loja,
+        "dias": dias,
+        "desde": corte,
+        "itens": lista,
+        "totalVolume": round(sum(i["volume"] for i in lista), 2),
+        "totalReceita": round(sum(i["receita"] for i in lista), 2),
+        "totalMargem": round(sum(i["margem"] for i in com_margem), 2) if com_margem else 0,
+        "vendasNaoCasadas": nao_casadas["vendas"],
+        "produtosNaoCasados": nao_casadas["produtos"],
+    }
+
+
+def definir_produto_protegido(item_id, protegido):
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE item_cardapio SET protegido = ? WHERE id = ?",
+            (1 if protegido else 0, item_id),
         )
 
 

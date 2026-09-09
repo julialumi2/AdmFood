@@ -3,16 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Preparo</title>
+  <title>AdmFood - Curva ABC</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="preparo.css">
+  <link rel="stylesheet" href="curva-abc.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="script.js" defer></script>
 </head>
@@ -82,11 +81,11 @@
           <i data-lucide="book-open"></i>
           <span>Cardápio</span>
         </a>
-        <a href="curva-abc.html" class="menu-item">
+        <a href="curva-abc.html" class="menu-item active">
           <i data-lucide="chart-no-axes-combined"></i>
           <span>Curva ABC</span>
         </a>
-        <a href="preparo.html" class="menu-item active">
+        <a href="preparo.html" class="menu-item">
           <i data-lucide="timer"></i>
           <span>Preparo</span>
         </a>
@@ -126,7 +125,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">PREPARO</span>
+          <span class="header-page-title">CURVA ABC</span>
         </div>
 
         <div class="header-right">
@@ -145,149 +144,139 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE PREPARO -->
+      <!-- PÁGINA DE CURVA ABC -->
       <div class="page-content">
 
+        <!-- TÍTULO -->
         <div class="dashboard-title-area">
           <div class="title-top">
-            <i data-lucide="timer" class="icon-pin"></i>
-            <span>INDICADORES OPERACIONAIS DA COZINHA</span>
+            <i data-lucide="chart-no-axes-combined" class="icon-pin"></i>
+            <span>DECISÃO DE CARDÁPIO</span>
           </div>
           <div class="title-row">
-            <h1>Preparo</h1>
+            <h1>Curva ABC</h1>
           </div>
         </div>
 
-        <p class="panel-subtitle" style="margin-top: -8px;">
-          Tempo do pedido inteiro (do recebido ao fechado/entregue) — a Cardápio Web não marca separadamente
-          quando a cozinha termina de preparar, só quando o pedido é finalizado.
+        <p class="panel-subtitle" style="max-width: 680px;">
+          Cruza quanto cada produto vende com a margem que ele gera, usando o CMV real da Ficha Técnica —
+          não estimativa. Curva A é o que sustenta o faturamento; Curva C fraca vende pouco e ainda tem o
+          pior custo.
         </p>
 
-        <!-- FILTRO DE PERÍODO -->
-        <div class="content-header">
-          <div class="header-titles">
-            <span class="atualizado-em" id="preparo-atualizado-em"></span>
+        <!-- FILTROS -->
+        <div class="curva-filtros">
+          <div class="loja-select" id="curva-loja-select">
+            <button type="button" class="loja-select-trigger" id="curva-loja-trigger">
+              <i data-lucide="store"></i>
+              <span class="loja-select-label">Hamburgueria Artesanos</span>
+              <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+            </button>
+            <div class="loja-select-menu" id="curva-loja-menu">
+              <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
+                <i data-lucide="store"></i>
+                <span>Hamburgueria Artesanos</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
+                <i data-lucide="store"></i>
+                <span>Tradiça ZN</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
+                <i data-lucide="store"></i>
+                <span>Tradiça Simus</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
+                <i data-lucide="store"></i>
+                <span>Açaí Na Lata</span>
+              </button>
+            </div>
           </div>
-          <div class="action-controls">
-            <div class="date-range-picker">
-              <div class="date-range-field">
-                <label for="preparo-data-inicio">De</label>
-                <input type="date" id="preparo-data-inicio">
+
+          <div class="curva-periodo" id="curva-periodo">
+            <button type="button" class="curva-periodo-btn" data-dias="7">7 dias</button>
+            <button type="button" class="curva-periodo-btn active" data-dias="30">30 dias</button>
+            <button type="button" class="curva-periodo-btn" data-dias="90">90 dias</button>
+          </div>
+        </div>
+
+        <!-- AVISO DE COBERTURA -->
+        <p class="curva-aviso" id="curva-aviso" style="display:none;"></p>
+
+        <!-- AS DUAS LISTAS -->
+        <div class="curva-listas">
+          <div class="chart-card curva-lista curva-lista-a">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Curva A — proteger</h3>
+                <p class="table-subtitle">Vendem muito e geram a maior parte da margem. Nunca deixar faltar; são os primeiros candidatos a um ajuste fino de preço.</p>
               </div>
-              <span class="date-range-sep">–</span>
-              <div class="date-range-field">
-                <label for="preparo-data-fim">Até</label>
-                <input type="date" id="preparo-data-fim">
+            </div>
+            <div class="table-responsive">
+              <table class="inventory-table">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th>Volume</th>
+                    <th>CMV</th>
+                    <th>Margem</th>
+                  </tr>
+                </thead>
+                <tbody id="curva-a-body">
+                  <!-- Renderizado dinamicamente via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="chart-card curva-lista curva-lista-c">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Curva C fraca — repensar</h3>
+                <p class="table-subtitle">Vendem pouco <em>e</em> têm o pior CMV ao mesmo tempo. Marque como protegido o que tem função estratégica (ex: opção vegetariana).</p>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- ABAS POR LOJA -->
-        <div class="tabs-bar" id="preparo-tabs">
-          <button class="tab-btn active" data-tab="geral">
-            <i data-lucide="store"></i>
-            <span>Visão Geral (Todas)</span>
-            <span class="tab-badge">4 Unidades</span>
-          </button>
-          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
-            <i data-lucide="store"></i>
-            <span>Hamburgueria Artesanos</span>
-          </button>
-          <button class="tab-btn" data-tab="Açaí Na Lata">
-            <i data-lucide="store"></i>
-            <span>Açaí Na Lata</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça ZN">
-            <i data-lucide="store"></i>
-            <span>Tradiça ZN</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça Simus">
-            <i data-lucide="store"></i>
-            <span>Tradiça Simus</span>
-          </button>
-        </div>
-
-        <!-- CARDS DE MÉTRICAS -->
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Tempo Médio do Pedido</span>
-              <div class="card-icon"><i data-lucide="timer"></i></div>
+            <div class="table-responsive">
+              <table class="inventory-table">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th>Volume</th>
+                    <th>CMV</th>
+                    <th>Margem</th>
+                    <th>Proteger</th>
+                  </tr>
+                </thead>
+                <tbody id="curva-c-body">
+                  <!-- Renderizado dinamicamente via JS -->
+                </tbody>
+              </table>
             </div>
-            <div class="card-value" id="preparo-val-tempo-medio">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label"></span></div>
-          </div>
-
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Total de Pedidos</span>
-              <div class="card-icon"><i data-lucide="shopping-bag"></i></div>
-            </div>
-            <div class="card-value" id="preparo-val-pedidos">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label-2"></span></div>
-          </div>
-
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Horário de Pico</span>
-              <div class="card-icon"><i data-lucide="flame"></i></div>
-            </div>
-            <div class="card-value" id="preparo-val-pico">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-pico-sub"></span></div>
           </div>
         </div>
 
-        <!-- VOLUME POR HORÁRIO -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Volume de pedidos por horário do dia</h3>
-            <span class="panel-subtitle">Quando os pedidos mais chegam — ajuda a prever picos de movimento</span>
-          </div>
-          <div class="preparo-chart-wrapper">
-            <canvas id="preparoHorarioChart"></canvas>
-          </div>
-        </div>
-
-        <!-- TEMPO MÉDIO POR LOJA (só na Visão Geral) -->
-        <div class="panel" id="preparo-panel-por-loja">
-          <div class="panel-header">
-            <h3 class="panel-title">Tempo médio por loja</h3>
-            <span class="panel-subtitle">Comparativo entre as 4 unidades no período selecionado</span>
+        <!-- TABELA COMPLETA -->
+        <div class="chart-card">
+          <div class="table-header-row">
+            <div>
+              <h3 class="table-title">Todos os produtos vendidos</h3>
+              <p class="table-subtitle" id="curva-tabela-subtitulo">—</p>
+            </div>
           </div>
           <div class="table-responsive">
-            <table>
+            <table class="inventory-table">
               <thead>
                 <tr>
-                  <th>Loja</th>
-                  <th>Pedidos</th>
-                  <th>Tempo médio</th>
+                  <th>Produto</th>
+                  <th>Categoria</th>
+                  <th>Volume</th>
+                  <th>Receita</th>
+                  <th>CMV</th>
+                  <th>Margem</th>
+                  <th>Curva</th>
+                  <th>Proteger</th>
                 </tr>
               </thead>
-              <tbody id="preparo-por-loja-body">
-                <!-- Renderizado dinamicamente via JS -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- GARGALOS -->
-        <div class="panel panel-table">
-          <div class="panel-header">
-            <h3 class="panel-title">Dias mais lentos do período</h3>
-            <span class="panel-subtitle">Loja + dia com maior tempo médio (mínimo 3 pedidos, pra não contar ruído)</span>
-          </div>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Dia</th>
-                  <th>Loja</th>
-                  <th>Pedidos</th>
-                  <th>Tempo médio</th>
-                </tr>
-              </thead>
-              <tbody id="preparo-gargalos-body">
+              <tbody id="curva-tabela-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
             </table>
@@ -296,7 +285,6 @@
 
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
-
   </div> <!-- /dashboard-wrapper -->
 
 </body>
