@@ -122,3 +122,34 @@
 .curva-tag-c { background-color: var(--danger-soft, #fbe4e0); color: var(--danger, #d93829); }
 .curva-tag-normal { background-color: var(--surface-muted); color: var(--text-muted); }
 .curva-tag-sem-cmv { background-color: var(--surface-muted); color: var(--text-faint); }
+
+/* Curva ABC de insumos (Etapa 8) — a classe é sobre concentração de gasto,
+   não sobre bom/ruim, então usa uma escala de peso e não as cores
+   semânticas de A/C-fraca do cardápio. */
+.chip-curva-a { background-color: #efe2d6; color: #8a4b1f; }
+.chip-curva-b { background-color: var(--surface-muted); color: var(--text-muted); }
+.chip-curva-c { background-color: transparent; color: var(--text-faint); border: 1px solid var(--surface-muted-border); }
+
+.acumulado-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 92px;
+}
+
+/* A barra mostra onde este insumo cai na curva acumulada — dá pra ver o
+   ponto em que a lista deixa de importar sem ler número nenhum. */
+.acumulado-barra {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  overflow: hidden;
+}
+
+.acumulado-barra span {
+  display: block;
+  height: 100%;
+  background-color: #b98a5e;
+  border-radius: 999px;
+}

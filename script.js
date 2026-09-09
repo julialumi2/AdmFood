@@ -3647,7 +3647,9 @@ function renderConferenciaRequisicao() {
   const itensBody = document.getElementById('requisicao-conferencia-itens-body');
   itensBody.innerHTML = r.itens.map((item) => `
     <tr>
-      <td class="font-bold">${escaparHtml(item.nome)}</td>
+      <td class="font-bold">${escaparHtml(item.nome)}${item.curvaAbc === 'A'
+        ? ' <span class="badge-pill neu-orange" title="Curva A: esse insumo concentra boa parte do gasto de compra — confira antes de aprovar">conferir</span>'
+        : ''}</td>
       <td class="text-muted">${escaparHtml(item.categoria)}</td>
       <td>${item.preenchidoTotal} ${escaparHtml(item.unidadeMedida)}</td>
       <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${item.idealTotal} ${escaparHtml(item.unidadeMedida)}`}${item.idealAjustado ? ' <span class="badge-pill neu-orange" title="Alguma loja tem ajuste manual">ajustado</span>' : ''}</td>
@@ -7704,3 +7706,81 @@ async function importarPlanilhaVendasSemanais(event) {
     statusEl.textContent = erro.message || 'Não foi possível importar a planilha.';
   }
 }
+
+/* --- Curva ABC de insumos (Etapa 8) ----------------------------------
+   Quanto cada insumo movimentou em compra recebida. Serve pra decidir o
+   que exige conferência antes de aprovar uma Requisição — a Curva A é
+   curta e concentra o gasto, a cauda pode passar direto. */
+let curvaInsumosDias = 90;
+
+async function carregarCurvaAbcInsumos() {
+  const tbody = document.getElementById('curva-insumos-body');
+  try {
+    const resposta = await fetch(`/api/curva-abc-insumos?dias=${curvaInsumosDias}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
+    renderCurvaAbcInsumos(dados);
+  } catch (erro) {
+    console.error('Falha ao carregar curva ABC de insumos:', erro);
+    tbody.innerHTML = `<tr><td colspan="7" class="panel-subtitle">Não foi possível carregar a análise.</td></tr>`;
+  }
+}
+
+function renderCurvaAbcInsumos(dados) {
+  const aviso = document.getElementById('curva-insumos-aviso');
+  const tbody = document.getElementById('curva-insumos-body');
+
+  document.getElementById('curva-insumos-subtitulo').textContent =
+    `Últimos ${dados.dias} dias · R$ ${_formatarMoedaBR(dados.total)} em compras recebidas`;
+
+  if (!dados.itens.length) {
+    aviso.style.display = '';
+    aviso.textContent = 'Nenhuma compra recebida nesse período. A curva se monta sozinha conforme os pedidos forem sendo recebidos em Compras → Recebimentos — ela mede dinheiro que saiu de verdade, não cotação nem pedido em aberto.';
+    tbody.innerHTML = `<tr><td colspan="7" class="curva-vazio">Sem dado de compra pra classificar ainda.</td></tr>`;
+    return;
+  }
+
+  const { A = 0, B = 0, C = 0 } = dados.porClasse;
+  aviso.style.display = '';
+  aviso.textContent = `${A} insumo(s) na Curva A concentram até 80% do gasto — são esses que valem conferir antes de aprovar uma Requisição. Curva B: ${B}. Curva C: ${C}.`;
+
+  const classeChip = { A: 'chip-curva-a', B: 'chip-curva-b', C: 'chip-curva-c' };
+  tbody.innerHTML = dados.itens.map((item) => `
+    <tr>
+      <td class="font-bold">${escaparHtml(item.nome)}</td>
+      <td class="text-muted">${escaparHtml(item.categoria)}</td>
+      <td><span class="curva-num">${_formatarNumeroBR(item.quantidade)} ${escaparHtml(item.unidadeMedida)}</span></td>
+      <td><span class="curva-num">R$ ${_formatarMoedaBR(item.valor)}</span></td>
+      <td><span class="curva-num">${(item.participacao * 100).toFixed(1).replace('.', ',')}%</span></td>
+      <td>
+        <div class="acumulado-cell">
+          <span class="curva-num">${(item.acumulado * 100).toFixed(1).replace('.', ',')}%</span>
+          <span class="acumulado-barra"><span style="width:${item.acumulado * 100}%"></span></span>
+        </div>
+      </td>
+      <td><span class="curva-tag ${classeChip[item.classe]}">Curva ${item.classe}</span></td>
+    </tr>
+  `).join('');
+}
+
+// --- Abas da tela (produtos do cardápio × insumos) ---
+document.querySelectorAll('#curva-tabs-bar .tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#curva-tabs-bar .tab-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const insumos = btn.dataset.tab === 'insumos';
+    document.getElementById('curva-aba-cardapio').style.display = insumos ? 'none' : '';
+    document.getElementById('curva-aba-insumos').style.display = insumos ? '' : 'none';
+    if (insumos) carregarCurvaAbcInsumos();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  });
+});
+
+document.querySelectorAll('#curva-insumos-periodo .curva-periodo-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#curva-insumos-periodo .curva-periodo-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    curvaInsumosDias = parseInt(btn.dataset.dias, 10);
+    carregarCurvaAbcInsumos();
+  });
+});

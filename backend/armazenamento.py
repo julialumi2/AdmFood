@@ -1993,6 +1993,84 @@ def salvar_custo_item_cardapio(item_id, loja, custo):
         )
 
 
+def curva_abc_insumos(dias=90):
+    """Etapa 8 do motor de compra — classifica insumo por quanto dinheiro ele
+    movimenta, pra decidir o que exige olho humano antes de aprovar uma
+    Requisição e o que pode passar direto.
+
+    Base é compra efetivamente recebida no período (quantidade × preço do
+    recebimento), que é o dinheiro que saiu de verdade — não o cotado nem o
+    pedido, que ainda podem mudar. Curva A é o topo que soma 80% do gasto,
+    B vai até 95%, C é a cauda longa de item barato.
+
+    Sem nenhuma compra recebida no período a lista volta vazia: dá pra
+    construir a curva sem inventar base, e quem chama avisa o porquê."""
+    corte = (datetime.now() - timedelta(days=dias)).date().isoformat()
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pci.insumo_id,
+                   i.nome, i.categoria, i.unidade_medida,
+                   SUM(pci.quantidade * pci.preco_unitario) AS valor,
+                   SUM(pci.quantidade) AS quantidade,
+                   COUNT(DISTINCT pc.id) AS compras
+            FROM pedido_compra_item pci
+            JOIN pedido_compra pc ON pc.id = pci.pedido_id
+            JOIN insumo i ON i.id = pci.insumo_id
+            WHERE pc.status = 'recebido' AND pc.recebido_em >= ?
+            GROUP BY pci.insumo_id
+            ORDER BY valor DESC
+            """,
+            (corte,),
+        ).fetchall()
+
+    total = sum(l["valor"] for l in linhas) or 0.0
+    itens = []
+    acumulado = 0.0
+    for linha in linhas:
+        valor = round(linha["valor"], 2)
+        acumulado += linha["valor"]
+        participacao = linha["valor"] / total if total else 0
+        acumulado_pct = acumulado / total if total else 0
+        # Regra clássica da curva: A é o topo que junta 80% do gasto. O
+        # corte olha o acumulado ATÉ este item, então o item que cruza a
+        # linha ainda entra em A — é ele que fecha os 80%.
+        if acumulado_pct <= 0.8 or not itens:
+            classe = "A"
+        elif acumulado_pct <= 0.95:
+            classe = "B"
+        else:
+            classe = "C"
+        itens.append({
+            "insumoId": linha["insumo_id"],
+            "nome": linha["nome"],
+            "categoria": linha["categoria"],
+            "unidadeMedida": linha["unidade_medida"],
+            "valor": valor,
+            "quantidade": round(linha["quantidade"], 2),
+            "compras": linha["compras"],
+            "participacao": round(participacao, 4),
+            "acumulado": round(acumulado_pct, 4),
+            "classe": classe,
+        })
+
+    return {
+        "dias": dias,
+        "desde": corte,
+        "total": round(total, 2),
+        "itens": itens,
+        "porClasse": {
+            classe: sum(1 for i in itens if i["classe"] == classe) for classe in ("A", "B", "C")
+        },
+    }
+
+
+def mapa_curva_abc_insumos(dias=90):
+    """{insumo_id: classe} — pra marcar na Conferência da Requisição quais
+    itens pedem revisão manual antes de aprovar."""
+    return {i["insumoId"]: i["classe"] for i in curva_abc_insumos(dias)["itens"]}
+
+
 def _mapa_preco_insumo():
     """Preço de referência de cada insumo pro cálculo de CMV real. Ordem de
     confiança: preço da última compra efetivamente recebida (é o que saiu

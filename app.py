@@ -63,6 +63,8 @@ from backend.armazenamento import (
     salvar_custo_item_cardapio,
     listar_produtos_por_loja,
     curva_abc_cardapio,
+    curva_abc_insumos,
+    mapa_curva_abc_insumos,
     definir_produto_protegido,
     consumo_medio_insumo,
     listar_produtos_pendentes,
@@ -1363,6 +1365,20 @@ def api_curva_abc():
     return jsonify(curva_abc_cardapio(loja, dias))
 
 
+@app.route('/api/curva-abc-insumos', methods=['GET'])
+def api_curva_abc_insumos():
+    """Curva ABC de insumos (Etapa 8) — quanto cada insumo movimenta em
+    compra recebida, pra separar o que exige revisão manual na Requisição."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    try:
+        dias = int(request.args.get('dias', 90))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Período inválido."}), 400
+    return jsonify(curva_abc_insumos(max(1, min(dias, 365))))
+
+
 @app.route('/api/itens-cardapio/<int:item_id>/protegido', methods=['PUT'])
 def api_definir_produto_protegido(item_id):
     erro_admin = _exigir_admin()
@@ -2405,6 +2421,7 @@ def api_conferencia_requisicao():
             if item.get('quantidadeIdealAjustada'):
                 agregado['algumAjustado'] = True
 
+    classe_por_insumo = mapa_curva_abc_insumos()
     itens = []
     for agregado in agregados.values():
         deficit = arredondar_quantidade_compra(
@@ -2419,6 +2436,9 @@ def api_conferencia_requisicao():
             "idealTotal": round(agregado['idealTotal'], 2) if agregado['temIdeal'] else None,
             "idealAjustado": agregado['algumAjustado'],
             "deficit": deficit,
+            # Curva A concentra o custo — o documento pede revisão manual
+            # nesses antes de aprovar; o resto pode passar direto.
+            "curvaAbc": classe_por_insumo.get(agregado['insumoId']),
         })
     itens.sort(key=lambda i: (i['deficit'] is None, -(i['deficit'] or 0), i['nome']))
 
