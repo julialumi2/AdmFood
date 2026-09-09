@@ -1207,6 +1207,11 @@ async function carregarInsights(inicio, fim, diaSemana) {
     canalTableBody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Carregando dados...</td></tr>`;
   }
 
+  // O tempo de preparo entra no mesmo período do relatório. Roda em
+  // paralelo e não derruba a tela se falhar — é informação de apoio, o
+  // faturamento é o que não pode faltar.
+  carregarPreparoDoInsight(inicio, fim);
+
   try {
     const filtroDiaSemana = diaSemana ? `&diaSemana=${diaSemana}` : '';
     const resposta = await fetch(`/api/insights?inicio=${inicio}&fim=${fim}${filtroDiaSemana}`);
@@ -7866,3 +7871,48 @@ document.querySelectorAll('#curva-insumos-periodo .curva-periodo-btn').forEach((
     carregarCurvaAbcInsumos();
   });
 });
+
+
+// --- Cozinha no período (dentro do relatório de Vendas Diárias) ---
+async function carregarPreparoDoInsight(inicio, fim) {
+  const painel = document.getElementById('panel-preparo');
+  if (!painel) return;
+  try {
+    const resposta = await fetch(`/api/preparo?inicio=${inicio}&fim=${fim}`);
+    if (!resposta.ok) throw new Error(`servidor respondeu ${resposta.status}`);
+    renderPreparoDoInsight(await resposta.json());
+  } catch (erro) {
+    console.error('Falha ao carregar tempo de preparo:', erro);
+    document.getElementById('insight-preparo-lojas-body').innerHTML =
+      `<tr><td colspan="3" class="panel-subtitle">Não foi possível carregar o tempo de preparo.</td></tr>`;
+  }
+}
+
+function renderPreparoDoInsight(dados) {
+  const geral = dados.geral;
+  if (!geral) return;
+
+  document.getElementById('insight-preparo-tempo').textContent = _formatarMinutos(geral.tempoMedioMinutos);
+  document.getElementById('insight-preparo-pedidos').textContent = (geral.totalPedidos || 0).toLocaleString('pt-BR');
+
+  const pico = document.getElementById('insight-preparo-pico');
+  const picoSub = document.getElementById('insight-preparo-pico-sub');
+  if (geral.horarioPico) {
+    pico.textContent = `${String(geral.horarioPico.hora).padStart(2, '0')}h`;
+    picoSub.textContent = `${geral.horarioPico.totalPedidos} pedidos nesse horário`;
+  } else {
+    pico.textContent = '—';
+    picoSub.textContent = '';
+  }
+
+  const corpo = document.getElementById('insight-preparo-lojas-body');
+  const lojas = geral.porLoja || [];
+  corpo.innerHTML = lojas.length
+    ? lojas.map((l) => `
+      <tr>
+        <td class="font-bold">${escaparHtml(l.loja)}</td>
+        <td>${l.totalPedidos}</td>
+        <td>${_formatarMinutos(l.tempoMedioMinutos)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" class="panel-subtitle">Nenhum pedido com tempo medido nesse período.</td></tr>`;
+}

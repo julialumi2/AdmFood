@@ -175,3 +175,55 @@
     display: block;
   }
 }
+
+/* Cozinha no período — o tempo de preparo entrou no relatório diário pra
+   ser lido junto do faturamento: dia de pico de venda e dia de pico de
+   demora são a mesma pergunta operacional, e antes moravam em telas
+   separadas. */
+.preparo-resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.preparo-metrica {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--surface-muted);
+  border-radius: var(--radius-sm);
+}
+
+.preparo-metrica-rotulo {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.preparo-metrica-valor {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.preparo-metrica-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* A tela de Preparo saiu do menu, mas continua sendo onde moram o gráfico
+   por horário e os gargalos — este link é o caminho até ela. */
+.link-detalhe {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.link-detalhe:hover { text-decoration: underline; }

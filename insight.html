@@ -105,10 +105,6 @@
               <i data-lucide="calendar-range"></i>
               <span>Vendas Semanais</span>
             </a>
-            <a href="preparo.html" class="menu-subitem">
-              <i data-lucide="timer"></i>
-              <span>Preparo</span>
-            </a>
           </div>
         </div>
         <a href="configuracoes.html" class="menu-item">
@@ -358,6 +354,46 @@
                 </tr>
               </thead>
               <tbody id="presencial-table-body">
+                <!-- Renderizado dinamicamente via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- COZINHA: tempo de preparo no mesmo período selecionado acima -->
+        <div class="panel" id="panel-preparo">
+          <div class="panel-header">
+            <h3 class="panel-title">Cozinha no período</h3>
+            <span class="panel-subtitle">Quanto o pedido demorou pra sair, no mesmo intervalo escolhido acima.</span>
+            <a href="preparo.html" class="link-detalhe">Ver por horário e gargalos</a>
+          </div>
+
+          <div class="preparo-resumo">
+            <div class="preparo-metrica">
+              <span class="preparo-metrica-rotulo">Tempo médio</span>
+              <span class="preparo-metrica-valor" id="insight-preparo-tempo">—</span>
+            </div>
+            <div class="preparo-metrica">
+              <span class="preparo-metrica-rotulo">Pedidos medidos</span>
+              <span class="preparo-metrica-valor" id="insight-preparo-pedidos">—</span>
+            </div>
+            <div class="preparo-metrica">
+              <span class="preparo-metrica-rotulo">Horário de pico</span>
+              <span class="preparo-metrica-valor" id="insight-preparo-pico">—</span>
+              <span class="preparo-metrica-sub" id="insight-preparo-pico-sub"></span>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th>Loja</th>
+                  <th>Pedidos</th>
+                  <th>Tempo médio</th>
+                </tr>
+              </thead>
+              <tbody id="insight-preparo-lojas-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
             </table>
