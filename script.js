@@ -1565,6 +1565,30 @@ function arredondarQuantidadeCompra(deficit, fatorConversaoCompra) {
   return Math.round(pacotes * fatorConversaoCompra * 100) / 100;
 }
 
+// Quantidade sempre é guardada na unidade-base do insumo (g, ml, un) e
+// exibida na que couber melhor: 850 g continua "850 g", 4950 g vira
+// "4,95 kg". Só formatação — o número no banco não muda, então soma,
+// déficit e receita continuam batendo entre telas.
+const _ESCALAS = {
+  g: { limite: 1000, fator: 1000, maior: 'kg' },
+  ml: { limite: 1000, fator: 1000, maior: 'L' },
+};
+
+function _formatarQuantidade(valor, unidade) {
+  if (valor === null || valor === undefined || valor === '') return '—';
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) return `${valor} ${unidade || ''}`.trim();
+
+  const escala = _ESCALAS[String(unidade || '').toLowerCase()];
+  const usaMaior = escala && Math.abs(numero) >= escala.limite;
+  const exibido = usaMaior ? numero / escala.fator : numero;
+  const rotulo = usaMaior ? escala.maior : (unidade || '');
+
+  // Sem casa decimal à toa: 12 kg em vez de 12,00 kg, mas 4,95 kg inteiro.
+  const texto = exibido.toLocaleString('pt-BR', { maximumFractionDigits: usaMaior ? 2 : 2 });
+  return `${texto} ${escaparHtml(rotulo)}`.trim();
+}
+
 function renderEstoqueTab() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const tbody = document.getElementById('estoque-tabela-body');
@@ -1658,17 +1682,17 @@ function renderEstoqueTab() {
           </div>
         </td>
         <td><span class="badge badge-neutral tag-categoria">${escaparHtml(insumo.categoria)}</span></td>
-        <td class="font-bold col-atual-destaque">${dados.quantidadeAtual} ${escaparHtml(insumo.unidadeMedida)}</td>
+        <td class="font-bold col-atual-destaque">${_formatarQuantidade(dados.quantidadeAtual, insumo.unidadeMedida)}</td>
         <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
-          ${dados.consumoMedio === null ? '—' : `${Math.round(dados.consumoMedio * 100) / 100} ${escaparHtml(insumo.unidadeMedida)}/dia`}
+          ${dados.consumoMedio === null ? '—' : `${_formatarQuantidade(Math.round(dados.consumoMedio * 100) / 100, insumo.unidadeMedida)}/dia`}
         </td>
         <td class="col-nivel" ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
           ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
             <div class="nivel-cell">
               <div class="nivel-valor-linha">
-                <span class="font-bold">${quantidadeIdeal} ${escaparHtml(insumo.unidadeMedida)}</span>
+                <span class="font-bold">${_formatarQuantidade(quantidadeIdeal, insumo.unidadeMedida)}</span>
                 ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
-                ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${sugestaoCompra} ${escaparHtml(insumo.unidadeMedida)}</span>` : ''}
+                ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${_formatarQuantidade(sugestaoCompra, insumo.unidadeMedida)}</span>` : ''}
               </div>
               <div class="nivel-gauge" title="Estoque atual em relação ao mínimo — o traço marca o limite mínimo">
                 <div class="progress-container">
@@ -1676,8 +1700,8 @@ function renderEstoqueTab() {
                 </div>
                 <span class="nivel-gauge-tick"></span>
               </div>
-              <span class="min-label">mínimo ${dados.estoqueMinimo} ${escaparHtml(insumo.unidadeMedida)}</span>
-              ${tendencia ? `<span class="tendencia-texto" title="Consumo médio dos últimos 14 dias comparado com a média de 30 dias — não muda o cálculo de déficit, é só um alerta">${tendencia.subindo ? '↑' : '↓'} tendência: ${tendencia.valor} ${escaparHtml(insumo.unidadeMedida)} (${tendencia.subindo ? '+' : ''}${tendencia.desvioPercentual}%)</span>` : ''}
+              <span class="min-label">mínimo ${_formatarQuantidade(dados.estoqueMinimo, insumo.unidadeMedida)}</span>
+              ${tendencia ? `<span class="tendencia-texto" title="Consumo médio dos últimos 14 dias comparado com a média de 30 dias — não muda o cálculo de déficit, é só um alerta">${tendencia.subindo ? '↑' : '↓'} tendência: ${_formatarQuantidade(tendencia.valor, insumo.unidadeMedida)} (${tendencia.subindo ? '+' : ''}${tendencia.desvioPercentual}%)</span>` : ''}
             </div>
           `}
         </td>
@@ -2000,7 +2024,7 @@ function renderLotesVencendo() {
       <tr>
         <td class="font-bold">${escaparHtml(lote.insumoNome)}</td>
         <td class="text-muted">${escaparHtml(lote.loja)}</td>
-        <td>${lote.quantidade} ${escaparHtml(lote.unidadeMedida)}</td>
+        <td>${_formatarQuantidade(lote.quantidade, lote.unidadeMedida)}</td>
         <td>
           ${new Date(`${lote.validade}T00:00:00`).toLocaleDateString('pt-BR')}
           <span class="badge-pill ${classeBadge}">${rotuloDias}</span>
@@ -2826,7 +2850,7 @@ function _renderTabelaComparacaoCotacao() {
             ${itensFiltrados.map(item => `
               <tr>
                 <td class="font-bold">${escaparHtml(item.nome)}<span class="text-muted td-insumo-categoria"> · ${escaparHtml(item.categoria)}</span></td>
-                <td>${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}</td>
+                <td>${_formatarQuantidade(item.quantidadeTotal, item.unidadeMedida)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -2950,7 +2974,7 @@ function _renderTabelaComparacaoCotacao() {
 
     const quantidadeCelula = catalogoCompleto
       ? `<input type="number" step="0.01" min="0" class="input-quantidade-cotacao" data-insumo-id="${linha.insumoId}" value="${item && item.quantidadeTotal !== null ? item.quantidadeTotal : ''}" placeholder="0" ${isAdmin ? '' : 'disabled'}>`
-      : (item ? `${item.quantidadeTotal} ${escaparHtml(item.unidadeMedida)}` : '—');
+      : (item ? `${_formatarQuantidade(item.quantidadeTotal, item.unidadeMedida)}` : '—');
 
     const ultimaCompra = item?.ultimaCompra;
     const celulaUltimaCompra = ultimaCompra
@@ -3270,7 +3294,7 @@ function renderPedidoDetalhe() {
   itensBody.innerHTML = p.itens.map((item) => `
     <tr>
       <td class="font-bold">${escaparHtml(item.nome)}</td>
-      <td>${item.quantidade} ${escaparHtml(item.unidadeMedida)}</td>
+      <td>${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
       <td>R$ ${item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
       <td>R$ ${item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
     </tr>
@@ -3440,9 +3464,9 @@ function renderContagemDetalhe() {
       <tr>
         <td class="font-bold">${escaparHtml(item.nome)}</td>
         <td class="text-muted">${escaparHtml(item.categoria)}</td>
-        <td>${preenchido === null ? '<span class="text-muted">não preenchido</span>' : `${preenchido} ${escaparHtml(item.unidadeMedida)}`}</td>
-        <td>${ideal === null ? '<span class="text-muted">—</span>' : `${ideal} ${escaparHtml(item.unidadeMedida)}`}${item.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}</td>
-        <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${deficit} ${escaparHtml(item.unidadeMedida)}</span>` : '—')}</td>
+        <td>${preenchido === null ? '<span class="text-muted">não preenchido</span>' : `${_formatarQuantidade(preenchido, item.unidadeMedida)}`}</td>
+        <td>${ideal === null ? '<span class="text-muted">—</span>' : `${_formatarQuantidade(ideal, item.unidadeMedida)}`}${item.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}</td>
+        <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${_formatarQuantidade(deficit, item.unidadeMedida)}</span>` : '—')}</td>
         ${isAdmin ? `
           <td class="acoes-linha">
             <button type="button" class="btn-acao-icone" data-acao="ajustar-ideal" data-insumo-id="${item.insumoId}" title="Ajustar quantidade ideal">
@@ -3738,9 +3762,9 @@ function renderConferenciaRequisicao() {
         ? ' <span class="badge-pill neu-orange" title="Curva A: esse insumo concentra boa parte do gasto de compra — confira antes de aprovar">conferir</span>'
         : ''}</td>
       <td class="text-muted">${escaparHtml(item.categoria)}</td>
-      <td>${item.preenchidoTotal} ${escaparHtml(item.unidadeMedida)}</td>
-      <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${item.idealTotal} ${escaparHtml(item.unidadeMedida)}`}${item.idealAjustado ? ' <span class="badge-pill neu-orange" title="Alguma loja tem ajuste manual">ajustado</span>' : ''}</td>
-      <td>${item.deficit === null ? '<span class="text-muted">—</span>' : (item.deficit > 0 ? `<span class="badge-pill neg">comprar ${item.deficit} ${escaparHtml(item.unidadeMedida)}</span>` : '—')}</td>
+      <td>${_formatarQuantidade(item.preenchidoTotal, item.unidadeMedida)}</td>
+      <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${_formatarQuantidade(item.idealTotal, item.unidadeMedida)}`}${item.idealAjustado ? ' <span class="badge-pill neu-orange" title="Alguma loja tem ajuste manual">ajustado</span>' : ''}</td>
+      <td>${item.deficit === null ? '<span class="text-muted">—</span>' : (item.deficit > 0 ? `<span class="badge-pill neg">comprar ${_formatarQuantidade(item.deficit, item.unidadeMedida)}</span>` : '—')}</td>
     </tr>
   `).join('');
 
@@ -4084,7 +4108,7 @@ async function inicializarPreencherCotacao() {
       <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
         <td class="font-bold">${escaparHtml(item.nome)}</td>
         <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '—')}</div></td>
-        <td><div class="contagem-item-somente-leitura">${item.quantidade} ${escaparHtml(item.unidadeMedida)}</div></td>
+        <td><div class="contagem-item-somente-leitura">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</div></td>
         <td><input type="number" step="0.01" min="0.01" placeholder="0,00" data-insumo-id="${item.insumoId}"></td>
         <td style="text-align:center;"><input type="checkbox" data-nao-vende-id="${item.insumoId}"></td>
       </tr>
@@ -4190,7 +4214,7 @@ async function inicializarConfirmarPedido() {
             ${pedido.itens.map((item) => `
               <tr>
                 <td class="font-bold">${escaparHtml(item.nome)}</td>
-                <td>${item.quantidade} ${escaparHtml(item.unidadeMedida)}</td>
+                <td>${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
                 <td>R$ ${item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                 <td>R$ ${item.precoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
               </tr>
@@ -4599,7 +4623,7 @@ function renderAjusteLoteTabela(filtro) {
     <tr>
       <td class="font-bold">${escaparHtml(linha.insumo.nome)}</td>
       <td class="text-muted">${escaparHtml(linha.insumo.categoria)}</td>
-      <td>${linha.dados.quantidadeIdeal !== null ? `${linha.dados.quantidadeIdeal} ${escaparHtml(linha.insumo.unidadeMedida)}` : '<span class="text-muted">—</span>'}${linha.dados.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange">ajustado</span>' : ''}</td>
+      <td>${linha.dados.quantidadeIdeal !== null ? `${_formatarQuantidade(linha.dados.quantidadeIdeal, linha.insumo.unidadeMedida)}` : '<span class="text-muted">—</span>'}${linha.dados.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange">ajustado</span>' : ''}</td>
       <td><input type="number" step="0.01" min="0" placeholder="—" data-insumo-id="${linha.insumo.id}" value="${ajusteLoteValores[linha.insumo.id] ?? ''}" style="width:100px;"></td>
     </tr>
   `).join('');
@@ -4740,7 +4764,7 @@ function renderAtualizarEstoqueLoteTabela(filtro) {
     <tr>
       <td class="font-bold">${escaparHtml(linha.insumo.nome)}</td>
       <td class="text-muted">${escaparHtml(linha.insumo.categoria)}</td>
-      <td>${linha.dados.quantidadeAtual} ${escaparHtml(linha.insumo.unidadeMedida)}</td>
+      <td>${_formatarQuantidade(linha.dados.quantidadeAtual, linha.insumo.unidadeMedida)}</td>
       <td><input type="number" step="0.01" min="0" placeholder="—" data-insumo-id="${linha.insumo.id}" value="${atualizarEstoqueLoteValores[linha.insumo.id] ?? ''}" style="width:100px;"></td>
       <td><input type="number" step="0.01" min="0" placeholder="—" data-minimo-id="${linha.insumo.id}" value="${atualizarEstoqueLoteMinimos[linha.insumo.id] ?? ''}" style="width:100px;"></td>
     </tr>
@@ -4990,7 +5014,7 @@ function _linhaRecebimentoItemHTML(item) {
   return `
     <tr data-insumo-id="${item.insumoId}">
       <td class="font-bold">${escaparHtml(item.nome)}</td>
-      <td class="text-muted">${item.quantidade} ${escaparHtml(item.unidadeMedida)}</td>
+      <td class="text-muted">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
       <td><input type="number" step="0.01" min="0" class="recebimento-input-quantidade" value="${item.quantidade}"></td>
       <td><input type="number" step="0.01" min="0" class="recebimento-input-preco" value="${item.precoUnitario}"></td>
     </tr>
@@ -6596,7 +6620,7 @@ function carregarFichaTecnicaAtual() {
 // Uma linha da lista de insumos dentro do cartão de receita — nome e
 // quantidade ligados por uma linha pontilhada, como numa receita impressa.
 function _receitaInsumoLinhaHTML(ins) {
-  const qtd = ins.quantidade != null ? `${ins.quantidade}${escaparHtml(ins.unidadeMedida || '')}` : '—';
+  const qtd = ins.quantidade != null ? _formatarQuantidade(ins.quantidade, ins.unidadeMedida || '') : '—';
   return `
     <div class="receita-insumo-linha">
       <span class="receita-insumo-nome">${escaparHtml(ins.nome)}</span>
@@ -6873,7 +6897,7 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
     painel.innerHTML = `
       <div class="ficha-tecnica-ingredientes">
         ${dados.insumos.length ? dados.insumos.map(ins => `
-          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidade(ins.quantidade, ins.unidadeMedida)})</span>` : ''}</span>
         `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
       </div>
       ${isAdmin ? `
@@ -6976,7 +7000,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       <div class="receita-eyebrow">Insumos</div>
       <div class="ficha-tecnica-ingredientes">
         ${dadosInsumos.insumos.length ? dadosInsumos.insumos.map(ins => `
-          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidade(ins.quantidade, ins.unidadeMedida)})</span>` : ''}</span>
         `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
       </div>
       ${isAdmin ? `
@@ -7836,7 +7860,7 @@ function renderCurvaAbcInsumos(dados) {
     <tr>
       <td class="font-bold">${escaparHtml(item.nome)}</td>
       <td class="text-muted">${escaparHtml(item.categoria)}</td>
-      <td><span class="curva-num">${_formatarNumeroBR(item.quantidade)} ${escaparHtml(item.unidadeMedida)}</span></td>
+      <td><span class="curva-num">${_formatarQuantidade(_formatarNumeroBR(item.quantidade), item.unidadeMedida)}</span></td>
       <td><span class="curva-num">R$ ${_formatarMoedaBR(item.valor)}</span></td>
       <td><span class="curva-num">${(item.participacao * 100).toFixed(1).replace('.', ',')}%</span></td>
       <td>
