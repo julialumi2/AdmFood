@@ -947,6 +947,16 @@ function nomeExibicaoCanalRelatorio(canalBruto) {
   return mapa[canalBruto] || canalBruto;
 }
 
+// Dia da semana por extenso, pro cabeçalho do relatório de um dia só. Usa
+// Date.UTC (não "new Date(dataIso)" puro) pra não sofrer com fuso horário —
+// senão meia-noite UTC de um dia vira noite do dia anterior aqui (UTC-3) e
+// o dia da semana sai errado.
+function _diaSemanaCompletoBR(dataIso) {
+  const NOMES_DIA_SEMANA_COMPLETO = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+  const [ano, mes, dia] = dataIso.split('-').map(Number);
+  return NOMES_DIA_SEMANA_COMPLETO[new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay()];
+}
+
 async function montarRelatorioWhatsApp() {
   const { inicio, fim } = periodoInsightsSelecionado();
   const mesmoDia = inicio === fim;
@@ -966,7 +976,12 @@ async function montarRelatorioWhatsApp() {
       ? `Faturamento do dia ${NOMES_CURTOS_WHATSAPP[unidade]}`
       : `Faturamento do período ${NOMES_CURTOS_WHATSAPP[unidade]} — ${data.canalDataLabel}`;
 
-    let bloco = `*${cabecalho}*\n\n`;
+    let bloco = `*${cabecalho}*\n`;
+    if (mesmoDia) {
+      const [, mesDia, diaDia] = inicio.split('-');
+      bloco += `${_diaSemanaCompletoBR(inicio)} - dia ${diaDia}/${mesDia}\n`;
+    }
+    bloco += `\n`;
     bloco += `💵 Presencial: R$ ${valorPorNome['Presencial'] || '0,00'}\n`;
     bloco += `📱 iFood: R$ ${valorPorNome['IFood'] || '0,00'}\n`;
     bloco += `🌐 Cardápio Web: R$ ${valorPorNome['Cardápio Web'] || '0,00'}\n`;
