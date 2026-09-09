@@ -315,21 +315,7 @@
   flex-shrink: 0;
 }
 
-/* Cabeçalho fixo só na tabela grande de Itens em estoque (pode passar de
-   150 linhas) — 64px é a altura do .top-header, pra não ficar por baixo
-   dele ao rolar. As outras tabelas da página (Lotes vencendo, Datas
-   especiais, Integrações) são curtas e não precisam disso. */
-#estoque-tabela-scroll thead th {
-  position: sticky;
-  top: 64px;
-  z-index: 2;
-}
-
 @media (max-width: 768px) {
-  #estoque-tabela-scroll thead th {
-    position: static;
-  }
-
   .estoque-saude-rotulo {
     flex-direction: column;
     align-items: flex-start;
