@@ -25,6 +25,7 @@ from backend.armazenamento import (
     listar_faturamento_canal_semanal,
     listar_resultado_semanal,
     salvar_resultado_semanal_se_ausente,
+    salvar_resultado_semanal,
     salvar_faturamento_canal_semanal_se_ausente,
     listar_tarefas,
     criar_tarefa,
@@ -3296,6 +3297,39 @@ def api_importar_faturamento_semanal():
         "semanasPorLoja": semanas_por_loja,
         "avisos": avisos,
     })
+
+
+@app.route('/api/faturamento-semanal/resultado', methods=['PUT'])
+def api_salvar_resultado_semanal():
+    """CMV e promoção de uma semana, digitados na tela. O faturamento não
+    entra aqui de propósito: ele vem do que o AdmFood sincroniza sozinho ou
+    da planilha, e deixar editar à mão criaria uma terceira versão do mesmo
+    número."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    inicio, fim = dados.get('periodoInicio'), dados.get('periodoFim')
+    if not inicio or not fim:
+        return jsonify({"erro": "Informe o período da semana."}), 400
+
+    valores = {}
+    for chave in ('cmv', 'promoLoja'):
+        bruto = dados.get(chave)
+        if bruto in (None, ''):
+            valores[chave] = None
+            continue
+        try:
+            valores[chave] = round(float(bruto), 2)
+        except (TypeError, ValueError):
+            return jsonify({"erro": f"Valor inválido pra {chave}."}), 400
+
+    salvar_resultado_semanal(loja, inicio, fim, valores['cmv'], valores['promoLoja'])
+    return jsonify({"ok": True})
 
 
 @app.route('/api/insights-automaticos', methods=['GET'])

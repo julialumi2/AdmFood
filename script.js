@@ -7485,6 +7485,7 @@ function renderVendasSemanais() {
   }
 
   const semana = semanas.find(s => s.periodoInicio === vendasSemanaisSelecionada) || semanas[0];
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
   const veredito = VEREDITO[semana.classificacao];
   const ehMaisRecente = semana.periodoInicio === semanas[0].periodoInicio;
 
@@ -7533,12 +7534,12 @@ function renderVendasSemanais() {
           </div>
           <div class="semana-linha">
             <span class="semana-linha-rotulo">CMV</span>
-            <span class="semana-linha-valor">${semana.cmv !== null ? 'R$ ' + _formatarMoedaBR(semana.cmv) : '—'}</span>
+            ${_valorEditavelHTML('cmv', semana.cmv, isAdmin)}
             ${_deltaHTML(semana.variacaoCmv, false)}
           </div>
           <div class="semana-linha">
             <span class="semana-linha-rotulo">Promoção da loja</span>
-            <span class="semana-linha-valor">${semana.promoLoja ? 'R$ ' + _formatarMoedaBR(semana.promoLoja) : '—'}</span>
+            ${_valorEditavelHTML('promoLoja', semana.promoLoja, isAdmin)}
             <span class="semana-delta neutro"></span>
           </div>
         </div>
@@ -7585,8 +7586,55 @@ function renderVendasSemanais() {
   // Abre mostrando o fim da fita, que é a semana mais recente.
   fitaEl.scrollLeft = fitaEl.scrollWidth;
 
+  document.querySelectorAll('[data-campo-semana]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      try {
+        await _salvarResultadoSemana(semana, input.dataset.campoSemana, input.value);
+        await carregarVendasSemanais(vendasSemanaisLojaAtual);
+      } catch (erro) {
+        console.error('Falha ao salvar CMV/promoção da semana:', erro);
+        alert(erro.message || 'Não foi possível salvar.');
+      }
+    });
+  });
+
   renderVendasSemanaisTabela(semanas);
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// CMV e promoção são digitados (não têm fonte automática hoje) — então na
+// tela eles são campo, não texto. O faturamento continua só leitura: ele vem
+// do sistema ou da planilha, e deixar editar criaria uma terceira versão.
+function _valorEditavelHTML(campo, valor, isAdmin) {
+  if (!isAdmin) {
+    return `<span class="semana-linha-valor">${valor ? 'R$ ' + _formatarMoedaBR(valor) : '—'}</span>`;
+  }
+  return `<span class="semana-valor-editavel">
+    <span class="prefixo-moeda">R$</span>
+    <input type="number" step="0.01" min="0" data-campo-semana="${campo}"
+      value="${valor !== null && valor !== undefined ? valor : ''}" placeholder="—"
+      aria-label="${campo === 'cmv' ? 'CMV da semana' : 'Promoção da loja na semana'}">
+  </span>`;
+}
+
+async function _salvarResultadoSemana(semana, campo, valor) {
+  const corpo = {
+    loja: vendasSemanaisLojaAtual,
+    periodoInicio: semana.periodoInicio,
+    periodoFim: semana.periodoFim,
+    cmv: semana.cmv,
+    promoLoja: semana.promoLoja,
+  };
+  corpo[campo] = valor === '' ? null : valor;
+  const resposta = await fetch('/api/faturamento-semanal/resultado', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo),
+  });
+  if (!resposta.ok) {
+    const dados = await resposta.json();
+    throw new Error(dados.erro || 'falha ao salvar');
+  }
 }
 
 function renderVendasSemanaisTabela(semanas) {

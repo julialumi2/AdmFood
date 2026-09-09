@@ -374,3 +374,45 @@
   .semana-hero { padding: var(--space-4) var(--space-4) var(--space-5); }
   .fita-card { padding: var(--space-4); }
 }
+
+/* Campo de CMV/promoção no cartão da semana — parece o valor que estava
+   ali, só que digitável, pra não virar um formulário no meio do resumo. */
+.semana-valor-editavel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  justify-self: end;
+}
+
+.semana-valor-editavel .prefixo-moeda {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.semana-valor-editavel input {
+  width: 118px;
+  text-align: right;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dark);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.semana-valor-editavel input:hover { border-color: var(--input-border); }
+
+.semana-valor-editavel input:focus {
+  background-color: var(--input-bg);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.semana-valor-editavel input::placeholder { color: var(--text-faint); font-weight: 400; }

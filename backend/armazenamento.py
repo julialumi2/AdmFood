@@ -904,6 +904,26 @@ def salvar_faturamento_canal_semanal_se_ausente(unidade, periodo_inicio_iso, per
         return True
 
 
+def salvar_resultado_semanal(unidade, periodo_inicio_iso, periodo_fim_iso, cmv, promo_loja):
+    """Grava CMV/promoção de uma semana **sobrescrevendo** o que estiver lá.
+    Diferente de `salvar_resultado_semanal_se_ausente` (usada na importação,
+    que nunca mexe no que já existe) porque aqui é edição feita à mão na
+    tela: se a pessoa está digitando, ela quer trocar o valor."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO resultado_semanal
+                (unidade, periodo_inicio, periodo_fim, cmv, promo_loja, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (unidade, periodo_inicio) DO UPDATE SET
+                periodo_fim = excluded.periodo_fim,
+                cmv = excluded.cmv,
+                promo_loja = excluded.promo_loja
+            """,
+            (unidade, periodo_inicio_iso, periodo_fim_iso, cmv, promo_loja, datetime.now().isoformat()),
+        )
+
+
 def salvar_resultado_semanal_se_ausente(unidade, periodo_inicio_iso, periodo_fim_iso, cmv, promo_loja):
     """CMV/promoção de uma semana, mesmo espírito de
     `salvar_faturamento_canal_semanal_se_ausente`: nunca sobrescreve o que
