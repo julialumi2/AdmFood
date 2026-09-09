@@ -46,6 +46,13 @@ _APELIDOS = {
 # unidade, e isso o sistema não sabe — esse caso é recusado.
 _FATOR = {("kg", "g"): 1000, ("g", "kg"): 0.001, ("l", "ml"): 1000, ("ml", "l"): 0.001}
 
+# g <-> ml é a única conversão aqui que assume alguma coisa: que 1 g ≈ 1 ml,
+# ou seja, densidade perto da água. Vale pros molhos e sucos da casa (é o
+# caso de todos os insumos que caem aqui hoje). Óleo daria ~8% de diferença
+# — pouco perto da alternativa, que é ficar sem custo nenhum e o produto
+# inteiro sumir da Curva ABC. A suposição é impressa toda vez que é usada.
+_FATOR_COM_SUPOSICAO = {("g", "ml"): 1, ("ml", "g"): 1}
+
 
 def _unidade(bruta):
     return _APELIDOS.get(str(bruta or "").strip().lower(), str(bruta or "").strip().lower())
@@ -62,6 +69,9 @@ def _converter_custo(custo, unidade_planilha, unidade_cadastro):
     fator = _FATOR.get((origem, destino))
     if fator:
         return round(custo / fator, 6), f"convertido de /{origem} pra /{destino}"
+    fator = _FATOR_COM_SUPOSICAO.get((origem, destino))
+    if fator:
+        return round(custo / fator, 6), f"de /{origem} pra /{destino} assumindo 1 g ≈ 1 ml"
     return None, f"unidade incompatível: planilha em {origem!r}, cadastro em {destino!r}"
 
 
