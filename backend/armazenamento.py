@@ -238,6 +238,13 @@ def inicializar_banco():
             conn.execute("ALTER TABLE insumo ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0")
         if "unidade_compra" not in colunas_insumo:
             conn.execute("ALTER TABLE insumo ADD COLUMN unidade_compra TEXT NOT NULL DEFAULT ''")
+        if "custo_referencia" not in colunas_insumo:
+            # Custo por unidade vindo da planilha de CMV do chefe. É a base
+            # do CMV enquanto não existe compra recebida no sistema — sem
+            # isso, produto nenhum tem custo e a Curva ABC de Cardápio não
+            # consegue classificar ninguém. Assim que uma compra real entra,
+            # ela ganha deste (ver _mapa_preco_insumo).
+            conn.execute("ALTER TABLE insumo ADD COLUMN custo_referencia REAL")
         if "fator_conversao_compra" not in colunas_insumo:
             # Quantas unidade_medida (kg/L/un...) tem em 1 unidade_compra (caixa/fardo/pacote...).
             # NULL = insumo ainda não configurado pra arredondamento de embalagem — cai no
@@ -2188,12 +2195,17 @@ def mapa_curva_abc_insumos(dias=90):
 
 def _mapa_preco_insumo():
     """Preço de referência de cada insumo pro cálculo de CMV real. Ordem de
-    confiança: preço da última compra efetivamente recebida (é o que saiu
-    do caixa); sem compra recebida, o preço mais recente cotado por algum
-    fornecedor. Insumo sem nenhum dos dois fica de fora — quem consome
-    trata como custo desconhecido em vez de assumir zero."""
+    confiança, do menos pro mais confiável (o de baixo sobrescreve): custo
+    cadastrado na ficha de custos, preço cotado por algum fornecedor, e
+    preço da última compra efetivamente recebida — esse é o que saiu do
+    caixa, então ganha de todos. Insumo sem nenhum dos três fica de fora:
+    quem consome trata como custo desconhecido em vez de assumir zero."""
     precos = {}
     with conexao() as conn:
+        for linha in conn.execute(
+            "SELECT id, custo_referencia FROM insumo WHERE custo_referencia IS NOT NULL"
+        ).fetchall():
+            precos[linha["id"]] = linha["custo_referencia"]
         linhas = conn.execute(
             "SELECT insumo_id, preco FROM cotacao_preco ORDER BY criado_em"
         ).fetchall()

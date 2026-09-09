@@ -19,7 +19,6 @@ Uso:
   python importar_ficha_tecnica_faltante.py --apply    # grava
 """
 import difflib
-import re
 import sys
 
 import openpyxl
@@ -32,6 +31,7 @@ from backend.armazenamento import (
     conexao,
     _normalizar_nome_insumo,
 )
+from backend.nomes_insumo import resolver as _resolver_insumo, sem_sufixo as _sem_sufixo
 from config import LOJAS
 
 try:
@@ -46,43 +46,6 @@ PRIMEIRA_LINHA = 5
 
 # Colunas (índice 0) da aba "Ficha Técnica"
 COL_CATEGORIA, COL_PRODUTO, COL_INSUMO, COL_UNIDADE, COL_QUANTIDADE = 0, 1, 3, 4, 5
-
-SUFIXO_PARENTESES = re.compile(r"\s*\([^)]*\)\s*$")
-
-
-def _sem_sufixo(nome):
-    """"CLASSICO (simples)" -> "CLASSICO". O parêntese na planilha é
-    anotação de variação, não faz parte do nome cadastrado."""
-    return SUFIXO_PARENTESES.sub("", nome).strip()
-
-
-# A planilha e o catálogo de estoque foram escritos por pessoas
-# diferentes, então o mesmo insumo às vezes tem dois nomes. Aqui ficam os
-# casos que nenhuma regra resolve — cada linha é uma decisão humana, e a
-# lista de candidatos existe porque o nome cadastrado muda de loja pra loja
-# (o Artesanos usa "Smashburger 110g"; o catálogo da VMarket, "Hamb. Select
-# 110g"). Vale o primeiro que existir.
-EQUIVALENCIAS = {
-    "smash burger": ["Smashburger 110g", "Hamb. Select 110g", "Smash burger 110g"],
-}
-
-
-def _resolver_insumo(nome, mapa_normalizado):
-    """Insumo da planilha -> insumo cadastrado. Duas regras determinísticas,
-    nessa ordem: nome normalizado igual, nome sem o sufixo entre parênteses
-    ("Queijo cheddar (fatia)" é o "Queijo cheddar" que já está no estoque)
-    e, por último, EQUIVALENCIAS. Sem regra fuzzy de propósito — "Smash burger" e
-    "Smashburger 110g" são a mesma coisa e "Geleia de Frutas Vermelhas" e
-    "Geleia de pimenta" não são, e nenhum algoritmo de similaridade separa
-    esses dois casos sozinho."""
-    candidatos = [nome, _sem_sufixo(nome)]
-    candidatos += EQUIVALENCIAS.get(_normalizar_nome_insumo(nome), [])
-    for candidato in candidatos:
-        achado = mapa_normalizado.get(_normalizar_nome_insumo(candidato))
-        if achado:
-            return achado
-    return None
-
 
 def _ler_planilha(caminho):
     wb = openpyxl.load_workbook(caminho, data_only=True)
