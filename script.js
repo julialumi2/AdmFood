@@ -211,6 +211,34 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarFornecedores();
   }
 
+  // 4.097b TELA DE VENDAS SEMANAIS (histórico por canal importado de
+  // planilha — separado das Vendas Diárias de propósito, ver comentário
+  // da tabela faturamento_canal_semanal em armazenamento.py)
+  if (document.getElementById('vendas-semanais-loja-select')) {
+    const seletorLoja = document.getElementById('vendas-semanais-loja-select');
+    const trigger = document.getElementById('vendas-semanais-loja-trigger');
+    const menu = document.getElementById('vendas-semanais-loja-menu');
+    let vendasSemanaisLojaAtual = 'Hamburgueria Artesanos';
+
+    trigger.addEventListener('click', () => seletorLoja.classList.toggle('aberto'));
+    document.addEventListener('click', (evento) => {
+      if (!seletorLoja.contains(evento.target)) seletorLoja.classList.remove('aberto');
+    });
+
+    menu.querySelectorAll('.loja-select-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        menu.querySelectorAll('.loja-select-item').forEach((i) => i.classList.remove('active'));
+        item.classList.add('active');
+        trigger.querySelector('.loja-select-label').textContent = item.querySelector('span').textContent;
+        vendasSemanaisLojaAtual = item.dataset.loja;
+        seletorLoja.classList.remove('aberto');
+        carregarVendasSemanais(vendasSemanaisLojaAtual);
+      });
+    });
+
+    carregarVendasSemanais(vendasSemanaisLojaAtual);
+  }
+
   // 4.097c TELA DE CURVA ABC DE CARDÁPIO (Etapa 10 do motor de compra —
   // volume × margem × CMV real por produto)
   if (document.getElementById('curva-loja-select')) {
@@ -7368,4 +7396,70 @@ function renderCurvaAbc() {
   });
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+
+/* ---------------------------------------------------------------------
+   VENDAS SEMANAIS — histórico por canal importado de planilha. Tela
+   separada das Vendas Diárias de propósito: a planilha só tem o total da
+   SEMANA por canal, sem quebra por dia (ver faturamento_canal_semanal em
+   armazenamento.py).
+   --------------------------------------------------------------------- */
+const CANAIS_VENDAS_SEMANAIS = [
+  { chave: 'ifood', label: 'iFood' },
+  { chave: 'catalog', label: 'Cardápio Web' },
+  { chave: 'food99', label: '99Food' },
+  { chave: 'portal', label: 'Presencial' },
+];
+
+async function carregarVendasSemanais(loja) {
+  const tbody = document.getElementById('vendas-semanais-tabela-body');
+  const subtitulo = document.getElementById('vendas-semanais-subtitulo');
+  if (subtitulo) subtitulo.textContent = loja;
+  try {
+    const resposta = await fetch(`/api/faturamento-semanal?loja=${encodeURIComponent(loja)}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
+    renderVendasSemanaisTabela(dados.semanas || []);
+  } catch (erro) {
+    console.error('Falha ao carregar vendas semanais:', erro);
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">Não foi possível carregar o histórico.</td></tr>`;
+  }
+}
+
+function _periodoSemanaLabel(inicioIso, fimIso) {
+  const curto = (iso) => {
+    const [ano, mes, dia] = iso.split('-');
+    return `${dia}/${mes}`;
+  };
+  return `${curto(inicioIso)} a ${curto(fimIso)} · ${inicioIso.slice(0, 4)}`;
+}
+
+function renderVendasSemanaisTabela(semanas) {
+  const tbody = document.getElementById('vendas-semanais-tabela-body');
+  if (!tbody) return;
+
+  if (!semanas.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">Nenhuma semana importada ainda pra essa loja.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = semanas.map((semana) => {
+    const celulas = CANAIS_VENDAS_SEMANAIS.map((canal) => {
+      const valor = semana.canais[canal.chave];
+      // Canal sem linha na planilha daquela semana (ex: 99Food antes da
+      // loja operar nele) fica "—", não R$ 0,00 — zero seria dizer que
+      // vendeu nada, e o certo é que não existia.
+      return valor === undefined || valor === null
+        ? '<td class="text-muted">—</td>'
+        : `<td>R$ ${_formatarMoedaBR(valor)}</td>`;
+    }).join('');
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim))}</td>
+        ${celulas}
+        <td class="font-bold col-atual-destaque">R$ ${_formatarMoedaBR(semana.total)}</td>
+      </tr>
+    `;
+  }).join('');
 }

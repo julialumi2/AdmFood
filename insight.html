@@ -82,10 +82,6 @@
           <i data-lucide="book-open"></i>
           <span>Cardápio</span>
         </a>
-        <a href="curva-abc.html" class="menu-item">
-          <i data-lucide="chart-no-axes-combined"></i>
-          <span>Curva ABC</span>
-        </a>
         <a href="preparo.html" class="menu-item">
           <i data-lucide="timer"></i>
           <span>Preparo</span>
@@ -94,10 +90,27 @@
           <i data-lucide="check-square"></i>
           <span>ClickUp</span>
         </a>
-        <a href="insight.html" class="menu-item active">
-          <i data-lucide="lightbulb"></i>
-          <span>Insights</span>
-        </a>
+        <div class="menu-group expandido">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="lightbulb"></i>
+            <span>Insights</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="curva-abc.html" class="menu-subitem">
+              <i data-lucide="chart-no-axes-combined"></i>
+              <span>Curva ABC</span>
+            </a>
+            <a href="insight.html" class="menu-subitem active">
+              <i data-lucide="activity"></i>
+              <span>Vendas Diárias</span>
+            </a>
+            <a href="vendas-semanais.html" class="menu-subitem">
+              <i data-lucide="calendar-range"></i>
+              <span>Vendas Semanais</span>
+            </a>
+          </div>
+        </div>
         <a href="configuracoes.html" class="menu-item">
           <i data-lucide="settings"></i>
           <span>Configurações</span>

@@ -22,6 +22,7 @@ from backend.armazenamento import (
     salvar_ajuste_canal,
     excluir_ajuste_canal,
     buscar_ajustes_canal_periodo,
+    listar_faturamento_canal_semanal,
     listar_tarefas,
     criar_tarefa,
     atualizar_tarefa,
@@ -3232,6 +3233,17 @@ def api_insights():
 # no frontend (nomeExibicaoCanal em script.js): "portal" sempre vira
 # "Presencial" aqui, já que esse relatório nunca é por loja individual.
 NOMES_CANAL_REDE = {"ifood": "IFood", "food99": "99Food", "catalog": "Cardápio Web", "portal": "Presencial"}
+
+
+@app.route('/api/faturamento-semanal', methods=['GET'])
+def api_faturamento_semanal():
+    """Histórico semanal por canal, importado de planilha (ver 'Vendas
+    Semanais' — tela separada das Vendas Diárias de propósito, porque essa
+    fonte só tem o total da semana, não quebra por dia)."""
+    unidade = request.args.get('loja')
+    if not unidade or unidade not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    return jsonify({"semanas": listar_faturamento_canal_semanal(unidade)})
 
 
 @app.route('/api/insights-automaticos', methods=['GET'])

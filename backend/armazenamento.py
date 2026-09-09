@@ -90,6 +90,26 @@ def inicializar_banco():
             """
         )
 
+        # Histórico semanal por canal (2026-09-08) — separado de propósito
+        # de faturamento_canal/faturamento_diario, que são por DIA. A
+        # planilha que a Julia recebeu do chefe só tem o total da SEMANA por
+        # canal, sem quebra diária — jogar isso num dia só (ou dividir por 7)
+        # inventaria uma precisão que a fonte não tem. Fica numa tela própria
+        # ("Vendas Semanais"), sem entrar nos gráficos/relatórios diários.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS faturamento_canal_semanal (
+                unidade TEXT NOT NULL,
+                periodo_inicio TEXT NOT NULL,
+                periodo_fim TEXT NOT NULL,
+                canal TEXT NOT NULL,
+                faturamento REAL NOT NULL,
+                criado_em TEXT NOT NULL,
+                PRIMARY KEY (unidade, periodo_inicio, canal)
+            )
+            """
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tarefa (
@@ -839,6 +859,63 @@ def buscar_ajustes_canal_periodo(inicio_iso, fim_iso):
             (inicio_iso, fim_iso),
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def salvar_faturamento_canal_semanal_se_ausente(unidade, periodo_inicio_iso, periodo_fim_iso, canal, faturamento):
+    """Grava uma linha do histórico semanal importado de planilha — só se
+    essa (loja, semana, canal) ainda não existir. Mesmo espírito de
+    `salvar_historico_se_ausente`: nunca sobrescreve o que já está
+    gravado (rodar a importação de novo não duplica nem troca valor).
+    Retorna True se gravou, False se já existia."""
+    with conexao() as conn:
+        existente = conn.execute(
+            "SELECT 1 FROM faturamento_canal_semanal WHERE unidade = ? AND periodo_inicio = ? AND canal = ?",
+            (unidade, periodo_inicio_iso, canal),
+        ).fetchone()
+        if existente:
+            return False
+        conn.execute(
+            """
+            INSERT INTO faturamento_canal_semanal
+                (unidade, periodo_inicio, periodo_fim, canal, faturamento, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (unidade, periodo_inicio_iso, periodo_fim_iso, canal, faturamento, datetime.now().isoformat()),
+        )
+        return True
+
+
+def listar_faturamento_canal_semanal(unidade):
+    """Uma linha por semana já importada dessa loja, mais recente primeiro,
+    com o faturamento de cada canal agrupado (None pro canal que a planilha
+    não trazia naquela semana, ex: 99Food antes da loja operar nesse canal)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT periodo_inicio, periodo_fim, canal, faturamento
+            FROM faturamento_canal_semanal
+            WHERE unidade = ?
+            ORDER BY periodo_inicio DESC, canal
+            """,
+            (unidade,),
+        ).fetchall()
+
+    semanas = {}
+    for linha in linhas:
+        chave = (linha["periodo_inicio"], linha["periodo_fim"])
+        semana = semanas.setdefault(chave, {
+            "periodoInicio": linha["periodo_inicio"],
+            "periodoFim": linha["periodo_fim"],
+            "canais": {},
+        })
+        semana["canais"][linha["canal"]] = linha["faturamento"]
+
+    resultado = []
+    for (inicio, fim), semana in semanas.items():
+        total = round(sum(semana["canais"].values()), 2)
+        resultado.append({**semana, "total": total})
+    resultado.sort(key=lambda s: s["periodoInicio"], reverse=True)
+    return resultado
 
 
 def salvar_venda_presencial(unidade, dia_iso, valor, quantidade=0):
