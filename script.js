@@ -133,9 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
     wireColumnDropEvents();
   }
 
-  // 4.095 TELA DE CARDÁPIO
-  if (document.getElementById('cardapio-tabs')) {
-    carregarPrecosCardapio();
+  // 4.095 TELA DE CARDÁPIO (Preços + Ficha Técnica numa tela só desde 2026-09-09)
+  if (document.getElementById('ficha-tecnica-conteudo')) {
+    carregarFichaTecnicaAtual();
     const inputArquivo = document.getElementById('cardapio-importar-arquivo');
     if (inputArquivo) inputArquivo.addEventListener('change', importarPlanilhaCardapio);
   }
@@ -5690,15 +5690,16 @@ async function carregarUsuarioLogado() {
       painelZonaPerigo.style.display = '';
     }
 
-    // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto
-    // (só admin). Os dois fetches (usuário logado + preços) rodam em
-    // paralelo — se os cards já tiverem renderizado como "só leitura" antes
-    // de saber que é admin, renderiza de novo agora com os controles de edição.
+    // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto/
+    // ficha técnica (só admin). Os dois fetches (usuário logado + produtos)
+    // rodam em paralelo — se os cards já tiverem renderizado como "só
+    // leitura" antes de saber que é admin, renderiza de novo agora com os
+    // controles de edição.
     const importarArea = document.getElementById('cardapio-importar-area');
-    if (importarArea && usuario.papel === 'admin' && cardapioAbaAtual === 'precos') {
+    if (importarArea && usuario.papel === 'admin') {
       importarArea.style.display = '';
       if (typeof lucide !== 'undefined') lucide.createIcons();
-      if (cardapioLojaSelecionada) renderCardapioLoja(cardapioLojaSelecionada);
+      if (fichaTecnicaProdutos.length || fichaTecnicaComplementos.length) renderFichaTecnicaConteudo();
     }
 
     // Tela de Insights: botão de ajustar canal (só admin) — se a tabela de
@@ -6282,53 +6283,12 @@ async function alterarStatusModal() {
   await recarregarTarefaSelecionada();
 }
 
-// --- TELA DE CARDÁPIO (comparativo de preços, só leitura) ---
-
-let cardapioData = [];
-let cardapioLojaSelecionada = null;
-
-async function carregarPrecosCardapio() {
-  const tabsEl = document.getElementById('cardapio-tabs');
-  const conteudoEl = document.getElementById('cardapio-conteudo');
-  if (!tabsEl || !conteudoEl) return;
-
-  try {
-    const resposta = await fetch('/api/precos-cardapio');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    cardapioData = dados.lojas;
-
-    if (!cardapioData.length) {
-      tabsEl.innerHTML = '';
-      conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum preço importado ainda.</p>`;
-      return;
-    }
-
-    // Ordem fixa das abas, independente da ordem que veio da API.
-    const ORDEM_LOJAS = ['Hamburgueria Artesanos', 'Tradiças', 'Açaí Na Lata'];
-    cardapioData.sort((a, b) => ORDEM_LOJAS.indexOf(a.loja) - ORDEM_LOJAS.indexOf(b.loja));
-
-    tabsEl.innerHTML = cardapioData.map((loja, i) => `
-      <button class="tab-btn ${i === 0 ? 'active' : ''}" data-loja="${escaparHtml(loja.loja)}">
-        ${escaparHtml(loja.loja)}
-      </button>
-    `).join('');
-
-    tabsEl.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        tabsEl.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        renderCardapioLoja(btn.dataset.loja);
-      });
-    });
-
-    cardapioLojaSelecionada = cardapioData[0].loja;
-    renderCardapioLoja(cardapioLojaSelecionada);
-  } catch (erro) {
-    console.error('Falha ao carregar preços do cardápio:', erro);
-    conteudoEl.innerHTML = `<p class="panel-subtitle" style="color:var(--danger); padding: var(--space-4);">Não foi possível carregar os preços. Confira se o Flask está rodando.</p>`;
-  }
-}
+// --- TELA DE CARDÁPIO (Preços + Ficha Técnica numa tela só, 2026-09-09) ---
+// A antiga aba "Preços" (abas por loja, cartão só de preço) foi absorvida
+// pela grade de produtos da Ficha Técnica (_renderProdutosConteudo mais
+// abaixo) — o cartão agora tem o visual de Preços E expande a ficha
+// técnica/custo no clique. CANAIS_CARDAPIO/_formatarPrecoCardapio
+// continuam, usados pelo cartão novo.
 
 const CANAIS_CARDAPIO = [
   { chave: 'ifood', label: 'iFood' },
@@ -6341,53 +6301,6 @@ function _formatarPrecoCardapio(valor) {
   return typeof valor === 'number'
     ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : null;
-}
-
-function _buscarItemCardapio(id) {
-  for (const loja of cardapioData) {
-    for (const cat of loja.categorias) {
-      const item = cat.produtos.find(p => String(p.id) === String(id));
-      if (item) return item;
-    }
-  }
-  return null;
-}
-
-// Corpo do card (nome + preços) — dois estados: leitura (padrão, todo mundo
-// vê) e edição (só depois de clicar no lápis, só admin). Refeito assim,
-// re-renderizando só o corpo, pra não precisar recarregar a lista inteira
-// nem religar eventos card por card a cada clique.
-function _cardapioCorpoHTML(p, canais, isAdmin, editando) {
-  const nome = `<div class="cardapio-card-nome">${escaparHtml(p.produto)}</div>`;
-
-  if (!editando) {
-    return `
-      <div class="cardapio-card-topo">
-        ${nome}
-        ${isAdmin ? `<button type="button" class="cardapio-btn-editar" data-acao="editar-preco" title="Editar preços"><i data-lucide="pencil"></i></button>` : ''}
-      </div>
-      ${canais.map(c => `
-        <div class="cardapio-linha-preco">
-          <span class="cardapio-canal-label">${c.label}</span>
-          <span class="cardapio-preco-valor">${_formatarPrecoCardapio(p[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>
-        </div>
-      `).join('')}
-    `;
-  }
-
-  return `
-    <div class="cardapio-card-topo">${nome}</div>
-    ${canais.map(c => `
-      <div class="cardapio-linha-preco">
-        <span class="cardapio-canal-label">${c.label}</span>
-        <input type="number" step="0.01" min="0" class="cardapio-input-preco" data-canal="${c.chave}" value="${p[c.chave] ?? ''}" placeholder="—">
-      </div>
-    `).join('')}
-    <div class="cardapio-editar-acoes">
-      <button type="button" class="btn-secondary-sm" data-acao="cancelar-preco">Cancelar</button>
-      <button type="button" class="btn-primary-sm cardapio-btn-salvar" data-acao="salvar">Salvar</button>
-    </div>
-  `;
 }
 
 // categorias: [{ nome, contagem }] — contagem vira o número de itens
@@ -6403,140 +6316,6 @@ function _renderSidebarCategorias(containerId, categorias, categoriaSelecionada,
   `).join('');
   sidebar.querySelectorAll('.cardapio-categoria-item').forEach(btn => {
     btn.addEventListener('click', () => onSelecionar(btn.dataset.categoria));
-  });
-}
-
-function renderCardapioLoja(nomeLoja) {
-  const conteudoEl = document.getElementById('cardapio-conteudo');
-  if (!conteudoEl) return;
-
-  const loja = cardapioData.find(l => l.loja === nomeLoja);
-  if (!loja) return;
-
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
-  const temBeefood = loja.categorias.some(cat => cat.produtos.some(p => p.beefood !== null));
-  const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
-
-  const cardsPorCategoria = loja.categorias.map(cat => `
-    <div class="cardapio-categoria-titulo">${escaparHtml(cat.nome)}</div>
-    <div class="cardapio-lista">
-      ${cat.produtos.map(p => `
-        <div class="cardapio-card" data-id="${p.id}">
-          <div class="cardapio-card-foto">
-            ${p.fotoUrl
-              ? `<img src="${p.fotoUrl}" alt="${escaparHtml(p.produto)}">`
-              : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
-            ${isAdmin ? `
-              <button type="button" class="cardapio-btn-foto" data-acao="foto" title="Trocar foto">
-                <i data-lucide="camera"></i>
-              </button>
-              <input type="file" accept="image/*" class="cardapio-input-foto" style="display:none;">
-            ` : ''}
-          </div>
-          <div class="cardapio-card-corpo">${_cardapioCorpoHTML(p, canais, isAdmin, false)}</div>
-        </div>
-      `).join('')}
-    </div>
-  `).join('');
-
-  conteudoEl.innerHTML = cardsPorCategoria;
-  conteudoEl.dataset.canais = JSON.stringify(canais);
-
-  _wireCardapioEventosDelegados();
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function _cardapioRerenderCorpo(card, editando) {
-  const itemId = card.dataset.id;
-  const item = _buscarItemCardapio(itemId);
-  if (!item) return;
-  const canais = JSON.parse(document.getElementById('cardapio-conteudo').dataset.canais || '[]');
-  card.querySelector('.cardapio-card-corpo').innerHTML = _cardapioCorpoHTML(item, canais, true, editando);
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-// Um listener só, no container — os cards são recriados/re-renderizados o
-// tempo todo (entrar/sair do modo edição, trocar de loja), então delegar
-// no pai evita ter que religar eventos toda vez.
-function _wireCardapioEventosDelegados() {
-  const conteudoEl = document.getElementById('cardapio-conteudo');
-  if (!conteudoEl || conteudoEl.dataset.eventosLigados) return;
-  conteudoEl.dataset.eventosLigados = '1';
-
-  conteudoEl.addEventListener('click', async (e) => {
-    const card = e.target.closest('.cardapio-card');
-    if (!card) return;
-    const itemId = card.dataset.id;
-
-    if (e.target.closest('[data-acao="editar-preco"]')) {
-      _cardapioRerenderCorpo(card, true);
-      return;
-    }
-
-    if (e.target.closest('[data-acao="cancelar-preco"]')) {
-      _cardapioRerenderCorpo(card, false);
-      return;
-    }
-
-    if (e.target.closest('[data-acao="salvar"]')) {
-      const btn = card.querySelector('[data-acao="salvar"]');
-      const corpo = {};
-      card.querySelectorAll('.cardapio-input-preco').forEach(input => {
-        corpo[input.dataset.canal] = input.value === '' ? null : input.value;
-      });
-      btn.disabled = true;
-      btn.textContent = 'Salvando...';
-      try {
-        const resposta = await fetch(`/api/precos-cardapio/${itemId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(corpo),
-        });
-        const dados = await resposta.json();
-        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
-
-        const item = _buscarItemCardapio(itemId);
-        if (item) Object.assign(item, { ifood: dados.ifood, food99: dados.food99, beefood: dados.beefood, cardapioWeb: dados.cardapioWeb });
-        _cardapioRerenderCorpo(card, false);
-      } catch (erro) {
-        console.error('Falha ao salvar preço do cardápio:', erro);
-        btn.textContent = 'Erro — tentar de novo';
-        btn.disabled = false;
-      }
-      return;
-    }
-
-    if (e.target.closest('[data-acao="foto"]')) {
-      card.querySelector('.cardapio-input-foto')?.click();
-    }
-  });
-
-  conteudoEl.addEventListener('change', async (e) => {
-    const inputFoto = e.target.closest('.cardapio-input-foto');
-    if (!inputFoto) return;
-    const card = inputFoto.closest('.cardapio-card');
-    const itemId = card.dataset.id;
-    const arquivo = inputFoto.files[0];
-    inputFoto.value = '';
-    if (!arquivo) return;
-
-    try {
-      const formData = new FormData();
-      formData.append('foto', arquivo);
-      const resposta = await fetch(`/api/precos-cardapio/${itemId}/foto`, { method: 'POST', body: formData });
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
-
-      const fotoContainer = card.querySelector('.cardapio-card-foto');
-      fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
-      fotoContainer.insertAdjacentHTML('afterbegin', `<img src="${dados.fotoUrl}" alt="">`);
-
-      const item = _buscarItemCardapio(itemId);
-      if (item) item.fotoUrl = dados.fotoUrl;
-    } catch (erro) {
-      console.error('Falha ao subir foto do cardápio:', erro);
-      alert('Não foi possível subir a foto. Tenta de novo.');
-    }
   });
 }
 
@@ -6564,7 +6343,7 @@ async function importarPlanilhaCardapio(event) {
 
     statusEl.style.color = 'var(--success)';
     statusEl.textContent = `Importado com sucesso: ${dados.totalProdutos} produtos.`;
-    await carregarPrecosCardapio();
+    await carregarFichaTecnicaAtual();
   } catch (erro) {
     console.error('Falha ao importar planilha do cardápio:', erro);
     statusEl.style.color = 'var(--danger)';
@@ -6585,6 +6364,11 @@ const fichaTecnicaExpandidos = new Set();
 const fichaTecnicaInsumosCache = new Map();
 let fichaTecnicaProdutoPendente = null;
 let fichaTecnicaCategoriaSelecionada = null;
+// Preços + Ficha Técnica viraram uma tela só (2026-09-09) — cartão no
+// visual de Preços (foto + preço por canal). Sem lápis/lixeira soltos:
+// clicar no cartão expande TUDO editável junto (preço + custo + ficha
+// técnica), reaproveitando o mesmo mecanismo já usado pelos Complementos
+// (fichaTecnicaExpandidos/renderPainelFichaTecnicaExpandido).
 
 // Lista do tipo (produto/complemento) atualmente em tela — os dois usam
 // os mesmos componentes de expandir/editar/excluir ficha técnica, só a
@@ -6642,110 +6426,97 @@ function _receitaInsumoLinhaHTML(ins) {
   `;
 }
 
-// Cartão de receita de um produto. `dadosInsumos` é null enquanto ainda
-// não buscou (mostra "Carregando..."), ou o resultado de
-// _buscarFichaTecnicaItem depois de pronto.
-function _receitaCardHTML(p, isAdmin, dadosInsumos) {
-  const semItemCardapio = !p.itemCardapioId;
+// Cartão de produto no visual de Preços — foto + nome + preço por canal,
+// só leitura, sem lápis/lixeira à vista. O cartão inteiro é clicável: abre
+// o modal de detalhe (abrirModalDetalheProduto) com preço por canal, custo
+// e ficha técnica juntos pra editar — em vez de expandir no lugar, a
+// pedido da Julia (2026-09-09), inspirado no modal de produto da própria
+// Cardápio Web.
+function _receitaCardHTML(p, isAdmin, canais) {
+  const nome = `<div class="cardapio-card-nome">${escaparHtml(p.nome)}</div>`;
   const foto = p.fotoUrl
     ? `<img src="${p.fotoUrl}" alt="${escaparHtml(p.nome)}">`
-    : `<div class="receita-foto-vazia"><i data-lucide="utensils"></i></div>`;
+    : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`;
 
-  const acoes = isAdmin && p.itemCardapioId ? `
-    <div class="receita-card-acoes">
-      <button type="button" class="btn-icon" data-acao="receita-editar-insumos" data-item-id="${p.itemCardapioId}" title="Editar insumos">
-        <i data-lucide="pencil"></i>
-      </button>
-      <button type="button" class="btn-icon danger" data-acao="receita-excluir-item" data-item-id="${p.itemCardapioId}" data-nome="${escaparHtml(p.nome)}" title="Excluir item">
-        <i data-lucide="trash-2"></i>
-      </button>
-    </div>
-  ` : '';
-
-  const precoLateral = `
-    <div class="receita-card-lateral">
-      <span class="receita-preco-venda">${p.valorVenda != null ? 'R$ ' + p.valorVenda.toFixed(2) : '—'}</span>
-      ${isAdmin && p.itemCardapioId
-        ? `<input type="number" step="0.01" min="0" class="receita-input-custo" data-acao="receita-editar-custo" data-item-id="${p.itemCardapioId}" value="${p.custo ?? ''}" placeholder="Custo">`
-        : (p.custo != null ? `<span class="receita-preco-custo-rotulo">custo R$ ${p.custo.toFixed(2)}</span>` : '')}
-      ${acoes}
-    </div>
+  const corpo = `
+    <div class="cardapio-card-topo">${nome}</div>
+    ${canais.map(c => `
+      <div class="cardapio-linha-preco">
+        <span class="cardapio-canal-label">${c.label}</span>
+        <span class="cardapio-preco-valor">${_formatarPrecoCardapio(p[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>
+      </div>
+    `).join('')}
+    ${!p.itemCardapioId ? '<span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>' : ''}
   `;
 
-  let miolo;
-  if (semItemCardapio) {
-    miolo = isAdmin ? `
-      <div class="receita-vazio-bloco">
-        <span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>
-        <button type="button" class="btn-secondary-sm" data-acao="receita-criar-ficha" data-nome="${escaparHtml(p.nome)}" data-categoria="${escaparHtml(p.categoria)}">Cadastrar ficha técnica</button>
-      </div>
-    ` : `<span class="ficha-tecnica-vazio">sem ficha técnica</span>`;
-  } else if (!dadosInsumos) {
-    miolo = `<p class="panel-subtitle">Carregando...</p>`;
-  } else if (!dadosInsumos.insumos.length) {
-    miolo = `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`;
-  } else {
-    miolo = `
-      <div class="receita-eyebrow">Insumos</div>
-      <div class="receita-insumos">
-        ${dadosInsumos.insumos.map(_receitaInsumoLinhaHTML).join('')}
-      </div>
-    `;
-  }
-
   return `
-    <div class="receita-card-topo">
-      <div class="receita-card-nome-bloco">
-        <div class="receita-card-nome">${escaparHtml(p.nome)}</div>
+    <div class="cardapio-card-linha-principal" data-acao="detalhe-produto" data-preco-cardapio-id="${p.precoCardapioId}">
+      <div class="cardapio-card-foto">
+        ${foto}
+        ${isAdmin ? `
+          <button type="button" class="cardapio-btn-foto" data-acao="foto" title="Trocar foto">
+            <i data-lucide="camera"></i>
+          </button>
+          <input type="file" accept="image/*" class="cardapio-input-foto" data-acao="foto" style="display:none;">
+        ` : ''}
       </div>
-      ${precoLateral}
+      <div class="cardapio-card-corpo">${corpo}</div>
     </div>
-    ${miolo}
   `;
 }
 
 // Um único listener delegado no container cuida de todos os cartões — evita
-// reanexar N listeners a cada re-render (troca de categoria, salvar custo,
-// etc.). Nomes de data-acao com prefixo "receita-" pra nunca colidir com os
-// data-acao (sem prefixo) que o painel de Complementos ainda usa no mesmo
-// container — ver renderPainelFichaTecnicaExpandido.
+// reanexar N listeners a cada re-render (troca de categoria, etc.). Sem
+// lápis/lixeira soltos no cartão (a pedido da Julia, 2026-09-09): o cartão
+// inteiro é o clique pra abrir o modal de detalhe com tudo editável junto
+// — ver abrirModalDetalheProduto. "foto" é a mesma ação que a antiga tela
+// de Preços já tinha (mesmo endpoint, mesmo payload).
 function _wireReceitaCardsEventos(conteudoEl) {
   if (conteudoEl.dataset.receitaWired) return;
   conteudoEl.dataset.receitaWired = '1';
 
   conteudoEl.addEventListener('click', (evento) => {
-    const btnEditar = evento.target.closest('[data-acao="receita-editar-insumos"]');
-    if (btnEditar) { abrirModalFichaTecnicaItem(parseInt(btnEditar.dataset.itemId, 10)); return; }
+    const card = evento.target.closest('.cardapio-card');
+    if (!card) return;
 
-    const btnCriar = evento.target.closest('[data-acao="receita-criar-ficha"]');
-    if (btnCriar) {
-      fichaTecnicaProdutoPendente = { nome: btnCriar.dataset.nome, categoria: btnCriar.dataset.categoria };
-      document.getElementById('novo-item-nome').value = btnCriar.dataset.nome;
-      document.getElementById('novo-item-categoria').value = btnCriar.dataset.categoria;
-      document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
+    if (evento.target.closest('[data-acao="foto"]')) {
+      card.querySelector('.cardapio-input-foto')?.click();
       return;
     }
 
-    const btnExcluir = evento.target.closest('[data-acao="receita-excluir-item"]');
-    if (btnExcluir) {
-      const itemId = parseInt(btnExcluir.dataset.itemId, 10);
-      if (!confirm(`Excluir "${btnExcluir.dataset.nome}" e sua ficha técnica (em todas as lojas)?`)) return;
-      (async () => {
-        try {
-          const resposta = await fetch(`/api/itens-cardapio/${itemId}`, { method: 'DELETE' });
-          if (!resposta.ok) throw new Error('falha ao excluir');
-          await carregarFichaTecnicaAtual();
-        } catch (erro) {
-          console.error('Falha ao excluir item do cardápio:', erro);
-          alert('Não foi possível excluir.');
-        }
-      })();
+    const linhaPrincipal = evento.target.closest('[data-acao="detalhe-produto"]');
+    if (linhaPrincipal) {
+      abrirModalDetalheProduto(parseInt(linhaPrincipal.dataset.precoCardapioId, 10));
     }
   });
 
-  conteudoEl.addEventListener('change', (evento) => {
-    const input = evento.target.closest('[data-acao="receita-editar-custo"]');
-    if (input) salvarCustoProduto(parseInt(input.dataset.itemId, 10), input.value);
+  conteudoEl.addEventListener('change', async (evento) => {
+    const inputFoto = evento.target.closest('.cardapio-input-foto');
+    if (inputFoto) {
+      const card = inputFoto.closest('.cardapio-card');
+      const precoCardapioId = card.dataset.id;
+      const arquivo = inputFoto.files[0];
+      inputFoto.value = '';
+      if (!arquivo) return;
+
+      try {
+        const formData = new FormData();
+        formData.append('foto', arquivo);
+        const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}/foto`, { method: 'POST', body: formData });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
+
+        const fotoContainer = card.querySelector('.cardapio-card-foto');
+        fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
+        fotoContainer.insertAdjacentHTML('afterbegin', `<img src="${dados.fotoUrl}" alt="">`);
+
+        const produto = fichaTecnicaProdutos.find(p => String(p.precoCardapioId) === String(precoCardapioId));
+        if (produto) produto.fotoUrl = dados.fotoUrl;
+      } catch (erro) {
+        console.error('Falha ao subir foto do cardápio:', erro);
+        alert('Não foi possível subir a foto. Tenta de novo.');
+      }
+    }
   });
 }
 
@@ -6805,35 +6576,27 @@ function renderFichaTecnicaConteudo() {
   if (ehComplemento) {
     _renderComplementosConteudo(conteudoEl, isAdmin);
   } else {
-    _renderProdutosConteudo(conteudoEl, isAdmin, porCategoria.get(fichaTecnicaCategoriaSelecionada) || []);
+    const temBeefood = fichaTecnicaProdutos.some(p => p.beefood !== null);
+    const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
+    _renderProdutosConteudo(conteudoEl, isAdmin, porCategoria.get(fichaTecnicaCategoriaSelecionada) || [], canais);
   }
 }
 
-async function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria) {
-  // Primeiro cartão em "Carregando...", depois busca os insumos de todo
-  // mundo em paralelo (com cache) e atualiza cada cartão — mais rápido do
-  // que buscar um item de cada vez, um atrás do outro.
+// A ficha técnica de cada produto só é buscada quando o modal de detalhe é
+// aberto (clique no cartão), não antecipado pra todo mundo — ver
+// abrirModalDetalheProduto.
+function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria, canais) {
   conteudoEl.innerHTML = `
     <div class="cardapio-categoria-titulo">${escaparHtml(fichaTecnicaCategoriaSelecionada)}</div>
-    <div class="receita-grid">
-      ${produtosDaCategoria.map(p => `<div class="receita-card" data-card-item-id="${p.itemCardapioId ?? ''}">${_receitaCardHTML(p, isAdmin, null)}</div>`).join('')}
+    <div class="cardapio-lista">
+      ${produtosDaCategoria.map(p => `
+        <div class="cardapio-card" data-id="${p.precoCardapioId}">
+          ${_receitaCardHTML(p, isAdmin, canais)}
+        </div>
+      `).join('')}
     </div>
   `;
   _wireReceitaCardsEventos(conteudoEl);
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-
-  const comFicha = produtosDaCategoria.filter(p => p.itemCardapioId);
-  await Promise.all(comFicha.map(async (p) => {
-    try {
-      const dados = await _buscarFichaTecnicaItem(p.itemCardapioId);
-      const card = conteudoEl.querySelector(`[data-card-item-id="${p.itemCardapioId}"]`);
-      if (card) card.innerHTML = _receitaCardHTML(p, isAdmin, dados);
-    } catch (erro) {
-      console.error('Falha ao carregar ficha técnica do item:', erro);
-      const card = conteudoEl.querySelector(`[data-card-item-id="${p.itemCardapioId}"]`);
-      if (card) card.innerHTML = `<p class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar os insumos.</p>`;
-    }
-  }));
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -6912,6 +6675,10 @@ async function alternarProdutoFichaTecnica(itemId) {
   renderFichaTecnicaConteudo();
 }
 
+// Só usado por Complementos agora (produto abre modal, ver
+// abrirModalDetalheProduto) — complemento não tem preço/custo próprio
+// (fora de escopo nessa fase, ver _renderComplementosConteudo), só insumos
+// + editar/excluir.
 async function renderPainelFichaTecnicaExpandido(itemId) {
   const painel = document.querySelector(`[data-painel-item-id="${itemId}"]`);
   if (!painel) return;
@@ -6922,6 +6689,7 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
     const dados = await _buscarFichaTecnicaItem(itemId);
     const isAdmin = window.usuarioLogado?.papel === 'admin';
     const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
+
     painel.innerHTML = `
       <div class="ficha-tecnica-ingredientes">
         ${dados.insumos.length ? dados.insumos.map(ins => `
@@ -6961,6 +6729,177 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
     painel.innerHTML = `<p class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar os insumos.</p>`;
   }
 }
+
+// Modal de detalhe do produto — abre ao clicar no cartão inteiro (sem
+// lápis/lixeira soltos, a pedido da Julia, 2026-09-09), inspirado no modal
+// de produto da própria Cardápio Web (foto + campos, um só lugar pra tudo).
+// Junta preço por canal (preco_cardapio) + custo + ficha técnica
+// (item_cardapio) num só modal, mesmo os dois vivendo em tabelas diferentes
+// — ver listar_produtos_por_loja em armazenamento.py, que já casa os dois.
+async function abrirModalDetalheProduto(precoCardapioId) {
+  const produto = fichaTecnicaProdutos.find(p => String(p.precoCardapioId) === String(precoCardapioId));
+  if (!produto) return;
+  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const modal = document.getElementById('modal-detalhe-produto');
+  const corpo = document.getElementById('detalhe-produto-corpo');
+  document.getElementById('detalhe-produto-titulo').textContent = produto.nome;
+  corpo.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>`;
+  modal.style.display = 'flex';
+
+  const temBeefood = fichaTecnicaProdutos.some(p => p.beefood !== null);
+  const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
+
+  let dadosInsumos = { insumos: [] };
+  if (produto.itemCardapioId) {
+    try {
+      dadosInsumos = await _buscarFichaTecnicaItem(produto.itemCardapioId);
+    } catch (erro) {
+      console.error('Falha ao carregar ficha técnica do item:', erro);
+    }
+  }
+
+  const precoHTML = `
+    <div class="receita-eyebrow">Preço por canal</div>
+    <div class="receita-precos-edicao">
+      ${canais.map(c => `
+        <div class="cardapio-linha-preco">
+          <span class="cardapio-canal-label">${c.label}</span>
+          ${isAdmin
+            ? `<input type="number" step="0.01" min="0" class="cardapio-input-preco" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
+            : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(produto[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>`}
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  const fichaTecnicaHTML = produto.itemCardapioId ? `
+    <div class="receita-custo-linha" style="margin-top: var(--space-3);">
+      <span class="receita-eyebrow">Custo</span>
+      ${isAdmin
+        ? `<input type="number" step="0.01" min="0" class="receita-input-custo" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="Custo">`
+        : (produto.custo != null ? `<span class="receita-preco-custo-rotulo">R$ ${produto.custo.toFixed(2)}</span>` : `<span class="ficha-tecnica-vazio">—</span>`)}
+    </div>
+    <div class="receita-eyebrow" style="margin-top: var(--space-3);">Insumos</div>
+    <div class="ficha-tecnica-ingredientes">
+      ${dadosInsumos.insumos.length ? dadosInsumos.insumos.map(ins => `
+        <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
+      `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
+    </div>
+    ${isAdmin ? `
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button type="button" class="btn-secondary-sm btn-excluir" id="btn-detalhe-produto-excluir">
+          <i data-lucide="trash-2"></i>
+          Excluir item
+        </button>
+        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-editar-insumos">
+          <i data-lucide="pencil"></i>
+          Editar insumos
+        </button>
+      </div>
+    ` : ''}
+  ` : (isAdmin ? `
+    <div class="receita-vazio-bloco" style="margin-top: var(--space-3);">
+      <span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>
+      <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-criar-ficha">Cadastrar ficha técnica</button>
+    </div>
+  ` : '');
+
+  corpo.innerHTML = `
+    <div class="detalhe-produto-foto">
+      ${produto.fotoUrl ? `<img src="${produto.fotoUrl}" alt="">` : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
+      ${isAdmin ? `
+        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-foto">
+          <i data-lucide="camera"></i>
+          Trocar foto
+        </button>
+        <input type="file" accept="image/*" id="detalhe-produto-input-foto" style="display:none;">
+      ` : ''}
+    </div>
+    ${precoHTML}
+    ${fichaTecnicaHTML}
+  `;
+
+  corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
+    input.addEventListener('change', async (evento) => {
+      const canal = evento.target.dataset.canal;
+      const valor = evento.target.value === '' ? null : evento.target.value;
+      try {
+        const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [canal]: valor }),
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+        Object.assign(produto, { ifood: dados.ifood, food99: dados.food99, beefood: dados.beefood, cardapioWeb: dados.cardapioWeb, valorVenda: dados.cardapioWeb });
+      } catch (erro) {
+        console.error('Falha ao salvar preço do cardápio:', erro);
+        alert('Não foi possível salvar o preço.');
+      }
+    });
+  });
+
+  document.getElementById('detalhe-produto-input-custo')?.addEventListener('change', (evento) => salvarCustoProduto(produto.itemCardapioId, evento.target.value));
+
+  document.getElementById('btn-detalhe-produto-editar-insumos')?.addEventListener('click', () => {
+    fecharModalDetalheProduto();
+    abrirModalFichaTecnicaItem(produto.itemCardapioId);
+  });
+
+  document.getElementById('btn-detalhe-produto-excluir')?.addEventListener('click', async () => {
+    if (!confirm(`Excluir "${produto.nome}" e sua ficha técnica (em todas as lojas)?`)) return;
+    try {
+      const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}`, { method: 'DELETE' });
+      if (!resposta.ok) throw new Error('falha ao excluir');
+      fecharModalDetalheProduto();
+      await carregarFichaTecnicaAtual();
+    } catch (erro) {
+      console.error('Falha ao excluir item do cardápio:', erro);
+      alert('Não foi possível excluir.');
+    }
+  });
+
+  document.getElementById('btn-detalhe-produto-criar-ficha')?.addEventListener('click', () => {
+    fichaTecnicaProdutoPendente = { nome: produto.nome, categoria: produto.categoria };
+    document.getElementById('novo-item-nome').value = produto.nome;
+    document.getElementById('novo-item-categoria').value = produto.categoria;
+    fecharModalDetalheProduto();
+    document.getElementById('modal-novo-item-cardapio').style.display = 'flex';
+  });
+
+  document.getElementById('btn-detalhe-produto-foto')?.addEventListener('click', () => {
+    document.getElementById('detalhe-produto-input-foto')?.click();
+  });
+
+  document.getElementById('detalhe-produto-input-foto')?.addEventListener('change', async (evento) => {
+    const arquivo = evento.target.files[0];
+    evento.target.value = '';
+    if (!arquivo) return;
+    try {
+      const formData = new FormData();
+      formData.append('foto', arquivo);
+      const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}/foto`, { method: 'POST', body: formData });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
+      produto.fotoUrl = dados.fotoUrl;
+      const fotoContainer = corpo.querySelector('.detalhe-produto-foto');
+      fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
+      fotoContainer.insertAdjacentHTML('afterbegin', `<img src="${dados.fotoUrl}" alt="">`);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    } catch (erro) {
+      console.error('Falha ao subir foto do cardápio:', erro);
+      alert('Não foi possível subir a foto. Tenta de novo.');
+    }
+  });
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function fecharModalDetalheProduto() {
+  document.getElementById('modal-detalhe-produto').style.display = 'none';
+}
+
+document.getElementById('btn-detalhe-produto-fechar')?.addEventListener('click', fecharModalDetalheProduto);
 
 // Busca (com cache por loja atual) os insumos + catálogo disponível de um
 // item — usado tanto pro painel expandido quanto pro modal de edição.
@@ -7228,35 +7167,6 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
   }
 });
 
-// --- Cardápio: "Preços" e "Ficha Técnica" viraram itens separados no menu
-// lateral (mesmo padrão do grupo "Compras"), em vez de sub-abas dentro da
-// página — a rota é a mesma (cardapio.html), o modo vem do ?aba= da URL.
-var cardapioAbaAtual = 'precos';
-(function inicializarAbaCardapio() {
-  const modoPrecos = document.getElementById('cardapio-modo-precos');
-  const modoFicha = document.getElementById('cardapio-modo-ficha-tecnica');
-  if (!modoPrecos || !modoFicha) return;
-
-  const aba = new URLSearchParams(location.search).get('aba') === 'ficha-tecnica' ? 'ficha-tecnica' : 'precos';
-  cardapioAbaAtual = aba;
-
-  const eyebrow = document.getElementById('cardapio-titulo-eyebrow');
-  const titulo = document.getElementById('cardapio-titulo-h1');
-  const itemPrecos = document.getElementById('menu-cardapio-precos');
-  const itemFicha = document.getElementById('menu-cardapio-ficha');
-
-  if (aba === 'ficha-tecnica') {
-    modoPrecos.style.display = 'none';
-    modoFicha.style.display = '';
-    if (eyebrow) eyebrow.textContent = 'INSUMOS DE CADA ITEM';
-    if (titulo) titulo.textContent = 'Cardápio · Ficha Técnica';
-    if (itemFicha) itemFicha.classList.add('active');
-    if (!fichaTecnicaProdutos.length && !fichaTecnicaComplementos.length) carregarFichaTecnicaAtual();
-  } else {
-    modoPrecos.style.display = '';
-    modoFicha.style.display = 'none';
-    if (eyebrow) eyebrow.textContent = 'COMPARATIVO DE PREÇOS';
-    if (titulo) titulo.textContent = 'Cardápio · Preços';
-    if (itemPrecos) itemPrecos.classList.add('active');
-  }
-})();
+// Preços e Ficha Técnica eram duas abas (?aba=) — viraram uma tela só em
+// 2026-09-09 (ver _receitaCardHTML/_renderProdutosConteudo). O carregamento
+// inicial agora acontece direto na seção "4.095 TELA DE CARDÁPIO", lá em cima.

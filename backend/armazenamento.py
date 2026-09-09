@@ -1713,16 +1713,19 @@ def mapa_custos_item_cardapio():
 
 
 def listar_produtos_por_loja(loja):
-    """Lista de produtos da loja pra tela de Ficha Técnica: parte de
-    `preco_cardapio` (que já sabe quem vende o quê e o valor de venda do
-    balcão), casa cada nome com um `item_cardapio` já cadastrado via
-    `_casar_item_cardapio` (mesmo critério usado pra bater venda com
-    receita, seção 6.6) e junta o custo digitado à mão quando existir.
-    Produto sem match nenhum volta com itemCardapioId None — a tela
-    oferece cadastrar um item novo com esse nome."""
+    """Lista de produtos da loja pra tela unificada de Cardápio (Preços +
+    Ficha Técnica numa tela só, 2026-09-09): parte de `preco_cardapio` (que
+    já sabe quem vende o quê e o valor de venda em cada canal), casa cada
+    nome com um `item_cardapio` já cadastrado via `_casar_item_cardapio`
+    (mesmo critério usado pra bater venda com receita, seção 6.6) e junta o
+    custo digitado à mão quando existir. Produto sem match nenhum volta com
+    itemCardapioId None — a tela oferece cadastrar um item novo com esse
+    nome. `precoCardapioId` (o id da própria linha de preco_cardapio) vai
+    junto pra permitir editar o preço por canal na mesma tela, sem precisar
+    de uma segunda chamada."""
     with conexao() as conn:
         produtos = conn.execute(
-            "SELECT id, categoria, produto, cardapio_web, foto_arquivo FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
+            "SELECT id, categoria, produto, ifood, food99, beefood, cardapio_web, foto_arquivo FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
             (loja,),
         ).fetchall()
         # Bebida não tem "ficha técnica" (não é receita, é produto pronto
@@ -1748,8 +1751,13 @@ def listar_produtos_por_loja(loja):
         item_id, _ = _casar_item_cardapio(p["produto"], catalogo)
         resultado.append({
             "itemCardapioId": item_id,
+            "precoCardapioId": p["id"],
             "nome": p["produto"],
             "categoria": p["categoria"],
+            "ifood": p["ifood"],
+            "food99": p["food99"],
+            "beefood": p["beefood"],
+            "cardapioWeb": p["cardapio_web"],
             "valorVenda": p["cardapio_web"],
             "custo": custos.get((item_id, loja)) if item_id else None,
             "temFichaTecnica": item_id in tem_ficha if item_id else False,

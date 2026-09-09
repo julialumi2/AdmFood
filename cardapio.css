@@ -300,8 +300,67 @@
   border-radius: var(--radius-md);
   padding: var(--space-4);
   display: flex;
-  gap: var(--space-4);
+  flex-direction: column;
   box-shadow: var(--shadow-sm);
+}
+
+/* Foto + corpo lado a lado — clicável (fora do lápis/upload de foto) pra
+   abrir o modal de detalhe (preço + custo + ficha técnica), ver
+   abrirModalDetalheProduto em script.js. Cursor de mãozinha + destaque
+   sutil no hover deixam claro que dá pra clicar, já que não tem mais
+   lápis/ícone nenhum sinalizando isso no cartão. */
+.cardapio-card-linha-principal {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.cardapio-card-linha-principal[data-acao="detalhe-produto"] {
+  cursor: pointer;
+  margin: calc(-1 * var(--space-2));
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+
+.cardapio-card-linha-principal[data-acao="detalhe-produto"]:hover {
+  background-color: var(--surface-muted);
+}
+
+/* Modal de detalhe do produto (preço + custo + ficha técnica juntos) */
+.detalhe-produto-foto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.detalhe-produto-foto img,
+.detalhe-produto-foto .cardapio-foto-vazia {
+  width: 140px;
+  height: 140px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background-color: var(--surface-muted);
+}
+
+.detalhe-produto-foto .cardapio-foto-vazia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+
+.receita-precos-edicao {
+  display: flex;
+  flex-direction: column;
+}
+
+.receita-custo-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .cardapio-card-foto {
