@@ -326,19 +326,29 @@
   background-color: var(--surface-muted);
 }
 
-/* Modal de detalhe do produto (preço + custo + ficha técnica juntos) */
+/* Modal de detalhe do produto (preço + custo + ficha técnica juntos,
+   layout em duas colunas — foto à esquerda, campos à direita — a pedido
+   da Julia, 2026-09-09, pra bater com o modal de produto da Cardápio
+   Web que ela mandou de referência). */
+.modal-content.modal-detalhe-produto { max-width: 640px; }
+
+.detalhe-produto-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
 .detalhe-produto-foto {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  position: relative;
+  width: 160px;
+  flex-shrink: 0;
 }
 
 .detalhe-produto-foto img,
 .detalhe-produto-foto .cardapio-foto-vazia {
-  width: 140px;
-  height: 140px;
+  width: 160px;
+  height: 160px;
   border-radius: var(--radius-md);
   object-fit: cover;
   background-color: var(--surface-muted);
@@ -349,6 +359,82 @@
   align-items: center;
   justify-content: center;
   color: var(--text-faint);
+}
+
+.detalhe-produto-btn-foto {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.detalhe-produto-btn-foto:hover { background-color: var(--primary-hover); }
+.detalhe-produto-btn-foto i, .detalhe-produto-btn-foto svg { width: 15px; height: 15px; }
+
+.detalhe-produto-campos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.detalhe-produto-secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.detalhe-produto-linha {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.detalhe-produto-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detalhe-produto-campo label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.detalhe-produto-campo input {
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font-size: 0.88rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.detalhe-produto-campo input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+@media (max-width: 768px) {
+  .detalhe-produto-grid { grid-template-columns: 1fr; }
+  .detalhe-produto-foto { margin: 0 auto; }
+  .detalhe-produto-linha { grid-template-columns: 1fr; }
 }
 
 .receita-precos-edicao {

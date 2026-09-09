@@ -6758,105 +6758,128 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     }
   }
 
+  // Alterações de preço/custo só vão pro servidor quando clicar Salvar
+  // (a pedido da Julia, 2026-09-09 — layout novo troca o antigo
+  // autosave-por-campo por um formulário de verdade, igual a referência).
+  const alteracoesPreco = {};
+  let custoAlterado = null;
+
   const precoHTML = `
-    <div class="receita-eyebrow">Preço por canal</div>
-    <div class="receita-precos-edicao">
-      ${canais.map(c => `
-        <div class="cardapio-linha-preco">
-          <span class="cardapio-canal-label">${c.label}</span>
-          ${isAdmin
-            ? `<input type="number" step="0.01" min="0" class="cardapio-input-preco" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
-            : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(produto[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>`}
-        </div>
-      `).join('')}
+    <div class="detalhe-produto-secao">
+      <div class="receita-eyebrow">Preço por canal</div>
+      <div class="detalhe-produto-linha">
+        ${canais.map(c => `
+          <div class="detalhe-produto-campo">
+            <label>${c.label}</label>
+            ${isAdmin
+              ? `<input type="number" step="0.01" min="0" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
+              : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(produto[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>`}
+          </div>
+        `).join('')}
+      </div>
     </div>
   `;
 
   const fichaTecnicaHTML = produto.itemCardapioId ? `
-    <div class="receita-custo-linha" style="margin-top: var(--space-3);">
-      <span class="receita-eyebrow">Custo</span>
-      ${isAdmin
-        ? `<input type="number" step="0.01" min="0" class="receita-input-custo" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="Custo">`
-        : (produto.custo != null ? `<span class="receita-preco-custo-rotulo">R$ ${produto.custo.toFixed(2)}</span>` : `<span class="ficha-tecnica-vazio">—</span>`)}
+    <div class="detalhe-produto-secao">
+      <div class="receita-eyebrow">Custo</div>
+      <div class="detalhe-produto-linha">
+        <div class="detalhe-produto-campo">
+          <label>Preço de custo</label>
+          ${isAdmin
+            ? `<input type="number" step="0.01" min="0" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="R$ 0,00">`
+            : (produto.custo != null ? `<span class="receita-preco-custo-rotulo">R$ ${produto.custo.toFixed(2)}</span>` : `<span class="ficha-tecnica-vazio">—</span>`)}
+        </div>
+      </div>
     </div>
-    <div class="receita-eyebrow" style="margin-top: var(--space-3);">Insumos</div>
-    <div class="ficha-tecnica-ingredientes">
-      ${dadosInsumos.insumos.length ? dadosInsumos.insumos.map(ins => `
-        <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
-      `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
-    </div>
-    ${isAdmin ? `
-      <div class="modal-actions" style="justify-content: space-between;">
-        <button type="button" class="btn-secondary-sm btn-excluir" id="btn-detalhe-produto-excluir">
-          <i data-lucide="trash-2"></i>
-          Excluir item
-        </button>
-        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-editar-insumos">
+    <div class="detalhe-produto-secao">
+      <div class="receita-eyebrow">Insumos</div>
+      <div class="ficha-tecnica-ingredientes">
+        ${dadosInsumos.insumos.length ? dadosInsumos.insumos.map(ins => `
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${ins.quantidade}${escaparHtml(ins.unidadeMedida)})</span>` : ''}</span>
+        `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
+      </div>
+      ${isAdmin ? `
+        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-editar-insumos" style="align-self: flex-start;">
           <i data-lucide="pencil"></i>
           Editar insumos
         </button>
-      </div>
-    ` : ''}
+      ` : ''}
+    </div>
   ` : (isAdmin ? `
-    <div class="receita-vazio-bloco" style="margin-top: var(--space-3);">
+    <div class="detalhe-produto-secao">
       <span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>
-      <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-criar-ficha">Cadastrar ficha técnica</button>
+      <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-criar-ficha" style="align-self: flex-start;">Cadastrar ficha técnica</button>
     </div>
   ` : '');
 
   corpo.innerHTML = `
-    <div class="detalhe-produto-foto">
-      ${produto.fotoUrl ? `<img src="${produto.fotoUrl}" alt="">` : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
-      ${isAdmin ? `
-        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-foto">
-          <i data-lucide="camera"></i>
-          Trocar foto
-        </button>
-        <input type="file" accept="image/*" id="detalhe-produto-input-foto" style="display:none;">
-      ` : ''}
+    <div class="detalhe-produto-grid">
+      <div class="detalhe-produto-foto">
+        ${produto.fotoUrl ? `<img src="${produto.fotoUrl}" alt="">` : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
+        ${isAdmin ? `
+          <button type="button" class="detalhe-produto-btn-foto" id="btn-detalhe-produto-foto" title="Trocar foto">
+            <i data-lucide="camera"></i>
+          </button>
+          <input type="file" accept="image/*" id="detalhe-produto-input-foto" style="display:none;">
+        ` : ''}
+      </div>
+      <div class="detalhe-produto-campos">
+        ${precoHTML}
+        ${fichaTecnicaHTML}
+      </div>
     </div>
-    ${precoHTML}
-    ${fichaTecnicaHTML}
+    ${isAdmin ? `
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-cancelar">Cancelar</button>
+        <button type="button" class="btn-primary-sm" id="btn-detalhe-produto-salvar">Salvar</button>
+      </div>
+    ` : ''}
   `;
 
   corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
-    input.addEventListener('change', async (evento) => {
-      const canal = evento.target.dataset.canal;
-      const valor = evento.target.value === '' ? null : evento.target.value;
-      try {
-        const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [canal]: valor }),
-        });
-        const dados = await resposta.json();
-        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
-        Object.assign(produto, { ifood: dados.ifood, food99: dados.food99, beefood: dados.beefood, cardapioWeb: dados.cardapioWeb, valorVenda: dados.cardapioWeb });
-      } catch (erro) {
-        console.error('Falha ao salvar preço do cardápio:', erro);
-        alert('Não foi possível salvar o preço.');
-      }
+    input.addEventListener('input', (evento) => {
+      alteracoesPreco[evento.target.dataset.canal] = evento.target.value === '' ? null : evento.target.value;
     });
   });
 
-  document.getElementById('detalhe-produto-input-custo')?.addEventListener('change', (evento) => salvarCustoProduto(produto.itemCardapioId, evento.target.value));
+  document.getElementById('detalhe-produto-input-custo')?.addEventListener('input', (evento) => {
+    custoAlterado = evento.target.value;
+  });
+
+  document.getElementById('btn-detalhe-produto-cancelar')?.addEventListener('click', fecharModalDetalheProduto);
+
+  document.getElementById('btn-detalhe-produto-salvar')?.addEventListener('click', async (evento) => {
+    const botao = evento.currentTarget;
+    botao.disabled = true;
+    botao.textContent = 'Salvando...';
+    try {
+      if (Object.keys(alteracoesPreco).length) {
+        const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(alteracoesPreco),
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar preço');
+        Object.assign(produto, { ifood: dados.ifood, food99: dados.food99, beefood: dados.beefood, cardapioWeb: dados.cardapioWeb, valorVenda: dados.cardapioWeb });
+      }
+      if (custoAlterado !== null && produto.itemCardapioId) {
+        await salvarCustoProduto(produto.itemCardapioId, custoAlterado);
+      }
+      fecharModalDetalheProduto();
+      renderFichaTecnicaConteudo();
+    } catch (erro) {
+      console.error('Falha ao salvar produto do cardápio:', erro);
+      alert('Não foi possível salvar. Tenta de novo.');
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
+  });
 
   document.getElementById('btn-detalhe-produto-editar-insumos')?.addEventListener('click', () => {
     fecharModalDetalheProduto();
     abrirModalFichaTecnicaItem(produto.itemCardapioId);
-  });
-
-  document.getElementById('btn-detalhe-produto-excluir')?.addEventListener('click', async () => {
-    if (!confirm(`Excluir "${produto.nome}" e sua ficha técnica (em todas as lojas)?`)) return;
-    try {
-      const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}`, { method: 'DELETE' });
-      if (!resposta.ok) throw new Error('falha ao excluir');
-      fecharModalDetalheProduto();
-      await carregarFichaTecnicaAtual();
-    } catch (erro) {
-      console.error('Falha ao excluir item do cardápio:', erro);
-      alert('Não foi possível excluir.');
-    }
   });
 
   document.getElementById('btn-detalhe-produto-criar-ficha')?.addEventListener('click', () => {
