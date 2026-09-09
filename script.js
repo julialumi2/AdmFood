@@ -218,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const seletorLoja = document.getElementById('vendas-semanais-loja-select');
     const trigger = document.getElementById('vendas-semanais-loja-trigger');
     const menu = document.getElementById('vendas-semanais-loja-menu');
-    let vendasSemanaisLojaAtual = 'Hamburgueria Artesanos';
 
     trigger.addEventListener('click', () => seletorLoja.classList.toggle('aberto'));
     document.addEventListener('click', (evento) => {
@@ -237,6 +236,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     carregarVendasSemanais(vendasSemanaisLojaAtual);
+
+    document.getElementById('vendas-semanais-importar-arquivo')
+      ?.addEventListener('change', importarPlanilhaVendasSemanais);
   }
 
   // 4.097c TELA DE CURVA ABC DE CARDÁPIO (Etapa 10 do motor de compra —
@@ -5784,6 +5786,13 @@ async function carregarUsuarioLogado() {
       if (fichaTecnicaProdutos.length || fichaTecnicaComplementos.length) renderFichaTecnicaConteudo();
     }
 
+    // Tela de Vendas Semanais: botão "Importar planilha" (só admin).
+    const importarSemanaisArea = document.getElementById('vendas-semanais-importar-area');
+    if (importarSemanaisArea && usuario.papel === 'admin') {
+      importarSemanaisArea.style.display = '';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
     // Tela de Insights: botão de ajustar canal (só admin) — se a tabela de
     // canal de um dia específico já tiver renderizado como só-leitura antes
     // de saber que é admin, re-renderiza agora com os controles de edição.
@@ -7405,6 +7414,8 @@ function renderCurvaAbc() {
    SEMANA por canal, sem quebra por dia (ver faturamento_canal_semanal em
    armazenamento.py).
    --------------------------------------------------------------------- */
+let vendasSemanaisLojaAtual = 'Hamburgueria Artesanos';
+
 const CANAIS_VENDAS_SEMANAIS = [
   { chave: 'ifood', label: 'iFood' },
   { chave: 'catalog', label: 'Cardápio Web' },
@@ -7462,4 +7473,40 @@ function renderVendasSemanaisTabela(semanas) {
       </tr>
     `;
   }).join('');
+}
+
+
+async function importarPlanilhaVendasSemanais(event) {
+  const arquivo = event.target.files[0];
+  event.target.value = ''; // permite escolher o mesmo arquivo de novo depois
+  if (!arquivo) return;
+
+  const statusEl = document.getElementById('vendas-semanais-importar-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '';
+  statusEl.textContent = `Importando "${arquivo.name}"...`;
+
+  try {
+    const formData = new FormData();
+    formData.append('planilha', arquivo);
+    const resposta = await fetch('/api/faturamento-semanal/importar', { method: 'POST', body: formData });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao importar');
+
+    const partes = [];
+    if (dados.gravadas) partes.push(`${dados.gravadas} valor(es) novo(s) gravado(s)`);
+    if (dados.jaExistiam) partes.push(`${dados.jaExistiam} já estavam no sistema e ficaram como estavam`);
+    if (!partes.length) partes.push('nada novo pra gravar');
+    // Linha que a planilha traz com data quebrada não entra — avisa qual,
+    // senão a semana some sem ninguém perceber.
+    if (dados.avisos?.length) {
+      partes.push(`${dados.avisos.length} linha(s) ficaram de fora: ${dados.avisos.join('; ')}`);
+    }
+    statusEl.textContent = partes.join(' · ');
+    await carregarVendasSemanais(vendasSemanaisLojaAtual);
+  } catch (erro) {
+    console.error('Falha ao importar planilha de vendas semanais:', erro);
+    statusEl.style.color = 'var(--danger)';
+    statusEl.textContent = erro.message || 'Não foi possível importar a planilha.';
+  }
 }

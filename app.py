@@ -23,6 +23,7 @@ from backend.armazenamento import (
     excluir_ajuste_canal,
     buscar_ajustes_canal_periodo,
     listar_faturamento_canal_semanal,
+    salvar_faturamento_canal_semanal_se_ausente,
     listar_tarefas,
     criar_tarefa,
     atualizar_tarefa,
@@ -130,6 +131,7 @@ from backend.armazenamento import (
     reabrir_convite_cotacao,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
+from backend.vendas_semanais_planilha import ler_vendas_semanais_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
 from backend.cardapio_web import buscar_resumo_do_dia
 from sincronizar import sincronizar_dia, DIA_FECHADO
@@ -3244,6 +3246,51 @@ def api_faturamento_semanal():
     if not unidade or unidade not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     return jsonify({"semanas": listar_faturamento_canal_semanal(unidade)})
+
+
+@app.route('/api/faturamento-semanal/importar', methods=['POST'])
+def api_importar_faturamento_semanal():
+    # Admin-only — sobe a planilha semanal do chefe direto pelo navegador,
+    # sem precisar de acesso ao servidor. Mesma leitura do script
+    # importar_vendas_semanais.py. Nunca sobrescreve o que já está gravado,
+    # então subir a mesma planilha de novo (ou uma versão com semanas novas
+    # no fim) só acrescenta o que falta.
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    arquivo = request.files.get('planilha')
+    if not arquivo or not arquivo.filename:
+        return jsonify({"erro": "Selecione um arquivo .xlsx."}), 400
+    if not arquivo.filename.lower().endswith('.xlsx'):
+        return jsonify({"erro": "O arquivo precisa ser .xlsx."}), 400
+
+    try:
+        por_loja, avisos = ler_vendas_semanais_da_planilha(arquivo.stream, datetime.now().date())
+    except Exception as erro_leitura:
+        return jsonify({"erro": f"Não foi possível ler a planilha: {erro_leitura}"}), 400
+
+    gravadas = existentes = 0
+    semanas_por_loja = {}
+    for loja, semanas in por_loja.items():
+        if loja not in LOJAS:
+            continue
+        semanas_por_loja[loja] = len(semanas)
+        for inicio, fim, canais in semanas:
+            for canal, valor in canais.items():
+                if salvar_faturamento_canal_semanal_se_ausente(
+                    loja, inicio.isoformat(), fim.isoformat(), canal, valor
+                ):
+                    gravadas += 1
+                else:
+                    existentes += 1
+
+    return jsonify({
+        "gravadas": gravadas,
+        "jaExistiam": existentes,
+        "semanasPorLoja": semanas_por_loja,
+        "avisos": avisos,
+    })
 
 
 @app.route('/api/insights-automaticos', methods=['GET'])
