@@ -8,6 +8,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="vendas-semanais.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -178,13 +179,15 @@
           </div>
         </div>
 
-        <p class="panel-subtitle" style="max-width: 640px;">
-          Histórico semana a semana, separado das Vendas Diárias de propósito: a planilha do relatório só traz o total da semana, não o valor de cada dia. Subir a mesma planilha de novo não duplica nada — só acrescenta as semanas que ainda faltam.
+        <p class="panel-subtitle" style="max-width: 660px;">
+          Fechamento de cada semana por loja. O faturamento vem do próprio AdmFood assim que ele
+          já tem a semana inteira sincronizada; nas semanas mais antigas vem da planilha importada.
+          O %CMV é sempre recalculado aqui.
         </p>
 
         <p id="vendas-semanais-importar-status" class="panel-subtitle" style="display:none;"></p>
 
-        <!-- SELETOR DE LOJA (dropdown) -->
+        <!-- SELETOR DE LOJA -->
         <div class="loja-select" id="vendas-semanais-loja-select">
           <button type="button" class="loja-select-trigger" id="vendas-semanais-loja-trigger">
             <i data-lucide="store"></i>
@@ -211,12 +214,36 @@
           </div>
         </div>
 
-        <!-- TABELA DE SEMANAS -->
+        <!-- SEMANA SELECIONADA -->
+        <div id="semana-hero-container"><!-- Renderizado dinamicamente via JS --></div>
+
+        <!-- FITA: UMA BARRA POR SEMANA -->
+        <div class="fita-card" id="fita-card" style="display:none;">
+          <div class="fita-titulo-linha">
+            <div>
+              <h3 class="table-title">Todas as semanas</h3>
+              <p class="table-subtitle">Altura é o faturamento, cor é o CMV. Clique numa semana pra abrir.</p>
+            </div>
+            <div class="fita-legenda-cores">
+              <span><i style="background:#2f7d55"></i>ótimo</span>
+              <span><i style="background:#b8862f"></i>bom</span>
+              <span><i style="background:#b3261e"></i>ruim</span>
+              <span><i style="background:#cbbfae"></i>sem CMV</span>
+            </div>
+          </div>
+          <div class="fita" id="fita"><!-- Renderizado dinamicamente via JS --></div>
+          <div class="fita-eixo">
+            <span id="fita-eixo-inicio"></span>
+            <span id="fita-eixo-fim"></span>
+          </div>
+        </div>
+
+        <!-- TABELA COMPLETA -->
         <div class="chart-card">
           <div class="table-header-row">
             <div>
               <h3 class="table-title">Semana a semana</h3>
-              <p class="table-subtitle" id="vendas-semanais-subtitulo">Hamburgueria Artesanos</p>
+              <p class="table-subtitle" id="vendas-semanais-subtitulo">—</p>
             </div>
           </div>
           <div class="table-responsive">
@@ -229,6 +256,9 @@
                   <th>99Food</th>
                   <th>Presencial</th>
                   <th class="col-atual-destaque">Total</th>
+                  <th>CMV</th>
+                  <th>%CMV</th>
+                  <th>Promoção</th>
                 </tr>
               </thead>
               <tbody id="vendas-semanais-tabela-body">

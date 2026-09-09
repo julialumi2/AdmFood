@@ -35,6 +35,13 @@ LOJA_POR_ABA = {
 # NOMES_CANAL_REDE em app.py ("portal" é a venda presencial/balcão).
 CANAL_POR_COLUNA = {1: "ifood", 2: "catalog", 3: "food99", 4: "portal"}
 
+# Métricas da semana (não por canal). %CMV, classificação e variação NÃO
+# vêm da planilha de propósito: são derivadas e o sistema recalcula, senão
+# seriam duas contas capazes de divergir (a da planilha, aliás, divide por
+# um total que nas semanas antigas não somava o 99 Food).
+COLUNA_CMV = 6
+COLUNA_PROMO_LOJA = 7
+
 PRIMEIRA_LINHA_DADOS = 4
 
 PERIODO = re.compile(r"^\s*(\d{1,2})/(\d{1,2})\s*\D*\s*(\d{1,2})/(\d{1,2})\s*$")
@@ -74,7 +81,11 @@ def _ler_aba(ws):
         if not (1 <= mes_i <= 12 and 1 <= mes_f <= 12 and 1 <= dia_i <= 31 and 1 <= dia_f <= 31):
             avisos.append(f"linha {numero_linha}: data inválida em {periodo!r} — corrija a planilha")
             continue
-        linhas.append((dia_i, mes_i, dia_f, mes_f, canais))
+        extras = {
+            "cmv": _numero(r[COLUNA_CMV]) if len(r) > COLUNA_CMV else None,
+            "promoLoja": _numero(r[COLUNA_PROMO_LOJA]) if len(r) > COLUNA_PROMO_LOJA else None,
+        }
+        linhas.append((dia_i, mes_i, dia_f, mes_f, canais, extras))
     return linhas, avisos
 
 
@@ -93,7 +104,7 @@ def _atribuir_anos(linhas, hoje):
 
     datadas = []
     mes_anterior = None
-    for dia_i, mes_i, dia_f, mes_f, canais in reversed(linhas):
+    for dia_i, mes_i, dia_f, mes_f, canais, extras in reversed(linhas):
         if mes_anterior is not None and mes_i > mes_anterior:
             ano -= 1
         try:
@@ -104,14 +115,14 @@ def _atribuir_anos(linhas, hoje):
         except ValueError:
             mes_anterior = mes_i
             continue  # 31/02 e afins — já reportado como data inválida
-        datadas.append((inicio, fim, canais))
+        datadas.append((inicio, fim, canais, extras))
         mes_anterior = mes_i
     datadas.reverse()
     return datadas
 
 
 def ler_vendas_semanais_da_planilha(caminho_ou_arquivo, hoje):
-    """Devolve {loja: [(inicio, fim, {canal: valor}), ...]} e a lista de
+    """Devolve {loja: [(inicio, fim, {canal: valor}, {cmv, promoLoja}), ...]} e a lista de
     avisos do que ficou de fora. `hoje` é obrigatório porque a inferência de
     ano depende dele — deixar implícito esconderia essa dependência."""
     wb = openpyxl.load_workbook(caminho_ou_arquivo, data_only=True)
@@ -126,12 +137,12 @@ def ler_vendas_semanais_da_planilha(caminho_ou_arquivo, hoje):
         avisos.extend(f"{aba} — {a}" for a in avisos_aba)
 
         semanas = []
-        for inicio, fim, canais in _atribuir_anos(linhas, hoje):
+        for inicio, fim, canais, extras in _atribuir_anos(linhas, hoje):
             dias = (fim - inicio).days
             if not 1 <= dias <= MAX_DIAS_SEMANA:
                 avisos.append(f"{aba} — {inicio} a {fim}: período de {dias} dias, dígito trocado na planilha")
                 continue
-            semanas.append((inicio, fim, {c: v for c, v in canais.items() if v is not None}))
+            semanas.append((inicio, fim, {c: v for c, v in canais.items() if v is not None}, extras))
         por_loja[loja] = semanas
 
     return por_loja, avisos

@@ -110,6 +110,25 @@ def inicializar_banco():
             """
         )
 
+        # CMV e promoção da semana vêm da mesma planilha, mas são por SEMANA
+        # (não por canal), então ficam à parte. Só o que é dado de entrada
+        # mora aqui: %CMV, classificação (ÓTIMO/BOM/RUIM) e variação semana
+        # a semana são calculados na hora — copiar número derivado da
+        # planilha seria manter duas contas que podem divergir.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS resultado_semanal (
+                unidade TEXT NOT NULL,
+                periodo_inicio TEXT NOT NULL,
+                periodo_fim TEXT NOT NULL,
+                cmv REAL,
+                promo_loja REAL,
+                criado_em TEXT NOT NULL,
+                PRIMARY KEY (unidade, periodo_inicio)
+            )
+            """
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tarefa (
@@ -883,6 +902,163 @@ def salvar_faturamento_canal_semanal_se_ausente(unidade, periodo_inicio_iso, per
             (unidade, periodo_inicio_iso, periodo_fim_iso, canal, faturamento, datetime.now().isoformat()),
         )
         return True
+
+
+def salvar_resultado_semanal_se_ausente(unidade, periodo_inicio_iso, periodo_fim_iso, cmv, promo_loja):
+    """CMV/promoção de uma semana, mesmo espírito de
+    `salvar_faturamento_canal_semanal_se_ausente`: nunca sobrescreve o que
+    já está gravado."""
+    with conexao() as conn:
+        existente = conn.execute(
+            "SELECT 1 FROM resultado_semanal WHERE unidade = ? AND periodo_inicio = ?",
+            (unidade, periodo_inicio_iso),
+        ).fetchone()
+        if existente:
+            return False
+        conn.execute(
+            """
+            INSERT INTO resultado_semanal
+                (unidade, periodo_inicio, periodo_fim, cmv, promo_loja, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (unidade, periodo_inicio_iso, periodo_fim_iso, cmv, promo_loja, datetime.now().isoformat()),
+        )
+        return True
+
+
+# Faixas de %CMV que o chefe da Julia usa na planilha (a fórmula da coluna
+# FATOR é IF(<0.31,"ÓTIMO", IF(<0.34,"BOM","RUIM"))).
+CMV_OTIMO_ATE = 0.31
+CMV_BOM_ATE = 0.34
+
+
+def _classificar_cmv(pct):
+    if pct is None:
+        return None
+    if pct < CMV_OTIMO_ATE:
+        return "otimo"
+    if pct < CMV_BOM_ATE:
+        return "bom"
+    return "ruim"
+
+
+def _semanas_do_faturamento_diario(unidade):
+    """Faturamento por canal de cada dia já sincronizado, agrupado por dia —
+    matéria-prima pra montar a semana sem depender da planilha."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT dia, canal, faturamento FROM faturamento_canal WHERE unidade = ?",
+            (unidade,),
+        ).fetchall()
+    por_dia = {}
+    for linha in linhas:
+        por_dia.setdefault(linha["dia"], {})[linha["canal"]] = linha["faturamento"]
+    return por_dia
+
+
+def _dias_do_periodo(inicio_iso, fim_iso):
+    inicio = datetime.fromisoformat(inicio_iso).date()
+    fim = datetime.fromisoformat(fim_iso).date()
+    return [(inicio + timedelta(days=i)).isoformat() for i in range((fim - inicio).days + 1)]
+
+
+def listar_resultado_semanal(unidade):
+    """Semana a semana dessa loja, com faturamento por canal, CMV, %CMV,
+    classificação e variação em relação à semana anterior.
+
+    O faturamento de cada semana vem do dado diário que o próprio AdmFood
+    sincroniza da Cardápio Web sempre que ele cobre a semana inteira; só cai
+    na planilha importada quando o sistema ainda não tinha esse período (o
+    histórico antigo, anterior à sincronização). Cada semana volta com
+    `origem` dizendo de onde veio, pra diferença ficar visível em vez de
+    virar um número sem procedência.
+
+    %CMV, classificação e variação são calculados aqui, nunca copiados da
+    planilha — a planilha calcula os dela com um total que, nas semanas mais
+    antigas, não somava o 99 Food."""
+    with conexao() as conn:
+        canais_planilha = conn.execute(
+            """
+            SELECT periodo_inicio, periodo_fim, canal, faturamento
+            FROM faturamento_canal_semanal WHERE unidade = ?
+            """,
+            (unidade,),
+        ).fetchall()
+        resultados = conn.execute(
+            "SELECT periodo_inicio, periodo_fim, cmv, promo_loja FROM resultado_semanal WHERE unidade = ?",
+            (unidade,),
+        ).fetchall()
+
+    periodos = {}
+    for linha in canais_planilha:
+        info = periodos.setdefault(linha["periodo_inicio"], {
+            "periodoFim": linha["periodo_fim"], "canais": {},
+        })
+        info["canais"][linha["canal"]] = linha["faturamento"]
+    for linha in resultados:
+        periodos.setdefault(linha["periodo_inicio"], {"periodoFim": linha["periodo_fim"], "canais": {}})
+
+    extras = {l["periodo_inicio"]: l for l in resultados}
+    faturamento_diario = _semanas_do_faturamento_diario(unidade)
+
+    # Semanas que o sistema já tem por conta própria e a planilha não
+    # cobre: agrupa em semana cheia de segunda a domingo, a partir do dia
+    # seguinte ao fim do que veio da planilha.
+    ultimo_fim = max((info["periodoFim"] for info in periodos.values()), default=None)
+    for dia in sorted(faturamento_diario):
+        if ultimo_fim and dia <= ultimo_fim:
+            continue
+        data = datetime.fromisoformat(dia).date()
+        inicio = (data - timedelta(days=data.weekday())).isoformat()
+        fim = (data + timedelta(days=6 - data.weekday())).isoformat()
+        periodos.setdefault(inicio, {"periodoFim": fim, "canais": {}})
+
+    semanas = []
+    for periodo_inicio in sorted(periodos):
+        info = periodos[periodo_inicio]
+        periodo_fim = info["periodoFim"]
+        dias = _dias_do_periodo(periodo_inicio, periodo_fim)
+        cobertos = [d for d in dias if d in faturamento_diario]
+
+        if len(cobertos) == len(dias):
+            canais = {}
+            for dia in dias:
+                for canal, valor in faturamento_diario[dia].items():
+                    canais[canal] = round(canais.get(canal, 0.0) + valor, 2)
+            origem = "sistema"
+        else:
+            canais = dict(info["canais"])
+            origem = "planilha"
+
+        total = round(sum(canais.values()), 2)
+        extra = extras.get(periodo_inicio)
+        cmv = extra["cmv"] if extra else None
+        promo = extra["promo_loja"] if extra else None
+        pct = round(cmv / total, 4) if (cmv is not None and total) else None
+
+        semanas.append({
+            "periodoInicio": periodo_inicio,
+            "periodoFim": periodo_fim,
+            "canais": canais,
+            "total": total,
+            "cmv": cmv,
+            "promoLoja": promo,
+            "pctCmv": pct,
+            "classificacao": _classificar_cmv(pct),
+            "origem": origem,
+            "diasComDadoDiario": len(cobertos),
+            "diasNoPeriodo": len(dias),
+        })
+
+    # Variação em relação à semana anterior — calculada na ordem cronológica
+    # e só entre semanas vizinhas de verdade.
+    for anterior, atual in zip(semanas, semanas[1:]):
+        for campo, chave in (("total", "variacaoTotal"), ("cmv", "variacaoCmv")):
+            base, novo = anterior[campo], atual[campo]
+            atual[chave] = round((novo - base) / base, 4) if (base and novo is not None) else None
+
+    semanas.reverse()  # mais recente primeiro, que é como a tela lê
+    return semanas
 
 
 def listar_faturamento_canal_semanal(unidade):

@@ -17,6 +17,7 @@ from datetime import datetime
 from backend.armazenamento import (
     inicializar_banco,
     salvar_faturamento_canal_semanal_se_ausente,
+    salvar_resultado_semanal_se_ausente,
 )
 from backend.vendas_semanais_planilha import ler_vendas_semanais_da_planilha
 
@@ -50,7 +51,11 @@ def importar(caminho, aplicar=False):
             continue
         print(f"  {len(semanas)} semanas: {semanas[0][0]} até {semanas[-1][1]}")
 
-        for inicio, fim, canais in semanas:
+        for inicio, fim, canais, extras in semanas:
+            if aplicar:
+                salvar_resultado_semanal_se_ausente(
+                    loja, inicio.isoformat(), fim.isoformat(), extras['cmv'], extras['promoLoja']
+                )
             for canal, valor in canais.items():
                 if not aplicar:
                     gravadas += 1
@@ -62,7 +67,7 @@ def importar(caminho, aplicar=False):
                     existentes += 1
 
         amostra = semanas[:2] + semanas[-2:] if len(semanas) > 4 else semanas
-        for inicio, fim, canais in amostra:
+        for inicio, fim, canais, _extras in amostra:
             resumo = "  ".join(f"{c}={_brl(v)}" for c, v in canais.items())
             print(f"    {inicio} a {fim}: {resumo}")
 

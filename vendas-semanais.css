@@ -1,0 +1,376 @@
+/* Tela de Vendas Semanais — fechamento semanal por loja. A base
+   compartilhada (sidebar, cabeçalho, painéis, tabelas) está em theme.css;
+   aqui fica só o que é desta tela.
+
+   O número que o chefe persegue é o %CMV, então ele é o herói: o veredito
+   da semana fechada vem antes do faturamento. As três cores de veredito são
+   propositalmente diferentes do vermelho da marca — marca é cromo (botão,
+   eyebrow), veredito é diagnóstico, e confundir os dois faria "RUIM" parecer
+   um botão. */
+
+.semana-hero {
+  --veredito: var(--text-muted);
+  --veredito-fundo: var(--surface-muted);
+}
+
+.semana-hero.veredito-otimo { --veredito: #2f7d55; --veredito-fundo: #e7f2ea; }
+.semana-hero.veredito-bom { --veredito: #b8862f; --veredito-fundo: #f9efdb; }
+.semana-hero.veredito-ruim { --veredito: #b3261e; --veredito-fundo: #fbe4e0; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .semana-hero.veredito-otimo { --veredito: #7bc494; --veredito-fundo: #1f3327; }
+  :root:not([data-theme="light"]) .semana-hero.veredito-bom { --veredito: #e0b166; --veredito-fundo: #3a2f1a; }
+  :root:not([data-theme="light"]) .semana-hero.veredito-ruim { --veredito: #ef7264; --veredito-fundo: #3a2320; }
+}
+
+:root[data-theme="dark"] .semana-hero.veredito-otimo { --veredito: #7bc494; --veredito-fundo: #1f3327; }
+:root[data-theme="dark"] .semana-hero.veredito-bom { --veredito: #e0b166; --veredito-fundo: #3a2f1a; }
+:root[data-theme="dark"] .semana-hero.veredito-ruim { --veredito: #ef7264; --veredito-fundo: #3a2320; }
+
+/* --- Semana fechada: o cartão de fechamento --------------------------- */
+.semana-hero {
+  position: relative;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Borda serrilhada embaixo — a semana fechada é uma comanda destacada da
+   bobina. Um recorte só, sem repetir o motivo no resto da tela. */
+.semana-hero::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -12px;
+  height: 12px;
+  background-color: var(--card-bg);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0 1px, transparent 1px),
+    radial-gradient(circle at 6px 12px, transparent 5.5px, #000 6px);
+  -webkit-mask-size: 100% 100%, 12px 12px;
+  -webkit-mask-repeat: no-repeat, repeat-x;
+  mask-image: linear-gradient(to bottom, #000 0 1px, transparent 1px),
+    radial-gradient(circle at 6px 12px, transparent 5.5px, #000 6px);
+  mask-size: 100% 100%, 12px 12px;
+  mask-repeat: no-repeat, repeat-x;
+}
+
+.semana-hero-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.semana-hero-periodo {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.semana-hero-rotulo {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+
+.semana-hero-corpo {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* O veredito: %CMV grande em mono, palavra do chefe embaixo. */
+.veredito-bloco {
+  background-color: var(--veredito-fundo);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.veredito-pct {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--veredito);
+  font-variant-numeric: tabular-nums;
+}
+
+.veredito-palavra {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--veredito);
+}
+
+.veredito-legenda {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+  line-height: 1.4;
+}
+
+/* Linhas de dinheiro: rótulo, valor em mono, variação. */
+.semana-numeros {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.semana-linha {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px dashed var(--surface-muted-border);
+}
+
+.semana-linha:last-child { border-bottom: none; padding-bottom: 0; }
+
+.semana-linha-rotulo {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.semana-linha-valor {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.semana-linha-valor.destaque { font-size: 1.25rem; }
+
+.semana-delta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 68px;
+  text-align: right;
+}
+
+/* Subir faturamento é bom; subir CMV é ruim. A cor segue o significado,
+   não o sinal do número. */
+.semana-delta.bom { color: #2f7d55; }
+.semana-delta.ruim { color: #b3261e; }
+.semana-delta.neutro { color: var(--text-faint); }
+
+/* --- Mistura de canais ------------------------------------------------ */
+.canais-barra {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: var(--surface-muted);
+  margin-top: var(--space-5);
+}
+
+.canais-barra span { display: block; height: 100%; }
+
+.canal-ifood { background-color: #d93829; }
+.canal-catalog { background-color: #e2915b; }
+.canal-food99 { background-color: #7a8f6b; }
+.canal-portal { background-color: #6b5d52; }
+
+.canais-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.canal-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.canal-ponto {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  transform: translateY(1px);
+}
+
+.canal-valor {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- A fita: uma barra por semana ------------------------------------- */
+.fita-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.fita-titulo-linha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.fita-legenda-cores {
+  display: flex;
+  gap: var(--space-4);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.fita-legenda-cores span { display: inline-flex; align-items: center; gap: 5px; }
+.fita-legenda-cores i {
+  width: 9px; height: 9px; border-radius: 2px; display: inline-block;
+}
+
+.fita {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 96px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-2);
+}
+
+.fita-semana {
+  flex: 0 0 10px;
+  min-width: 10px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.fita-semana:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.fita-barra {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background-color: var(--barra-cor, var(--text-faint));
+  opacity: 0.75;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform-origin: bottom;
+}
+
+.fita-semana:hover .fita-barra { opacity: 1; }
+
+.fita-semana.selecionada .fita-barra {
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 3px var(--text-dark);
+}
+
+.fita-barra.cor-otimo { --barra-cor: #2f7d55; }
+.fita-barra.cor-bom { --barra-cor: #b8862f; }
+.fita-barra.cor-ruim { --barra-cor: #b3261e; }
+.fita-barra.cor-sem-cmv { --barra-cor: #cbbfae; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .fita-barra { animation: fita-sobe 0.4s ease-out both; }
+  @keyframes fita-sobe {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+}
+
+.fita-eixo {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  margin-top: var(--space-2);
+}
+
+/* --- Marcadores ------------------------------------------------------- */
+.tag-origem {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.chip-veredito {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.chip-otimo { background-color: #e7f2ea; color: #2f7d55; }
+.chip-bom { background-color: #f9efdb; color: #b8862f; }
+.chip-ruim { background-color: #fbe4e0; color: #b3261e; }
+.chip-sem-cmv { background-color: var(--surface-muted); color: var(--text-faint); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .chip-otimo { background-color: #1f3327; color: #7bc494; }
+  :root:not([data-theme="light"]) .chip-bom { background-color: #3a2f1a; color: #e0b166; }
+  :root:not([data-theme="light"]) .chip-ruim { background-color: #3a2320; color: #ef7264; }
+}
+
+:root[data-theme="dark"] .chip-otimo { background-color: #1f3327; color: #7bc494; }
+:root[data-theme="dark"] .chip-bom { background-color: #3a2f1a; color: #e0b166; }
+:root[data-theme="dark"] .chip-ruim { background-color: #3a2320; color: #ef7264; }
+
+.num-mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  .semana-hero-corpo { grid-template-columns: 1fr; gap: var(--space-4); }
+  .veredito-pct { font-size: 2.4rem; }
+  .semana-hero { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .fita-card { padding: var(--space-4); }
+}

@@ -7409,12 +7409,17 @@ function renderCurvaAbc() {
 
 
 /* ---------------------------------------------------------------------
-   VENDAS SEMANAIS — histórico por canal importado de planilha. Tela
-   separada das Vendas Diárias de propósito: a planilha só tem o total da
-   SEMANA por canal, sem quebra por dia (ver faturamento_canal_semanal em
-   armazenamento.py).
+   VENDAS SEMANAIS — fechamento por semana de cada loja.
+
+   O número que o chefe da Julia persegue é o %CMV (a planilha dele tem uma
+   coluna só pra classificar a semana em ÓTIMO/BOM/RUIM), então a tela abre
+   pelo veredito da semana, não pelo faturamento. A fita embaixo é o
+   histórico inteiro: altura é faturamento, cor é CMV — dá pra ver sequência
+   de semana ruim e sazonalidade sem ler número nenhum.
    --------------------------------------------------------------------- */
 let vendasSemanaisLojaAtual = 'Hamburgueria Artesanos';
+let vendasSemanaisDados = [];
+let vendasSemanaisSelecionada = null;
 
 const CANAIS_VENDAS_SEMANAIS = [
   { chave: 'ifood', label: 'iFood' },
@@ -7423,53 +7428,194 @@ const CANAIS_VENDAS_SEMANAIS = [
   { chave: 'portal', label: 'Presencial' },
 ];
 
+// Mesmas faixas da fórmula da planilha: <31% ótimo, 31-34% bom, acima ruim.
+const VEREDITO = {
+  otimo: { palavra: 'Ótimo', chip: 'chip-otimo', cor: 'cor-otimo' },
+  bom: { palavra: 'Bom', chip: 'chip-bom', cor: 'cor-bom' },
+  ruim: { palavra: 'Ruim', chip: 'chip-ruim', cor: 'cor-ruim' },
+};
+
 async function carregarVendasSemanais(loja) {
-  const tbody = document.getElementById('vendas-semanais-tabela-body');
   const subtitulo = document.getElementById('vendas-semanais-subtitulo');
   if (subtitulo) subtitulo.textContent = loja;
   try {
     const resposta = await fetch(`/api/faturamento-semanal?loja=${encodeURIComponent(loja)}`);
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
-    renderVendasSemanaisTabela(dados.semanas || []);
+    vendasSemanaisDados = dados.semanas || [];
+    vendasSemanaisSelecionada = vendasSemanaisDados.length ? vendasSemanaisDados[0].periodoInicio : null;
+    renderVendasSemanais();
   } catch (erro) {
     console.error('Falha ao carregar vendas semanais:', erro);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">Não foi possível carregar o histórico.</td></tr>`;
+    document.getElementById('vendas-semanais-tabela-body').innerHTML =
+      `<tr><td colspan="9" class="panel-subtitle">Não foi possível carregar o histórico.</td></tr>`;
   }
 }
 
 function _periodoSemanaLabel(inicioIso, fimIso) {
-  const curto = (iso) => {
-    const [ano, mes, dia] = iso.split('-');
-    return `${dia}/${mes}`;
-  };
-  return `${curto(inicioIso)} a ${curto(fimIso)} · ${inicioIso.slice(0, 4)}`;
+  const curto = (iso) => iso.split('-').slice(1).reverse().join('/');
+  return `${curto(inicioIso)} a ${curto(fimIso)}`;
+}
+
+function _pctBR(fracao, casas = 1) {
+  return `${(fracao * 100).toFixed(casas).replace('.', ',')}%`;
+}
+
+// Faturamento subindo é bom; CMV subindo é ruim. A cor segue o significado
+// do indicador, não o sinal do número.
+function _deltaHTML(variacao, subirEhBom) {
+  if (variacao === null || variacao === undefined) return '<span class="semana-delta neutro">—</span>';
+  const subiu = variacao > 0;
+  const classe = Math.abs(variacao) < 0.005 ? 'neutro' : (subiu === subirEhBom ? 'bom' : 'ruim');
+  return `<span class="semana-delta ${classe}">${subiu ? '↑' : '↓'} ${_pctBR(Math.abs(variacao), 1)}</span>`;
+}
+
+function renderVendasSemanais() {
+  const semanas = vendasSemanaisDados;
+  const heroEl = document.getElementById('semana-hero-container');
+  const fitaCard = document.getElementById('fita-card');
+  if (!heroEl || !fitaCard) return;
+
+  if (!semanas.length) {
+    heroEl.innerHTML = '';
+    fitaCard.style.display = 'none';
+    document.getElementById('vendas-semanais-tabela-body').innerHTML =
+      `<tr><td colspan="9" class="panel-subtitle">Nenhuma semana ainda pra essa loja — importe a planilha do histórico pra começar.</td></tr>`;
+    return;
+  }
+
+  const semana = semanas.find(s => s.periodoInicio === vendasSemanaisSelecionada) || semanas[0];
+  const veredito = VEREDITO[semana.classificacao];
+  const ehMaisRecente = semana.periodoInicio === semanas[0].periodoInicio;
+
+  const canaisComValor = CANAIS_VENDAS_SEMANAIS.filter(c => semana.canais[c.chave]);
+  const barras = canaisComValor.map(c => {
+    const parte = semana.total ? (semana.canais[c.chave] / semana.total) * 100 : 0;
+    return `<span class="canal-${c.chave}" style="width:${parte}%" title="${c.label}"></span>`;
+  }).join('');
+  const legenda = canaisComValor.map(c => `
+    <span class="canal-item">
+      <span class="canal-ponto canal-${c.chave}"></span>
+      ${c.label}
+      <span class="canal-valor">R$ ${_formatarMoedaBR(semana.canais[c.chave])}</span>
+    </span>
+  `).join('');
+
+  const origemTitulo = semana.origem === 'sistema'
+    ? 'Somado do faturamento diário que o AdmFood sincroniza sozinho'
+    : 'Veio da planilha importada — o sistema ainda não tinha esse período';
+
+  heroEl.innerHTML = `
+    <div class="semana-hero ${veredito ? 'veredito-' + semana.classificacao : ''}">
+      <div class="semana-hero-topo">
+        <div>
+          <span class="semana-hero-rotulo">${ehMaisRecente ? 'Semana mais recente' : 'Semana selecionada'}</span>
+          <span class="semana-hero-periodo">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)} · ${semana.periodoInicio.slice(0, 4)}</span>
+        </div>
+        <span class="tag-origem" title="${origemTitulo}">${semana.origem === 'sistema' ? 'do sistema' : 'da planilha'}</span>
+      </div>
+
+      <div class="semana-hero-corpo">
+        <div class="veredito-bloco">
+          <span class="semana-hero-rotulo">CMV sobre o faturamento</span>
+          <span class="veredito-pct">${semana.pctCmv !== null ? _pctBR(semana.pctCmv) : '—'}</span>
+          <span class="veredito-palavra">${veredito ? veredito.palavra : 'sem CMV'}</span>
+          <span class="veredito-legenda">${semana.pctCmv !== null
+            ? 'Meta: abaixo de 31% é ótimo, até 34% é bom.'
+            : 'Sem CMV lançado nessa semana, então não dá pra classificar.'}</span>
+        </div>
+
+        <div class="semana-numeros">
+          <div class="semana-linha">
+            <span class="semana-linha-rotulo">Faturamento</span>
+            <span class="semana-linha-valor destaque">R$ ${_formatarMoedaBR(semana.total)}</span>
+            ${_deltaHTML(semana.variacaoTotal, true)}
+          </div>
+          <div class="semana-linha">
+            <span class="semana-linha-rotulo">CMV</span>
+            <span class="semana-linha-valor">${semana.cmv !== null ? 'R$ ' + _formatarMoedaBR(semana.cmv) : '—'}</span>
+            ${_deltaHTML(semana.variacaoCmv, false)}
+          </div>
+          <div class="semana-linha">
+            <span class="semana-linha-rotulo">Promoção da loja</span>
+            <span class="semana-linha-valor">${semana.promoLoja ? 'R$ ' + _formatarMoedaBR(semana.promoLoja) : '—'}</span>
+            <span class="semana-delta neutro"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="canais-barra">${barras}</div>
+      <div class="canais-legenda">${legenda}</div>
+    </div>
+  `;
+
+  // A fita vai do mais antigo pro mais recente (a lista vem invertida).
+  const cronologica = [...semanas].reverse();
+  const maiorTotal = Math.max(...cronologica.map(s => s.total), 1);
+  document.getElementById('fita').innerHTML = cronologica.map((s) => {
+    const altura = Math.max(4, Math.round((s.total / maiorTotal) * 100));
+    const cor = VEREDITO[s.classificacao] ? VEREDITO[s.classificacao].cor : 'cor-sem-cmv';
+    const selecionada = s.periodoInicio === semana.periodoInicio ? ' selecionada' : '';
+    const pct = s.pctCmv !== null ? _pctBR(s.pctCmv) : 'sem CMV';
+    const rotulo = `${_periodoSemanaLabel(s.periodoInicio, s.periodoFim)} · R$ ${_formatarMoedaBR(s.total)} · CMV ${pct}`;
+    return `
+      <button type="button" class="fita-semana${selecionada}" data-inicio="${s.periodoInicio}" title="${rotulo}" aria-label="${rotulo}">
+        <span class="fita-barra ${cor}" style="height:${altura}%"></span>
+      </button>
+    `;
+  }).join('');
+  fitaCard.style.display = '';
+
+  const primeira = cronologica[0];
+  const ultima = cronologica[cronologica.length - 1];
+  document.getElementById('fita-eixo-inicio').textContent =
+    `${_periodoSemanaLabel(primeira.periodoInicio, primeira.periodoFim)} · ${primeira.periodoInicio.slice(0, 4)}`;
+  document.getElementById('fita-eixo-fim').textContent =
+    `${_periodoSemanaLabel(ultima.periodoInicio, ultima.periodoFim)} · ${ultima.periodoInicio.slice(0, 4)}`;
+
+  const fitaEl = document.getElementById('fita');
+  document.querySelectorAll('#fita .fita-semana').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      vendasSemanaisSelecionada = btn.dataset.inicio;
+      const scroll = fitaEl.scrollLeft;
+      renderVendasSemanais();
+      document.getElementById('fita').scrollLeft = scroll;
+    });
+  });
+  // Abre mostrando o fim da fita, que é a semana mais recente.
+  fitaEl.scrollLeft = fitaEl.scrollWidth;
+
+  renderVendasSemanaisTabela(semanas);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function renderVendasSemanaisTabela(semanas) {
   const tbody = document.getElementById('vendas-semanais-tabela-body');
   if (!tbody) return;
 
-  if (!semanas.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">Nenhuma semana importada ainda pra essa loja.</td></tr>`;
-    return;
-  }
-
   tbody.innerHTML = semanas.map((semana) => {
     const celulas = CANAIS_VENDAS_SEMANAIS.map((canal) => {
       const valor = semana.canais[canal.chave];
-      // Canal sem linha na planilha daquela semana (ex: 99Food antes da
-      // loja operar nele) fica "—", não R$ 0,00 — zero seria dizer que
-      // vendeu nada, e o certo é que não existia.
+      // Canal sem linha naquela semana (ex: 99Food antes da loja operar
+      // nele) fica "—", não R$ 0,00: zero diria que não vendeu, e o certo
+      // é que não existia.
       return valor === undefined || valor === null
         ? '<td class="text-muted">—</td>'
-        : `<td>R$ ${_formatarMoedaBR(valor)}</td>`;
+        : `<td class="num-mono">R$ ${_formatarMoedaBR(valor)}</td>`;
     }).join('');
+    const veredito = VEREDITO[semana.classificacao];
+    const chipPct = semana.pctCmv !== null
+      ? `<span class="chip-veredito ${veredito ? veredito.chip : 'chip-sem-cmv'}">${_pctBR(semana.pctCmv)}${veredito ? ' · ' + veredito.palavra.toLowerCase() : ''}</span>`
+      : '<span class="chip-veredito chip-sem-cmv">sem CMV</span>';
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim))}</td>
+        <td class="font-bold num-mono">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)}
+          <span class="text-muted" style="font-weight:400;">${semana.periodoInicio.slice(0, 4)}</span></td>
         ${celulas}
-        <td class="font-bold col-atual-destaque">R$ ${_formatarMoedaBR(semana.total)}</td>
+        <td class="font-bold num-mono col-atual-destaque">R$ ${_formatarMoedaBR(semana.total)}</td>
+        <td class="num-mono">${semana.cmv !== null ? 'R$ ' + _formatarMoedaBR(semana.cmv) : '<span class="text-muted">—</span>'}</td>
+        <td>${chipPct}</td>
+        <td class="num-mono">${semana.promoLoja ? 'R$ ' + _formatarMoedaBR(semana.promoLoja) : '<span class="text-muted">—</span>'}</td>
       </tr>
     `;
   }).join('');

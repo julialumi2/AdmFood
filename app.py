@@ -23,6 +23,8 @@ from backend.armazenamento import (
     excluir_ajuste_canal,
     buscar_ajustes_canal_periodo,
     listar_faturamento_canal_semanal,
+    listar_resultado_semanal,
+    salvar_resultado_semanal_se_ausente,
     salvar_faturamento_canal_semanal_se_ausente,
     listar_tarefas,
     criar_tarefa,
@@ -3245,7 +3247,7 @@ def api_faturamento_semanal():
     unidade = request.args.get('loja')
     if not unidade or unidade not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
-    return jsonify({"semanas": listar_faturamento_canal_semanal(unidade)})
+    return jsonify({"semanas": listar_resultado_semanal(unidade)})
 
 
 @app.route('/api/faturamento-semanal/importar', methods=['POST'])
@@ -3276,7 +3278,7 @@ def api_importar_faturamento_semanal():
         if loja not in LOJAS:
             continue
         semanas_por_loja[loja] = len(semanas)
-        for inicio, fim, canais in semanas:
+        for inicio, fim, canais, extras in semanas:
             for canal, valor in canais.items():
                 if salvar_faturamento_canal_semanal_se_ausente(
                     loja, inicio.isoformat(), fim.isoformat(), canal, valor
@@ -3284,6 +3286,9 @@ def api_importar_faturamento_semanal():
                     gravadas += 1
                 else:
                     existentes += 1
+            salvar_resultado_semanal_se_ausente(
+                loja, inicio.isoformat(), fim.isoformat(), extras['cmv'], extras['promoLoja']
+            )
 
     return jsonify({
         "gravadas": gravadas,
