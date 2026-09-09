@@ -322,3 +322,33 @@
     gap: 2px;
   }
 }
+
+/* Linhas do combo no modal de vincular: item + quantidade + tirar. */
+.combo-linha {
+  display: grid;
+  grid-template-columns: 1fr 86px 32px;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.combo-linha select,
+.combo-linha input {
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.88rem;
+  outline: none;
+  min-width: 0;
+}
+
+.combo-linha input { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+
+.combo-linha select:focus,
+.combo-linha input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}

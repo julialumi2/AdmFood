@@ -418,6 +418,33 @@ def inicializar_banco():
             # manual vigente então), não recalculado depois — resincronizar
             # o dia de novo já usa o vínculo atualizado.
             conn.execute("ALTER TABLE venda_item ADD COLUMN multiplicador REAL NOT NULL DEFAULT 1")
+        if "nome_normalizado" not in colunas_venda_item:
+            # O mesmo nome_produto normalizado (_normalizar_nome_insumo),
+            # gravado junto: é por ele que a composição de combo consegue
+            # ser resolvida dentro do SQL da baixa de estoque, sem trazer
+            # todas as vendas pro Python só pra normalizar string.
+            conn.execute("ALTER TABLE venda_item ADD COLUMN nome_normalizado TEXT")
+
+        # Combo/kit vendido como um nome só ("Clássico + Batata + Bebida")
+        # não é um produto de Ficha Técnica: é a soma de vários. Aqui cada
+        # nome vendido vira N itens com quantidade, e a baixa de estoque
+        # segue a receita de cada componente — sem duplicar receita, que
+        # ficaria desatualizada assim que o lanche mudasse.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS composicao_produto_venda (
+                nome_produto_normalizado TEXT NOT NULL,
+                item_cardapio_id INTEGER NOT NULL,
+                quantidade REAL NOT NULL DEFAULT 1,
+                criado_em TEXT NOT NULL,
+                criado_por TEXT,
+                PRIMARY KEY (nome_produto_normalizado, item_cardapio_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_venda_item_nome_norm ON venda_item(nome_normalizado)"
+        )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_venda_item_dia ON venda_item(dia)"
         )
@@ -1475,8 +1502,8 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                 conn.execute(
                     """
                     INSERT INTO venda_item
-                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id, multiplicador)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id, multiplicador, nome_normalizado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         unidade,
@@ -1488,11 +1515,32 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                         item["quantidade"],
                         item_cardapio_id,
                         multiplicador,
+                        _normalizar_nome_insumo(item["nome"]),
                     ),
                 )
 
     if unidade == "Hamburgueria Artesanos":
         aplicar_baixa_estoque_dia(unidade, dia_iso)
+
+
+# Venda -> item de Ficha Técnica, contando as duas formas de chegar lá: o
+# produto vendido direto (item_cardapio_id preenchido) e o combo, que não é
+# um produto de receita e sim a soma de vários (composicao_produto_venda).
+# Usada pela baixa de estoque e pelo consumo médio, pra não existirem duas
+# definições de "quanto saiu".
+SQL_ITENS_CONSUMIDOS = """
+    SELECT unidade, dia, item_cardapio_id AS item_id,
+           quantidade * multiplicador AS quantidade
+    FROM venda_item
+    WHERE item_cardapio_id IS NOT NULL
+    UNION ALL
+    SELECT v.unidade, v.dia, c.item_cardapio_id AS item_id,
+           v.quantidade * v.multiplicador * c.quantidade AS quantidade
+    FROM venda_item v
+    JOIN composicao_produto_venda c
+      ON c.nome_produto_normalizado = v.nome_normalizado
+    WHERE v.item_cardapio_id IS NULL
+"""
 
 
 def aplicar_baixa_estoque_dia(unidade, dia_iso):
@@ -1513,10 +1561,10 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
         consumo_novo = {
             linha["insumo_id"]: linha["total"]
             for linha in conn.execute(
-                """
-                SELECT f.insumo_id AS insumo_id, SUM(v.quantidade * v.multiplicador * f.quantidade) AS total
-                FROM venda_item v
-                JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id AND f.loja = v.unidade
+                f"""
+                SELECT f.insumo_id AS insumo_id, SUM(v.quantidade * f.quantidade) AS total
+                FROM ({SQL_ITENS_CONSUMIDOS}) v
+                JOIN ficha_tecnica f ON f.item_id = v.item_id AND f.loja = v.unidade
                 WHERE v.unidade = ? AND v.dia = ? AND f.quantidade IS NOT NULL
                 GROUP BY f.insumo_id
                 """,
@@ -1551,23 +1599,90 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
 
 
 def listar_produtos_pendentes(unidade, dias=30):
-    """Produtos vendidos nos últimos N dias que não casaram com nenhum
-    item_cardapio ainda — fila de pendência da Etapa 0 (painel de
-    integrações do estoque). Agrupado por nome (o mesmo prato costuma
-    aparecer várias vezes)."""
+    """Produtos vendidos nos últimos N dias que ainda não têm como virar
+    baixa de estoque — fila de pendência da Etapa 0 (painel de integrações
+    do estoque). Sai da fila tanto quem casou com um item de Ficha Técnica
+    quanto o combo que já teve a composição definida. Agrupado por nome (o
+    mesmo prato costuma aparecer várias vezes)."""
     inicio = (datetime.now().date() - timedelta(days=dias)).isoformat()
     with conexao() as conn:
         linhas = conn.execute(
             """
             SELECT nome_produto, COUNT(*) AS vendas, SUM(quantidade) AS quantidade_total, MIN(dia) AS primeira_vez
-            FROM venda_item
+            FROM venda_item v
             WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM composicao_produto_venda c
+                  WHERE c.nome_produto_normalizado = v.nome_normalizado
+              )
             GROUP BY nome_produto
             ORDER BY vendas DESC
             """,
             (unidade, inicio),
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def definir_composicao_produto_venda(nome_produto, componentes, criado_por):
+    """Diz de que um combo é feito: [{"itemCardapioId", "quantidade"}, ...].
+    A baixa de estoque passa a seguir a receita de cada componente (ver
+    SQL_ITENS_CONSUMIDOS), em vez de precisar de uma Ficha Técnica própria
+    pro combo — que ficaria desatualizada assim que o lanche de dentro
+    mudasse de receita.
+
+    Substitui a composição inteira: é mais previsível editar a lista toda
+    do que adivinhar o que sai e o que fica."""
+    nome_normalizado = _normalizar_nome_insumo(nome_produto)
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM composicao_produto_venda WHERE nome_produto_normalizado = ?",
+            (nome_normalizado,),
+        )
+        for componente in componentes:
+            conn.execute(
+                """
+                INSERT INTO composicao_produto_venda
+                    (nome_produto_normalizado, item_cardapio_id, quantidade, criado_em, criado_por)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (nome_normalizado, int(componente["itemCardapioId"]),
+                 float(componente.get("quantidade", 1) or 1), agora, criado_por),
+            )
+        # Venda antiga com esse nome ainda está com nome_normalizado vazio
+        # (a coluna é nova): preenche pra composição alcançar o histórico
+        # também, não só as vendas daqui pra frente.
+        conn.execute(
+            "UPDATE venda_item SET nome_normalizado = ? WHERE nome_produto = ? AND nome_normalizado IS NULL",
+            (nome_normalizado, nome_produto),
+        )
+
+
+def listar_composicoes_produto_venda():
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT c.nome_produto_normalizado, c.item_cardapio_id, c.quantidade,
+                   c.criado_em, c.criado_por, ic.nome AS item_cardapio_nome
+            FROM composicao_produto_venda c
+            JOIN item_cardapio ic ON ic.id = c.item_cardapio_id
+            ORDER BY c.nome_produto_normalizado, ic.nome
+            """
+        ).fetchall()
+    por_nome = {}
+    for linha in linhas:
+        info = por_nome.setdefault(linha["nome_produto_normalizado"], {
+            "nomeProdutoNormalizado": linha["nome_produto_normalizado"],
+            "criadoEm": linha["criado_em"],
+            "criadoPor": linha["criado_por"],
+            "componentes": [],
+        })
+        info["componentes"].append({
+            "itemCardapioId": linha["item_cardapio_id"],
+            "nome": linha["item_cardapio_nome"],
+            "quantidade": linha["quantidade"],
+        })
+    return list(por_nome.values())
 
 
 def vincular_produto_venda_manualmente(nome_produto, item_cardapio_id, criado_por, quantidade_por_unidade=1):
@@ -2350,9 +2465,9 @@ def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
         linhas = conn.execute(
             f"""
             SELECT v.unidade, f.insumo_id, i.nome AS insumo_nome, i.unidade_medida,
-                   SUM(v.quantidade * v.multiplicador * f.quantidade) AS total_consumido
-            FROM venda_item v
-            JOIN ficha_tecnica f ON f.item_id = v.item_cardapio_id AND f.loja = v.unidade
+                   SUM(v.quantidade * f.quantidade) AS total_consumido
+            FROM ({SQL_ITENS_CONSUMIDOS}) v
+            JOIN ficha_tecnica f ON f.item_id = v.item_id AND f.loja = v.unidade
             JOIN insumo i ON i.id = f.insumo_id
             WHERE {' AND '.join(condicoes)}
             GROUP BY v.unidade, f.insumo_id

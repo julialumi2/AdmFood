@@ -1772,14 +1772,83 @@ async function abrirModalVincularProduto(nomeProduto) {
     .map((item) => `<option value="${item.id}">${escaparHtml(item.nome)} ${item.tipo === 'complemento' ? '(complemento)' : ''}</option>`)
     .join('');
 
+  comboComponentes = [];
+  document.querySelectorAll('#vincular-modo-tabs .tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.getElementById('vincular-modo-simples').style.display = '';
+  document.getElementById('vincular-modo-combo').style.display = 'none';
   document.getElementById('modal-vincular-produto').style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function fecharModalVincularProduto() {
   document.getElementById('modal-vincular-produto').style.display = 'none';
   document.getElementById('vincular-produto-quantidade').value = '1';
   vincularProdutoContexto = null;
+  comboComponentes = [];
 }
+
+// Componentes do combo sendo montado no modal: [{itemCardapioId, quantidade}]
+let comboComponentes = [];
+
+function _vincularModo() {
+  return document.querySelector('#vincular-modo-tabs .tab-btn.active')?.dataset.modo || 'simples';
+}
+
+function renderComboComponentes() {
+  const container = document.getElementById('combo-componentes');
+  if (!container) return;
+  if (!comboComponentes.length) {
+    container.innerHTML = `<p class="panel-subtitle">Nenhum item ainda — adicione o que vem dentro do combo.</p>`;
+    return;
+  }
+  const opcoes = (selecionado) => (itensCardapioTodosCache || [])
+    .map((item) => `<option value="${item.id}"${String(item.id) === String(selecionado) ? ' selected' : ''}>${escaparHtml(item.nome)}${item.tipo === 'complemento' ? ' (complemento)' : ''}</option>`)
+    .join('');
+  container.innerHTML = comboComponentes.map((componente, indice) => `
+    <div class="combo-linha">
+      <select data-combo-item="${indice}">${opcoes(componente.itemCardapioId)}</select>
+      <input type="number" min="0.01" step="0.01" value="${componente.quantidade}" data-combo-qtd="${indice}" aria-label="Quantidade">
+      <button type="button" class="btn-acao-icone btn-excluir" data-combo-remover="${indice}" title="Tirar do combo">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-combo-item]').forEach((select) => {
+    select.addEventListener('change', () => {
+      comboComponentes[parseInt(select.dataset.comboItem, 10)].itemCardapioId = select.value;
+    });
+  });
+  container.querySelectorAll('[data-combo-qtd]').forEach((input) => {
+    input.addEventListener('change', () => {
+      comboComponentes[parseInt(input.dataset.comboQtd, 10)].quantidade = parseFloat(input.value) || 1;
+    });
+  });
+  container.querySelectorAll('[data-combo-remover]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      comboComponentes.splice(parseInt(btn.dataset.comboRemover, 10), 1);
+      renderComboComponentes();
+    });
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.querySelectorAll('#vincular-modo-tabs .tab-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#vincular-modo-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const combo = btn.dataset.modo === 'combo';
+    document.getElementById('vincular-modo-simples').style.display = combo ? 'none' : '';
+    document.getElementById('vincular-modo-combo').style.display = combo ? '' : 'none';
+    if (combo) renderComboComponentes();
+  });
+});
+
+document.getElementById('btn-combo-adicionar')?.addEventListener('click', () => {
+  const primeiro = (itensCardapioTodosCache || [])[0];
+  comboComponentes.push({ itemCardapioId: primeiro ? primeiro.id : '', quantidade: 1 });
+  renderComboComponentes();
+});
 
 document.getElementById('btn-vincular-produto-fechar')?.addEventListener('click', fecharModalVincularProduto);
 document.getElementById('btn-vincular-produto-cancelar')?.addEventListener('click', fecharModalVincularProduto);
@@ -1787,20 +1856,33 @@ document.getElementById('btn-vincular-produto-cancelar')?.addEventListener('clic
 document.getElementById('form-vincular-produto')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
   if (!vincularProdutoContexto) return;
-  const itemCardapioId = document.getElementById('vincular-produto-item-select').value;
-  const quantidadePorUnidade = document.getElementById('vincular-produto-quantidade').value;
+  const ehCombo = _vincularModo() === 'combo';
+  if (ehCombo && !comboComponentes.length) {
+    alert('Adicione ao menos um item ao combo.');
+    return;
+  }
+  const rota = ehCombo ? '/api/produtos-pendentes/composicao' : '/api/produtos-pendentes/vincular';
+  const corpo = ehCombo
+    ? {
+        nomeProduto: vincularProdutoContexto,
+        componentes: comboComponentes.map((c) => ({
+          itemCardapioId: parseInt(c.itemCardapioId, 10),
+          quantidade: c.quantidade,
+        })),
+      }
+    : {
+        nomeProduto: vincularProdutoContexto,
+        itemCardapioId: parseInt(document.getElementById('vincular-produto-item-select').value, 10),
+        quantidadePorUnidade: parseFloat(document.getElementById('vincular-produto-quantidade').value),
+      };
   try {
-    const resposta = await fetch('/api/produtos-pendentes/vincular', {
+    const resposta = await fetch(rota, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nomeProduto: vincularProdutoContexto,
-        itemCardapioId: parseInt(itemCardapioId, 10),
-        quantidadePorUnidade: parseFloat(quantidadePorUnidade),
-      }),
+      body: JSON.stringify(corpo),
     });
     const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao vincular');
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
     fecharModalVincularProduto();
     await carregarIntegracoesEstoque();
   } catch (erro) {

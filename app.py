@@ -69,6 +69,8 @@ from backend.armazenamento import (
     consumo_medio_insumo,
     listar_produtos_pendentes,
     vincular_produto_venda_manualmente,
+    definir_composicao_produto_venda,
+    listar_composicoes_produto_venda,
     listar_vinculos_manuais,
     listar_itens_cardapio_todos,
     listar_lotes_vencendo,
@@ -1255,6 +1257,37 @@ def api_listar_produtos_pendentes():
     dias = request.args.get('dias', 30, type=int)
     pendentes = listar_produtos_pendentes(unidade, dias)
     return jsonify({"pendentes": pendentes})
+
+
+@app.route('/api/produtos-pendentes/composicao', methods=['POST'])
+def api_definir_composicao_produto():
+    """Diz de que um combo é feito. Diferente de vincular (que aponta pra um
+    item só): aqui o nome vendido vira vários itens, e a baixa segue a Ficha
+    Técnica de cada um."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    nome_produto = (dados.get('nomeProduto') or '').strip()
+    componentes = dados.get('componentes') or []
+    if not nome_produto or not componentes:
+        return jsonify({"erro": "Informe o produto vendido e ao menos um item do combo."}), 400
+
+    limpos = []
+    for componente in componentes:
+        try:
+            item_id = int(componente['itemCardapioId'])
+            quantidade = float(componente.get('quantidade') or 1)
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"erro": "Item do combo inválido."}), 400
+        if quantidade <= 0:
+            return jsonify({"erro": "Quantidade precisa ser maior que zero."}), 400
+        limpos.append({"itemCardapioId": item_id, "quantidade": quantidade})
+
+    usuario = _usuario_logado()
+    definir_composicao_produto_venda(nome_produto, limpos, usuario['nome'] if usuario else None)
+    return jsonify({"ok": True, "componentes": len(limpos)})
 
 
 @app.route('/api/produtos-pendentes/vincular', methods=['POST'])
