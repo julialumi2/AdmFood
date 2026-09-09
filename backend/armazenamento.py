@@ -1074,9 +1074,13 @@ def listar_resultado_semanal(unidade):
         dias = _dias_do_periodo(periodo_inicio, periodo_fim)
         cobertos = [d for d in dias if d in faturamento_diario]
 
-        if len(cobertos) == len(dias):
+        # Usa o dado diário quando ele cobre a semana inteira, ou quando a
+        # planilha não tem essa semana (é o caso da semana em andamento, que
+        # a planilha só vai ter na semana que vem — mostrar o que já entrou
+        # é melhor que mostrar R$ 0,00).
+        if cobertos and (len(cobertos) == len(dias) or not info["canais"]):
             canais = {}
-            for dia in dias:
+            for dia in cobertos:
                 for canal, valor in faturamento_diario[dia].items():
                     canais[canal] = round(canais.get(canal, 0.0) + valor, 2)
             origem = "sistema"
@@ -1089,6 +1093,10 @@ def listar_resultado_semanal(unidade):
         cmv = extra["cmv"] if extra else None
         promo = extra["promo_loja"] if extra else None
         pct = round(cmv / total, 4) if (cmv is not None and total) else None
+        # Semana gerada a partir do calendário mas ainda sem venda nenhuma
+        # (nem no diário, nem na planilha) não é informação — é linha vazia.
+        if not canais and cmv is None:
+            continue
 
         semanas.append({
             "periodoInicio": periodo_inicio,
