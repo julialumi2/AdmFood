@@ -198,6 +198,12 @@ def inicializar_banco():
         colunas_preco = {c["name"] for c in conn.execute("PRAGMA table_info(preco_cardapio)").fetchall()}
         if "foto_arquivo" not in colunas_preco:
             conn.execute("ALTER TABLE preco_cardapio ADD COLUMN foto_arquivo TEXT")
+        if "manual" not in colunas_preco:
+            # 1 = produto criado na tela ("Novo item" do Cardápio), que não
+            # veio da planilha de preços. A reimportação da planilha apaga
+            # quem sumiu dela, mas não esse — senão o produto sumiria na
+            # próxima importação junto com a ficha que ela montou pra ele.
+            conn.execute("ALTER TABLE preco_cardapio ADD COLUMN manual INTEGER NOT NULL DEFAULT 0")
         # Índice único (não PK) pra sincronizar_precos_cardapio conseguir usar
         # "ON CONFLICT(loja, produto)" — atualiza produto existente em vez de
         # duplicar, preservando o id e a foto ao reimportar a planilha.
@@ -1453,7 +1459,8 @@ def sincronizar_precos_cardapio(linhas):
                     food99 = excluded.food99,
                     beefood = excluded.beefood,
                     cardapio_web = excluded.cardapio_web,
-                    ordem = excluded.ordem
+                    ordem = excluded.ordem,
+                    manual = 0
                 """,
                 linha,
             )
@@ -1463,10 +1470,30 @@ def sincronizar_precos_cardapio(linhas):
             produtos_por_loja.setdefault(linha['loja'], []).append(linha['produto'])
         for loja, produtos in produtos_por_loja.items():
             marcadores = ", ".join("?" * len(produtos))
+            # Produto criado na tela fica: ele nunca esteve na planilha.
             conn.execute(
-                f"DELETE FROM preco_cardapio WHERE loja = ? AND produto NOT IN ({marcadores})",
+                f"DELETE FROM preco_cardapio WHERE loja = ? AND manual = 0 AND produto NOT IN ({marcadores})",
                 [loja] + produtos,
             )
+
+
+def adicionar_produto_ao_cardapio(loja, produto, categoria):
+    """Coloca um produto criado pelo "Novo item" no cardápio da loja, sem
+    preço (ela preenche na tela). Sem isso ele era criado mas nunca
+    aparecia: a tela de Cardápio lista o que está em preco_cardapio. Se o
+    produto já está no cardápio dessa loja, não mexe."""
+    with conexao() as conn:
+        ordem = conn.execute(
+            "SELECT COALESCE(MAX(ordem), 0) + 1 FROM preco_cardapio WHERE loja = ?", (loja,)
+        ).fetchone()[0]
+        conn.execute(
+            """
+            INSERT INTO preco_cardapio (loja, categoria, produto, ordem, manual)
+            VALUES (?, ?, ?, ?, 1)
+            ON CONFLICT(loja, produto) DO NOTHING
+            """,
+            (loja, categoria, produto, ordem),
+        )
 
 
 def listar_precos_cardapio():
@@ -1717,6 +1744,11 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
                 (unidade, dia_iso),
             ).fetchall()
         }
+        # Mistura feita na casa não tem baixa própria: vira os ingredientes
+        # dela (vendeu batata -> sal, páprica, açúcar). No primeiro dia com a
+        # receita cadastrada, a diferença abaixo devolve ao estoque o tempero
+        # que tinha sido descontado e desconta os ingredientes no lugar.
+        consumo_novo = explodir_receitas_em_ingredientes(consumo_novo, mapa_receita_insumo())
         consumo_anterior = {
             linha["insumo_id"]: linha["quantidade_baixada"]
             for linha in conn.execute(
@@ -2021,6 +2053,7 @@ def listar_insumos():
             """
             SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
                    i.marca_homologada, i.unidade_compra, i.fator_conversao_compra,
+                   (i.rendimento_receita IS NOT NULL) AS eh_mistura,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em,
                    EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = e.loja) AS aplica
             FROM insumo i
@@ -2407,6 +2440,95 @@ def mapa_receita_insumo():
     return receitas
 
 
+def buscar_receita_insumo(insumo_id):
+    """Receita de uma mistura feita na casa, com o custo de cada ingrediente
+    e o da batelada — o que a tela mostra pra ela conferir a conta."""
+    precos = _mapa_preco_insumo()
+    with conexao() as conn:
+        insumo = conn.execute(
+            "SELECT id, nome, unidade_medida, rendimento_receita FROM insumo WHERE id = ?", (insumo_id,)
+        ).fetchone()
+        if not insumo:
+            return None
+        linhas = conn.execute(
+            """
+            SELECT r.ingrediente_id, r.quantidade, i.nome, i.unidade_medida
+            FROM receita_insumo r JOIN insumo i ON i.id = r.ingrediente_id
+            WHERE r.insumo_id = ?
+            ORDER BY i.nome
+            """,
+            (insumo_id,),
+        ).fetchall()
+
+    ingredientes, custo_batelada, completo = [], 0.0, bool(linhas)
+    for linha in linhas:
+        preco = precos.get(linha["ingrediente_id"])
+        custo = linha["quantidade"] * preco if preco is not None and linha["quantidade"] is not None else None
+        if custo is None:
+            completo = False
+        else:
+            custo_batelada += custo
+        ingredientes.append({
+            "insumoId": linha["ingrediente_id"],
+            "nome": linha["nome"],
+            "unidadeMedida": linha["unidade_medida"],
+            "quantidade": linha["quantidade"],
+            "custoUnitario": preco,
+            "custo": round(custo, 4) if custo is not None else None,
+        })
+    rendimento = insumo["rendimento_receita"]
+    return {
+        "insumoId": insumo["id"],
+        "nome": insumo["nome"],
+        "unidadeMedida": insumo["unidade_medida"],
+        "rendimento": rendimento,
+        "ingredientes": ingredientes,
+        # Só com a receita inteira precificada — metade da conta daria um
+        # custo menor que o real (mesma regra da ficha técnica).
+        "custoBatelada": round(custo_batelada, 2) if completo else None,
+        "custoPorUnidade": round(custo_batelada / rendimento, 6) if completo and rendimento else None,
+    }
+
+
+def definir_receita_insumo(insumo_id, rendimento, ingredientes):
+    """Substitui a receita inteira da mistura. `ingredientes` =
+    [{"insumoId", "quantidade"}]; lista vazia apaga a receita e o insumo volta
+    a ser tratado como comprado pronto. Levanta ValueError pra receita que
+    usa a si mesma, direta ou indiretamente — isso travaria o custo e a
+    baixa de tudo que leva a mistura."""
+    ingredientes = [i for i in ingredientes if i.get("insumoId")]
+    if ingredientes and not (rendimento and rendimento > 0):
+        raise ValueError("Informe quanto a receita rende.")
+    ids = [int(i["insumoId"]) for i in ingredientes]
+    if len(ids) != len(set(ids)):
+        raise ValueError("O mesmo ingrediente aparece duas vezes na receita.")
+
+    receitas = mapa_receita_insumo()
+    receitas[insumo_id] = {"rendimento": rendimento, "ingredientes": {i: 1 for i in ids}}
+    pendentes, vistos = list(ids), set()
+    while pendentes:
+        atual = pendentes.pop()
+        if atual == insumo_id:
+            raise ValueError("A receita usa ela mesma (direto ou dentro de outra mistura).")
+        if atual in vistos:
+            continue
+        vistos.add(atual)
+        pendentes.extend(receitas.get(atual, {}).get("ingredientes", {}))
+
+    with conexao() as conn:
+        conn.execute("DELETE FROM receita_insumo WHERE insumo_id = ?", (insumo_id,))
+        for ingrediente in ingredientes:
+            quantidade = ingrediente.get("quantidade")
+            conn.execute(
+                "INSERT INTO receita_insumo (insumo_id, ingrediente_id, quantidade) VALUES (?, ?, ?)",
+                (insumo_id, int(ingrediente["insumoId"]), float(quantidade) if quantidade not in (None, "") else None),
+            )
+        conn.execute(
+            "UPDATE insumo SET rendimento_receita = ? WHERE id = ?",
+            (float(rendimento) if ingredientes else None, insumo_id),
+        )
+
+
 def _custo_das_receitas(precos, receitas):
     """Custo por unidade de cada insumo preparado na casa: o que custa a
     batelada inteira, dividido pelo que ela rende. Resolve em cascata, porque
@@ -2494,6 +2616,10 @@ def _mapa_preco_insumo():
         precos[linha["insumo_id"]] = linha["preco"]
     for insumo_id, info in buscar_ultima_compra_por_insumo().items():
         precos[insumo_id] = info["preco"]
+    # Mistura feita na casa custa o que foi dentro dela, então o custo da
+    # receita ganha de tudo acima — uma "compra" de Tempero Batata seria erro
+    # de cadastro. Receita incompleta não entra aqui: fica o que já valia.
+    precos.update(_custo_das_receitas(precos, mapa_receita_insumo()))
     return precos
 
 
@@ -2800,28 +2926,39 @@ def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
     with conexao() as conn:
         linhas = conn.execute(
             f"""
-            SELECT v.unidade, f.insumo_id, i.nome AS insumo_nome, i.unidade_medida,
-                   SUM(v.quantidade * f.quantidade) AS total_consumido
+            SELECT v.unidade, f.insumo_id, SUM(v.quantidade * f.quantidade) AS total_consumido
             FROM ({SQL_ITENS_CONSUMIDOS}) v
             JOIN ficha_tecnica f ON f.item_id = v.item_id AND f.loja = v.unidade
-            JOIN insumo i ON i.id = f.insumo_id
             WHERE {' AND '.join(condicoes)}
             GROUP BY v.unidade, f.insumo_id
-            ORDER BY i.categoria, i.nome
             """,
             parametros,
         ).fetchall()
-
-    return [
-        {
-            "unidade": linha["unidade"],
-            "insumoId": linha["insumo_id"],
-            "insumoNome": linha["insumo_nome"],
-            "unidadeMedida": linha["unidade_medida"],
-            "consumoMedioDiario": linha["total_consumido"] / dias,
+        insumos = {
+            linha["id"]: linha
+            for linha in conn.execute("SELECT id, nome, unidade_medida, categoria FROM insumo").fetchall()
         }
-        for linha in linhas
+
+    # Consumo é o que se compra: mistura feita na casa vira os ingredientes
+    # dela, senão a sugestão de compra pediria "Tempero Batata" em vez de sal.
+    receitas = mapa_receita_insumo()
+    por_loja = {}
+    for linha in linhas:
+        por_loja.setdefault(linha["unidade"], {})[linha["insumo_id"]] = linha["total_consumido"]
+
+    resultado = [
+        {
+            "unidade": loja,
+            "insumoId": insumo_id,
+            "insumoNome": insumos[insumo_id]["nome"],
+            "unidadeMedida": insumos[insumo_id]["unidade_medida"],
+            "consumoMedioDiario": total / dias,
+        }
+        for loja, consumo in por_loja.items()
+        for insumo_id, total in explodir_receitas_em_ingredientes(consumo, receitas).items()
+        if insumo_id in insumos
     ]
+    return sorted(resultado, key=lambda r: (insumos[r["insumoId"]]["categoria"] or "", r["insumoNome"]))
 
 
 # --- FORNECEDOR (diretório da rede, semente do módulo de Compras) ----------

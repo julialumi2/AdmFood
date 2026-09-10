@@ -1355,6 +1355,9 @@ const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', crit
 const STATUS_ICONE_ESTOQUE = { ok: 'check', baixo: 'trending-down', critico: 'alert-triangle' };
 
 let estoqueInsumos = [];
+// Mesmas lojas de INICIO_BAIXA_AUTOMATICA (backend/armazenamento.py) — só
+// nelas venda vira baixa, então só nelas a fila de pendências faz sentido.
+const LOJAS_COM_BAIXA_AUTOMATICA = ['Hamburgueria Artesanos', 'Açaí Na Lata'];
 let estoqueTabAtual = 'geral';
 let integracoesEstoqueUltimaLoja = null;
 let itensCardapioTodosCache = null;
@@ -1616,12 +1619,12 @@ function renderEstoqueTab() {
   if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
   // Painel de Integrações do Estoque (Etapa 0 do motor de compra) — só
-  // Hamburgueria Artesanos por enquanto, única loja com a baixa
-  // automática ligada (ver plano). Carrega uma vez por troca de loja, não
-  // a cada tecla da busca (que também chama renderEstoqueTab).
+  // nas lojas com baixa automática ligada (INICIO_BAIXA_AUTOMATICA em
+  // armazenamento.py). Carrega uma vez por troca de loja, não a cada tecla
+  // da busca (que também chama renderEstoqueTab).
   const cardIntegracoes = document.getElementById('integracoes-estoque-card');
   if (cardIntegracoes) {
-    const mostrarIntegracoes = isAdmin && estoqueTabAtual === 'Hamburgueria Artesanos';
+    const mostrarIntegracoes = isAdmin && LOJAS_COM_BAIXA_AUTOMATICA.includes(estoqueTabAtual);
     cardIntegracoes.style.display = mostrarIntegracoes ? '' : 'none';
     if (mostrarIntegracoes && integracoesEstoqueUltimaLoja !== estoqueTabAtual) {
       integracoesEstoqueUltimaLoja = estoqueTabAtual;
@@ -7254,6 +7257,7 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
     nome: document.getElementById('novo-item-nome').value,
     categoria: document.getElementById('novo-item-categoria').value,
     tipo: fichaTecnicaTipoAtual,
+    loja: fichaTecnicaLojaAtual,
   };
   const abriaFichaLogoEmSeguida = fichaTecnicaProdutoPendente;
   try {

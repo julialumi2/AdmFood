@@ -135,6 +135,10 @@ from backend.armazenamento import (
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
     CAMINHO_BANCO,
+    buscar_receita_insumo,
+    adicionar_produto_ao_cardapio,
+    definir_receita_insumo,
+    _mapa_preco_insumo,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -1003,6 +1007,7 @@ def _formatar_insumos(linhas):
             "marcaHomologada": linha['marca_homologada'],
             "unidadeCompra": linha['unidade_compra'],
             "fatorConversaoCompra": linha['fator_conversao_compra'],
+            "ehMistura": bool(linha['eh_mistura']),
             "fornecedorIds": mapa_fornecedores.get(linha['insumo_id'], []),
             "porLoja": {},
         })
@@ -1019,6 +1024,33 @@ def _formatar_insumos(linhas):
 @app.route('/api/insumos', methods=['GET'])
 def api_listar_insumos():
     return jsonify({"insumos": _formatar_insumos(listar_insumos())})
+
+
+@app.route('/api/insumos/<int:insumo_id>/receita', methods=['GET'])
+def api_buscar_receita_insumo(insumo_id):
+    """Receita da mistura feita na casa + o preço de todo insumo, pra tela
+    recalcular o custo da batelada enquanto ela edita."""
+    receita = buscar_receita_insumo(insumo_id)
+    if receita is None:
+        return jsonify({"erro": "Insumo não encontrado."}), 404
+    return jsonify({**receita, "precos": {str(k): v for k, v in _mapa_preco_insumo().items()}})
+
+
+@app.route('/api/insumos/<int:insumo_id>/receita', methods=['PUT'])
+def api_definir_receita_insumo(insumo_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        rendimento = float(dados["rendimento"]) if dados.get("rendimento") not in (None, "") else None
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Rendimento inválido."}), 400
+    try:
+        definir_receita_insumo(insumo_id, rendimento, dados.get("ingredientes") or [])
+    except (TypeError, ValueError) as erro:
+        return jsonify({"erro": str(erro)}), 400
+    return jsonify(buscar_receita_insumo(insumo_id))
 
 
 @app.route('/api/insumos', methods=['POST'])
@@ -1476,6 +1508,12 @@ def api_criar_item_cardapio():
         return jsonify({"erro": "Tipo inválido."}), 400
 
     item_id = criar_item_cardapio(nome, categoria, tipo=tipo)
+    # Produto criado na aba de uma loja entra no cardápio dela, senão não
+    # aparece na tela (que lista o cardápio de preços). Complemento não
+    # tem cardápio: a aba de complementos lista os itens direto.
+    loja = (dados.get('loja') or '').strip()
+    if tipo == 'produto' and loja in LOJAS:
+        adicionar_produto_ao_cardapio(loja, nome, categoria)
     return jsonify({"id": item_id})
 
 
