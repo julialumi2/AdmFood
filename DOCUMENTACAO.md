@@ -25,9 +25,19 @@ config.py                   → LOJAS (config por unidade, lida de env vars)
 sincronizar.py               → lógica de sincronização diária (usada pelo app.py e rodável isolada)
 backend/
   armazenamento.py           → toda a camada SQLite (schema + queries)
-  cardapio_web.py            → cliente da API da Cardápio Web
+  cardapio_web.py            → cliente da API da Cardápio Web (pedido, complementos, tamanho)
+  nomes_insumo.py            → casamento determinístico de nome de insumo (planilha ↔ cadastro)
+  precos_cardapio.py         → leitor da planilha "Comparativos de Preços"
+  vendas_semanais_planilha.py → leitor da planilha de vendas semanais
 importar_historico_sheets.py → script avulso de importação inicial (Google Sheets → SQLite)
 completar_pedidos_historico.py → script avulso de backfill de histórico
+sincronizar_periodo.py       → carga de histórico de venda (N dias), com paciência no limite da API
+atualizar_dados.py           → roda, em ordem, os passos de dado abaixo — é o que o botão
+                               "Atualizar dados pelas planilhas" executa em produção (seção 6.17)
+  importar_ficha_tecnica_faltante.py, importar_custos_insumo.py, migrar_insumo_para_grama.py,
+  limpar_fichas_copiadas.py, importar_ficha_acai.py, configurar_complementos_acai.py,
+  montar_cardapio_tradica.py, importar_sub_receitas.py → os passos (cada um roda sozinho
+                               também: sem --apply só simula)
 
 *.html / *.css               → uma página por arquivo, na raiz do projeto
 script.js                    → JS de todas as páginas, num arquivo só
@@ -47,10 +57,12 @@ inicializa o que é relevante pra ela.
 | `estoque.html` | Estoque — controle nativo de insumos por loja, sem depender de terceiro (ver seção 6.4) |
 | `fornecedores.html` | Fornecedores — diretório da rede, semente do módulo de Compras (ver seção 6.7) |
 | `cotacoes.html` | Cotações — comparação manual de preço por insumo entre fornecedores (ver seção 6.8) |
-| `cardapio.html` | Cardápio — comparativo de preços por canal de venda (iFood/99Food/BeeFood/Cardápio Web), só leitura, importado de planilha (ver seção 6.1) |
+| `cardapio.html` | Cardápio — preço por canal (iFood/99Food/BeeFood/Cardápio Web) e ficha técnica de cada produto e complemento, por loja (ver seções 6.1 e 6.5) |
 | `preparo.html` | Preparo — indicadores operacionais da cozinha (tempo médio do pedido, volume por horário, gargalos; ver seção 6.2) |
 | `clickup.html` | Quadro de tarefas (Kanban) |
-| `insight.html` | Insights — faturamento por período, por loja, por canal, por dia da semana |
+| `insight.html` | Insights → Vendas Diárias — faturamento por período, por loja, por canal, por dia da semana; inclui o painel de Preparo |
+| `vendas-semanais.html` | Insights → Vendas Semanais — CMV, %CMV e veredito por semana (ver seção 6.13) |
+| `curva-abc.html` | Insights → Curva ABC — de cardápio e de insumos (ver seção 6.12) |
 | `configuracoes.html` | Configurações — status dos tokens da Cardápio Web, sincronização manual, lançamento de venda presencial |
 | `login.html` | Login (e-mail + senha) — única página, além de `esquecisenha.html`, acessível sem estar logado |
 | `esquecisenha.html` | Orienta a falar com o admin pra redefinir a senha (não tem recuperação por e-mail) |
@@ -125,10 +137,12 @@ desse cache, nunca chama a Cardápio Web ao vivo numa requisição de página.
 
 **Em produção**, dois jobs do APScheduler rodam dentro do processo do Flask
 (`app.py`, gatilhados só se `SINCRONIZACAO_AUTOMATICA=true`):
-- Diário às 3h — reconfere os **últimos 3 dias** (não só ontem), com calma
+- Diário às 3h — reconfere os **últimos 7 dias** (não só ontem), com calma
+  (eram 3 até 2026-08-31: pedido reaberto pode levar mais que isso pra
+  voltar a "concluído")
 - A cada 15 min — resincroniza o dia de hoje, pra tela ir se atualizando quase em tempo real
 
-A reconferência dos últimos 3 dias existe porque um pedido que ainda
+A reconferência dos últimos dias existe porque um pedido que ainda
 estava "em andamento" (não `closed`/`delivered`) no momento de uma
 sincronização anterior fica de fora daquela vez — comum em dias de mais
 movimento, tipo sábado, onde vários pedidos só fecham depois da meia-noite.
@@ -153,6 +167,28 @@ console do navegador: `fetch('/api/sincronizar-agora?dia=2026-08-22', {method:'P
 
 **Segundas-feiras são dia de loja fechada** (`DIA_FECHADO = 0` em
 `sincronizar.py`) — a sincronização pula sem chamar a API.
+
+**Limite de requisição (429).** Estourar o limite da Cardápio Web devolve
+429, e sem espera a tentativa seguinte cai no mesmo minuto cheio — foi
+assim que uma carga de 90 dias em 2026-09-09 gravou 1 dia e falhou 76 em
+cascata (parecia que o processo "morria"). `_buscar` repete a chamada com
+espera crescente (ou o `Retry-After` da API); o histórico, que tem limite
+próprio de 5/min, é espaçado em `_respeitar_janela_historico`. A
+sincronização automática usa poucas tentativas (não pode ficar
+pendurada); carga longa aumenta.
+
+**Carga de histórico**: `python sincronizar_periodo.py "Loja" DIAS [ATE]`
+(ex: `90 60`, depois `60 30`...), mais devagar e com mais paciência no 429.
+Reprocessar dia já sincronizado é seguro (o dia é regravado inteiro).
+
+**Data de corte da baixa** (`INICIO_BAIXA_AUTOMATICA`, por loja:
+Artesanos desde 2026-09-08, Açaí desde 2026-09-11). Venda anterior ao dia
+de início nunca desconta estoque, venha a sincronização de onde vier —
+antes dessa trava, carregar histórico ou ressincronizar um dia antigo pela
+tela descontava meses de consumo do estoque de hoje. Atenção: na primeira
+madrugada depois da baixa entrar, a reconferência de 7 dias pode ter
+descontado a semana anterior de uma vez; uma contagem depois disso zera o
+efeito.
 
 ## 5. Vendas presenciais
 
@@ -2169,6 +2205,249 @@ decidido, a baixa automática desses 6 produtos simplesmente não desconta
 alface nenhuma (não é um erro silencioso de quantidade errada — é a
 ausência da linha, visível abrindo a Ficha Técnica de qualquer um deles).
 
+### 6.12 Motor de Compra — Etapas 6, 8 e 10 (embalagem e Curvas ABC)
+
+Concluídas em 2026-09-09, na ordem que a Julia aprovou depois do roadmap
+das 10 etapas (Etapas 1–4 dependem de ~4 semanas de consumo real
+acumulado; a 7, de compras recebidas no sistema).
+
+**Etapa 6 — arredondamento por embalagem.** `insumo.unidade_compra` +
+`insumo.fator_conversao_compra` ("1 caixa = 12 kg"). A sugestão de compra
+(`arredondar_quantidade_compra` no backend, `arredondarQuantidadeCompra`
+no front — mesma regra nos dois lados) sobe o déficit pro próximo múltiplo
+fechado da embalagem. Sem fator cadastrado, cai no arredondamento antigo.
+
+**Etapa 8 — Curva ABC de insumos** (`curva_abc_insumos(dias=90)`). Base é
+compra **recebida** no período (quantidade × preço do recebimento — o
+dinheiro que saiu de verdade, não o cotado). A = topo que junta 80% do
+gasto, B até 95%, C a cauda. `mapa_curva_abc_insumos` marca na conferência
+da Requisição o que pede olho humano antes de aprovar. Sem compra recebida
+no período, a lista volta vazia de propósito (sem inventar base).
+
+**Etapa 10 — Curva ABC de cardápio** (`curva_abc_cardapio(loja, dias=30)`,
+tela `curva-abc.html`, aba "Cardápio"). Cruza volume × margem × CMV real.
+Curva A = acumulado de 80% da margem **e** volume acima da mediana (os
+dois, senão item caro de giro baixo entraria como pilar). Curva C fraca =
+terço de menor volume **e** terço de pior CMV ao mesmo tempo, nunca um só
+— e nunca produto marcado `item_cardapio.protegido` (opção vegetariana,
+item de assinatura). Produto sem custo confiável aparece como "sem CMV":
+com volume e receita, fora das duas listas. O preço vem da lista de preços
+por canal (`_CANAL_VENDA_PARA_PRECO`) e, desde 2026-09-10, o custo do
+"monte o seu" soma o custo médio dos complementos escolhidos (seção 6.15).
+
+Menu: "Insights" virou submenu (Curva ABC, Vendas Diárias, Vendas
+Semanais), no mesmo formato de "Compras". O Preparo (seção 6.2) entrou
+dentro de Vendas Diárias em vez de tela própria, a pedido da Julia.
+
+**Combo desconta os lanches de dentro** (2026-09-09). Combo não tem ficha
+própria: `composicao_produto_venda` diz de que ele é feito (nome vendido
+normalizado → N itens com quantidade), definido pelo modal "Vincular" da
+fila de pendências (modo combo). `SQL_ITENS_CONSUMIDOS` junta numa query
+só as três formas de uma venda virar consumo: produto casado direto,
+combo decomposto e complemento escolhido (seção 6.15) — baixa de estoque
+e consumo médio usam a mesma definição de "quanto saiu".
+
+### 6.13 Vendas Semanais (CMV, %CMV e veredito por semana)
+
+Tela `vendas-semanais.html` (Insights → Vendas Semanais), redesenhada em
+2026-09-09 pra o chefe ver, de forma objetiva, o que ele acompanhava na
+planilha "RELATÓRIO VENDAS SEMANAL": faturamento por canal, total, CMV em
+R$, %CMV com veredito (ÓTIMO < 31%, BOM 31–34%, RUIM > 34% — a mesma
+fórmula da planilha), promoção da loja e variação contra a semana
+anterior. Cores do veredito deliberadamente diferentes do vermelho da
+marca, pra "RUIM" não se confundir com o visual do sistema.
+
+`listar_resultado_semanal(unidade)` monta cada semana e marca a origem:
+`sistema` quando a sincronização diária cobre a semana (inclusive a
+semana em andamento), `planilha` pro histórico antigo importado. CMV e
+promoção da semana são campos editáveis na própria tela
+(`resultado_semanal`). O histórico (74 semanas por loja) entra pelo botão
+"Importar planilha" da tela — `backend/vendas_semanais_planilha.py`, o
+mesmo leitor do script `importar_vendas_semanais.py` —, que nunca
+sobrescreve semana que já existe. Intenção da Julia: parar de usar a
+planilha e deixar tudo no sistema.
+
+### 6.14 Unidade de medida, custo de insumo e conteúdo por pacote
+
+Três decisões que se complementam, todas vindas de erros reais:
+
+**Unidade base + exibição escalada** (2026-09-09, ideia da Julia). O
+cadastro guarda na unidade menor (g, ml) e a tela mostra em kg/L acima de
+1000 (`_formatarQuantidade`: "850 g", "4,95 kg"). Carne e frango migraram
+de "unidade" pra grama (`migrar_insumo_para_grama.py`: 1 disco = 110 g,
+1 burger de frango = 100 g, confirmado pela Julia), convertendo junto
+estoque, mínimo, lotes, contagens, cotações, pedidos (preço dividido) e o
+razão da baixa automática — sem este último, a próxima sincronização
+compararia grama com unidade e descontaria a diferença inteira de uma vez.
+
+**Custo de referência** (`insumo.custo_referencia`, `importar_custos_insumo.py`).
+Custo por unidade da aba "Insumos" da planilha de CMV do chefe — o último
+da fila em `_mapa_preco_insumo` (cotação e compra recebida passam na
+frente sozinhas). O import **confere a unidade**: preço por kg num insumo
+contado por unidade faria cada hambúrguer custar um quilo de carne — foi
+exatamente o erro que produziu um CMV de 18.000% em 09/09. Conversões
+permitidas: kg↔g, L↔ml e g↔ml (densidade ≈ 1, avisada no relatório);
+o resto é recusado e o custo antigo errado é apagado. Regra geral: **custo
+só é calculado quando a receita inteira tem preço** — "sem CMV" é melhor
+que um custo menor que o real na tela que decide corte de cardápio.
+
+**Conteúdo por unidade** (2026-09-10, `insumo.conteudo_por_unidade` +
+`unidade_conteudo`). Pra insumo comprado e contado por pacote mas usado em
+grama na receita — o Açaí conta "Amendoim triturado 1kg" em sacos. No
+cadastro: "Cada unidade tem 1000 g". Na ficha técnica a linha ganha um
+seletor g/un e abre em grama: "14 g" fica gravado como 0,014 un
+(`_quantidadeBaseDaLinhaFicha`); a receita mostra "14 g (0,014 un)".
+Estoque, compra e custo continuam por pacote. O campo de quantidade da
+ficha também deixou de ter `step="0.01"`, que fazia o navegador recusar
+0,014 em silêncio. Nos scripts, `quantidade_para_insumo` e
+`custo_para_insumo` (`importar_ficha_tecnica_faltante.py`) fazem a mesma
+conversão, e pacote sem conteúdo cadastrado deixa a quantidade em branco
+em vez de chutar.
+
+### 6.15 Complementos escolhidos no pedido (Açaí "monte o seu")
+
+Concluído em 2026-09-10. No "NaLata 330ml + 3 complementos" a receita é o
+que o cliente escolhe, e a Cardápio Web manda as escolhas em cada item do
+pedido, em `options` (investigado ao vivo, 116 pedidos): grupos "ESCOLHA 3
+Toppings 500ml", "Escolha até 5 adicionais", "Toppings EXTRAS" (pagos),
+"Escolha suas frutas", "Acompanha 1 adicional", e nos combos as opções vêm
+sem nome de grupo. Dá pra escolher o mesmo complemento duas vezes.
+
+**Leitura** (`_itens_vendidos`, `backend/cardapio_web.py`). Cada opção vira
+um complemento do item, com a quantidade multiplicada pela do item. O
+tamanho do copo não é complemento: vem como opção "Tamanho: 330ml" ou
+colado no nome ("NaLata Paçoca - 500ML") e completa o nome do produto
+("NaLata Paçoca 500ml"), que antes não casava com nada. Só volume em ml
+conta como tamanho ("Tamanho: Média" de uma batata não mexe em nome). O
+corte de combo "Lanche + Extra" não se aplica a "+ N complementos" — ele
+transformaria o produto em "NaLata 330ml".
+
+**Gravação.** `venda_complemento` (tabela à parte, pra "Leite condensado"
+nunca aparecer como produto nos relatórios), casado com um item
+`tipo='complemento'` pelo mesmo `_casar_item_cardapio` e pelos vínculos
+manuais ("Chocoboll" → Chocoball). Entra em `SQL_ITENS_CONSUMIDOS`, então
+baixa e consumo médio seguem a ficha de cada complemento (ex: "Leite
+condensado" = 70 g). A receita base do "monte o seu" fica só com açaí +
+embalagem, e o Frutas ao Creme só com a embalagem.
+
+**Baixa no Açaí** ligada a partir de 2026-09-11 (`INICIO_BAIXA_AUTOMATICA`
+passou a ser por loja). A fila de pendências do Estoque aparece em toda
+loja com baixa automática e mostra também o complemento sem cadastro
+("· complemento") — mas só na loja que trabalha com complemento, porque no
+Artesanos as opções do pedido são "Sem cebola", "Ao ponto"...
+
+**CMV.** A Curva ABC soma ao produto o custo médio dos complementos que
+vieram de verdade, e a receita dos toppings pagos; complemento sem custo é
+estimado pela média dos que têm, e acima de 20% sem custo o produto fica
+"sem CMV". Primeiro número real: o "330ml + 3 complementos" custa
+R$ 10,23 por copo (CMV 36,8%) — mais que o exemplo da planilha, porque o
+cliente escolhe muito leite condensado e creme de avelã.
+
+Cadastros (19 complementos com porção, variações de nome, receita base,
+combos Filhinho/Filminho/Família como 2 ou 4 copos base):
+`configurar_complementos_acai.py`, passo do botão da seção 6.17. As porções
+de creme como topping e do Chocoball não estão na planilha do chefe — são
+valores de partida (60 g e 30 g) pra loja conferir.
+
+### 6.16 Receita de mistura (insumo feito na casa)
+
+Concluída em 2026-09-10. Tempero, molho e maionese não são comprados
+prontos. `receita_insumo` (insumo → ingredientes com quantidade) +
+`insumo.rendimento_receita` (quanto a batelada rende, na unidade do
+próprio insumo — não dá pra deduzir somando, porque o que vai ao fogo
+perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
+
+- **Custo**: `_custo_das_receitas` calcula a mistura pelo que vai dentro,
+  em cascata (o Molho Especial leva Maionese da Casa, que tem receita
+  própria), e esse custo ganha de qualquer outro em `_mapa_preco_insumo`.
+  Receita incompleta não entra: fica o custo digitado. Receita circular
+  é ignorada em vez de travar a tela.
+- **Baixa e consumo**: `explodir_receitas_em_ingredientes` troca a mistura
+  pelos ingredientes, em `aplicar_baixa_estoque_dia` e em
+  `consumo_medio_insumo`. Vendeu batata → desconta sal, páprica e açúcar,
+  e a sugestão de compra pede sal, não "tempero pronto". A mistura não tem
+  baixa própria (contar os dois seria contar a mesma compra duas vezes); o
+  preço disso é que o tempero já no pote conta como consumido — no máximo
+  uma batelada, pro lado seguro. A baixa cria a linha de estoque do
+  ingrediente na loja quando ainda não existe, pra não sumir calada.
+- **Tela**: botão de chapéu de chef em cada insumo do Estoque, com o custo
+  da batelada recalculando enquanto edita (a rota GET manda o preço de
+  todo insumo junto); insumo com receita ganha o selo "mistura". Trava
+  contra receita que usa a si mesma (`definir_receita_insumo`).
+- **Import**: `importar_sub_receitas.py` lê as 9 misturas da aba
+  "Sub-Receitas" (Tempero Smash R$ 7,02/kg e Tempero Batata R$ 4,14/kg,
+  iguais à planilha) e cria os 14 ingredientes que faltavam. Ingrediente
+  que é outra mistura casa com ela ("Maionese da Casa" →
+  "Maionese da Casa (caseira)"), senão a cascata quebraria. O suco de
+  limão da Maionese entra com quantidade em branco (receita em g, cadastro
+  conta limão por unidade), deixando a receita incompleta em vez de mais
+  barata que a real.
+
+### 6.17 Levar dado pra produção: botão "Atualizar dados pelas planilhas"
+
+**O banco de produção não vai no push.** Ele fica num volume do Dokploy
+(`DATABASE_PATH`); o push leva só código. Tudo que é importado por script
+no banco local fica só no local — foi assim por dois dias (09–10/09) até
+alguém perceber. E o repositório `julialumi2/AdmFood` é **público** no
+GitHub (confirmado pela API em 2026-09-10), então planilha com custo,
+receita ou preço de fornecedor não pode ir pro git.
+
+Solução: Configurações → "Atualizar dados pelas planilhas" (só admin,
+`api_atualizar_dados` em `app.py`). Recebe as planilhas por upload (Ficha
+Técnica do Artesanos, CMV do Açaí, Comparativos de Preços e, opcional, o
+painel de Compras da Tradiça) e roda `atualizar_dados.py`, que executa os
+passos na ordem certa. Cada passo confere o estado antes de mexer, então
+rodar de novo não refaz nada:
+
+1. Unidade do Provolone e do Brie empanado
+2. Carne e frango de unidade pra grama
+3. Receitas e gramaturas que faltam no Artesanos
+4. Custo à mão errado da Batata Individual (o preço do quilo, R$ 12,50)
+5. Receitas do Artesanos copiadas nas outras lojas (a migração pra
+   ficha-por-loja copiou 19 hambúrgueres pra Tradiça e Açaí)
+6. Ficha técnica do Açaí
+7. Complementos do Açaí
+8. Cardápio da Tradiça (só as abas da Tradiça, só se a loja não tiver)
+9. Insumos e esqueleto de receita da Tradiça
+10. Receita das misturas
+11. Custo dos insumos (por último, pra pegar os insumos criados antes)
+
+**Simular** roda o mesmo processo numa cópia do banco (feita pela API de
+backup do SQLite, segura mesmo com o sistema gravando) e mostra o
+relatório; **Aplicar** só libera depois de uma simulação bem-sucedida com
+os mesmos arquivos e faz backup antes (`backups/` no mesmo volume).
+
+**Reaproveitar o que foi cadastrado à mão.** Em produção os insumos do
+Açaí foram cadastrados por pacote, com os nomes da planilha ("Amendoim
+triturado 1kg"). `localizar_insumo` (`backend/nomes_insumo.py`) casa pelo
+nome que o import daria, pelo nome da planilha ou pelo nome sem o tamanho
+do pacote — nunca dois tamanhos diferentes ("Lata embalagem 500ml" não é
+a de 300ml) e nunca quando dois insumos têm a mesma base (decisão
+humana). O relatório lista os insumos que a loja já tinha e os que vão ser
+criados, pra conferir duplicata antes de aplicar. A limpeza da receita
+base do "monte o seu" tira só insumo de complemento — o que foi montado à
+mão fica —, e a limpeza das cópias só desvincula insumo que também é do
+Artesanos.
+
+**Tradiça.** Não existe planilha de receita dos hot dogs. O passo 9 cria
+os insumos (custo pela planilha de compras quando o tamanho do pacote está
+no nome; salsicha "pct 5Kg" a R$ 35,17 fica sem custo porque pode ser o
+pacote ou o quilo) e o esqueleto da receita — pão, salsicha e o que o nome
+do produto garante —, com as gramas em branco pra Julia preencher na tela.
+A lista de preços casa "Calabreso (com Calabresa)" com o item "Calabreso"
+ignorando o parêntese (`ignorar_parenteses`, só na lista de preços: nas
+vendas, "BACON (duplo)" não é o BACON simples).
+
+**Import de preços** (seção 6.1, corrigido em 2026-09-10): a planilha de
+02/09 trocou a aba única das Tradiças por "Comparativo de preços ZN" e
+"Comparativo de preços Simus", e o import pulava as duas sem avisar — por
+isso as Tradiças estavam sem cardápio. Agora lê os dois formatos, compara
+aba sem diferenciar maiúscula e **para com erro** se aparecer aba de preço
+desconhecida. Produto criado pelo "Novo item" do Cardápio passou a entrar
+no cardápio da loja (antes era criado mas nunca aparecia, porque a tela
+lista o cardápio de preços) e é marcado `preco_cardapio.manual`, pra
+reimportação da planilha não apagá-lo.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -2184,6 +2463,12 @@ Todos em `app.py`, prefixo `/api`.
 **Configuração / Sincronização**
 - `GET /api/config/lojas` — status de cada loja (token mascarado, última sincronização)
 - `POST /api/sincronizar-agora?dia=AAAA-MM-DD` — dispara sincronização em background (sem `?dia`, sincroniza ontem)
+- `POST /api/admin/atualizar-dados` — botão "Atualizar dados pelas planilhas" (multipart: `modo=simular|aplicar` + as planilhas); devolve o relatório e, ao aplicar, o nome do backup — só admin (seção 6.17)
+
+**Receita de mistura / conteúdo por pacote** (seções 6.14 e 6.16)
+- `GET /api/insumos/<id>/receita` — receita da mistura + custo da batelada + preço de todo insumo
+- `PUT /api/insumos/<id>/receita` — substitui a receita (`rendimento` + `ingredientes`); lista vazia apaga — só admin
+- `POST|PUT /api/insumos` — aceitam `conteudoPorUnidade` + `unidadeConteudo` ("1 un = 1000 g")
 
 **Venda presencial**
 - `GET|POST|DELETE /api/venda-presencial` — listar/lançar/excluir (só unidades em `UNIDADES_COM_PRESENCIAL`)
@@ -2343,7 +2628,7 @@ Lista viva do que falta pro sistema ficar 100% funcional (conversa de
 6. **Agente no WhatsApp pra relatórios sob demanda** — perguntar todo dia de manhã, num grupo, quanto vendeu no presencial (Art e Tradiça ZN) do dia anterior, e a própria Julia responder pra atualizar o sistema. Depende do item 2 (acesso à API do WhatsApp).
 7. **Cardápio (comparativo de preços)** — ✅ concluído em 2026-08-21 (tela nova com fotos, edição de preço protegida por botão "Editar" e importação de planilha — ver seção 6.1). Fica faltando só a Julia (ou quem for editar) subir as fotos dos produtos que ainda não têm, pela própria tela.
 8. **Preparo** — ✅ concluído em 2026-08-24 (indicadores operacionais da cozinha — ver seção 6.2). Pivotou de KDS em tempo real (pedido do rascunho original da Julia) pra tela de relatório, depois de investigar e confirmar que a API da Cardápio Web não expõe o momento em que a cozinha termina de preparar.
-9. **Aviso de estoque baixo/vencendo + quantidade ideal inteligente** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`) e card "Lotes vencendo" com botão de resolver (seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`) e coluna "Consumo médio/dia" na tela de Estoque (seção 6.6); coluna "Qtd. ideal (7 dias)" = consumo médio × 7, com "comprar X" destacado quando o atual fica abaixo do ideal (concluído em 2026-08-25). **"Quantidade ideal inteligente"** (as 3 peças que a Kethllyn pediu no roteiro de compras, ver seção 6.9) ✅ concluída em 2026-08-27: ajuste manual por insumo/loja, copiar de loja parecida (loja nova sem histórico) e datas especiais (feriado/evento aumentando a conta calculada com antecedência) — deliberadamente **sem** IA/caixa-preta, ela pediu conta simples e visível. Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — hoje só 20 itens da Hamburgueria Artesanos, a maioria sem gramatura, aguardando o chefe da loja definir e passar as quantidades, sem prazo (sem isso, a quantidade ideal calculada fica "—" pra maioria dos insumos, mesmo com ajuste manual/cópia/data especial prontos); (b) o "aviso" em si sendo empurrado (WhatsApp) — hoje é passivo, só aparece pra quem abrir a tela; depende do item 2.
+9. **Aviso de estoque baixo/vencendo + quantidade ideal inteligente** — 🟡 em andamento (iniciado 2026-08-25). Pronto: schema de lotes de validade (`lote_insumo`) e card "Lotes vencendo" com botão de resolver (seção 6.4); cálculo de consumo médio a partir de Ficha Técnica × vendas reais (`venda_item` + `consumo_medio_insumo`) e coluna "Consumo médio/dia" na tela de Estoque (seção 6.6); coluna "Qtd. ideal (7 dias)" = consumo médio × 7, com "comprar X" destacado quando o atual fica abaixo do ideal (concluído em 2026-08-25). **"Quantidade ideal inteligente"** (as 3 peças que a Kethllyn pediu no roteiro de compras, ver seção 6.9) ✅ concluída em 2026-08-27: ajuste manual por insumo/loja, copiar de loja parecida (loja nova sem histórico) e datas especiais (feriado/evento aumentando a conta calculada com antecedência) — deliberadamente **sem** IA/caixa-preta, ela pediu conta simples e visível. Falta: (a) a Ficha Técnica ficar completa pras 4 lojas — em 2026-09-10: Artesanos com 26 produtos (7 gramaturas pendentes), Açaí com 30 de 32 produtos + 19 complementos (seções 6.15 e 6.17), Tradiça com o cardápio oficial e o esqueleto das receitas, gramas a preencher na tela (seção 6.17); (b) o "aviso" em si sendo empurrado (WhatsApp) — hoje é passivo, só aparece pra quem abrir a tela; depende do item 2.
 
 **Confirmado com números reais em 2026-08-31** (ao testar a "sugestão por
 tendência" abaixo — ela também depende dessa mesma Ficha Técnica): de 600
@@ -2377,7 +2662,7 @@ antes se corrigem sozinhos na reconferência automática dos últimos 7
 dias (ver seção 6.3), ou com uma ressincronização manual pra ir mais
 longe no histórico.
 
-10. **Baixa automática de estoque por venda real (produto + complemento) e "quebra"** — 🟡 fase 2 concluída em 2026-09-08 (documento "Motor de Sugestão de Compra Inteligente" do chefe da Julia — ver seção 6.11). **Fase 1** ✅ (ver "Ficha técnica de complemento" na seção 6.5) — só a receita do complemento em si dentro do AdmFood. **Fase 2 (Etapa 0 do motor)** ✅ — baixa automática de estoque a partir da venda do **produto principal**, casado com a Ficha Técnica, com fila de pendência + vínculo manual permanente (seção 6.11); por enquanto só Hamburgueria Artesanos. **Fases seguintes, ainda não iniciadas**: (a) casar também cada **complemento** escolhido (a API da Cardápio Web já expõe isso, confirmado ao vivo — só falta capturar); (b) comparação com a Contagem física mostrando a quebra; (c) gerar pedido de compra automático a partir da quebra; (d) expandir a Etapa 0 pras outras 3 lojas, quando tiverem Ficha Técnica completa. Etapas 1-9 do documento do chefe (médias ponderadas, margem de segurança variável, calendário de eventos, arredondamento de embalagem, Índice de Quebra, Curva ABC, Sugestão Tripla) dependem da Etapa 0 rodando e coletando dado real primeiro — plano completo salvo, a decidir com a Julia por onde continuar.
+10. **Baixa automática de estoque por venda real (produto + complemento) e "quebra"** — 🟡 fase 2 concluída em 2026-09-08 (documento "Motor de Sugestão de Compra Inteligente" do chefe da Julia — ver seção 6.11). **Fase 1** ✅ (ver "Ficha técnica de complemento" na seção 6.5) — só a receita do complemento em si dentro do AdmFood. **Fase 2 (Etapa 0 do motor)** ✅ — baixa automática de estoque a partir da venda do **produto principal**, casado com a Ficha Técnica, com fila de pendência + vínculo manual permanente (seção 6.11); por enquanto só Hamburgueria Artesanos. **Atualização de 2026-09-10**: ✅ complemento escolhido no pedido virou baixa e CMV (seção 6.15); ✅ baixa ligada também no Açaí, a partir de 11/09; ✅ receita de mistura em cascata (seção 6.16); ✅ Etapas 6, 8 e 10 do documento do chefe (seção 6.12). **Ainda não iniciadas**: (b) comparação com a Contagem física mostrando a quebra — é a Etapa 7 (Índice de Quebra), que depende de compras recebidas pelo sistema; (c) pedido de compra automático a partir da quebra; (d) baixa na Tradiça, quando as gramas dos hot dogs estiverem preenchidas; Etapas 1–4 (médias ponderadas, margem de segurança variável, calendário de eventos) precisam de ~4 semanas de consumo real acumulado; Etapa 9 (Sugestão Tripla) depois delas.
 
 11. **Cotação manual gerar pedido de compra de verdade** — 🟡 decisão em
 aberto (2026-09-04). Hoje "Gerar pedidos" só funciona pra cotação que
@@ -2389,6 +2674,26 @@ pedido real também, o que exigiria uma etapa nova de "quantidade por
 loja" antes de gerar) ou se cotação manual fica só pra pesquisa de
 preço/marcar vencedor, com o pedido real sempre saindo da Requisição —
 aguardando resposta.
+
+12. **Pendências de informação da loja** (levantadas em 2026-09-10 — o
+sistema está pronto, falta o número):
+   - **Tradiça**: gramas de cada hot dog (esqueleto já na tela), ficha do
+     Franguitos, preço do pão de hot dog (não aparece nas compras), da
+     salsicha (os R$ 35,17 do "pct 5Kg" são do pacote ou do quilo?) e do
+     requeijão; receita do Purê (batata + leite + margarina) pela tela de
+     receita de mistura.
+   - **Artesanos**: 7 gramaturas (Queijo ×3, Queijo cheddar, Catupiry ×2,
+     Maionese branca); peso de 1 disco de Catupiry (o Big Jump está com
+     "1 g"); quantos limões vão numa batelada de Maionese da Casa;
+     rendimento real de cebola caramelizada, cebola crispy e bacon
+     empanado (a planilha diz que rendem a soma dos ingredientes).
+   - **Açaí**: conteúdo de cada pacote nos insumos contados por unidade
+     ("Cada unidade tem 1000 g"); porção de creme como topping e do
+     Chocoball (valores de partida 60 g e 30 g); preço do Chocoball;
+     contagem de estoque em 11/09, quando a baixa automática começa.
+   - **Segurança**: o repositório no GitHub é público — tornar privado
+     (antes, confirmar que o Dokploy tem acesso ao GitHub, senão o deploy
+     para).
 
 ## 10. Padrões do projeto (pra manter consistência em mudanças futuras)
 
@@ -2411,3 +2716,24 @@ aguardando resposta.
   Técnica dentro de "Cardápio"), o modo vem de um `?aba=` na URL e o
   próprio JS da página marca o sub-item ativo e alterna os `#modo-*` — o
   grupo em si não sabe a diferença entre os dois casos.
+- **Dado de negócio chega em produção por passo do `atualizar_dados.py`**
+  (botão da seção 6.17), nunca por SQL solto no banco local: o banco de
+  produção não vai no push. Todo passo novo precisa ser idempotente, ter
+  simulação e ser testado duas vezes numa cópia — uma "do zero" e uma
+  montada como a de produção (insumos cadastrados à mão, por pacote).
+- **Repositório público**: nada de planilha, custo, receita ou preço de
+  fornecedor no git. Preço entra por upload; o código guarda só estrutura
+  (que linha da planilha vira qual insumo).
+- **Unidade**: número de planilha nunca entra sem conferir a unidade do
+  insumo cadastrado — `quantidade_para_insumo`/`custo_para_insumo` fazem
+  a conversão (inclusive pacote com conteúdo). Quando não dá pra
+  converter, a linha entra com a quantidade **em branco**, não some: sem a
+  linha, a receita pareceria completa e o custo sairia menor que o real.
+- **Nome**: casamento só por regra determinística (`resolver`,
+  `localizar_insumo` em `backend/nomes_insumo.py`) — nada de similaridade.
+  Dois candidatos pra mesma regra é decisão humana.
+- **Teste no banco local não pode deixar dado pra trás**: item, vínculo ou
+  venda de teste criados no banco de verdade contaminaram a análise por
+  dias (em 2026-09-10 um vínculo de teste fazia 266 vendas do Tasty Bacon
+  contarem como BIG ART). Testar em cópia (`DATABASE_PATH` apontando pra
+  um arquivo temporário).
