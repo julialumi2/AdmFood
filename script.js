@@ -1679,7 +1679,7 @@ function renderEstoqueTab() {
             <div>
               <span class="font-bold">${escaparHtml(insumo.nome)}</span>
               <span class="insumo-unidade">${escaparHtml(insumo.unidadeMedida)}</span>
-              ${insumo.ehMistura ? '<span class="tag-mistura" title="Feito na casa: quando sai, o estoque desconta os ingredientes da receita">mistura</span>' : ''}
+              ${insumo.ehMistura ? '<span class="tag-mistura" title="Feito na casa: quando sai, o estoque desconta os ingredientes da receita (Cardápio → Misturas)">mistura</span>' : ''}
             </div>
           </div>
         </td>
@@ -1718,9 +1718,6 @@ function renderEstoqueTab() {
             <button type="button" class="btn-acao-icone" data-acao="editar-insumo" data-insumo-id="${insumo.id}" title="Editar cadastro do insumo (fornecedores, marca)">
               <i data-lucide="settings-2"></i>
             </button>
-            <button type="button" class="btn-acao-icone ${insumo.ehMistura ? 'ativo' : ''}" data-acao="receita-insumo" data-insumo-id="${insumo.id}" title="${insumo.ehMistura ? 'Receita da mistura' : 'Cadastrar receita (insumo feito na casa)'}">
-              <i data-lucide="chef-hat"></i>
-            </button>
             <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)">
               <i data-lucide="trash-2"></i>
             </button>
@@ -1737,9 +1734,12 @@ function renderEstoqueTab() {
 // --- RECEITA DA MISTURA (insumo feito na casa: tempero, molho...) ---
 // Vendeu um produto que leva a mistura, a baixa desconta os ingredientes
 // daqui, e o custo dela sai desta conta (ver definir_receita_insumo e
-// explodir_receitas_em_ingredientes em armazenamento.py). A API manda o
-// preço de todo insumo junto, pra o custo da batelada recalcular na hora.
-let receitaInsumoAtual = null; // { insumoId, unidadeMedida, precos }
+// explodir_receitas_em_ingredientes em armazenamento.py). A janela fica no
+// Cardápio → Misturas, junto com as fichas técnicas (pedido da Julia,
+// 2026-09-10 — antes era um botão no Estoque). A API manda o preço e a
+// unidade de todo insumo junto, pra montar a lista de ingredientes e o
+// custo da batelada recalcular na hora.
+let receitaInsumoAtual = null; // { insumoId, unidadeMedida, precos, insumos }
 
 // Custo é gravado na unidade do insumo (é o que o CMV multiplica pela
 // quantidade da receita), mas em grama e ml a tela mostra e recebe por kg e
@@ -1761,7 +1761,9 @@ async function abrirModalReceitaInsumo(insumoId) {
     const resposta = await fetch(`/api/insumos/${insumoId}/receita`);
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível abrir a receita.');
-    receitaInsumoAtual = { insumoId, unidadeMedida: dados.unidadeMedida, precos: dados.precos || {} };
+    receitaInsumoAtual = {
+      insumoId, unidadeMedida: dados.unidadeMedida, precos: dados.precos || {}, insumos: dados.insumos || [],
+    };
     document.getElementById('receita-insumo-nome').textContent = dados.nome;
     document.getElementById('receita-rendimento').value = dados.rendimento ?? '';
     document.getElementById('receita-rendimento-unidade').textContent = dados.unidadeMedida;
@@ -1782,7 +1784,7 @@ function fecharModalReceitaInsumo() {
 }
 
 function _adicionarLinhaReceita(ingrediente) {
-  const opcoes = estoqueInsumos
+  const opcoes = receitaInsumoAtual.insumos
     .filter(i => i.id !== receitaInsumoAtual.insumoId)
     .sort((a, b) => a.nome.localeCompare(b.nome))
     .map(i => `<option value="${i.id}" ${ingrediente?.insumoId === i.id ? 'selected' : ''}>${escaparHtml(i.nome)}</option>`)
@@ -1820,7 +1822,7 @@ function _atualizarResumoReceita() {
   let completo = true;
   let algum = false;
   _linhasReceita().forEach(({ linha, insumoId, quantidade }) => {
-    const insumo = estoqueInsumos.find(i => i.id === insumoId);
+    const insumo = receitaInsumoAtual.insumos.find(i => i.id === insumoId);
     linha.querySelector('.receita-unidade').textContent = insumo ? insumo.unidadeMedida : '';
     const celula = linha.querySelector('.receita-custo');
     if (!insumoId) {
@@ -1870,7 +1872,7 @@ async function _salvarReceitaInsumo(apagar) {
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a receita.');
     fecharModalReceitaInsumo();
-    await carregarInsumos();
+    await carregarFichaTecnicaAtual();
   } catch (e) {
     erro.textContent = e.message;
     erro.style.display = 'block';
@@ -2168,10 +2170,6 @@ function wireEstoqueTableEvents() {
       if (!insumo) return;
       abrirModalNovoInsumo(insumo);
     });
-  });
-
-  document.querySelectorAll('[data-acao="receita-insumo"]').forEach(btn => {
-    btn.addEventListener('click', () => abrirModalReceitaInsumo(parseInt(btn.dataset.insumoId, 10)));
   });
 
   document.querySelectorAll('[data-acao="excluir-insumo"]').forEach(btn => {
@@ -6837,9 +6835,10 @@ async function importarPlanilhaCardapio(event) {
 // Ficha Técnica virou uma tela por loja (custo + valor de venda de cada
 // produto, receita própria por unidade) — ver seção 6.5 da documentação.
 let fichaTecnicaLojaAtual = 'Hamburgueria Artesanos';
-let fichaTecnicaTipoAtual = 'produto'; // 'produto' | 'complemento'
+let fichaTecnicaTipoAtual = 'produto'; // 'produto' | 'complemento' | 'mistura'
 let fichaTecnicaProdutos = [];
 let fichaTecnicaComplementos = [];
+let fichaTecnicaMisturas = [];
 let fichaTecnicaInsumosDisponiveis = [];
 let fichaTecnicaEditandoItemId = null;
 const fichaTecnicaExpandidos = new Set();
@@ -6865,6 +6864,10 @@ function _fichaTecnicaItensAtuais() {
 // renderFichaTecnicaConteudo. Precisa buscar as duas listas de uma vez
 // pra montar esse menu com o item extra desde o primeiro render.
 const FICHA_TECNICA_COMPLEMENTOS_ITEM = 'Complementos';
+// Mistura feita na casa (tempero, molho...) entra no mesmo menu, em toda
+// loja: a receita dela é global, e ficha técnica, complemento e mistura
+// ficam num lugar só (pedido da Julia, 2026-09-10).
+const FICHA_TECNICA_MISTURAS_ITEM = 'Misturas';
 
 function carregarFichaTecnicaAtual() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
@@ -6875,7 +6878,9 @@ function carregarFichaTecnicaAtual() {
     temComplementos
       ? fetch(`/api/complementos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => r.json())
       : Promise.resolve({ complementos: [] }),
-  ]).then(([dadosProdutos, dadosComplementos]) => {
+    fetch('/api/misturas').then(r => r.json()),
+  ]).then(([dadosProdutos, dadosComplementos, dadosMisturas]) => {
+    fichaTecnicaMisturas = dadosMisturas.misturas || [];
     fichaTecnicaProdutos = dadosProdutos.produtos || [];
     fichaTecnicaComplementos = (dadosComplementos.complementos || []).map(c => ({
       itemCardapioId: c.id,
@@ -7035,27 +7040,35 @@ function renderFichaTecnicaConteudo() {
   const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
   const categoriaValida = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM
     ? temComplementos
-    : categorias.includes(fichaTecnicaCategoriaSelecionada);
+    : fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM || categorias.includes(fichaTecnicaCategoriaSelecionada);
   if (!fichaTecnicaCategoriaSelecionada || !categoriaValida) {
     fichaTecnicaCategoriaSelecionada = categorias[0] || (temComplementos ? FICHA_TECNICA_COMPLEMENTOS_ITEM : null);
   }
-  fichaTecnicaTipoAtual = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM ? 'complemento' : 'produto';
+  fichaTecnicaTipoAtual = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM
+    ? 'complemento'
+    : fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM ? 'mistura' : 'produto';
 
   const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
   if (temComplementos) categoriasComContagem.push({ nome: FICHA_TECNICA_COMPLEMENTOS_ITEM, contagem: fichaTecnicaComplementos.length });
+  categoriasComContagem.push({ nome: FICHA_TECNICA_MISTURAS_ITEM, contagem: fichaTecnicaMisturas.length });
   _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
     fichaTecnicaCategoriaSelecionada = nome;
     renderFichaTecnicaConteudo();
   });
 
   const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
-  if (subtitulo) subtitulo.textContent = ehComplemento
-    ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
-    : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
-  if (btnNovoTexto) btnNovoTexto.textContent = ehComplemento ? 'Novo complemento' : 'Novo item';
+  const ehMistura = fichaTecnicaTipoAtual === 'mistura';
+  if (subtitulo) subtitulo.textContent = ehMistura
+    ? 'Receita do que é feito na casa (tempero, molho, maionese...): quanto rende e o que vai dentro. Quando sai um produto que leva a mistura, o estoque desconta os ingredientes, e o custo dela sai desta conta. A receita vale pra todas as lojas.'
+    : ehComplemento
+      ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
+      : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
+  if (btnNovoTexto) btnNovoTexto.textContent = ehMistura ? 'Nova mistura' : ehComplemento ? 'Novo complemento' : 'Novo item';
   if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
 
-  if (ehComplemento) {
+  if (ehMistura) {
+    _renderMisturasConteudo(conteudoEl, isAdmin);
+  } else if (ehComplemento) {
     _renderComplementosConteudo(conteudoEl, isAdmin);
   } else {
     const temBeefood = fichaTecnicaProdutos.some(p => p.beefood !== null);
@@ -7129,6 +7142,88 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// Misturas: uma linha por insumo feito na casa, com quanto rende e o custo
+// (ou o que falta pra ter custo). Clicar abre a receita pra editar.
+function _renderMisturasConteudo(conteudoEl, isAdmin) {
+  if (!fichaTecnicaMisturas.length) {
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhuma mistura com receita ainda${isAdmin ? ' — use "Nova mistura" pra cadastrar a receita de um tempero, molho ou preparo feito na casa.' : '.'}</p>`;
+    return;
+  }
+  conteudoEl.innerHTML = `
+    <div class="cardapio-categoria-titulo">${FICHA_TECNICA_MISTURAS_ITEM}</div>
+    <div class="ficha-tecnica-produto-lista">
+      ${fichaTecnicaMisturas.map(m => {
+        const rende = _formatarQuantidade(m.rendimento, m.unidadeMedida);
+        const custo = m.custoPorUnidade != null
+          ? _formatarCustoPorUnidade(m.custoPorUnidade, m.unidadeMedida)
+          : `<span class="mistura-incompleta">${m.semQuantidade ? `${m.semQuantidade} sem quantidade` : 'falta custo de ingrediente'}</span>`;
+        return `
+        <div class="ficha-tecnica-produto">
+          <div class="ficha-tecnica-produto-linha ficha-tecnica-complemento-linha" data-acao="abrir-mistura" data-insumo-id="${m.insumoId}" ${isAdmin ? '' : 'style="cursor:default;"'}>
+            <div class="ficha-tecnica-produto-nome">${escaparHtml(m.nome)}</div>
+            <div class="mistura-meta">rende ${rende} · ${m.ingredientes} ingrediente${m.ingredientes === 1 ? '' : 's'} · ${custo}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+  if (!isAdmin) return;
+  conteudoEl.querySelectorAll('[data-acao="abrir-mistura"]').forEach(linha => {
+    linha.addEventListener('click', () => abrirModalReceitaInsumo(parseInt(linha.dataset.insumoId, 10)));
+  });
+}
+
+// "Nova mistura": o nome digitado vira o insumo da receita — o que já
+// existe com esse nome (a lista sugere os insumos cadastrados) ou um novo,
+// só desta loja (api_nova_mistura). Depois abre a receita dele.
+async function abrirModalNovaMistura() {
+  document.getElementById('form-nova-mistura').reset();
+  document.getElementById('nova-mistura-erro').style.display = 'none';
+  try {
+    const dados = await fetch('/api/insumos').then(r => r.json());
+    const comReceita = new Set(fichaTecnicaMisturas.map(m => m.insumoId));
+    document.getElementById('nova-mistura-insumos').innerHTML = (dados.insumos || [])
+      .filter(i => !comReceita.has(i.id))
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+      .map(i => `<option value="${escaparHtml(i.nome)}"></option>`)
+      .join('');
+  } catch (erro) {
+    console.error('Falha ao carregar insumos pra nova mistura:', erro);
+  }
+  document.getElementById('modal-nova-mistura').style.display = 'flex';
+  document.getElementById('nova-mistura-nome').focus();
+}
+
+function fecharModalNovaMistura() {
+  document.getElementById('modal-nova-mistura').style.display = 'none';
+}
+
+document.getElementById('btn-nova-mistura-fechar')?.addEventListener('click', fecharModalNovaMistura);
+document.getElementById('btn-nova-mistura-cancelar')?.addEventListener('click', fecharModalNovaMistura);
+document.getElementById('form-nova-mistura')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const erro = document.getElementById('nova-mistura-erro');
+  erro.style.display = 'none';
+  try {
+    const resposta = await fetch('/api/misturas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome: document.getElementById('nova-mistura-nome').value,
+        unidadeMedida: document.getElementById('nova-mistura-unidade').value,
+        loja: fichaTecnicaLojaAtual,
+      }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível criar a mistura.');
+    fecharModalNovaMistura();
+    await abrirModalReceitaInsumo(dados.insumoId);
+  } catch (e) {
+    erro.textContent = e.message;
+    erro.style.display = 'block';
+  }
+});
 
 async function salvarCustoProduto(itemId, valor) {
   // Campo em branco apaga o custo à mão (o produto volta a usar o custo
@@ -7446,6 +7541,10 @@ async function _buscarFichaTecnicaItem(itemId) {
 
 // --- Modal: Novo item do cardápio (produto ou complemento, conforme a aba ativa) ---
 function abrirModalNovoItemCardapio() {
+  if (fichaTecnicaTipoAtual === 'mistura') {
+    abrirModalNovaMistura();
+    return;
+  }
   fichaTecnicaProdutoPendente = null;
   document.getElementById('form-novo-item-cardapio').reset();
   const ehComplemento = fichaTecnicaTipoAtual === 'complemento';

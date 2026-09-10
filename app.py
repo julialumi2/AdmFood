@@ -137,6 +137,8 @@ from backend.armazenamento import (
     custo_em_uso_por_insumo,
     inicio_baixa_automatica,
     definir_inicio_baixa_automatica,
+    listar_misturas,
+    localizar_ou_criar_insumo_de_mistura,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -1037,12 +1039,44 @@ def api_listar_insumos():
 
 @app.route('/api/insumos/<int:insumo_id>/receita', methods=['GET'])
 def api_buscar_receita_insumo(insumo_id):
-    """Receita da mistura feita na casa + o preço de todo insumo, pra tela
-    recalcular o custo da batelada enquanto ela edita."""
-    receita = buscar_receita_insumo(insumo_id)
+    """Receita da mistura feita na casa + o preço e a unidade de todo
+    insumo, pra tela montar a lista de ingredientes e recalcular o custo da
+    batelada enquanto ela edita (a janela abre no Cardápio, que não tem a
+    lista de insumos carregada)."""
+    precos = _mapa_preco_insumo()
+    receita = buscar_receita_insumo(insumo_id, precos)
     if receita is None:
         return jsonify({"erro": "Insumo não encontrado."}), 404
-    return jsonify({**receita, "precos": {str(k): v for k, v in _mapa_preco_insumo().items()}})
+    insumos = [
+        {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida']}
+        for i in _insumos_unicos(listar_insumos())
+    ]
+    return jsonify({**receita, "precos": {str(k): v for k, v in precos.items()}, "insumos": insumos})
+
+
+@app.route('/api/misturas', methods=['GET'])
+def api_listar_misturas():
+    """Cardápio → Misturas: todo insumo feito na casa, com rendimento e custo."""
+    return jsonify({"misturas": listar_misturas()})
+
+
+@app.route('/api/misturas', methods=['POST'])
+def api_nova_mistura():
+    """"Nova mistura" do Cardápio: devolve o insumo que vai ganhar a receita
+    — o que já existe com esse nome, ou um novo, só da loja em tela."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    unidade = (dados.get('unidadeMedida') or 'g').strip() or 'g'
+    loja = dados.get('loja')
+    if not nome:
+        return jsonify({"erro": "Informe o nome da mistura."}), 400
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    insumo_id, criado = localizar_ou_criar_insumo_de_mistura(nome, unidade, loja)
+    return jsonify({"insumoId": insumo_id, "criado": criado})
 
 
 @app.route('/api/insumos/<int:insumo_id>/receita', methods=['PUT'])

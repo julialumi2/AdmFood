@@ -526,49 +526,6 @@
       </div>
     </div>
 
-    <!-- MODAL: RECEITA DA MISTURA (insumo feito na casa) — ver definir_receita_insumo em armazenamento.py -->
-    <div class="modal-overlay" id="modal-receita-insumo" style="display:none;">
-      <div class="modal-content modal-large">
-        <div class="modal-header">
-          <h3 class="panel-title">Receita — <span id="receita-insumo-nome">—</span></h3>
-          <button type="button" class="btn-close" id="btn-receita-insumo-fechar" aria-label="Fechar">&times;</button>
-        </div>
-        <p class="panel-subtitle receita-ajuda">
-          Pra insumo feito na casa, como tempero e molho. Quando sai um produto que leva essa mistura, o estoque desconta os ingredientes daqui — e o custo dela passa a sair desta conta.
-        </p>
-        <div class="receita-rendimento">
-          <label for="receita-rendimento">Uma batelada rende</label>
-          <input type="number" id="receita-rendimento" min="0" step="any" placeholder="Ex: 1600">
-          <span id="receita-rendimento-unidade" class="text-muted">g</span>
-        </div>
-        <div class="table-responsive">
-          <table class="receita-tabela">
-            <thead>
-              <tr>
-                <th>Ingrediente</th>
-                <th>Quantidade na batelada</th>
-                <th class="num">Custo</th>
-                <th aria-label="Ações"></th>
-              </tr>
-            </thead>
-            <tbody id="receita-ingredientes-body">
-              <!-- Renderizado dinamicamente via JS -->
-            </tbody>
-          </table>
-        </div>
-        <button type="button" class="btn-secondary-sm" id="btn-receita-adicionar">+ Adicionar ingrediente</button>
-        <p class="receita-resumo" id="receita-resumo" role="status"></p>
-        <p id="receita-erro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
-        <div class="modal-actions" style="justify-content: space-between;">
-          <button type="button" class="btn-secondary-sm" id="btn-receita-apagar" style="color: var(--danger);">Apagar receita</button>
-          <div style="display:flex; gap: var(--space-2);">
-            <button type="button" class="btn-secondary-sm" id="btn-receita-cancelar">Cancelar</button>
-            <button type="button" class="btn-primary-sm" id="btn-receita-salvar">Salvar receita</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- MODAL: ATUALIZAR ESTOQUE ATUAL EM LOTE (importar contagem física / relatório externo) -->
     <div class="modal-overlay" id="modal-atualizar-estoque-lote" style="display:none;">
       <div class="modal-content modal-large">

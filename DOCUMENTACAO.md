@@ -2405,10 +2405,20 @@ perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
   preço disso é que o tempero já no pote conta como consumido — no máximo
   uma batelada, pro lado seguro. A baixa cria a linha de estoque do
   ingrediente na loja quando ainda não existe, pra não sumir calada.
-- **Tela**: botão de chapéu de chef em cada insumo do Estoque, com o custo
-  da batelada recalculando enquanto edita (a rota GET manda o preço de
-  todo insumo junto); insumo com receita ganha o selo "mistura". Trava
-  contra receita que usa a si mesma (`definir_receita_insumo`).
+- **Tela**: Cardápio → item **"Misturas"** no menu lateral de categorias,
+  em toda loja (a receita é global) — pedido da Julia em 10/09 pra ficha
+  técnica, complemento e mistura ficarem num lugar só; antes era um botão de
+  chapéu de chef no Estoque, que saiu. A lista (`GET /api/misturas`,
+  `listar_misturas`) mostra quanto cada uma rende, quantos ingredientes e o
+  custo por kg/L — ou "N sem quantidade" / "falta custo de ingrediente".
+  Clicar abre a receita, com o custo da batelada recalculando enquanto
+  edita (a rota GET da receita manda o preço e a unidade de todo insumo
+  junto). "Nova mistura" (`POST /api/misturas`): nome que já existe,
+  normalizado, é o mesmo insumo (o "Tempero Batata" que a batata já usa na
+  ficha); nome novo cria o insumo só na loja em tela, categoria
+  "Misturas". No Estoque, o insumo com receita continua com o selo
+  "mistura". Trava contra receita que usa a si mesma
+  (`definir_receita_insumo`).
 - **Import**: `importar_sub_receitas.py` lê as 9 misturas da aba
   "Sub-Receitas" (Tempero Smash R$ 7,02/kg e Tempero Batata R$ 4,14/kg,
   iguais à planilha) e cria os 14 ingredientes que faltavam. Ingrediente

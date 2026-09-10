@@ -2503,10 +2503,52 @@ def mapa_receita_insumo():
     return receitas
 
 
-def buscar_receita_insumo(insumo_id):
-    """Receita de uma mistura feita na casa, com o custo de cada ingrediente
-    e o da batelada — o que a tela mostra pra ela conferir a conta."""
+def listar_misturas():
+    """Todo insumo feito na casa (com receita), com o resumo que a tela de
+    Cardápio → Misturas mostra: quanto rende, quantos ingredientes, quantos
+    ainda sem quantidade e o custo — só quando a receita inteira tem preço.
+    A receita é global (vale pra todas as lojas), então a lista também é."""
     precos = _mapa_preco_insumo()
+    with conexao() as conn:
+        ids = [l["id"] for l in conn.execute(
+            "SELECT id FROM insumo WHERE rendimento_receita IS NOT NULL").fetchall()]
+    misturas = []
+    for insumo_id in ids:
+        receita = buscar_receita_insumo(insumo_id, precos)
+        misturas.append({
+            "insumoId": receita["insumoId"],
+            "nome": receita["nome"],
+            "unidadeMedida": receita["unidadeMedida"],
+            "rendimento": receita["rendimento"],
+            "ingredientes": len(receita["ingredientes"]),
+            "semQuantidade": sum(1 for i in receita["ingredientes"] if i["quantidade"] is None),
+            "custoBatelada": receita["custoBatelada"],
+            "custoPorUnidade": receita["custoPorUnidade"],
+        })
+    return sorted(misturas, key=lambda m: _normalizar_nome_insumo(m["nome"]))
+
+
+def localizar_ou_criar_insumo_de_mistura(nome, unidade_medida, loja):
+    """Insumo que vai ganhar receita pela tela de Cardápio → Misturas. Nome
+    que já existe (mesmo critério de _normalizar_nome_insumo) é o mesmo
+    insumo — o "Tempero Batata" que a batata já usa na ficha técnica; criar
+    outro partiria a receita e o estoque em dois. Nome novo vira insumo novo,
+    só da loja em que ela está. Devolve (insumo_id, criado)."""
+    alvo = _normalizar_nome_insumo(nome)
+    with conexao() as conn:
+        for linha in conn.execute("SELECT id, nome FROM insumo").fetchall():
+            if _normalizar_nome_insumo(linha["nome"]) == alvo:
+                return linha["id"], False
+    return criar_insumo(nome, "Misturas", unidade_medida, [loja]), True
+
+
+def buscar_receita_insumo(insumo_id, precos=None):
+    """Receita de uma mistura feita na casa, com o custo de cada ingrediente
+    e o da batelada — o que a tela mostra pra ela conferir a conta.
+    `precos` (de _mapa_preco_insumo) evita recalcular pra cada mistura
+    quando são várias de uma vez (listar_misturas)."""
+    if precos is None:
+        precos = _mapa_preco_insumo()
     with conexao() as conn:
         insumo = conn.execute(
             "SELECT id, nome, unidade_medida, rendimento_receita FROM insumo WHERE id = ?", (insumo_id,)

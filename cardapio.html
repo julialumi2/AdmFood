@@ -338,6 +338,78 @@
         </form>
       </div>
     </div>
+
+    <!-- MODAL: NOVA MISTURA — nome que já existe é o mesmo insumo (ver localizar_ou_criar_insumo_de_mistura) -->
+    <div class="modal-overlay" id="modal-nova-mistura" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Nova mistura</h3>
+          <button type="button" class="btn-close" id="btn-nova-mistura-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-nova-mistura">
+          <div class="form-group">
+            <label for="nova-mistura-nome">Nome</label>
+            <input type="text" id="nova-mistura-nome" list="nova-mistura-insumos" required autocomplete="off" placeholder="Ex: Tempero Batata">
+            <datalist id="nova-mistura-insumos"></datalist>
+          </div>
+          <p class="panel-subtitle" id="nova-mistura-dica" style="margin-top: calc(-1 * var(--space-2)); margin-bottom: var(--space-3);">
+            Se o insumo já existe (o tempero que a batata já usa na ficha, por exemplo), escolha ele na lista: a receita vai pra ele.
+          </p>
+          <div class="form-group" id="nova-mistura-unidade-grupo">
+            <label for="nova-mistura-unidade">Unidade (insumo novo)</label>
+            <input type="text" id="nova-mistura-unidade" value="g" placeholder="g, ml, kg...">
+          </div>
+          <p id="nova-mistura-erro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-nova-mistura-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Continuar pra receita</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: RECEITA DA MISTURA (insumo feito na casa) — ver definir_receita_insumo em armazenamento.py -->
+    <div class="modal-overlay" id="modal-receita-insumo" style="display:none;">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 class="panel-title">Receita — <span id="receita-insumo-nome">—</span></h3>
+          <button type="button" class="btn-close" id="btn-receita-insumo-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle receita-ajuda">
+          Pra insumo feito na casa, como tempero e molho. Quando sai um produto que leva essa mistura, o estoque desconta os ingredientes daqui — e o custo dela passa a sair desta conta. A receita vale pra todas as lojas.
+        </p>
+        <div class="receita-rendimento">
+          <label for="receita-rendimento">Uma batelada rende</label>
+          <input type="number" id="receita-rendimento" min="0" step="any" placeholder="Ex: 1600">
+          <span id="receita-rendimento-unidade" class="text-muted">g</span>
+        </div>
+        <div class="table-responsive">
+          <table class="receita-tabela">
+            <thead>
+              <tr>
+                <th>Ingrediente</th>
+                <th>Quantidade na batelada</th>
+                <th class="num">Custo</th>
+                <th aria-label="Ações"></th>
+              </tr>
+            </thead>
+            <tbody id="receita-ingredientes-body">
+              <!-- Renderizado dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="btn-secondary-sm" id="btn-receita-adicionar">+ Adicionar ingrediente</button>
+        <p class="receita-resumo" id="receita-resumo" role="status"></p>
+        <p id="receita-erro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
+        <div class="modal-actions" style="justify-content: space-between;">
+          <button type="button" class="btn-secondary-sm" id="btn-receita-apagar" style="color: var(--danger);">Apagar receita</button>
+          <div style="display:flex; gap: var(--space-2);">
+            <button type="button" class="btn-secondary-sm" id="btn-receita-cancelar">Cancelar</button>
+            <button type="button" class="btn-primary-sm" id="btn-receita-salvar">Salvar receita</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div> <!-- /dashboard-wrapper -->
 
 </body>
