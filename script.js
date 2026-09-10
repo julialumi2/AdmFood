@@ -6099,11 +6099,6 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
-    const painelAtualizarDados = document.getElementById('painel-atualizar-dados');
-    if (painelAtualizarDados && usuario.papel === 'admin') {
-      painelAtualizarDados.style.display = '';
-    }
-
     // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto/
     // ficha técnica (só admin). Os dois fetches (usuário logado + produtos)
     // rodam em paralelo — se os cards já tiverem renderizado como "só
@@ -6280,68 +6275,6 @@ function abrirModalLimparRequisicoesCotacoes() {
 function fecharModalLimparRequisicoesCotacoes() {
   document.getElementById('modalLimparRequisicoesCotacoes').style.display = 'none';
 }
-
-// --- ATUALIZAR DADOS PELAS PLANILHAS (Configurações, só admin) ---
-// O banco de produção não vai no push e o repositório é público, então as
-// planilhas com custo chegam por aqui (api_atualizar_dados em app.py).
-// Aplicar só libera depois de uma simulação bem-sucedida com os mesmos
-// arquivos: a simulação roda numa cópia do banco e mostra exatamente o que
-// vai mudar.
-async function _rodarAtualizacaoDados(modo) {
-  const status = document.getElementById('atualizar-dados-status');
-  const relatorio = document.getElementById('atualizar-dados-relatorio');
-  const btnSimular = document.getElementById('btn-simular-atualizacao');
-  const btnAplicar = document.getElementById('btn-aplicar-atualizacao');
-
-  const dados = new FormData();
-  dados.append('modo', modo);
-  document.querySelectorAll('#painel-atualizar-dados input[type="file"]').forEach(input => {
-    if (input.files[0]) dados.append(input.dataset.campo, input.files[0]);
-  });
-
-  btnSimular.disabled = true;
-  btnAplicar.disabled = true;
-  status.style.color = '';
-  status.textContent = modo === 'simular' ? 'Simulando numa cópia do banco...' : 'Aplicando...';
-  try {
-    const resposta = await fetch('/api/admin/atualizar-dados', { method: 'POST', body: dados });
-    const resultado = await resposta.json();
-    if (!resposta.ok) throw new Error(resultado.erro || 'Não foi possível rodar a atualização.');
-    relatorio.textContent = resultado.relatorio;
-    relatorio.hidden = false;
-    if (!resultado.ok) {
-      status.style.color = 'var(--danger)';
-      status.textContent = 'Parou num passo — o motivo está no fim do relatório.';
-    } else if (modo === 'simular') {
-      status.style.color = 'var(--success)';
-      status.textContent = 'Simulação concluída. Nada foi gravado — confira o relatório e clique em Aplicar.';
-      btnAplicar.disabled = false;
-    } else {
-      status.style.color = 'var(--success)';
-      status.textContent = `Dados atualizados. O banco de antes ficou salvo em backups/${resultado.backup}.`;
-    }
-  } catch (erro) {
-    status.style.color = 'var(--danger)';
-    status.textContent = erro.message;
-  } finally {
-    btnSimular.disabled = false;
-  }
-}
-
-document.querySelectorAll('#painel-atualizar-dados input[type="file"]').forEach(input => {
-  input.addEventListener('change', () => {
-    // Arquivo trocado depois da simulação: o que foi simulado não vale mais.
-    document.getElementById('btn-aplicar-atualizacao').disabled = true;
-    document.getElementById('atualizar-dados-status').textContent = '';
-  });
-});
-
-document.getElementById('btn-simular-atualizacao')?.addEventListener('click', () => _rodarAtualizacaoDados('simular'));
-
-document.getElementById('btn-aplicar-atualizacao')?.addEventListener('click', () => {
-  if (!confirm('Isso grava as mudanças no banco. Um backup do banco atual é feito antes. Continuar?')) return;
-  _rodarAtualizacaoDados('aplicar');
-});
 
 document.getElementById('btn-limpar-requisicoes-cotacoes')?.addEventListener('click', abrirModalLimparRequisicoesCotacoes);
 

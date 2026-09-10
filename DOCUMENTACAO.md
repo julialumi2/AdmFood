@@ -32,12 +32,12 @@ backend/
 importar_historico_sheets.py → script avulso de importação inicial (Google Sheets → SQLite)
 completar_pedidos_historico.py → script avulso de backfill de histórico
 sincronizar_periodo.py       → carga de histórico de venda (N dias), com paciência no limite da API
-atualizar_dados.py           → roda, em ordem, os passos de dado abaixo — é o que o botão
-                               "Atualizar dados pelas planilhas" executa em produção (seção 6.17)
-  importar_ficha_tecnica_faltante.py, importar_custos_insumo.py, migrar_insumo_para_grama.py,
-  limpar_fichas_copiadas.py, importar_ficha_acai.py, configurar_complementos_acai.py,
-  montar_cardapio_tradica.py, importar_sub_receitas.py → os passos (cada um roda sozinho
-                               também: sem --apply só simula)
+importar_ficha_tecnica_faltante.py, importar_custos_insumo.py, migrar_insumo_para_grama.py,
+limpar_fichas_copiadas.py, importar_ficha_acai.py, configurar_complementos_acai.py,
+montar_cardapio_tradica.py, importar_sub_receitas.py
+                             → imports avulsos das planilhas, usados no banco local em 09–10/09
+                               (sem --apply só simulam). Não rodam em produção: lá a Julia
+                               cadastrou tudo na tela, e o botão que os levava foi removido (6.17)
 
 *.html / *.css               → uma página por arquivo, na raiz do projeto
 script.js                    → JS de todas as páginas, num arquivo só
@@ -2302,9 +2302,9 @@ só é calculado quando a receita inteira tem preço** — "sem CMV" é melhor
 que um custo menor que o real na tela que decide corte de cardápio.
 
 **Custo digitado no cadastro** (2026-09-10, pedido da Julia: "não usar mais
-as planilhas, deixar tudo centralizado no sistema"). A planilha de custos
-entra uma última vez pela carga inicial (6.17); dali pra frente o
-`custo_referencia` é mantido em Estoque → editar insumo, campo "Custo".
+as planilhas, deixar tudo centralizado no sistema"). Não há carga de
+custo por planilha em produção (6.17): o `custo_referencia` é mantido em
+Estoque → editar insumo, campo "Custo".
 Em grama e ml ela digita por kg e por litro, e a tela converte pra unidade
 do insumo (`_escalaDeCusto` em `script.js`). É o custo de menor prioridade
 no CMV — cotação, compra recebida e receita de mistura passam na frente —,
@@ -2369,7 +2369,9 @@ cliente escolhe muito leite condensado e creme de avelã.
 
 Cadastros (19 complementos com porção, variações de nome, receita base,
 combos Filhinho/Filminho/Família como 2 ou 4 copos base):
-`configurar_complementos_acai.py`, passo do botão da seção 6.17. As porções
+`configurar_complementos_acai.py`, usado no banco local — em produção a
+Julia cadastra na tela (Cardápio → Complementos; variações de nome e
+combos pela fila de pendências do Estoque). As porções
 de creme como topping e do Chocoball não estão na planilha do chefe — são
 valores de partida (60 g e 30 g) pra loja conferir.
 
@@ -2419,7 +2421,18 @@ perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
   cadastro ao lado. Onde a VMarket tem dois, a Julia confirmou (10/09):
   cebola = "Cebola Branca", limão = "Limão Taiti".
 
-### 6.17 Levar dado pra produção: botão "Atualizar dados pelas planilhas"
+### 6.17 Levar dado pra produção: botão "Atualizar dados pelas planilhas" (removido)
+
+**Removido em 2026-09-10, antes de ser usado.** A Julia já tinha passado pro
+sistema, à mão, o que estava nas planilhas, e o objetivo dela é não usar
+mais planilha nenhuma: dado de negócio é cadastrado e mantido nas telas
+(custo do insumo no cadastro, ficha técnica no Cardápio, receita de mistura
+no Estoque). Rodar o botão depois disso passaria por cima do que ela
+cadastrou — o passo de custo regrava o custo de todo insumo que a planilha
+conhece. Saíram o painel de Configurações, a rota
+`POST /api/admin/atualizar-dados` e o `atualizar_dados.py`; os imports
+avulsos continuam no repositório pra uso local. O texto abaixo fica como
+registro do que o botão fazia.
 
 **O banco de produção não vai no push.** Ele fica num volume do Dokploy
 (`DATABASE_PATH`); o push leva só código. Tudo que é importado por script
@@ -2510,7 +2523,6 @@ Todos em `app.py`, prefixo `/api`.
 **Configuração / Sincronização**
 - `GET /api/config/lojas` — status de cada loja (token mascarado, última sincronização)
 - `POST /api/sincronizar-agora?dia=AAAA-MM-DD` — dispara sincronização em background (sem `?dia`, sincroniza ontem)
-- `POST /api/admin/atualizar-dados` — botão "Atualizar dados pelas planilhas" (multipart: `modo=simular|aplicar` + as planilhas); devolve o relatório e, ao aplicar, o nome do backup — só admin (seção 6.17)
 
 **Receita de mistura / conteúdo por pacote** (seções 6.14 e 6.16)
 - `GET /api/insumos/<id>/receita` — receita da mistura + custo da batelada + preço de todo insumo
@@ -2763,11 +2775,12 @@ sistema está pronto, falta o número):
   Técnica dentro de "Cardápio"), o modo vem de um `?aba=` na URL e o
   próprio JS da página marca o sub-item ativo e alterna os `#modo-*` — o
   grupo em si não sabe a diferença entre os dois casos.
-- **Dado de negócio chega em produção por passo do `atualizar_dados.py`**
-  (botão da seção 6.17), nunca por SQL solto no banco local: o banco de
-  produção não vai no push. Todo passo novo precisa ser idempotente, ter
-  simulação e ser testado duas vezes numa cópia — uma "do zero" e uma
-  montada como a de produção (insumos cadastrados à mão, por pacote).
+- **Dado de negócio é cadastrado na tela, em produção.** O banco de
+  produção não vai no push, então script de dado rodado no banco local não
+  chega lá — e a Julia quer tudo mantido no sistema, sem planilha (desde
+  2026-09-10; o botão de carga por planilha foi removido, seção 6.17). Onde
+  falta tela pra manter um dado, a solução é criar a tela (foi o caso do
+  custo do insumo), não um import.
 - **Repositório público**: nada de planilha, custo, receita ou preço de
   fornecedor no git. Preço entra por upload; o código guarda só estrutura
   (que linha da planilha vira qual insumo).

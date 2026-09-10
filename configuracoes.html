@@ -300,44 +300,6 @@
           </div>
         </div>
 
-        <!-- ATUALIZAR DADOS PELAS PLANILHAS (só admin) — ver api_atualizar_dados em app.py -->
-        <div class="panel" id="painel-atualizar-dados" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Atualizar dados pelas planilhas</h3>
-              <span class="panel-subtitle">Traz pro sistema as fichas técnicas, os custos e o cardápio montados a partir das planilhas. Primeiro simule: nada é gravado até você clicar em Aplicar.</span>
-            </div>
-          </div>
-          <div class="atualizar-dados-arquivos">
-            <label class="atualizar-dados-arquivo">
-              <span class="atualizar-dados-rotulo">Ficha técnica do Artesanos</span>
-              <span class="atualizar-dados-dica">Ficha_Tecnica_CMV_Artesanos_Burger.xlsx</span>
-              <input type="file" accept=".xlsx" data-campo="fichaArtesanos">
-            </label>
-            <label class="atualizar-dados-arquivo">
-              <span class="atualizar-dados-rotulo">CMV do Açaí Na Lata</span>
-              <span class="atualizar-dados-dica">CMV v2 .xlsx</span>
-              <input type="file" accept=".xlsx" data-campo="cmvAcai">
-            </label>
-            <label class="atualizar-dados-arquivo">
-              <span class="atualizar-dados-rotulo">Preços do cardápio</span>
-              <span class="atualizar-dados-dica">Comparativos de Preços.xlsx — só as abas da Tradiça são usadas, e só se a loja ainda não tiver cardápio</span>
-              <input type="file" accept=".xlsx" data-campo="precosCardapio">
-            </label>
-            <label class="atualizar-dados-arquivo">
-              <span class="atualizar-dados-rotulo">Compras da Tradiça <em>(opcional)</em></span>
-              <span class="atualizar-dados-dica">Compras Tradiça - Painel de Controle.xlsx — sem ela, os insumos da Tradiça entram sem custo</span>
-              <input type="file" accept=".xlsx" data-campo="comprasTradica">
-            </label>
-          </div>
-          <div class="atualizar-dados-acoes">
-            <button type="button" class="btn-secondary" id="btn-simular-atualizacao">Simular</button>
-            <button type="button" class="btn-primary" id="btn-aplicar-atualizacao" disabled>Aplicar</button>
-            <span id="atualizar-dados-status" class="atualizar-dados-status" role="status"></span>
-          </div>
-          <pre id="atualizar-dados-relatorio" class="atualizar-dados-relatorio" hidden></pre>
-        </div>
-
         <!-- ZONA DE PERIGO (só admin) -->
         <div class="panel" id="painel-zona-perigo" style="display:none; border-color: var(--danger);">
           <div class="panel-header">

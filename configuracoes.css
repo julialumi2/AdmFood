@@ -87,59 +87,6 @@
 /* .sync-resultado / .sync-resultado-item (resultado da sincronização
    manual) estão em theme.css — reaproveitados também na Home. */
 
-/* Atualizar dados pelas planilhas (só admin) */
-.atualizar-dados-arquivos {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.atualizar-dados-arquivo {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--surface-muted);
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.atualizar-dados-rotulo { font-weight: 600; }
-.atualizar-dados-rotulo em { font-weight: 400; font-style: normal; color: var(--text-muted); }
-
-.atualizar-dados-dica {
-  font-size: 12px;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-}
-
-.atualizar-dados-arquivo input[type="file"] { font-size: 13px; max-width: 100%; }
-
-.atualizar-dados-acoes {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.atualizar-dados-status { font-size: 13px; color: var(--text-muted); }
-
-.atualizar-dados-relatorio {
-  margin: var(--space-4) 0 0;
-  max-height: 420px;
-  overflow: auto;
-  padding: var(--space-3);
-  background: var(--surface-muted);
-  border: 1px solid var(--surface-muted-border);
-  border-radius: var(--radius-sm);
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre;
-}
-
 @media (max-width: 768px) {
   .config-row { grid-template-columns: 1fr; }
 

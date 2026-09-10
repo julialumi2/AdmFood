@@ -1,8 +1,4 @@
 import os
-import sqlite3
-import subprocess
-import sys
-import tempfile
 import threading
 import time
 import uuid
@@ -134,7 +130,6 @@ from backend.armazenamento import (
     confirmar_pedidos_por_token,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
-    CAMINHO_BANCO,
     buscar_receita_insumo,
     adicionar_produto_ao_cardapio,
     definir_receita_insumo,
@@ -2449,87 +2444,6 @@ def api_limpar_requisicoes_cotacoes():
         return erro_admin
     limpar_requisicoes_e_cotacoes()
     return jsonify({"ok": True})
-
-
-# Campo do formulário -> argumento do atualizar_dados.py
-_PLANILHAS_ATUALIZACAO = [
-    ("fichaArtesanos", "--ficha-artesanos"),
-    ("cmvAcai", "--cmv-acai"),
-    ("comprasTradica", "--compras-tradica"),
-    ("precosCardapio", "--precos"),
-]
-
-
-def _copiar_banco(origem, destino):
-    """Cópia consistente mesmo com o sistema gravando ao mesmo tempo (a
-    sincronização roda de 15 em 15 min) — copiar o arquivo direto poderia
-    pegar uma escrita pela metade."""
-    fonte, alvo = sqlite3.connect(origem), sqlite3.connect(destino)
-    try:
-        fonte.backup(alvo)
-    finally:
-        alvo.close()
-        fonte.close()
-
-
-@app.route('/api/admin/atualizar-dados', methods=['POST'])
-def api_atualizar_dados():
-    """Botão "Atualizar dados pelas planilhas" (Configurações, só admin):
-    roda o atualizar_dados.py com as planilhas enviadas. Existe porque o
-    banco de produção não vai no push e o repositório é público — as
-    planilhas com custo chegam por aqui, nunca pelo git.
-
-    `modo=simular` roda tudo numa CÓPIA do banco e devolve o relatório: é
-    o mesmo processo do real, então mostra inclusive o efeito de um passo
-    no seguinte. `modo=aplicar` faz backup do banco (pasta backups/, no
-    mesmo volume) e roda de verdade."""
-    erro_admin = _exigir_admin()
-    if erro_admin:
-        return erro_admin
-    modo = request.form.get('modo')
-    if modo not in ('simular', 'aplicar'):
-        return jsonify({"erro": "Modo inválido."}), 400
-
-    with tempfile.TemporaryDirectory() as pasta:
-        argumentos = []
-        for campo, flag in _PLANILHAS_ATUALIZACAO:
-            arquivo = request.files.get(campo)
-            if not arquivo or not arquivo.filename:
-                continue
-            if not arquivo.filename.lower().endswith('.xlsx'):
-                return jsonify({"erro": f"{arquivo.filename}: envie o arquivo em .xlsx."}), 400
-            caminho = os.path.join(pasta, f"{campo}.xlsx")
-            arquivo.save(caminho)
-            argumentos += [flag, caminho]
-
-        backup = None
-        if modo == 'simular':
-            banco = os.path.join(pasta, 'simulacao.db')
-            _copiar_banco(CAMINHO_BANCO, banco)
-        else:
-            banco = os.path.abspath(CAMINHO_BANCO)
-            pasta_backup = os.path.join(os.path.dirname(banco), 'backups')
-            os.makedirs(pasta_backup, exist_ok=True)
-            backup = os.path.join(pasta_backup, f"admfood-antes-atualizacao-{datetime.now():%Y%m%d-%H%M%S}.db")
-            _copiar_banco(banco, backup)
-
-        try:
-            resultado = subprocess.run(
-                [sys.executable, '-u', os.path.join(DIRETORIO_BASE, 'atualizar_dados.py'), *argumentos, '--apply'],
-                cwd=DIRETORIO_BASE,
-                env={**os.environ, 'DATABASE_PATH': banco, 'PYTHONIOENCODING': 'utf-8'},
-                capture_output=True, text=True, encoding='utf-8', timeout=50,
-            )
-        except subprocess.TimeoutExpired:
-            return jsonify({"erro": "A atualização passou de 50 segundos e foi interrompida. Os passos que terminaram antes ficaram gravados: rode a simulação de novo pra ver o que falta — o que já foi feito aparece como \"nada a fazer\"."}), 504
-
-    relatorio = resultado.stdout + (f"\n{resultado.stderr}" if resultado.stderr.strip() else "")
-    return jsonify({
-        "ok": resultado.returncode == 0,
-        "modo": modo,
-        "relatorio": relatorio,
-        "backup": os.path.basename(backup) if backup else None,
-    })
 
 
 def _prazo_vencido(prazo_iso):
