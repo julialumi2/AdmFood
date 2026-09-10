@@ -122,6 +122,7 @@ def main():
     inicializar_banco()
     # Importados aqui, e não no topo, pra que DATABASE_PATH já esteja valendo
     # e cada script use o mesmo banco que este processo.
+    import configurar_complementos_acai
     import importar_custos_insumo
     import importar_ficha_acai
     import importar_ficha_tecnica_faltante
@@ -141,6 +142,7 @@ def main():
         ("Custo à mão errado da Batata Individual", None, lambda: custo_manual_da_batata(args.apply)),
         ("Receitas do Artesanos copiadas nas outras lojas", None, lambda: limpar_fichas_copiadas.limpar(args.apply)),
         ("Ficha técnica do Açaí Na Lata", cmv, lambda: importar_ficha_acai.importar(args.apply, cmv)),
+        ("Complementos do Açaí (topping escolhido no pedido)", None, lambda: configurar_complementos_acai.configurar(args.apply)),
         ("Cardápio da Tradiça (planilha de preços)", precos, lambda: cardapio_da_tradica(args.apply, precos)),
         ("Insumos e receitas da Tradiça", "sempre", lambda: montar_cardapio_tradica.montar(args.apply, compras)),
         ("Custo dos insumos (planilha do Artesanos)", ficha, lambda: importar_custos_insumo.importar(ficha, args.apply)),

@@ -8,6 +8,7 @@ detalhes pra pegar o campo "total". Limites de requisição documentados:
 - /orders/{id}: 300 requisições a cada 3 minutos (~100/min)
 """
 
+import re
 import time
 from datetime import datetime
 
@@ -149,6 +150,34 @@ def _total_com_desconto_ifood(detalhes, sales_channel):
     return total + desconto_ifood
 
 
+# Tamanho do copo no Açaí: vem como opção ("Tamanho: 330ml"; nos combos sem
+# nome de grupo) ou colado no nome ("NaLata Paçoca - 500ML"). O cadastro
+# chama o produto "NaLata Paçoca 500ml", então o tamanho vira parte do nome.
+# Só volume em ml conta como tamanho — "Tamanho: Média" de uma batata não
+# mexe em nome nenhum.
+_TAMANHO = re.compile(r"^\d+\s*ml$", re.IGNORECASE)
+_TAMANHO_NO_NOME = re.compile(r"^(.*?)\s+-\s+(\d+\s*ml)$", re.IGNORECASE)
+# "NaLata 330ml + 3 complementos" é UM produto, não um combo "Lanche + Extra".
+_MONTE_O_SEU = re.compile(r"\+\s*\d+\s*complementos?\b", re.IGNORECASE)
+
+
+_TAMANHO_EM_QUALQUER_PARTE = re.compile(r"\d+\s*ml\b", re.IGNORECASE)
+
+
+def _eh_tamanho(opcao):
+    """Opção de tamanho nunca é complemento: grupo "Tamanho" (qualquer valor,
+    "330ml" ou "Média") ou, sem grupo — como vem nos combos —, um volume."""
+    nome = (opcao.get("name") or "").strip()
+    grupo = (opcao.get("option_group_name") or "").strip().lower()
+    return grupo == "tamanho" or (not grupo and bool(_TAMANHO.match(nome)))
+
+
+def _tamanho_da_opcao(opcao):
+    """O volume ("330ml") que completa o nome do produto, ou None."""
+    nome = (opcao.get("name") or "").strip()
+    return nome if _eh_tamanho(opcao) and _TAMANHO.match(nome) else None
+
+
 def _itens_vendidos(detalhes):
     """Achata `detalhes["items"]` numa lista [{"nome", "quantidade"}] — usado
     pra estimar consumo de insumo (ficha técnica × vendas reais, seção 6.6) e
@@ -172,15 +201,24 @@ def _itens_vendidos(detalhes):
     3. Nem uma coisa nem outra (ex: "Combo de sexta 99 Food - 2 smash's
        tradicionais", sem `options` e sem "+" no nome) — não dá pra
        decompor sozinho; cai como produto pendente pro vínculo manual
-       resolver (que aceita "quantos lanches" além de "qual lanche")."""
+       resolver (que aceita "quantos lanches" além de "qual lanche").
+
+    Complementos (2026-09-10, Açaí Na Lata): no "monte o seu" a receita é o
+    que o cliente escolhe, então cada opção do item — "ESCOLHA 3 Toppings",
+    "Escolha até 5 adicionais", os pagos de "Toppings EXTRAS", as frutas do
+    Frutas ao Creme — vai em `complementos`, com a quantidade já
+    multiplicada pela do item (dá pra escolher o mesmo duas vezes). A opção
+    de tamanho não é complemento: ela completa o nome do produto. No
+    formato 1 as outras opções continuam de fora, como antes."""
     itens = []
     for item in detalhes.get("items") or []:
         quantidade = item.get("quantity") or 0
         if not quantidade:
             continue
+        opcoes = item.get("options") or []
 
         opcoes_lanche = [
-            opcao for opcao in (item.get("options") or [])
+            opcao for opcao in opcoes
             if "burger" in (opcao.get("option_group_name") or "").lower()
         ]
         if opcoes_lanche:
@@ -188,15 +226,38 @@ def _itens_vendidos(detalhes):
                 itens.append({
                     "nome": opcao.get("name", ""),
                     "quantidade": (opcao.get("quantity") or 0) * quantidade,
+                    "complementos": [],
                 })
             continue
 
-        nome = item.get("name") or ""
-        if " + " in nome:
-            itens.append({"nome": nome.split(" + ", 1)[0], "quantidade": quantidade})
-            continue
+        nome = (item.get("name") or "").strip()
+        tamanho = next((t for t in map(_tamanho_da_opcao, opcoes) if t), None)
+        no_nome = _TAMANHO_NO_NOME.match(nome)
+        if no_nome:
+            nome, tamanho = no_nome.group(1), no_nome.group(2)
+        # Nome que já traz o tamanho ("Combo Filhinho - 2 X 500ml") fica como
+        # está — o "500ml" solto do combo é de cada copo, não do nome.
+        if tamanho and not _TAMANHO_EM_QUALQUER_PARTE.search(nome):
+            # "330 ml" e "330ml" são o mesmo copo; o cadastro escreve junto.
+            nome = f"{nome} {re.sub(r'\s+', '', tamanho)}"
+        elif not tamanho and " + " in nome and not _MONTE_O_SEU.search(nome):
+            nome = nome.split(" + ", 1)[0]
 
-        itens.append({"nome": nome, "quantidade": quantidade})
+        complementos = [
+            {
+                "nome": (opcao.get("name") or "").strip(),
+                "quantidade": (opcao.get("quantity") or 0) * quantidade,
+                "grupo": opcao.get("option_group_name"),
+                "preco": opcao.get("unit_price") or 0.0,
+            }
+            for opcao in opcoes
+            if not _eh_tamanho(opcao)
+        ]
+        itens.append({
+            "nome": nome,
+            "quantidade": quantidade,
+            "complementos": [c for c in complementos if c["nome"] and c["quantidade"]],
+        })
     return [i for i in itens if i["nome"] and i["quantidade"]]
 
 

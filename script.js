@@ -1756,7 +1756,7 @@ function renderProdutosPendentesTabela(pendentes) {
 
   tbody.innerHTML = pendentes.map((p) => `
     <tr>
-      <td class="font-bold">${escaparHtml(p.nome_produto)}</td>
+      <td class="font-bold">${escaparHtml(p.nome_produto)}${p.complemento ? ' <span class="text-muted">· complemento</span>' : ''}</td>
       <td>${p.vendas}</td>
       <td>${p.quantidade_total}</td>
       <td class="text-muted">${p.primeira_vez.split('-').reverse().join('/')}</td>

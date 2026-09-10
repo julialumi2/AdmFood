@@ -485,6 +485,34 @@ def inicializar_banco():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_venda_item_dia ON venda_item(dia)"
         )
+        # Complemento escolhido em cada produto vendido (Açaí "monte o seu":
+        # "ESCOLHA 3 Toppings", "Toppings EXTRAS"...). Tabela à parte, e não
+        # linha a mais em venda_item, pra nunca aparecer como produto nos
+        # relatórios de venda: "Leite condensado" não é um item do
+        # cardápio. (pedido_id, linha) aponta pro produto em venda_item;
+        # a quantidade já vem multiplicada pela do produto.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS venda_complemento (
+                unidade TEXT NOT NULL,
+                pedido_id INTEGER NOT NULL,
+                linha INTEGER NOT NULL,
+                ordem INTEGER NOT NULL,
+                dia TEXT NOT NULL,
+                nome_complemento TEXT NOT NULL,
+                nome_normalizado TEXT NOT NULL,
+                grupo TEXT,
+                quantidade REAL NOT NULL,
+                preco_unitario REAL NOT NULL DEFAULT 0,
+                item_cardapio_id INTEGER,
+                PRIMARY KEY (unidade, pedido_id, linha, ordem)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_venda_complemento_dia ON venda_complemento(unidade, dia)"
+        )
+
         # Venda gravada antes da coluna nome_normalizado existir ficou com ela
         # vazia — e aí o combo daquele dia nunca casa com a composição dele.
         # Só olha as vazias, então depois da primeira vez não custa nada; e
@@ -1565,8 +1593,31 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
             "DELETE FROM venda_item WHERE unidade = ? AND dia = ?",
             (unidade, dia_iso),
         )
+        conn.execute(
+            "DELETE FROM venda_complemento WHERE unidade = ? AND dia = ?",
+            (unidade, dia_iso),
+        )
         for pedido in pedidos_detalhados:
             for indice, item in enumerate(pedido.get("itens", [])):
+                # Complemento casa pelo mesmo critério do produto (nome
+                # normalizado + vínculo manual pros erros de digitação da
+                # Cardápio Web, tipo "Chocoboll"). Sem casar, fica guardado
+                # com item_cardapio_id nulo e não desconta nada.
+                for ordem, complemento in enumerate(item.get("complementos") or []):
+                    complemento_id, _ = _casar_item_cardapio(complemento["nome"], catalogo, vinculos_manuais)
+                    conn.execute(
+                        """
+                        INSERT INTO venda_complemento
+                            (unidade, pedido_id, linha, ordem, dia, nome_complemento, nome_normalizado,
+                             grupo, quantidade, preco_unitario, item_cardapio_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            unidade, pedido["id"], indice, ordem, dia_iso, complemento["nome"],
+                            _normalizar_nome_insumo(complemento["nome"]), complemento.get("grupo"),
+                            complemento["quantidade"], complemento.get("preco") or 0.0, complemento_id,
+                        ),
+                    )
                 item_cardapio_id, multiplicador = _casar_item_cardapio(item["nome"], catalogo, vinculos_manuais)
                 conn.execute(
                     """
@@ -1588,13 +1639,16 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                     ),
                 )
 
-    if unidade == "Hamburgueria Artesanos":
-        aplicar_baixa_estoque_dia(unidade, dia_iso)
+    # Só nas lojas de INICIO_BAIXA_AUTOMATICA — nas outras a própria função
+    # não faz nada.
+    aplicar_baixa_estoque_dia(unidade, dia_iso)
 
 
-# Venda -> item de Ficha Técnica, contando as duas formas de chegar lá: o
-# produto vendido direto (item_cardapio_id preenchido) e o combo, que não é
-# um produto de receita e sim a soma de vários (composicao_produto_venda).
+# Venda -> item de Ficha Técnica, contando as três formas de chegar lá: o
+# produto vendido direto (item_cardapio_id preenchido), o combo, que não é
+# um produto de receita e sim a soma de vários (composicao_produto_venda), e
+# o complemento escolhido no pedido (venda_complemento — cada complemento
+# tem a própria ficha, ex: "Leite condensado" = 70 g).
 # Usada pela baixa de estoque e pelo consumo médio, pra não existirem duas
 # definições de "quanto saiu".
 SQL_ITENS_CONSUMIDOS = """
@@ -1609,16 +1663,27 @@ SQL_ITENS_CONSUMIDOS = """
     JOIN composicao_produto_venda c
       ON c.nome_produto_normalizado = v.nome_normalizado
     WHERE v.item_cardapio_id IS NULL
+    UNION ALL
+    SELECT unidade, dia, item_cardapio_id AS item_id, quantidade
+    FROM venda_complemento
+    WHERE item_cardapio_id IS NOT NULL
 """
 
 
-# Primeiro dia com baixa automática de estoque (Etapa 0 entrou em 08/09/2026).
-# Venda anterior a isso nunca desconta estoque, venha a sincronização de onde
-# vier: o estoque atual já reflete aquele consumo (foi contado depois), então
-# descontar de novo tiraria o mesmo produto duas vezes. Antes dessa trava,
-# carregar 90 dias de histórico (sincronizar_periodo.py) ou ressincronizar um
-# dia antigo pela tela descontava meses de consumo do estoque de hoje.
-INICIO_BAIXA_AUTOMATICA = "2026-09-08"
+# Lojas com baixa automática de estoque -> primeiro dia em que ela vale.
+# Loja fora daqui não tem baixa (a Tradiça ainda não tem receita com
+# gramatura). Venda anterior ao dia de início nunca desconta estoque, venha a
+# sincronização de onde vier: o estoque atual já reflete aquele consumo (foi
+# contado depois), então descontar de novo tiraria o mesmo produto duas
+# vezes. Antes dessa trava, carregar 90 dias de histórico
+# (sincronizar_periodo.py) ou ressincronizar um dia antigo pela tela
+# descontava meses de consumo do estoque de hoje.
+INICIO_BAIXA_AUTOMATICA = {
+    "Hamburgueria Artesanos": "2026-09-08",  # Etapa 0 do motor de compra
+    # Entra junto com a leitura dos complementos do pedido: antes disso a
+    # receita do "monte o seu" era um chute de 3 complementos fixos.
+    "Açaí Na Lata": "2026-09-11",
+}
 
 
 def aplicar_baixa_estoque_dia(unidade, dia_iso):
@@ -1634,7 +1699,8 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
     Deixa o estoque ir negativo de propósito — é sinal real de
     divergência entre teórico e físico (quebra, porcionamento diferente,
     Ficha Técnica desatualizada), não é erro pra esconder."""
-    if dia_iso < INICIO_BAIXA_AUTOMATICA:
+    inicio = INICIO_BAIXA_AUTOMATICA.get(unidade)
+    if inicio is None or dia_iso < inicio:
         return
     agora = datetime.now().isoformat()
     with conexao() as conn:
@@ -1700,7 +1766,33 @@ def listar_produtos_pendentes(unidade, dias=30):
             """,
             (unidade, inicio),
         ).fetchall()
-        return [dict(linha) for linha in linhas]
+        pendentes = [dict(linha) for linha in linhas]
+
+        # Complemento que não casou não desconta nada — tem que aparecer na
+        # fila. Só na loja que já trabalha com complemento (tem algum com
+        # receita): no Artesanos as opções do pedido são "Sem cebola", "Ao
+        # ponto"... e encheriam a fila de coisa que não é insumo.
+        usa_complementos = conn.execute(
+            "SELECT 1 FROM ficha_tecnica f JOIN item_cardapio i ON i.id = f.item_id "
+            "WHERE f.loja = ? AND i.tipo = 'complemento' LIMIT 1",
+            (unidade,),
+        ).fetchone()
+        if usa_complementos:
+            pendentes += [
+                {**dict(linha), "complemento": True}
+                for linha in conn.execute(
+                    """
+                    SELECT nome_complemento AS nome_produto, COUNT(*) AS vendas,
+                           SUM(quantidade) AS quantidade_total, MIN(dia) AS primeira_vez
+                    FROM venda_complemento
+                    WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NULL
+                    GROUP BY nome_complemento
+                    ORDER BY vendas DESC
+                    """,
+                    (unidade, inicio),
+                ).fetchall()
+            ]
+        return pendentes
 
 
 def definir_composicao_produto_venda(nome_produto, componentes, criado_por):
@@ -1794,6 +1886,12 @@ def vincular_produto_venda_manualmente(nome_produto, item_cardapio_id, criado_po
         conn.execute(
             "UPDATE venda_item SET item_cardapio_id = ?, multiplicador = ? WHERE nome_produto = ?",
             (item_cardapio_id, quantidade_por_unidade, nome_produto),
+        )
+        # O mesmo vínculo serve pro complemento com nome diferente do
+        # cadastro ("Chocoboll" -> Chocoball), vindo da mesma fila.
+        conn.execute(
+            "UPDATE venda_complemento SET item_cardapio_id = ? WHERE nome_complemento = ?",
+            (item_cardapio_id, nome_produto),
         )
 
 
@@ -2474,10 +2572,42 @@ def curva_abc_cardapio(loja, dias=30):
             """,
             (loja, corte),
         ).fetchone()
+        # Complementos escolhidos junto de cada produto no período. Só os que
+        # casaram com um item de complemento: o resto é modificador ("Sem
+        # cebola", "Ao ponto") ou nome ainda sem cadastro.
+        complementos_vendidos = conn.execute(
+            """
+            SELECT v.item_cardapio_id AS produto_id, c.item_cardapio_id AS complemento_id,
+                   SUM(c.quantidade) AS quantidade, SUM(c.quantidade * c.preco_unitario) AS receita
+            FROM venda_complemento c
+            JOIN venda_item v ON v.unidade = c.unidade AND v.pedido_id = c.pedido_id AND v.linha = c.linha
+            WHERE c.unidade = ? AND c.dia >= ?
+              AND v.item_cardapio_id IS NOT NULL AND c.item_cardapio_id IS NOT NULL
+            GROUP BY v.item_cardapio_id, c.item_cardapio_id
+            """,
+            (loja, corte),
+        ).fetchall()
 
     produtos_loja = {p["itemCardapioId"]: p for p in listar_produtos_por_loja(loja) if p["itemCardapioId"]}
     custos_ficha = _custo_por_item_da_ficha(loja, _mapa_preco_insumo())
     custos_manuais = mapa_custos_item_cardapio()
+
+    # No "monte o seu" a receita fixa é só açaí + embalagem; o resto é o que
+    # o cliente escolheu. O custo desses complementos entra no produto, senão
+    # o CMV dele pareceria bem menor do que é. Complemento sem custo conhecido
+    # é estimado pela média dos que têm custo — mas se passar de 20% sem
+    # custo, o produto fica "sem CMV" (mesma regra da receita incompleta).
+    extras_por_produto = {}
+    for linha in complementos_vendidos:
+        extra = extras_por_produto.setdefault(
+            linha["produto_id"], {"custo": 0.0, "unidades": 0.0, "com_custo": 0.0, "receita": 0.0}
+        )
+        extra["unidades"] += linha["quantidade"]
+        extra["receita"] += linha["receita"] or 0.0
+        custo_complemento = custos_ficha.get(linha["complemento_id"])
+        if custo_complemento is not None:
+            extra["custo"] += linha["quantidade"] * custo_complemento
+            extra["com_custo"] += linha["quantidade"]
 
     itens = {}
     for venda in vendas:
@@ -2503,8 +2633,19 @@ def curva_abc_cardapio(loja, dias=30):
         # Custo digitado à mão ganha do calculado: é a palavra final dela
         # sobre aquele produto naquela loja.
         custo = custos_manuais.get((item_id, loja))
+        custo_manual = custo is not None
         if custo is None:
             custo = custos_ficha.get(item_id)
+        extra = extras_por_produto.get(item_id)
+        if extra and item["volume"]:
+            item["receita"] += extra["receita"]  # topping pago
+            # Custo à mão já é o custo inteiro do produto, na palavra dela.
+            if custo is not None and not custo_manual:
+                if extra["com_custo"] >= 0.8 * extra["unidades"]:
+                    estimado = extra["custo"] * extra["unidades"] / extra["com_custo"] if extra["com_custo"] else 0.0
+                    custo += estimado / item["volume"]
+                else:
+                    custo = None
         item["custoUnitario"] = round(custo, 2) if custo is not None else None
         item["volume"] = round(item["volume"], 2)
         item["receita"] = round(item["receita"], 2)
