@@ -135,6 +135,8 @@ from backend.armazenamento import (
     definir_receita_insumo,
     _mapa_preco_insumo,
     custo_em_uso_por_insumo,
+    inicio_baixa_automatica,
+    definir_inicio_baixa_automatica,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -1341,12 +1343,47 @@ def api_consumo_medio_insumo():
     return jsonify({"consumo": consumo})
 
 
+@app.route('/api/estoque/baixa-automatica', methods=['GET'])
+def api_baixa_automatica():
+    """Desde quando cada loja tem baixa automática de estoque (None =
+    desligada) — o liga/desliga do painel de Integrações do Estoque."""
+    inicios = inicio_baixa_automatica()
+    return jsonify({"lojas": {loja: inicios.get(loja) for loja in LOJAS}})
+
+
+@app.route('/api/estoque/baixa-automatica', methods=['PUT'])
+def api_definir_baixa_automatica():
+    """Liga (`inicio` = 'AAAA-MM-DD') ou desliga (`inicio` vazio) a baixa
+    automática de uma loja. Só de hoje em diante: venda de um dia que já
+    passou já está no estoque contado, e ligar pra trás descontaria de novo
+    na próxima sincronização daquele dia."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    inicio = dados.get('inicio') or None
+    if inicio:
+        try:
+            dia = date.fromisoformat(inicio)
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Data inválida."}), 400
+        if dia < date.today():
+            return jsonify({"erro": "Escolha hoje ou um dia depois: a venda de um dia que já passou já está no estoque contado."}), 400
+        inicio = dia.isoformat()
+    usuario = _usuario_logado()
+    definir_inicio_baixa_automatica(loja, inicio, usuario['nome'] if usuario else None)
+    return jsonify({"loja": loja, "inicio": inicio})
+
+
 @app.route('/api/produtos-pendentes', methods=['GET'])
 def api_listar_produtos_pendentes():
     """Painel de integrações do estoque (Etapa 0 do motor de compra) —
     produtos vendidos que ainda não casaram com nenhum item da Ficha
-    Técnica. Por enquanto só Hamburgueria Artesanos, única loja com a
-    baixa automática ligada."""
+    Técnica. Aparece em toda loja, com a baixa ligada ou não: com ela
+    desligada, é a lista do que ainda falta casar antes de ligar."""
     unidade = request.args.get('unidade', 'Hamburgueria Artesanos')
     if unidade not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400

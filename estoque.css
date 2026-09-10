@@ -116,6 +116,43 @@
 }
 
 /* Insumo feito na casa (tem receita) — ver modal de receita. */
+/* Liga/desliga da baixa automática (card Integrações do Estoque) */
+.baixa-automatica {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-sm);
+}
+
+.baixa-automatica-ligar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+}
+
+.baixa-automatica-ligar input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.baixa-automatica-ajuda {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .tag-mistura {
   display: inline-block;
   margin-top: 2px;

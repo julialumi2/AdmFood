@@ -181,9 +181,18 @@ pendurada); carga longa aumenta.
 (ex: `90 60`, depois `60 30`...), mais devagar e com mais paciência no 429.
 Reprocessar dia já sincronizado é seguro (o dia é regravado inteiro).
 
-**Data de corte da baixa** (`INICIO_BAIXA_AUTOMATICA`, por loja:
-Artesanos desde 2026-09-08, Açaí desde 2026-09-11). Venda anterior ao dia
-de início nunca desconta estoque, venha a sincronização de onde vier —
+**Liga/desliga e data de corte da baixa** (`baixa_automatica_loja`,
+`inicio_baixa_automatica`). Desde 2026-09-10 é a Julia quem liga e desliga
+a baixa de cada loja, na tela: Estoque → aba da loja → card Integrações do
+Estoque, "Ligar a partir de [data]" (hoje ou depois; o padrão é amanhã, pra
+dar tempo de contar o estoque antes do primeiro pedido) e "Desligar", que
+não devolve o que já foi descontado. Rota `GET/PUT
+/api/estoque/baixa-automatica` (PUT só admin, recusa data passada). O
+Artesanos entrou ligado desde 2026-09-08 (Etapa 0); o Açaí ia ligar em
+11/09 e ela pediu pra esperar a ficha técnica ficar 100% — está desligado,
+e o card aparece em toda loja pra mostrar o que ainda não casou antes de
+ligar. Venda anterior ao dia de início nunca desconta estoque, venha a
+sincronização de onde vier —
 antes dessa trava, carregar histórico ou ressincronizar um dia antigo pela
 tela descontava meses de consumo do estoque de hoje. Atenção: na primeira
 madrugada depois da baixa entrar, a reconferência de 7 dias pode ter
@@ -2354,9 +2363,9 @@ baixa e consumo médio seguem a ficha de cada complemento (ex: "Leite
 condensado" = 70 g). A receita base do "monte o seu" fica só com açaí +
 embalagem, e o Frutas ao Creme só com a embalagem.
 
-**Baixa no Açaí** ligada a partir de 2026-09-11 (`INICIO_BAIXA_AUTOMATICA`
-passou a ser por loja). A fila de pendências do Estoque aparece em toda
-loja com baixa automática e mostra também o complemento sem cadastro
+**Baixa no Açaí**: desligada até a Julia ligar na tela (seção 4, "Liga/
+desliga e data de corte da baixa"), quando a ficha técnica estiver pronta. A fila de pendências do
+Estoque aparece em toda loja e mostra também o complemento sem cadastro
 ("· complemento") — mas só na loja que trabalha com complemento, porque no
 Artesanos as opções do pedido são "Sem cebola", "Ao ponto"...
 
@@ -2749,7 +2758,8 @@ sistema está pronto, falta o número):
    - **Açaí**: conteúdo de cada pacote nos insumos contados por unidade
      ("Cada unidade tem 1000 g"); porção de creme como topping e do
      Chocoball (valores de partida 60 g e 30 g); preço do Chocoball;
-     contagem de estoque em 11/09, quando a baixa automática começa.
+     contagem de estoque antes do primeiro pedido do dia em que ela ligar
+     a baixa automática (adiada em 10/09 — ficha ainda não está 100%).
    - **Segurança**: o repositório no GitHub é público — tornar privado
      (antes, confirmar que o Dokploy tem acesso ao GitHub, senão o deploy
      para).

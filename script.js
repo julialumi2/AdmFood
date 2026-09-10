@@ -1355,9 +1355,6 @@ const STATUS_CLASSE_BARRA_ESTOQUE = { ok: 'bar-green', baixo: 'bar-orange', crit
 const STATUS_ICONE_ESTOQUE = { ok: 'check', baixo: 'trending-down', critico: 'alert-triangle' };
 
 let estoqueInsumos = [];
-// Mesmas lojas de INICIO_BAIXA_AUTOMATICA (backend/armazenamento.py) — só
-// nelas venda vira baixa, então só nelas a fila de pendências faz sentido.
-const LOJAS_COM_BAIXA_AUTOMATICA = ['Hamburgueria Artesanos', 'Açaí Na Lata'];
 let estoqueTabAtual = 'geral';
 let integracoesEstoqueUltimaLoja = null;
 let itensCardapioTodosCache = null;
@@ -1618,13 +1615,14 @@ function renderEstoqueTab() {
   const btnInsumosLoja = document.getElementById('btn-insumos-loja');
   if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
-  // Painel de Integrações do Estoque (Etapa 0 do motor de compra) — só
-  // nas lojas com baixa automática ligada (INICIO_BAIXA_AUTOMATICA em
-  // armazenamento.py). Carrega uma vez por troca de loja, não a cada tecla
-  // da busca (que também chama renderEstoqueTab).
+  // Painel de Integrações do Estoque (Etapa 0 do motor de compra) — na aba
+  // de toda loja: é nele que a baixa automática liga e desliga, e com ela
+  // desligada a fila de pendências mostra o que falta casar antes de ligar.
+  // Carrega uma vez por troca de loja, não a cada tecla da busca (que
+  // também chama renderEstoqueTab).
   const cardIntegracoes = document.getElementById('integracoes-estoque-card');
   if (cardIntegracoes) {
-    const mostrarIntegracoes = isAdmin && LOJAS_COM_BAIXA_AUTOMATICA.includes(estoqueTabAtual);
+    const mostrarIntegracoes = isAdmin && !ehGeral;
     cardIntegracoes.style.display = mostrarIntegracoes ? '' : 'none';
     if (mostrarIntegracoes && integracoesEstoqueUltimaLoja !== estoqueTabAtual) {
       integracoesEstoqueUltimaLoja = estoqueTabAtual;
@@ -1895,16 +1893,84 @@ document.getElementById('btn-receita-apagar')?.addEventListener('click', () => {
 // --- Painel de Integrações do Estoque (Etapa 0 do motor de compra) ---
 async function carregarIntegracoesEstoque() {
   try {
-    const [respPendentes, respVinculos] = await Promise.all([
+    const [respPendentes, respVinculos, respBaixa] = await Promise.all([
       fetch(`/api/produtos-pendentes?unidade=${encodeURIComponent(estoqueTabAtual)}`),
       fetch('/api/vinculos-manuais'),
+      fetch('/api/estoque/baixa-automatica'),
     ]);
     const dadosPendentes = await respPendentes.json();
     const dadosVinculos = await respVinculos.json();
+    const dadosBaixa = await respBaixa.json();
+    renderBaixaAutomatica(estoqueTabAtual, (dadosBaixa.lojas || {})[estoqueTabAtual] || null);
     renderProdutosPendentesTabela(dadosPendentes.pendentes || []);
     renderVinculosManuaisTabela(dadosVinculos.vinculos || []);
   } catch (erro) {
     console.error('Falha ao carregar integrações do estoque:', erro);
+  }
+}
+
+// Liga/desliga da baixa automática da loja (api_definir_baixa_automatica).
+// Ligada, cada venda desconta a ficha técnica do estoque; desligada, nada
+// desconta e a fila abaixo serve de lista do que falta casar. Liga só de
+// hoje em diante, e o padrão é amanhã: dá tempo de contar o estoque antes
+// do primeiro pedido.
+function _dataIsoLocal(data) {
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+}
+
+function renderBaixaAutomatica(loja, inicio) {
+  const caixa = document.getElementById('baixa-automatica-estado');
+  if (!caixa) return;
+  const hoje = new Date();
+  const hojeIso = _dataIsoLocal(hoje);
+  const dataCurta = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
+
+  if (inicio && inicio > hojeIso) {
+    caixa.innerHTML = `
+      <span class="badge-pill neu-orange">Baixa automática liga em ${dataCurta(inicio)}</span>
+      <button type="button" class="btn-secondary-sm" id="btn-baixa-desligar">Cancelar</button>
+      <p class="baixa-automatica-ajuda">A partir de ${dataCurta(inicio)}, cada venda desconta a ficha técnica do estoque desta loja. Conte o estoque antes do primeiro pedido desse dia.</p>`;
+  } else if (inicio) {
+    caixa.innerHTML = `
+      <span class="badge-pill pos">Baixa automática ligada desde ${dataCurta(inicio)}</span>
+      <button type="button" class="btn-secondary-sm" id="btn-baixa-desligar">Desligar</button>
+      <p class="baixa-automatica-ajuda">Cada venda desconta a ficha técnica do estoque desta loja.</p>`;
+  } else {
+    const amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+    caixa.innerHTML = `
+      <span class="badge-pill badge-neutral">Baixa automática desligada</span>
+      <label class="baixa-automatica-ligar">
+        Ligar a partir de
+        <input type="date" id="baixa-automatica-inicio" min="${hojeIso}" value="${_dataIsoLocal(amanha)}">
+      </label>
+      <button type="button" class="btn-primary-sm" id="btn-baixa-ligar">Ligar</button>
+      <p class="baixa-automatica-ajuda">Enquanto estiver desligada, as vendas não descontam nada do estoque. Ligue quando a ficha técnica da loja estiver pronta, e conte o estoque antes do primeiro pedido do dia escolhido.</p>`;
+  }
+
+  document.getElementById('btn-baixa-ligar')?.addEventListener('click', () => {
+    const data = document.getElementById('baixa-automatica-inicio').value;
+    if (!data) return;
+    if (!confirm(`Ligar a baixa automática de ${loja} a partir de ${dataCurta(data)}? As vendas desse dia em diante vão descontar a ficha técnica do estoque.`)) return;
+    _salvarBaixaAutomatica(loja, data);
+  });
+  document.getElementById('btn-baixa-desligar')?.addEventListener('click', () => {
+    if (!confirm(`Desligar a baixa automática de ${loja}? O que já foi descontado continua descontado; as próximas vendas não descontam mais.`)) return;
+    _salvarBaixaAutomatica(loja, null);
+  });
+}
+
+async function _salvarBaixaAutomatica(loja, inicio) {
+  try {
+    const resposta = await fetch('/api/estoque/baixa-automatica', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loja, inicio }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar.');
+    renderBaixaAutomatica(loja, dados.inicio);
+  } catch (erro) {
+    alert(erro.message);
   }
 }
 

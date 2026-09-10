@@ -363,13 +363,16 @@
           </div>
         </div>
 
-        <!-- CONTAINER DE INTEGRAÇÕES DO ESTOQUE (Etapa 0 do motor de compra, só admin + Hamburgueria Artesanos) -->
+        <!-- CONTAINER DE INTEGRAÇÕES DO ESTOQUE (Etapa 0 do motor de compra, só admin, na aba de cada loja) -->
         <div class="chart-card" id="integracoes-estoque-card" style="display:none;">
           <div class="table-header-row">
             <div>
               <h3 class="table-title">Integrações do Estoque</h3>
               <p class="table-subtitle">Baixa automática de estoque por venda real — produtos que ainda não casaram com a Ficha Técnica ficam aqui, esperando um vínculo manual (que fica valendo pra sempre depois)</p>
             </div>
+          </div>
+          <div class="baixa-automatica" id="baixa-automatica-estado">
+            <!-- Liga/desliga da baixa desta loja — renderizado via JS (renderBaixaAutomatica) -->
           </div>
           <div class="table-responsive">
           <table class="inventory-table">

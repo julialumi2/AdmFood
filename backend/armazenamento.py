@@ -582,6 +582,26 @@ def inicializar_banco():
             )
             """
         )
+        # Liga/desliga da baixa automática por loja (Estoque → Integrações do
+        # Estoque, só admin). `inicio` nulo = desligada; a linha fica pra
+        # lembrar a decisão. Ver inicio_baixa_automatica.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS baixa_automatica_loja (
+                loja TEXT PRIMARY KEY,
+                inicio TEXT,
+                alterado_em TEXT NOT NULL,
+                alterado_por TEXT
+            )
+            """
+        )
+        # O Artesanos já estava com a baixa ligada desde a Etapa 0, antes de
+        # existir a tela. OR IGNORE: nunca desfaz o que foi decidido nela.
+        conn.execute(
+            "INSERT OR IGNORE INTO baixa_automatica_loja (loja, inicio, alterado_em, alterado_por) "
+            "VALUES ('Hamburgueria Artesanos', '2026-09-08', ?, 'Etapa 0 do motor de compra')",
+            (datetime.now().isoformat(),),
+        )
 
         # Cadastro de fornecedor — semente do futuro módulo de Compras/
         # Cotação (ver seção 9 da documentação), começando só pelo diretório,
@@ -1673,8 +1693,8 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                     ),
                 )
 
-    # Só nas lojas de INICIO_BAIXA_AUTOMATICA — nas outras a própria função
-    # não faz nada.
+    # Só nas lojas com a baixa ligada (inicio_baixa_automatica) — nas outras
+    # a própria função não faz nada.
     aplicar_baixa_estoque_dia(unidade, dia_iso)
 
 
@@ -1704,20 +1724,43 @@ SQL_ITENS_CONSUMIDOS = """
 """
 
 
-# Lojas com baixa automática de estoque -> primeiro dia em que ela vale.
-# Loja fora daqui não tem baixa (a Tradiça ainda não tem receita com
-# gramatura). Venda anterior ao dia de início nunca desconta estoque, venha a
-# sincronização de onde vier: o estoque atual já reflete aquele consumo (foi
-# contado depois), então descontar de novo tiraria o mesmo produto duas
-# vezes. Antes dessa trava, carregar 90 dias de histórico
-# (sincronizar_periodo.py) ou ressincronizar um dia antigo pela tela
-# descontava meses de consumo do estoque de hoje.
-INICIO_BAIXA_AUTOMATICA = {
-    "Hamburgueria Artesanos": "2026-09-08",  # Etapa 0 do motor de compra
-    # Entra junto com a leitura dos complementos do pedido: antes disso a
-    # receita do "monte o seu" era um chute de 3 complementos fixos.
-    "Açaí Na Lata": "2026-09-11",
-}
+def inicio_baixa_automatica():
+    """{loja: primeiro dia da baixa automática} das lojas com ela ligada.
+    Quem liga e desliga é a Julia, na tela (Estoque → Integrações do
+    Estoque), quando a ficha técnica da loja estiver pronta — o Açaí ia
+    começar em 11/09/2026 e ela pediu pra esperar a ficha ficar 100%.
+
+    Venda anterior ao dia de início nunca desconta estoque, venha a
+    sincronização de onde vier: o estoque atual já reflete aquele consumo
+    (foi contado depois), então descontar de novo tiraria o mesmo produto
+    duas vezes. Antes dessa trava, carregar 90 dias de histórico
+    (sincronizar_periodo.py) ou ressincronizar um dia antigo pela tela
+    descontava meses de consumo do estoque de hoje."""
+    with conexao() as conn:
+        return {
+            linha["loja"]: linha["inicio"]
+            for linha in conn.execute(
+                "SELECT loja, inicio FROM baixa_automatica_loja WHERE inicio IS NOT NULL"
+            ).fetchall()
+        }
+
+
+def definir_inicio_baixa_automatica(loja, inicio, alterado_por):
+    """Liga a baixa automática da loja a partir de `inicio` ('AAAA-MM-DD')
+    ou desliga (None). Desligar não devolve o que já foi descontado: só as
+    vendas seguintes deixam de descontar."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO baixa_automatica_loja (loja, inicio, alterado_em, alterado_por)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (loja) DO UPDATE SET
+                inicio = excluded.inicio,
+                alterado_em = excluded.alterado_em,
+                alterado_por = excluded.alterado_por
+            """,
+            (loja, inicio, datetime.now().isoformat(), alterado_por),
+        )
 
 
 def aplicar_baixa_estoque_dia(unidade, dia_iso):
@@ -1733,7 +1776,7 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
     Deixa o estoque ir negativo de propósito — é sinal real de
     divergência entre teórico e físico (quebra, porcionamento diferente,
     Ficha Técnica desatualizada), não é erro pra esconder."""
-    inicio = INICIO_BAIXA_AUTOMATICA.get(unidade)
+    inicio = inicio_baixa_automatica().get(unidade)
     if inicio is None or dia_iso < inicio:
         return
     agora = datetime.now().isoformat()
