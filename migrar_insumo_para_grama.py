@@ -69,9 +69,9 @@ TABELAS = [
 ]
 
 
-def _receitas_da_planilha(nome_planilha):
+def _receitas_da_planilha(nome_planilha, caminho=PLANILHA):
     """{nome_do_produto: quantidade_em_kg} pra esse insumo."""
-    wb = openpyxl.load_workbook(PLANILHA, data_only=True)
+    wb = openpyxl.load_workbook(caminho, data_only=True)
     alvo = _normalizar_nome_insumo(nome_planilha)
     receitas = {}
     for linha in wb["Ficha Técnica"].iter_rows(min_row=5, values_only=True):
@@ -87,7 +87,7 @@ def _receitas_da_planilha(nome_planilha):
     return receitas
 
 
-def migrar(aplicar=False):
+def migrar(aplicar=False, caminho=PLANILHA):
     inicializar_banco()
     for migracao in MIGRACOES:
         peso = migracao["gramas"]
@@ -120,7 +120,7 @@ def migrar(aplicar=False):
                     conn.execute(f"UPDATE {tabela} SET {campos} WHERE insumo_id = ?", (insumo_id,))
 
             # Ficha técnica: reescrita a partir da planilha, não multiplicada.
-            receitas = _receitas_da_planilha(migracao["planilha"])
+            receitas = _receitas_da_planilha(migracao["planilha"], caminho)
             linhas_ficha = conn.execute(
                 """
                 SELECT f.item_id, f.quantidade, ic.nome
@@ -161,4 +161,5 @@ def migrar(aplicar=False):
 
 
 if __name__ == "__main__":
-    migrar(aplicar="--apply" in sys.argv)
+    argumentos = [a for a in sys.argv[1:] if a != "--apply"]
+    migrar(aplicar="--apply" in sys.argv, caminho=argumentos[0] if argumentos else PLANILHA)

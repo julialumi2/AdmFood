@@ -33,6 +33,7 @@ from backend.armazenamento import (
 )
 from backend.nomes_insumo import resolver as _resolver_insumo, sem_sufixo as _sem_sufixo
 from config import LOJAS
+from importar_custos_insumo import _unidade, _FATOR, _FATOR_COM_SUPOSICAO
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -46,6 +47,19 @@ PRIMEIRA_LINHA = 5
 
 # Colunas (índice 0) da aba "Ficha Técnica"
 COL_CATEGORIA, COL_PRODUTO, COL_INSUMO, COL_UNIDADE, COL_QUANTIDADE = 0, 1, 3, 4, 5
+
+def _converter_quantidade(quantidade, unidade_planilha, unidade_cadastro):
+    """Quantidade da planilha na unidade do cadastro, ou None quando não dá
+    pra converter sem assumir peso por unidade. Sem isso, "0,11 kg" de carne
+    virava 0,11 g num insumo contado em grama — o mesmo tipo de erro que já
+    produziu um CMV de 18.000% neste sistema. g <-> ml assume densidade ≈ 1,
+    a mesma suposição documentada em importar_custos_insumo.py (molhos)."""
+    origem, destino = _unidade(unidade_planilha), _unidade(unidade_cadastro)
+    if quantidade is None or not origem or not destino or origem == destino:
+        return quantidade
+    fator = _FATOR.get((origem, destino)) or _FATOR_COM_SUPOSICAO.get((origem, destino))
+    return round(quantidade * fator, 4) if fator else None
+
 
 def _ler_planilha(caminho):
     wb = openpyxl.load_workbook(caminho, data_only=True)
@@ -83,8 +97,8 @@ def importar(caminho, aplicar=False):
 
     with conexao() as conn:
         insumos_cadastrados = {
-            _normalizar_nome_insumo(l["nome"]): {"id": l["id"], "nome": l["nome"]}
-            for l in conn.execute("SELECT id, nome FROM insumo").fetchall()
+            _normalizar_nome_insumo(l["nome"]): {"id": l["id"], "nome": l["nome"], "unidade_medida": l["unidade_medida"]}
+            for l in conn.execute("SELECT id, nome, unidade_medida FROM insumo").fetchall()
         }
         itens = {
             _normalizar_nome_insumo(l["nome"]): {"id": l["id"], "nome": l["nome"]}
@@ -110,14 +124,27 @@ def importar(caminho, aplicar=False):
         # planilha não sabe disso. Mas quantidade NULA é preenchida: linha
         # sem gramatura não desconta estoque nem entra no custo, então ela
         # é indistinguível de não existir, e a planilha tem o número.
-        faltantes, completar = [], []
+        faltantes, completar, incompativeis = [], [], []
         for i in info["insumos"]:
             insumo = _resolver_insumo(i["nome"], insumos_cadastrados)
             atual = por_insumo.get(insumo["id"]) if insumo else None
+            if insumo and i["quantidade"] is not None:
+                convertida = _converter_quantidade(i["quantidade"], i["unidade"], insumo["unidade_medida"])
+                if convertida is None:
+                    # un x g, por exemplo: converter exigiria saber quanto
+                    # pesa uma unidade. Fica de fora e aparece no relatório.
+                    if atual is None or atual["quantidade"] is None:
+                        incompativeis.append((i, insumo))
+                    continue
+                i = {**i, "quantidade": convertida, "unidade": insumo["unidade_medida"]}
             if atual is None:
                 faltantes.append(i)
             elif atual["quantidade"] is None and i["quantidade"] is not None:
                 completar.append((atual, i))
+
+        for i, insumo in incompativeis:
+            print(f"  ! {produto!r}: {i['nome']!r} está em {i['unidade']!r} na planilha e em "
+                  f"{insumo['unidade_medida']!r} no cadastro — não dá pra converter, fica de fora")
 
         if not faltantes and not completar:
             continue  # receita completa — nada a fazer
@@ -164,8 +191,11 @@ def importar(caminho, aplicar=False):
             if insumo:
                 insumo_id = insumo["id"]
             else:
-                insumo_id = criar_insumo(i["nome"], "Ingrediente", i["unidade"], list(LOJAS.keys()))
-                insumos_cadastrados[_normalizar_nome_insumo(i["nome"])] = {"id": insumo_id, "nome": i["nome"]}
+                # Só no Artesanos: vincular às 4 lojas foi o que encheu o
+                # estoque da Tradiça e do Açaí de insumo de hambúrguer.
+                insumo_id = criar_insumo(i["nome"], "Ingrediente", i["unidade"], [LOJA])
+                insumos_cadastrados[_normalizar_nome_insumo(i["nome"])] = {
+                    "id": insumo_id, "nome": i["nome"], "unidade_medida": i["unidade"]}
             links.append({"insumoId": insumo_id, "quantidade": i["quantidade"]})
         definir_ficha_tecnica(item_id, LOJA, links)
         preenchidos += 1
