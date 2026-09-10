@@ -30,6 +30,25 @@ EQUIVALENCIAS = {
     "oleo de soja": ["Oleo De Soja (Mais Barato)", "Óleo de soja"],
     "ovo pasteurizado": ["Ovo Pasteurizado Kg"],
     "bacon fatia crua": ["Bacon", "Bacon Fatiado Smoke-MR BEEF"],
+    # Ingredientes das misturas (aba Sub-Receitas) -> nome da VMarket, que é
+    # o catálogo do Artesanos em produção (insumos_vmarket.json). Sem isso o
+    # import das misturas criaria um "Açúcar" ao lado do "Açúcar Refinado
+    # 1Kg" e partiria o estoque em dois. Os de galão ("un") só convertem a
+    # quantidade depois de cadastrado quanto tem em 1 unidade.
+    "acucar": ["Açúcar Refinado 1Kg"],
+    "alho": ["Alho Descascado 1Kg"],
+    "ketchup": ["Ketchup Cepera Galão"],
+    "mostarda": ["Mostarda Cepera Galão"],
+    "leite": ["Leite Integral 1L"],
+    "picles": ["Sweet Picles Mc Coys Grande"],
+    "molho barbecue": ["Barbecue Cepera Galão 3,5kg"],
+    "geleia de pimenta": ["Geléia De Pimenta - SWEET CHILLI JUNIOR - JUNIOR"],
+    "farinha panko": ["Farinha Panko Romariz/Orquídea 1Kg"],
+    "flocos de tapioca": ["Tapioca Granulada"],
+    # A VMarket tem dois de cada. Suposição, a confirmar com a loja: cebola
+    # pra empanar e caramelizar é a branca; limão de maionese é o taiti.
+    "cebola": ["Cebola Branca"],
+    "limao": ["Limão Taiti"],
 }
 
 

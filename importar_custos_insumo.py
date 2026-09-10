@@ -46,12 +46,20 @@ _APELIDOS = {
 # unidade, e isso o sistema não sabe — esse caso é recusado.
 _FATOR = {("kg", "g"): 1000, ("g", "kg"): 0.001, ("l", "ml"): 1000, ("ml", "l"): 0.001}
 
-# g <-> ml é a única conversão aqui que assume alguma coisa: que 1 g ≈ 1 ml,
-# ou seja, densidade perto da água. Vale pros molhos e sucos da casa (é o
-# caso de todos os insumos que caem aqui hoje). Óleo daria ~8% de diferença
-# — pouco perto da alternativa, que é ficar sem custo nenhum e o produto
-# inteiro sumir da Curva ABC. A suposição é impressa toda vez que é usada.
-_FATOR_COM_SUPOSICAO = {("g", "ml"): 1, ("ml", "g"): 1}
+# Peso <-> volume é a única conversão aqui que assume alguma coisa: que 1 g ≈
+# 1 ml, ou seja, densidade perto da água. Vale pros molhos e sucos da casa (é
+# o caso de todos os insumos que caem aqui hoje). Óleo daria ~8% de
+# diferença — pouco perto da alternativa, que é ficar sem custo nenhum e o
+# produto inteiro sumir da Curva ABC. A suposição é impressa toda vez que é
+# usada. Os pares com kg e litro são a mesma suposição em outra escala: o
+# catálogo da VMarket conta líquido em kg ("Molho Inglês", "Oleo De Soja"),
+# e a receita pede ml.
+_FATOR_COM_SUPOSICAO = {
+    ("g", "ml"): 1, ("ml", "g"): 1,
+    ("kg", "l"): 1, ("l", "kg"): 1,
+    ("kg", "ml"): 1000, ("ml", "kg"): 0.001,
+    ("l", "g"): 1000, ("g", "l"): 0.001,
+}
 
 
 def _unidade(bruta):

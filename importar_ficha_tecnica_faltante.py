@@ -61,14 +61,20 @@ def _converter_quantidade(quantidade, unidade_planilha, unidade_cadastro):
     return round(quantidade * fator, 4) if fator else None
 
 
+_PESO_OU_VOLUME = {"g", "kg", "ml", "l"}
+
+
 def quantidade_para_insumo(quantidade, unidade_origem, insumo):
     """Quantidade da planilha na unidade do insumo cadastrado, inclusive o
-    contado por pacote ("un") que tem conteúdo cadastrado (1 un = 1000 g):
-    14 g viram 0,014 un. None quando não dá — pacote sem conteúdo
-    cadastrado, ou grandezas diferentes."""
+    contado por embalagem (un, pct, cx, galão...) que tem conteúdo
+    cadastrado (1 un = 1000 g): 14 g viram 0,014 un. Vale pra qualquer
+    embalagem, igual ao campo "Cada unidade tem" do cadastro e ao seletor
+    g/un da ficha. None quando não dá — embalagem sem conteúdo cadastrado,
+    ou grandezas diferentes."""
     if quantidade is None:
         return None
-    if _unidade(insumo["unidade_medida"]) == "un" and _unidade(unidade_origem) != "un":
+    destino = _unidade(insumo["unidade_medida"])
+    if destino and destino not in _PESO_OU_VOLUME and _unidade(unidade_origem) != destino:
         conteudo = insumo.get("conteudo_por_unidade")
         if not conteudo:
             return None

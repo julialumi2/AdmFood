@@ -84,30 +84,102 @@ def custo_manual_da_batata(aplicar):
 
 def cardapio_da_tradica(aplicar, precos):
     """Cardápio das Tradiças a partir da planilha de preços — só as abas da
-    Tradiça, e só pra loja que ainda não tem cardápio. Até a correção de
-    10/09/2026 o import de preços pulava as abas novas ("Comparativo de
-    preços ZN"/"Simus") sem avisar, então as Tradiças ficaram vazias. O
-    botão de preços do Cardápio faria isso também, mas regrava Artesanos e
-    Açaí junto e passaria por cima de preço editado à mão."""
-    from backend.armazenamento import sincronizar_precos_cardapio
+    Tradiça, e só pra loja que ainda não tem cardápio vindo da planilha. Até
+    a correção de 10/09/2026 o import de preços pulava as abas novas
+    ("Comparativo de preços ZN"/"Simus") sem avisar, então as Tradiças
+    ficaram vazias. O botão de preços do Cardápio faria isso também, mas
+    regrava Artesanos e Açaí junto e passaria por cima de preço editado à mão.
+
+    Produto criado na tela ("Novo item", manual = 1) não conta como cardápio:
+    com a loja vazia, é assim que ela monta as primeiras fichas, e um só
+    desses bastava pra loja inteira ficar sem a lista de preços. Ele fica. Se
+    for um produto da planilha escrito do jeito curto ("Calabreso" x
+    "Calabreso (com Calabresa)"), vira a linha da planilha em vez de aparecer
+    duas vezes — a tela não tem como tirar produto do cardápio. Preço que ela
+    digitou nele fica; o que estava vazio vem da planilha. Foto e ficha
+    técnica continuam as mesmas."""
     from backend.precos_cardapio import ler_precos_da_planilha
+    from montar_cardapio_tradica import _nome_de_cardapio
 
     lojas = ("Tradiça ZN", "Tradiça Simus")
     with conexao() as conn:
         com_cardapio = {
             l["loja"] for l in conn.execute(
-                "SELECT DISTINCT loja FROM preco_cardapio WHERE loja IN (?, ?)", lojas
+                "SELECT DISTINCT loja FROM preco_cardapio WHERE loja IN (?, ?) AND manual = 0", lojas
             ).fetchall()
         }
-    linhas = [l for l in ler_precos_da_planilha(precos) if l["loja"] in lojas and l["loja"] not in com_cardapio]
+        da_tela = {}
+        for l in conn.execute(
+            "SELECT id, loja, produto, ifood, food99, beefood, cardapio_web FROM preco_cardapio "
+            "WHERE loja IN (?, ?) AND manual = 1 ORDER BY ordem", lojas
+        ).fetchall():
+            da_tela.setdefault(l["loja"], []).append(dict(l))
+
+    planilha = ler_precos_da_planilha(precos)
+    novas, assumidas = [], []  # linhas a inserir; (linha da tela, linha da planilha)
     for loja in lojas:
         if loja in com_cardapio:
             print(f"   {loja}: já tem cardápio — não é mexido (pra atualizar preço, use o botão do Cardápio)")
-        else:
-            n = sum(1 for l in linhas if l["loja"] == loja)
-            print(f"   {loja}: entra o cardápio da planilha ({n} produtos)" if n else f"   {loja}: planilha sem aba dessa loja")
-    if aplicar and linhas:
-        sincronizar_precos_cardapio(linhas)
+            continue
+        da_loja = [l for l in planilha if l["loja"] == loja]
+        if not da_loja:
+            print(f"   {loja}: planilha sem aba dessa loja")
+            continue
+        print(f"   {loja}: entra o cardápio da planilha ({len(da_loja)} produtos)")
+
+        # Mesmo produto = mesmo nome sem o parêntese de descrição, o critério
+        # com que a tela liga a lista de preços à ficha (_casar_item_cardapio).
+        # Só quando é um pra um: dois candidatos é decisão dela, não regra.
+        tela_por_nome, planilha_por_nome = {}, {}
+        for linha in da_tela.get(loja, []):
+            tela_por_nome.setdefault(_nome_de_cardapio(linha["produto"]), []).append(linha)
+        for linha in da_loja:
+            planilha_por_nome.setdefault(_nome_de_cardapio(linha["produto"]), []).append(linha)
+        assumidas_aqui = []
+        for linha in da_loja:
+            nome = _nome_de_cardapio(linha["produto"])
+            candidatas = tela_por_nome.get(nome, [])
+            if len(candidatas) == 1 and len(planilha_por_nome[nome]) == 1:
+                assumidas_aqui.append((candidatas[0], linha))
+            else:
+                novas.append(linha)
+        assumidas += assumidas_aqui
+
+        for da_tela_linha, da_planilha in assumidas_aqui:
+            digitou = any(da_tela_linha[c] is not None for c in ("ifood", "food99", "beefood", "cardapio_web"))
+            destino = ("passa a ser da planilha" if da_tela_linha["produto"] == da_planilha["produto"]
+                       else f"vira {da_planilha['produto']!r} da planilha")
+            print(f"      {da_tela_linha['produto']!r} (criado na tela) {destino}"
+                  + (" — o preço que você digitou fica" if digitou else ""))
+        ids_assumidos = {da_tela_linha["id"] for da_tela_linha, _ in assumidas_aqui}
+        for linha in da_tela.get(loja, []):
+            if linha["id"] not in ids_assumidos:
+                print(f"      fica também {linha['produto']!r} (criado na tela, sem par único na planilha)")
+
+    if aplicar:
+        with conexao() as conn:
+            for da_tela_linha, da_planilha in assumidas:
+                conn.execute(
+                    """
+                    UPDATE preco_cardapio SET produto = ?, categoria = ?, ordem = ?,
+                        ifood = COALESCE(ifood, ?), food99 = COALESCE(food99, ?),
+                        beefood = COALESCE(beefood, ?), cardapio_web = COALESCE(cardapio_web, ?),
+                        manual = 0
+                    WHERE id = ?
+                    """,
+                    (da_planilha["produto"], da_planilha["categoria"], da_planilha["ordem"],
+                     da_planilha["ifood"], da_planilha["food99"], da_planilha["beefood"],
+                     da_planilha["cardapio_web"], da_tela_linha["id"]),
+                )
+            for linha in novas:
+                conn.execute(
+                    """
+                    INSERT INTO preco_cardapio (loja, categoria, produto, ifood, food99, beefood, cardapio_web, ordem)
+                    VALUES (:loja, :categoria, :produto, :ifood, :food99, :beefood, :cardapio_web, :ordem)
+                    ON CONFLICT(loja, produto) DO NOTHING
+                    """,
+                    linha,
+                )
 
 
 def main():

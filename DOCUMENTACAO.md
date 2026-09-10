@@ -642,6 +642,15 @@ de propósito: um combo como "Lanche + Batata + Bebida + Maionese" cita
 Só essa lista muda — "Preços" continua mostrando bebida normalmente,
 já que lá o que importa é preço de venda, não receita.
 
+**Combo do Açaí fora dessa tela** (2026-09-10, pedido da Julia). A
+categoria de combo ("COMBOS NALATA": Família 4 × 330 ml e Filhinho/
+Filminho 2 × 500 ml) sai da lista do Açaí (`LOJAS_SEM_COMBO_NO_CARDAPIO`
+em `armazenamento.py`). Combo não tem ficha própria: a venda desconta os
+copos de dentro pela composição (`composicao_produto_venda`, seção 6.11) e
+os complementos escolhidos no pedido (6.15). Na lista, era produto "sem
+ficha" sem nada pra preencher. O preço continua gravado e a venda continua
+contando. Os combos do Artesanos continuam na lista.
+
 **Ficha técnica de complemento** (concluído em 2026-09-02, pedido do
 chefe da Julia repassado por ela: a Cardápio Web tem ficha técnica de
 **produto**, mas não de **complemento** — e a Açaí Na Lata é "100%
@@ -2286,7 +2295,8 @@ da fila em `_mapa_preco_insumo` (cotação e compra recebida passam na
 frente sozinhas). O import **confere a unidade**: preço por kg num insumo
 contado por unidade faria cada hambúrguer custar um quilo de carne — foi
 exatamente o erro que produziu um CMV de 18.000% em 09/09. Conversões
-permitidas: kg↔g, L↔ml e g↔ml (densidade ≈ 1, avisada no relatório);
+permitidas: kg↔g, L↔ml e peso↔volume com densidade ≈ 1 (g↔ml, kg↔L,
+kg↔ml, L↔g — a VMarket conta líquido em kg; avisada no relatório);
 o resto é recusado e o custo antigo errado é apagado. Regra geral: **custo
 só é calculado quando a receita inteira tem preço** — "sem CMV" é melhor
 que um custo menor que o real na tela que decide corte de cardápio.
@@ -2301,8 +2311,9 @@ Estoque, compra e custo continuam por pacote. O campo de quantidade da
 ficha também deixou de ter `step="0.01"`, que fazia o navegador recusar
 0,014 em silêncio. Nos scripts, `quantidade_para_insumo` e
 `custo_para_insumo` (`importar_ficha_tecnica_faltante.py`) fazem a mesma
-conversão, e pacote sem conteúdo cadastrado deixa a quantidade em branco
-em vez de chutar.
+conversão pra qualquer embalagem (un, pct, cx, galão — igual à tela), e
+embalagem sem conteúdo cadastrado deixa a quantidade em branco em vez de
+chutar.
 
 ### 6.15 Complementos escolhidos no pedido (Açaí "monte o seu")
 
@@ -2379,9 +2390,21 @@ perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
   iguais à planilha) e cria os 14 ingredientes que faltavam. Ingrediente
   que é outra mistura casa com ela ("Maionese da Casa" →
   "Maionese da Casa (caseira)"), senão a cascata quebraria. O suco de
-  limão da Maionese entra com quantidade em branco (receita em g, cadastro
-  conta limão por unidade), deixando a receita incompleta em vez de mais
-  barata que a real.
+  limão da Maionese entra com quantidade em branco (receita em g de suco,
+  estoque conta a fruta — `QUANTIDADE_A_CONFERIR`), deixando a receita
+  incompleta em vez de mais barata que a real.
+- **Em produção** (corrigido em 2026-09-10, revisão de código): o
+  catálogo do Artesanos lá veio da VMarket ("Açúcar Refinado 1Kg",
+  "Mostarda Cepera Galão", líquido em kg), e o import procurava só o nome
+  exato — criaria um "Açúcar" ao lado do da VMarket e partiria o estoque.
+  Agora ingrediente e mistura passam por `localizar_insumo` (nome exato,
+  `EQUIVALENCIAS` com os nomes da VMarket, nome sem tamanho de pacote), a
+  quantidade vai pela unidade do cadastro (`quantidade_para_insumo`: kg,
+  densidade ≈ 1, ou fração da embalagem pelo conteúdo) e o relatório diz
+  de onde veio cada linha ("Açúcar → Açúcar Refinado 1Kg 0.1 kg"). O que
+  ainda for ser criado aparece no "⚠ vão ser CRIADOS", com os parecidos do
+  cadastro ao lado. Duas equivalências são suposição a confirmar com a
+  loja: cebola = "Cebola Branca", limão = "Limão Taiti".
 
 ### 6.17 Levar dado pra produção: botão "Atualizar dados pelas planilhas"
 
@@ -2407,7 +2430,8 @@ rodar de novo não refaz nada:
    ficha-por-loja copiou 19 hambúrgueres pra Tradiça e Açaí)
 6. Ficha técnica do Açaí
 7. Complementos do Açaí
-8. Cardápio da Tradiça (só as abas da Tradiça, só se a loja não tiver)
+8. Cardápio da Tradiça (só as abas da Tradiça, só se a loja ainda não
+   tiver cardápio vindo da planilha — ver "Tradiça" abaixo)
 9. Insumos e esqueleto de receita da Tradiça
 10. Receita das misturas
 11. Custo dos insumos (por último, pra pegar os insumos criados antes)
@@ -2437,6 +2461,16 @@ do produto garante —, com as gramas em branco pra Julia preencher na tela.
 A lista de preços casa "Calabreso (com Calabresa)" com o item "Calabreso"
 ignorando o parêntese (`ignorar_parenteses`, só na lista de preços: nas
 vendas, "BACON (duplo)" não é o BACON simples).
+
+O passo 8 só conta como "já tem cardápio" produto que veio da planilha
+(`manual = 0`). Até a revisão de 2026-09-10 contava qualquer um: com a
+Tradiça vazia, um único produto criado pelo "Novo item" fazia o passo pular
+a lista de preços inteira. O produto criado na tela fica; se for um da
+planilha escrito do jeito curto ("Calabreso"), vira a linha da planilha
+("Calabreso (com Calabresa)") em vez de aparecer duas vezes — a tela não
+tem como tirar produto do cardápio. O preço digitado nele fica, o vazio vem
+da planilha, e foto e ficha técnica continuam. Sem par único (dois
+parecidos, ou nenhum), ele fica como está e o relatório lista.
 
 **Import de preços** (seção 6.1, corrigido em 2026-09-10): a planilha de
 02/09 trocou a aba única das Tradiças por "Comparativo de preços ZN" e
