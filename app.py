@@ -139,6 +139,7 @@ from backend.armazenamento import (
     adicionar_produto_ao_cardapio,
     definir_receita_insumo,
     _mapa_preco_insumo,
+    custo_em_uso_por_insumo,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -994,8 +995,9 @@ def _status_estoque(quantidade_atual, estoque_minimo):
     return 'ok'
 
 
-def _formatar_insumos(linhas):
+def _formatar_insumos(linhas, com_custo=False):
     mapa_fornecedores = mapa_insumo_fornecedores()
+    custos_em_uso = custo_em_uso_por_insumo() if com_custo else {}
     por_insumo = {}
     for linha in linhas:
         insumo = por_insumo.setdefault(linha['insumo_id'], {
@@ -1013,6 +1015,11 @@ def _formatar_insumos(linhas):
             "fornecedorIds": mapa_fornecedores.get(linha['insumo_id'], []),
             "porLoja": {},
         })
+        if com_custo:
+            # Custo digitado no cadastro + o que o CMV está usando de fato
+            # (pode ser uma cotação, a última compra ou a receita da mistura).
+            insumo["custoReferencia"] = linha['custo_referencia']
+            insumo["custoEmUso"] = custos_em_uso.get(linha['insumo_id'])
         insumo["porLoja"][linha['loja']] = {
             "quantidadeAtual": linha['quantidade_atual'],
             "estoqueMinimo": linha['estoque_minimo'],
@@ -1025,7 +1032,10 @@ def _formatar_insumos(linhas):
 
 @app.route('/api/insumos', methods=['GET'])
 def api_listar_insumos():
-    return jsonify({"insumos": _formatar_insumos(listar_insumos())})
+    # Custo só pra admin, que é quem edita o cadastro do insumo.
+    usuario = _usuario_logado()
+    com_custo = bool(usuario and usuario['papel'] == 'admin')
+    return jsonify({"insumos": _formatar_insumos(listar_insumos(), com_custo=com_custo)})
 
 
 @app.route('/api/insumos/<int:insumo_id>/receita', methods=['GET'])
@@ -1073,6 +1083,25 @@ def _campos_conteudo_por_unidade(dados):
     return {"conteudo_por_unidade": conteudo, "unidade_conteudo": unidade}, None
 
 
+def _campo_custo_referencia(dados):
+    """Custo do insumo digitado no cadastro -> custo_referencia, sempre na
+    unidade do insumo (a tela converte: em grama ela digita R$ por kg). Em
+    branco apaga. É o custo de menor prioridade no CMV — cotação, compra
+    recebida e receita de mistura passam na frente (custo_em_uso_por_insumo)."""
+    if 'custoReferencia' not in dados:
+        return {}, None
+    bruto = dados.get('custoReferencia')
+    if bruto in (None, ''):
+        return {"custo_referencia": None}, None
+    try:
+        custo = float(bruto)
+    except (TypeError, ValueError):
+        return {}, "Custo inválido."
+    if custo < 0:
+        return {}, "O custo não pode ser negativo."
+    return {"custo_referencia": round(custo, 8)}, None
+
+
 @app.route('/api/insumos', methods=['POST'])
 def api_criar_insumo():
     erro_admin = _exigir_admin()
@@ -1086,24 +1115,29 @@ def api_criar_insumo():
     if not nome:
         return jsonify({"erro": "Informe o nome do insumo."}), 400
 
-    insumo_id = criar_insumo(nome, categoria, unidade_medida, list(LOJAS.keys()))
-
+    # Tudo validado ANTES de criar: um erro depois do INSERT deixava o insumo
+    # criado pela metade, e tentar de novo cadastrava ele duas vezes.
+    campos = {}
     marca_homologada = dados.get('marcaHomologada')
     if marca_homologada is not None:
-        atualizar_insumo(insumo_id, {"marca_homologada": marca_homologada.strip()})
+        campos["marca_homologada"] = marca_homologada.strip()
     unidade_compra = dados.get('unidadeCompra')
     if unidade_compra is not None:
-        atualizar_insumo(insumo_id, {"unidade_compra": unidade_compra.strip()})
+        campos["unidade_compra"] = unidade_compra.strip()
     if 'fatorConversaoCompra' in dados:
         try:
             fator = float(dados['fatorConversaoCompra']) if dados['fatorConversaoCompra'] not in (None, '') else None
         except (TypeError, ValueError):
             return jsonify({"erro": "Fator de conversão inválido."}), 400
-        atualizar_insumo(insumo_id, {"fator_conversao_compra": fator if fator and fator > 0 else None})
-    campos_conteudo, erro_conteudo = _campos_conteudo_por_unidade(dados)
-    if erro_conteudo:
-        return jsonify({"erro": erro_conteudo}), 400
-    atualizar_insumo(insumo_id, campos_conteudo)
+        campos["fator_conversao_compra"] = fator if fator and fator > 0 else None
+    for validar in (_campos_conteudo_por_unidade, _campo_custo_referencia):
+        campos_extra, erro = validar(dados)
+        if erro:
+            return jsonify({"erro": erro}), 400
+        campos.update(campos_extra)
+
+    insumo_id = criar_insumo(nome, categoria, unidade_medida, list(LOJAS.keys()))
+    atualizar_insumo(insumo_id, campos)
     fornecedor_ids = dados.get('fornecedorIds')
     if fornecedor_ids is not None:
         definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
@@ -1196,10 +1230,11 @@ def api_atualizar_insumo(insumo_id):
         except (TypeError, ValueError):
             return jsonify({"erro": "Fator de conversão inválido."}), 400
         campos['fator_conversao_compra'] = fator if fator and fator > 0 else None
-    campos_conteudo, erro_conteudo = _campos_conteudo_por_unidade(dados)
-    if erro_conteudo:
-        return jsonify({"erro": erro_conteudo}), 400
-    campos.update(campos_conteudo)
+    for validar in (_campos_conteudo_por_unidade, _campo_custo_referencia):
+        campos_extra, erro = validar(dados)
+        if erro:
+            return jsonify({"erro": erro}), 400
+        campos.update(campos_extra)
 
     atualizar_insumo(insumo_id, campos)
 

@@ -1743,9 +1743,19 @@ function renderEstoqueTab() {
 // preço de todo insumo junto, pra o custo da batelada recalcular na hora.
 let receitaInsumoAtual = null; // { insumoId, unidadeMedida, precos }
 
+// Custo é gravado na unidade do insumo (é o que o CMV multiplica pela
+// quantidade da receita), mas em grama e ml a tela mostra e recebe por kg e
+// por litro — ninguém sabe de cabeça o preço de 1 g de sal.
+function _escalaDeCusto(unidade) {
+  const u = (unidade || '').trim().toLowerCase();
+  if (u === 'g' || u === 'gr') return { rotulo: 'kg', fator: 1000 };
+  if (u === 'ml') return { rotulo: 'L', fator: 1000 };
+  return { rotulo: u || 'unidade', fator: 1 };
+}
+
 function _formatarCustoPorUnidade(valor, unidade) {
-  const escala = { g: ['kg', 1000], ml: ['L', 1000] }[unidade];
-  return escala ? `${_formatarMoedaBRL(valor * escala[1])}/${escala[0]}` : `${_formatarMoedaBRL(valor)}/${unidade}`;
+  const { rotulo, fator } = _escalaDeCusto(unidade);
+  return `${_formatarMoedaBRL(valor * fator)}/${rotulo}`;
 }
 
 async function abrirModalReceitaInsumo(insumoId) {
@@ -1823,7 +1833,7 @@ function _atualizarResumoReceita() {
     const preco = receitaInsumoAtual.precos[String(insumoId)];
     if (preco == null || quantidade === null || Number.isNaN(quantidade)) {
       completo = false;
-      celula.innerHTML = preco == null ? '<span class="text-muted" title="Esse insumo ainda não tem custo cadastrado">sem custo</span>' : '—';
+      celula.innerHTML = preco == null ? '<span class="text-muted" title="Esse insumo ainda não tem custo: cadastre em Estoque → editar insumo (ícone de engrenagem)">sem custo</span>' : '—';
       return;
     }
     total += quantidade * preco;
@@ -4480,9 +4490,47 @@ function abrirModalNovoInsumo(insumo) {
   document.getElementById('novo-insumo-fator-compra').value = insumo && insumo.fatorConversaoCompra ? insumo.fatorConversaoCompra : '';
   document.getElementById('novo-insumo-conteudo').value = insumo && insumo.conteudoPorUnidade ? insumo.conteudoPorUnidade : '';
   document.getElementById('novo-insumo-unidade-conteudo').value = (insumo && insumo.unidadeConteudo) || 'g';
+  const { fator } = _escalaDeCusto(insumo ? insumo.unidadeMedida : 'un');
+  document.getElementById('novo-insumo-custo').value = insumo && insumo.custoReferencia != null
+    ? _arredondarQuantidade(insumo.custoReferencia * fator)
+    : '';
+  _atualizarRotuloCustoInsumo();
+  const emUso = document.getElementById('novo-insumo-custo-em-uso');
+  emUso.textContent = insumo ? _textoCustoEmUso(insumo) : '';
+  emUso.hidden = !insumo;
   _renderChecklistFornecedores(insumo ? insumo.fornecedorIds : []);
   document.getElementById('modal-novo-insumo').style.display = 'flex';
 }
+
+function _atualizarRotuloCustoInsumo() {
+  const { rotulo } = _escalaDeCusto(document.getElementById('novo-insumo-unidade').value);
+  document.getElementById('novo-insumo-custo-rotulo').textContent = `Custo (R$ por ${rotulo})`;
+}
+
+// O custo digitado é o de menor prioridade no CMV (custo_em_uso_por_insumo
+// em armazenamento.py): cotação, compra recebida e receita de mistura passam
+// na frente. Por isso a tela diz qual está valendo — senão ela digitaria um
+// custo e acharia que não funcionou.
+function _textoCustoEmUso(insumo) {
+  const emUso = insumo.custoEmUso;
+  if (!emUso) return 'Sem custo no CMV ainda: os produtos que usam este insumo ficam sem CMV até ele ter um.';
+  const valor = _formatarCustoPorUnidade(emUso.valor, insumo.unidadeMedida);
+  // "2026-09-03T10:15" -> "03/09", sem passar por Date (data sem hora viraria o dia anterior no fuso daqui).
+  const data = emUso.data ? emUso.data.slice(0, 10).split('-').reverse().slice(0, 2).join('/') : '';
+  if (emUso.origem === 'cotacao') {
+    return `Valendo no CMV: ${valor}, da cotação de ${data}. Cotação e compra recebida passam na frente do custo digitado.`;
+  }
+  if (emUso.origem === 'compra') {
+    const quem = emUso.fornecedor ? `${emUso.fornecedor}, ${data}` : data;
+    return `Valendo no CMV: ${valor}, da última compra recebida (${quem}). Compra recebida passa na frente do custo digitado.`;
+  }
+  if (emUso.origem === 'receita') {
+    return `Valendo no CMV: ${valor}, calculado pela receita da mistura. O custo digitado só vale se a receita ficar incompleta.`;
+  }
+  return `Valendo no CMV: ${valor}, este custo.`;
+}
+
+document.getElementById('novo-insumo-unidade')?.addEventListener('input', _atualizarRotuloCustoInsumo);
 
 function fecharModalNovoInsumo() {
   document.getElementById('modal-novo-insumo').style.display = 'none';
@@ -4496,10 +4544,14 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
   evento.preventDefault();
   const insumoId = document.getElementById('novo-insumo-id').value;
   const fornecedorIds = Array.from(document.querySelectorAll('#novo-insumo-fornecedores input:checked')).map(el => parseInt(el.value, 10));
+  const unidadeMedida = document.getElementById('novo-insumo-unidade').value;
+  const custoDigitado = document.getElementById('novo-insumo-custo').value;
   const corpo = {
     nome: document.getElementById('novo-insumo-nome').value,
     categoria: document.getElementById('novo-insumo-categoria').value,
-    unidadeMedida: document.getElementById('novo-insumo-unidade').value,
+    unidadeMedida,
+    // Digitado por kg/litro em grama/ml; gravado na unidade do insumo.
+    custoReferencia: custoDigitado === '' ? '' : parseFloat(custoDigitado) / _escalaDeCusto(unidadeMedida).fator,
     marcaHomologada: document.getElementById('novo-insumo-marca').value,
     unidadeCompra: document.getElementById('novo-insumo-unidade-compra').value,
     fatorConversaoCompra: document.getElementById('novo-insumo-fator-compra').value,

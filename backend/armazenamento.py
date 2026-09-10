@@ -2072,7 +2072,7 @@ def listar_insumos():
             SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
                    i.marca_homologada, i.unidade_compra, i.fator_conversao_compra,
                    (i.rendimento_receita IS NOT NULL) AS eh_mistura,
-                   i.conteudo_por_unidade, i.unidade_conteudo,
+                   i.conteudo_por_unidade, i.unidade_conteudo, i.custo_referencia,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em,
                    EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = e.loja) AS aplica
             FROM insumo i
@@ -2616,31 +2616,47 @@ def explodir_receitas_em_ingredientes(consumo, receitas):
     return final
 
 
-def _mapa_preco_insumo():
-    """Preço de referência de cada insumo pro cálculo de CMV real. Ordem de
-    confiança, do menos pro mais confiável (o de baixo sobrescreve): custo
-    cadastrado na ficha de custos, preço cotado por algum fornecedor, e
-    preço da última compra efetivamente recebida — esse é o que saiu do
-    caixa, então ganha de todos. Insumo sem nenhum dos três fica de fora:
-    quem consome trata como custo desconhecido em vez de assumir zero."""
-    precos = {}
+def custo_em_uso_por_insumo():
+    """O custo que o CMV usa pra cada insumo e de onde ele veio:
+    {insumo_id: {"valor", "origem", "data", "fornecedor"}}, com origem
+    "cadastro" (custo_referencia: digitado no cadastro do insumo, ou vindo
+    da planilha na carga inicial), "cotacao", "compra" ou "receita". Ordem de
+    confiança, do menos pro mais confiável (o de baixo sobrescreve): o custo
+    do cadastro, o preço cotado por algum fornecedor, e o preço da última
+    compra efetivamente recebida — esse é o que saiu do caixa, então ganha
+    de todos. Insumo sem nenhum dos três fica de fora: quem consome trata
+    como custo desconhecido em vez de assumir zero.
+
+    A origem vai junto porque o custo do cadastro é o de menor prioridade: a
+    tela mostra do lado dele qual custo está valendo, senão ela digitaria
+    um valor e acharia que não funcionou."""
+    em_uso = {}
     with conexao() as conn:
         for linha in conn.execute(
             "SELECT id, custo_referencia FROM insumo WHERE custo_referencia IS NOT NULL"
         ).fetchall():
-            precos[linha["id"]] = linha["custo_referencia"]
+            em_uso[linha["id"]] = {"valor": linha["custo_referencia"], "origem": "cadastro"}
         linhas = conn.execute(
-            "SELECT insumo_id, preco FROM cotacao_preco ORDER BY criado_em"
+            "SELECT insumo_id, preco, criado_em FROM cotacao_preco ORDER BY criado_em"
         ).fetchall()
     for linha in linhas:
-        precos[linha["insumo_id"]] = linha["preco"]
+        em_uso[linha["insumo_id"]] = {"valor": linha["preco"], "origem": "cotacao", "data": linha["criado_em"]}
     for insumo_id, info in buscar_ultima_compra_por_insumo().items():
-        precos[insumo_id] = info["preco"]
+        em_uso[insumo_id] = {"valor": info["preco"], "origem": "compra", "data": info["dataIso"],
+                             "fornecedor": info["fornecedorNome"]}
     # Mistura feita na casa custa o que foi dentro dela, então o custo da
     # receita ganha de tudo acima — uma "compra" de Tempero Batata seria erro
     # de cadastro. Receita incompleta não entra aqui: fica o que já valia.
-    precos.update(_custo_das_receitas(precos, mapa_receita_insumo()))
-    return precos
+    precos = {insumo_id: info["valor"] for insumo_id, info in em_uso.items()}
+    for insumo_id, valor in _custo_das_receitas(precos, mapa_receita_insumo()).items():
+        em_uso[insumo_id] = {"valor": valor, "origem": "receita"}
+    return em_uso
+
+
+def _mapa_preco_insumo():
+    """{insumo_id: custo} que o CMV usa — ver custo_em_uso_por_insumo, que
+    diz também de onde cada custo veio."""
+    return {insumo_id: info["valor"] for insumo_id, info in custo_em_uso_por_insumo().items()}
 
 
 def _custo_por_item_da_ficha(loja, precos_insumo):

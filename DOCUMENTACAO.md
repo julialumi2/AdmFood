@@ -2301,6 +2301,19 @@ o resto é recusado e o custo antigo errado é apagado. Regra geral: **custo
 só é calculado quando a receita inteira tem preço** — "sem CMV" é melhor
 que um custo menor que o real na tela que decide corte de cardápio.
 
+**Custo digitado no cadastro** (2026-09-10, pedido da Julia: "não usar mais
+as planilhas, deixar tudo centralizado no sistema"). A planilha de custos
+entra uma última vez pela carga inicial (6.17); dali pra frente o
+`custo_referencia` é mantido em Estoque → editar insumo, campo "Custo".
+Em grama e ml ela digita por kg e por litro, e a tela converte pra unidade
+do insumo (`_escalaDeCusto` em `script.js`). É o custo de menor prioridade
+no CMV — cotação, compra recebida e receita de mistura passam na frente —,
+então o formulário mostra embaixo qual está valendo e de onde veio
+(`custo_em_uso_por_insumo`, que agora é a fonte única de
+`_mapa_preco_insumo`). Custo só vai no `/api/insumos` pra admin. As rotas
+de criar insumo passaram a validar tudo antes do INSERT (um erro de
+conteúdo por unidade deixava o insumo criado pela metade).
+
 **Conteúdo por unidade** (2026-09-10, `insumo.conteudo_por_unidade` +
 `unidade_conteudo`). Pra insumo comprado e contado por pacote mas usado em
 grama na receita — o Açaí conta "Amendoim triturado 1kg" em sacos. No
