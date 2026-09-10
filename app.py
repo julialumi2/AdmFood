@@ -1047,8 +1047,11 @@ def api_buscar_receita_insumo(insumo_id):
     receita = buscar_receita_insumo(insumo_id, precos)
     if receita is None:
         return jsonify({"erro": "Insumo não encontrado."}), 404
+    # Conteúdo por unidade vai junto pro seletor g/un da receita: açúcar
+    # contado por pacote de 1 kg entra como "100 g", igual na ficha técnica.
     insumos = [
-        {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida']}
+        {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida'],
+         "conteudoPorUnidade": i['conteudo_por_unidade'], "unidadeConteudo": i['unidade_conteudo']}
         for i in _insumos_unicos(listar_insumos())
     ]
     return jsonify({**receita, "precos": {str(k): v for k, v in precos.items()}, "insumos": insumos})

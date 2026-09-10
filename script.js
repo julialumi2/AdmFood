@@ -1793,27 +1793,46 @@ function _adicionarLinhaReceita(ingrediente) {
   linha.innerHTML = `
     <td><select class="receita-ingrediente" aria-label="Ingrediente"><option value="">Escolha o ingrediente...</option>${opcoes}</select></td>
     <td class="receita-qtd-cell">
-      <input type="number" class="receita-quantidade" min="0" step="any" aria-label="Quantidade na batelada" value="${ingrediente?.quantidade ?? ''}">
-      <span class="receita-unidade text-muted"></span>
+      <input type="number" class="receita-quantidade" min="0" step="any" aria-label="Quantidade na batelada">
+      <select class="receita-unidade-select" aria-label="Unidade da quantidade"></select>
     </td>
     <td class="num receita-custo">—</td>
     <td><button type="button" class="btn-acao-icone btn-excluir" title="Tirar da receita"><i data-lucide="x"></i></button></td>`;
-  linha.querySelector('select').addEventListener('change', _atualizarResumoReceita);
-  linha.querySelector('input').addEventListener('input', _atualizarResumoReceita);
+  const seletorInsumo = linha.querySelector('.receita-ingrediente');
+  const seletorUnidade = linha.querySelector('.receita-unidade-select');
+  const campo = linha.querySelector('.receita-quantidade');
+  // Quantidade gravada é na unidade do insumo; o seletor mostra em grama
+  // quando ele tem conteúdo cadastrado (pacote de 1 kg: 0,1 un = 100 g).
+  _prepararSeletorUnidade(seletorUnidade, campo, _insumoDaLinhaReceita(linha), ingrediente?.quantidade ?? null);
+  // Trocou o ingrediente: o número digitado fica, a unidade volta pro padrão dele.
+  seletorInsumo.addEventListener('change', () => {
+    const valor = campo.value;
+    _prepararSeletorUnidade(seletorUnidade, campo, _insumoDaLinhaReceita(linha), null);
+    campo.value = valor;
+    _atualizarResumoReceita();
+  });
+  seletorUnidade.addEventListener('change', () => {
+    _converterAoTrocarUnidade(seletorUnidade, campo, _insumoDaLinhaReceita(linha));
+    _atualizarResumoReceita();
+  });
+  campo.addEventListener('input', _atualizarResumoReceita);
   linha.querySelector('button').addEventListener('click', () => { linha.remove(); _atualizarResumoReceita(); });
   document.getElementById('receita-ingredientes-body').appendChild(linha);
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+function _insumoDaLinhaReceita(linha) {
+  const id = parseInt(linha.querySelector('.receita-ingrediente').value, 10);
+  return receitaInsumoAtual.insumos.find(i => i.id === id);
+}
+
 function _linhasReceita() {
-  return [...document.querySelectorAll('#receita-ingredientes-body tr')].map(linha => {
-    const valor = linha.querySelector('input').value;
-    return {
-      linha,
-      insumoId: parseInt(linha.querySelector('select').value, 10) || null,
-      quantidade: valor === '' ? null : parseFloat(valor),
-    };
-  });
+  return [...document.querySelectorAll('#receita-ingredientes-body tr')].map(linha => ({
+    linha,
+    insumoId: parseInt(linha.querySelector('.receita-ingrediente').value, 10) || null,
+    quantidade: _quantidadeNaUnidadeDoInsumo(linha.querySelector('.receita-unidade-select'),
+      linha.querySelector('.receita-quantidade'), _insumoDaLinhaReceita(linha)),
+  }));
 }
 
 function _atualizarResumoReceita() {
@@ -1822,8 +1841,6 @@ function _atualizarResumoReceita() {
   let completo = true;
   let algum = false;
   _linhasReceita().forEach(({ linha, insumoId, quantidade }) => {
-    const insumo = receitaInsumoAtual.insumos.find(i => i.id === insumoId);
-    linha.querySelector('.receita-unidade').textContent = insumo ? insumo.unidadeMedida : '';
     const celula = linha.querySelector('.receita-custo');
     if (!insumoId) {
       celula.textContent = '—';
@@ -7665,13 +7682,11 @@ function _arredondarQuantidade(valor) {
   return Math.round(valor * 10000) / 10000;
 }
 
-// Monta o seletor de unidade da linha e mostra a quantidade gravada na
-// unidade escolhida. Com conteúdo cadastrado, abre em grama/ml — é assim
-// que a receita é pensada.
-function _prepararUnidadeLinhaFicha(linha, quantidadeBase) {
-  const insumo = _insumoDaLinhaFicha(linha);
-  const seletor = linha.querySelector('.ficha-tecnica-select-unidade');
-  const campo = linha.querySelector('.ficha-tecnica-input-quantidade');
+// Seletor g/un de uma linha de receita — o mesmo na ficha técnica e na
+// receita de mistura. Monta as opções e mostra a quantidade gravada na
+// unidade escolhida: com conteúdo cadastrado ("1 un = 1000 g"), abre em
+// grama/ml, que é como a receita é pensada.
+function _prepararSeletorUnidade(seletor, campo, insumo, quantidadeBase) {
   const conteudo = insumo?.conteudoPorUnidade;
   if (conteudo) {
     seletor.innerHTML = `<option value="conteudo">${escaparHtml(insumo.unidadeConteudo)}</option><option value="base">${escaparHtml(insumo.unidadeMedida)}</option>`;
@@ -7688,13 +7703,32 @@ function _prepararUnidadeLinhaFicha(linha, quantidadeBase) {
 }
 
 // Quantidade que vai pro banco, sempre na unidade do insumo.
+function _quantidadeNaUnidadeDoInsumo(seletor, campo, insumo) {
+  if (campo.value === '') return null;
+  const numero = parseFloat(campo.value);
+  return seletor.value === 'conteudo' && insumo?.conteudoPorUnidade ? numero / insumo.conteudoPorUnidade : numero;
+}
+
+// Trocou g <-> un: converte o número, pra quantidade continuar a mesma.
+function _converterAoTrocarUnidade(seletor, campo, insumo) {
+  const conteudo = insumo?.conteudoPorUnidade;
+  if (conteudo && campo.value !== '') {
+    const numero = parseFloat(campo.value);
+    campo.value = _arredondarQuantidade(seletor.value === 'base' && seletor.dataset.anterior === 'conteudo'
+      ? numero / conteudo
+      : seletor.value === 'conteudo' && seletor.dataset.anterior === 'base' ? numero * conteudo : numero);
+  }
+  seletor.dataset.anterior = seletor.value;
+}
+
+function _prepararUnidadeLinhaFicha(linha, quantidadeBase) {
+  _prepararSeletorUnidade(linha.querySelector('.ficha-tecnica-select-unidade'),
+    linha.querySelector('.ficha-tecnica-input-quantidade'), _insumoDaLinhaFicha(linha), quantidadeBase);
+}
+
 function _quantidadeBaseDaLinhaFicha(linha) {
-  const valor = linha.querySelector('.ficha-tecnica-input-quantidade').value;
-  if (valor === '') return null;
-  const numero = parseFloat(valor);
-  const insumo = _insumoDaLinhaFicha(linha);
-  const emConteudo = linha.querySelector('.ficha-tecnica-select-unidade').value === 'conteudo';
-  return emConteudo && insumo?.conteudoPorUnidade ? numero / insumo.conteudoPorUnidade : numero;
+  return _quantidadeNaUnidadeDoInsumo(linha.querySelector('.ficha-tecnica-select-unidade'),
+    linha.querySelector('.ficha-tecnica-input-quantidade'), _insumoDaLinhaFicha(linha));
 }
 
 function _wireLinhasFichaTecnica() {
@@ -7709,18 +7743,9 @@ function _wireLinhasFichaTecnica() {
       _prepararUnidadeLinhaFicha(linha, null);
       linha.querySelector('.ficha-tecnica-input-quantidade').value = valor;
     });
-    // Trocou g <-> un: converte o número, pra quantidade continuar a mesma.
     const seletor = linha.querySelector('.ficha-tecnica-select-unidade');
     seletor.addEventListener('change', () => {
-      const campo = linha.querySelector('.ficha-tecnica-input-quantidade');
-      const conteudo = _insumoDaLinhaFicha(linha)?.conteudoPorUnidade;
-      if (conteudo && campo.value !== '') {
-        const numero = parseFloat(campo.value);
-        campo.value = _arredondarQuantidade(seletor.value === 'base' && seletor.dataset.anterior === 'conteudo'
-          ? numero / conteudo
-          : seletor.value === 'conteudo' && seletor.dataset.anterior === 'base' ? numero * conteudo : numero);
-      }
-      seletor.dataset.anterior = seletor.value;
+      _converterAoTrocarUnidade(seletor, linha.querySelector('.ficha-tecnica-input-quantidade'), _insumoDaLinhaFicha(linha));
     });
   });
 }

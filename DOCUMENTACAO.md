@@ -2328,7 +2328,12 @@ conteúdo por unidade deixava o insumo criado pela metade).
 grama na receita — o Açaí conta "Amendoim triturado 1kg" em sacos. No
 cadastro: "Cada unidade tem 1000 g". Na ficha técnica a linha ganha um
 seletor g/un e abre em grama: "14 g" fica gravado como 0,014 un
-(`_quantidadeBaseDaLinhaFicha`); a receita mostra "14 g (0,014 un)".
+(`_quantidadeBaseDaLinhaFicha`); a receita mostra "14 g (0,014 un)". A
+receita de mistura (Cardápio → Misturas) usa o mesmo seletor desde 10/09 —
+o açúcar da VMarket é contado por pacote de 1 kg e entra no Tempero
+Batata como "100 g" (0,1 un). O código do seletor é um só pras duas
+telas (`_prepararSeletorUnidade`, `_quantidadeNaUnidadeDoInsumo`,
+`_converterAoTrocarUnidade`).
 Estoque, compra e custo continuam por pacote. O campo de quantidade da
 ficha também deixou de ter `step="0.01"`, que fazia o navegador recusar
 0,014 em silêncio. Nos scripts, `quantidade_para_insumo` e
