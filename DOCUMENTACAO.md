@@ -2416,8 +2416,8 @@ perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
   densidade ≈ 1, ou fração da embalagem pelo conteúdo) e o relatório diz
   de onde veio cada linha ("Açúcar → Açúcar Refinado 1Kg 0.1 kg"). O que
   ainda for ser criado aparece no "⚠ vão ser CRIADOS", com os parecidos do
-  cadastro ao lado. Duas equivalências são suposição a confirmar com a
-  loja: cebola = "Cebola Branca", limão = "Limão Taiti".
+  cadastro ao lado. Onde a VMarket tem dois, a Julia confirmou (10/09):
+  cebola = "Cebola Branca", limão = "Limão Taiti".
 
 ### 6.17 Levar dado pra produção: botão "Atualizar dados pelas planilhas"
 

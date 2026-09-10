@@ -45,8 +45,8 @@ EQUIVALENCIAS = {
     "geleia de pimenta": ["Geléia De Pimenta - SWEET CHILLI JUNIOR - JUNIOR"],
     "farinha panko": ["Farinha Panko Romariz/Orquídea 1Kg"],
     "flocos de tapioca": ["Tapioca Granulada"],
-    # A VMarket tem dois de cada. Suposição, a confirmar com a loja: cebola
-    # pra empanar e caramelizar é a branca; limão de maionese é o taiti.
+    # A VMarket tem dois de cada. Confirmado pela Julia em 10/09/2026: a
+    # cebola das receitas é a branca e o limão da maionese é o taiti.
     "cebola": ["Cebola Branca"],
     "limao": ["Limão Taiti"],
 }
