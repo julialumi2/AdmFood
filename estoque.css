@@ -142,12 +142,29 @@
 }
 
 .receita-rendimento label { font-weight: 600; }
+
+/* Mesmo visual do select global (theme.css), pra campo e seletor da mesma
+   linha não parecerem de telas diferentes. */
+.receita-rendimento input,
+.receita-qtd-cell input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  padding: 10px var(--space-3);
+  font-size: 0.875rem;
+  color: var(--text-dark);
+  outline: none;
+}
+
+.receita-rendimento input:focus-visible,
+.receita-qtd-cell input:focus-visible { border-color: var(--primary); }
+
 .receita-rendimento input { width: 120px; }
 
 .receita-tabela { width: 100%; margin-bottom: var(--space-3); }
-.receita-tabela select { width: 100%; min-width: 180px; }
+.receita-tabela select { width: 100%; min-width: 150px; }
 .receita-qtd-cell { white-space: nowrap; }
-.receita-qtd-cell input { width: 100px; }
+.receita-qtd-cell input { width: 96px; }
 .receita-tabela .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .receita-resumo {
