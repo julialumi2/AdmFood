@@ -4478,6 +4478,8 @@ function abrirModalNovoInsumo(insumo) {
   document.getElementById('novo-insumo-marca').value = insumo ? (insumo.marcaHomologada || '') : '';
   document.getElementById('novo-insumo-unidade-compra').value = insumo ? (insumo.unidadeCompra || '') : '';
   document.getElementById('novo-insumo-fator-compra').value = insumo && insumo.fatorConversaoCompra ? insumo.fatorConversaoCompra : '';
+  document.getElementById('novo-insumo-conteudo').value = insumo && insumo.conteudoPorUnidade ? insumo.conteudoPorUnidade : '';
+  document.getElementById('novo-insumo-unidade-conteudo').value = (insumo && insumo.unidadeConteudo) || 'g';
   _renderChecklistFornecedores(insumo ? insumo.fornecedorIds : []);
   document.getElementById('modal-novo-insumo').style.display = 'flex';
 }
@@ -4501,6 +4503,8 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     marcaHomologada: document.getElementById('novo-insumo-marca').value,
     unidadeCompra: document.getElementById('novo-insumo-unidade-compra').value,
     fatorConversaoCompra: document.getElementById('novo-insumo-fator-compra').value,
+    conteudoPorUnidade: document.getElementById('novo-insumo-conteudo').value,
+    unidadeConteudo: document.getElementById('novo-insumo-unidade-conteudo').value,
     fornecedorIds,
   };
   try {
@@ -6843,7 +6847,7 @@ function carregarFichaTecnicaAtual() {
 // Uma linha da lista de insumos dentro do cartão de receita — nome e
 // quantidade ligados por uma linha pontilhada, como numa receita impressa.
 function _receitaInsumoLinhaHTML(ins) {
-  const qtd = ins.quantidade != null ? _formatarQuantidade(ins.quantidade, ins.unidadeMedida || '') : '—';
+  const qtd = _formatarQuantidadeFicha(ins);
   return `
     <div class="receita-insumo-linha">
       <span class="receita-insumo-nome">${escaparHtml(ins.nome)}</span>
@@ -7122,7 +7126,7 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
     painel.innerHTML = `
       <div class="ficha-tecnica-ingredientes">
         ${dados.insumos.length ? dados.insumos.map(ins => `
-          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidade(ins.quantidade, ins.unidadeMedida)})</span>` : ''}</span>
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidadeFicha(ins)})</span>` : ''}</span>
         `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
       </div>
       ${isAdmin ? `
@@ -7225,7 +7229,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       <div class="receita-eyebrow">Insumos</div>
       <div class="ficha-tecnica-ingredientes">
         ${dadosInsumos.insumos.length ? dadosInsumos.insumos.map(ins => `
-          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidade(ins.quantidade, ins.unidadeMedida)})</span>` : ''}</span>
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidadeFicha(ins)})</span>` : ''}</span>
         `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
       </div>
       ${isAdmin ? `
@@ -7468,15 +7472,33 @@ document.getElementById('form-colar-complementos')?.addEventListener('submit', a
   }
 });
 
+// Quantidade de um insumo na receita. Com conteúdo cadastrado ("1 un =
+// 1000 g"), mostra primeiro em grama, que é como a receita é pensada:
+// "14 g (0,014 un)".
+function _formatarQuantidadeFicha(ins) {
+  if (ins.quantidade == null) return '—';
+  if (!ins.conteudoPorUnidade) return _formatarQuantidade(ins.quantidade, ins.unidadeMedida || '');
+  // A fração de unidade vai com todas as casas: 0,014 un arredondado pra
+  // 0,01 pareceria 10 g.
+  const naUnidade = `${ins.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} ${ins.unidadeMedida}`;
+  return `${_formatarQuantidade(_arredondarQuantidade(ins.quantidade * ins.conteudoPorUnidade), ins.unidadeConteudo)} (${naUnidade})`;
+}
+
 // --- Modal: Editar ficha técnica de um item ---
+// `quantidade` chega sempre na unidade do insumo (é o que fica gravado).
+// Insumo contado por unidade com conteúdo cadastrado ("1 un = 1000 g") ganha
+// um seletor g/un: ela digita "14 g" e o que vai pro banco é 0,014 un. O
+// campo aceita qualquer casa decimal — com step 0,01, 0,014 era recusado
+// pelo navegador e só dava pra gravar 0,01 ou 0,02.
 function _linhaFichaTecnicaHTML(insumoId, quantidade) {
   const opcoes = fichaTecnicaInsumosDisponiveis.map(i =>
     `<option value="${i.id}" ${i.id === insumoId ? 'selected' : ''}>${escaparHtml(i.nome)} (${escaparHtml(i.unidadeMedida)})</option>`
   ).join('');
   return `
-    <div class="ficha-tecnica-linha">
+    <div class="ficha-tecnica-linha" data-quantidade-base="${quantidade ?? ''}">
       <select class="ficha-tecnica-select-insumo">${opcoes}</select>
-      <input type="number" step="0.01" min="0" class="ficha-tecnica-input-quantidade" placeholder="Qtd." value="${quantidade ?? ''}">
+      <input type="number" step="any" min="0" class="ficha-tecnica-input-quantidade" placeholder="Qtd.">
+      <select class="ficha-tecnica-select-unidade" aria-label="Unidade da quantidade"></select>
       <button type="button" class="btn-acao-icone btn-excluir" data-acao="remover-linha-ficha-tecnica" title="Remover">
         <i data-lucide="x"></i>
       </button>
@@ -7484,9 +7506,72 @@ function _linhaFichaTecnicaHTML(insumoId, quantidade) {
   `;
 }
 
+function _insumoDaLinhaFicha(linha) {
+  const id = parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10);
+  return fichaTecnicaInsumosDisponiveis.find(i => i.id === id);
+}
+
+function _arredondarQuantidade(valor) {
+  return Math.round(valor * 10000) / 10000;
+}
+
+// Monta o seletor de unidade da linha e mostra a quantidade gravada na
+// unidade escolhida. Com conteúdo cadastrado, abre em grama/ml — é assim
+// que a receita é pensada.
+function _prepararUnidadeLinhaFicha(linha, quantidadeBase) {
+  const insumo = _insumoDaLinhaFicha(linha);
+  const seletor = linha.querySelector('.ficha-tecnica-select-unidade');
+  const campo = linha.querySelector('.ficha-tecnica-input-quantidade');
+  const conteudo = insumo?.conteudoPorUnidade;
+  if (conteudo) {
+    seletor.innerHTML = `<option value="conteudo">${escaparHtml(insumo.unidadeConteudo)}</option><option value="base">${escaparHtml(insumo.unidadeMedida)}</option>`;
+    seletor.value = 'conteudo';
+    seletor.style.visibility = '';
+    campo.value = quantidadeBase === null || quantidadeBase === '' ? '' : _arredondarQuantidade(quantidadeBase * conteudo);
+  } else {
+    seletor.innerHTML = `<option value="base">${escaparHtml(insumo?.unidadeMedida || '')}</option>`;
+    seletor.value = 'base';
+    seletor.style.visibility = insumo ? '' : 'hidden';
+    campo.value = quantidadeBase === null || quantidadeBase === '' ? '' : quantidadeBase;
+  }
+  seletor.dataset.anterior = seletor.value;
+}
+
+// Quantidade que vai pro banco, sempre na unidade do insumo.
+function _quantidadeBaseDaLinhaFicha(linha) {
+  const valor = linha.querySelector('.ficha-tecnica-input-quantidade').value;
+  if (valor === '') return null;
+  const numero = parseFloat(valor);
+  const insumo = _insumoDaLinhaFicha(linha);
+  const emConteudo = linha.querySelector('.ficha-tecnica-select-unidade').value === 'conteudo';
+  return emConteudo && insumo?.conteudoPorUnidade ? numero / insumo.conteudoPorUnidade : numero;
+}
+
 function _wireLinhasFichaTecnica() {
-  document.querySelectorAll('[data-acao="remover-linha-ficha-tecnica"]').forEach(btn => {
-    btn.addEventListener('click', () => btn.closest('.ficha-tecnica-linha').remove());
+  document.querySelectorAll('#ficha-tecnica-item-linhas .ficha-tecnica-linha:not([data-ligada])').forEach(linha => {
+    linha.dataset.ligada = '1';
+    const base = linha.dataset.quantidadeBase;
+    _prepararUnidadeLinhaFicha(linha, base === '' ? null : parseFloat(base));
+    linha.querySelector('[data-acao="remover-linha-ficha-tecnica"]').addEventListener('click', () => linha.remove());
+    // Trocou o insumo: a quantidade digitada fica, a unidade volta pro padrão dele.
+    linha.querySelector('.ficha-tecnica-select-insumo').addEventListener('change', () => {
+      const valor = linha.querySelector('.ficha-tecnica-input-quantidade').value;
+      _prepararUnidadeLinhaFicha(linha, null);
+      linha.querySelector('.ficha-tecnica-input-quantidade').value = valor;
+    });
+    // Trocou g <-> un: converte o número, pra quantidade continuar a mesma.
+    const seletor = linha.querySelector('.ficha-tecnica-select-unidade');
+    seletor.addEventListener('change', () => {
+      const campo = linha.querySelector('.ficha-tecnica-input-quantidade');
+      const conteudo = _insumoDaLinhaFicha(linha)?.conteudoPorUnidade;
+      if (conteudo && campo.value !== '') {
+        const numero = parseFloat(campo.value);
+        campo.value = _arredondarQuantidade(seletor.value === 'base' && seletor.dataset.anterior === 'conteudo'
+          ? numero / conteudo
+          : seletor.value === 'conteudo' && seletor.dataset.anterior === 'base' ? numero * conteudo : numero);
+      }
+      seletor.dataset.anterior = seletor.value;
+    });
   });
 }
 
@@ -7590,7 +7675,7 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
 
   const insumos = [...document.querySelectorAll('#ficha-tecnica-item-linhas .ficha-tecnica-linha')].map(linha => ({
     insumoId: parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10),
-    quantidade: linha.querySelector('.ficha-tecnica-input-quantidade').value || null,
+    quantidade: _quantidadeBaseDaLinhaFicha(linha),
   }));
 
   try {

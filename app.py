@@ -1008,6 +1008,8 @@ def _formatar_insumos(linhas):
             "unidadeCompra": linha['unidade_compra'],
             "fatorConversaoCompra": linha['fator_conversao_compra'],
             "ehMistura": bool(linha['eh_mistura']),
+            "conteudoPorUnidade": linha['conteudo_por_unidade'],
+            "unidadeConteudo": linha['unidade_conteudo'],
             "fornecedorIds": mapa_fornecedores.get(linha['insumo_id'], []),
             "porLoja": {},
         })
@@ -1053,6 +1055,24 @@ def api_definir_receita_insumo(insumo_id):
     return jsonify(buscar_receita_insumo(insumo_id))
 
 
+def _campos_conteudo_por_unidade(dados):
+    """("1 unidade = 1000 g") do formulário de insumo -> colunas. Em branco
+    apaga: o insumo volta a ser usado na receita na própria unidade."""
+    if 'conteudoPorUnidade' not in dados:
+        return {}, None
+    bruto = dados.get('conteudoPorUnidade')
+    if bruto in (None, ''):
+        return {"conteudo_por_unidade": None, "unidade_conteudo": None}, None
+    try:
+        conteudo = float(bruto)
+    except (TypeError, ValueError):
+        return {}, "Conteúdo por unidade inválido."
+    unidade = (dados.get('unidadeConteudo') or 'g').strip().lower()
+    if conteudo <= 0 or unidade not in ('g', 'ml'):
+        return {}, "Informe quantos gramas (ou ml) tem em 1 unidade."
+    return {"conteudo_por_unidade": conteudo, "unidade_conteudo": unidade}, None
+
+
 @app.route('/api/insumos', methods=['POST'])
 def api_criar_insumo():
     erro_admin = _exigir_admin()
@@ -1080,6 +1100,10 @@ def api_criar_insumo():
         except (TypeError, ValueError):
             return jsonify({"erro": "Fator de conversão inválido."}), 400
         atualizar_insumo(insumo_id, {"fator_conversao_compra": fator if fator and fator > 0 else None})
+    campos_conteudo, erro_conteudo = _campos_conteudo_por_unidade(dados)
+    if erro_conteudo:
+        return jsonify({"erro": erro_conteudo}), 400
+    atualizar_insumo(insumo_id, campos_conteudo)
     fornecedor_ids = dados.get('fornecedorIds')
     if fornecedor_ids is not None:
         definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
@@ -1172,6 +1196,10 @@ def api_atualizar_insumo(insumo_id):
         except (TypeError, ValueError):
             return jsonify({"erro": "Fator de conversão inválido."}), 400
         campos['fator_conversao_compra'] = fator if fator and fator > 0 else None
+    campos_conteudo, erro_conteudo = _campos_conteudo_por_unidade(dados)
+    if erro_conteudo:
+        return jsonify({"erro": erro_conteudo}), 400
+    campos.update(campos_conteudo)
 
     atualizar_insumo(insumo_id, campos)
 
@@ -1471,11 +1499,14 @@ def api_buscar_ficha_tecnica_item(item_id):
             "nome": i['insumo_nome'],
             "unidadeMedida": i['unidade_medida'],
             "quantidade": i['quantidade'],
+            "conteudoPorUnidade": i['conteudo_por_unidade'],
+            "unidadeConteudo": i['unidade_conteudo'],
         }
         for i in buscar_ficha_tecnica_item(item_id, loja)
     ]
     insumos_disponiveis = [
-        {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida']}
+        {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida'],
+         "conteudoPorUnidade": i['conteudo_por_unidade'], "unidadeConteudo": i['unidade_conteudo']}
         for i in _insumos_unicos(listar_insumos())
     ]
     return jsonify({"insumos": insumos, "insumosDisponiveis": insumos_disponiveis})
@@ -1488,6 +1519,8 @@ def _insumos_unicos(linhas_estoque):
             "id": linha['insumo_id'],
             "nome": linha['nome'],
             "unidade_medida": linha['unidade_medida'],
+            "conteudo_por_unidade": linha['conteudo_por_unidade'],
+            "unidade_conteudo": linha['unidade_conteudo'],
         })
     return sorted(vistos.values(), key=lambda i: i['nome'])
 

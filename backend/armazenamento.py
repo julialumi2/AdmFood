@@ -266,6 +266,13 @@ def inicializar_banco():
             # o rendimento que transforma o custo da batelada em custo por
             # grama. NULL = insumo comprado pronto, sem receita.
             conn.execute("ALTER TABLE insumo ADD COLUMN rendimento_receita REAL")
+        if "conteudo_por_unidade" not in colunas_insumo:
+            # Insumo contado por unidade (saco de 1 kg, bisnaga, pote) que a
+            # receita usa em grama/ml: quanto tem em 1 unidade (1000 g). Com
+            # isso a ficha aceita "14 g" e guarda 0,014 un — estoque, compra
+            # e custo continuam por pacote, do jeito que a loja conta.
+            conn.execute("ALTER TABLE insumo ADD COLUMN conteudo_por_unidade REAL")
+            conn.execute("ALTER TABLE insumo ADD COLUMN unidade_conteudo TEXT")
 
         conn.execute(
             """
@@ -2065,6 +2072,7 @@ def listar_insumos():
             SELECT i.id AS insumo_id, i.nome, i.categoria, i.unidade_medida, i.favorito,
                    i.marca_homologada, i.unidade_compra, i.fator_conversao_compra,
                    (i.rendimento_receita IS NOT NULL) AS eh_mistura,
+                   i.conteudo_por_unidade, i.unidade_conteudo,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em,
                    EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = e.loja) AS aplica
             FROM insumo i
@@ -2305,7 +2313,8 @@ def buscar_ficha_tecnica_item(item_id, loja):
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT f.insumo_id, f.quantidade, i.nome AS insumo_nome, i.unidade_medida
+            SELECT f.insumo_id, f.quantidade, i.nome AS insumo_nome, i.unidade_medida,
+                   i.conteudo_por_unidade, i.unidade_conteudo
             FROM ficha_tecnica f
             JOIN insumo i ON i.id = f.insumo_id
             WHERE f.item_id = ? AND f.loja = ?

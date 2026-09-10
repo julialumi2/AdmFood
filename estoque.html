@@ -784,6 +784,22 @@
           <p class="panel-subtitle" style="margin-top: calc(-1 * var(--space-2)); margin-bottom: var(--space-3);">
             Preencha os dois pra sugestão de compra arredondar pro múltiplo fechado da embalagem — deixe em branco se compra solto.
           </p>
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="novo-insumo-conteudo">Cada unidade tem (opcional)</label>
+              <input type="number" step="any" min="0" id="novo-insumo-conteudo" placeholder="Ex: 1000 (saco de 1 kg)">
+            </div>
+            <div class="form-group">
+              <label for="novo-insumo-unidade-conteudo">Em</label>
+              <select id="novo-insumo-unidade-conteudo">
+                <option value="g">gramas (g)</option>
+                <option value="ml">mililitros (ml)</option>
+              </select>
+            </div>
+          </div>
+          <p class="panel-subtitle" style="margin-top: calc(-1 * var(--space-2)); margin-bottom: var(--space-3);">
+            Pra insumo contado por unidade (saco, pote, bisnaga) mas usado em grama na receita: na ficha técnica dá pra digitar "14 g" e o sistema converte pra unidade.
+          </p>
           <div class="form-group">
             <label>Fornecedores que cotam esse insumo</label>
             <div class="checklist-fornecedores" id="novo-insumo-fornecedores">
