@@ -126,6 +126,7 @@ def main():
     import importar_custos_insumo
     import importar_ficha_acai
     import importar_ficha_tecnica_faltante
+    import importar_sub_receitas
     import limpar_fichas_copiadas
     import migrar_insumo_para_grama
     import montar_cardapio_tradica
@@ -145,6 +146,7 @@ def main():
         ("Complementos do Açaí (topping escolhido no pedido)", None, lambda: configurar_complementos_acai.configurar(args.apply)),
         ("Cardápio da Tradiça (planilha de preços)", precos, lambda: cardapio_da_tradica(args.apply, precos)),
         ("Insumos e receitas da Tradiça", "sempre", lambda: montar_cardapio_tradica.montar(args.apply, compras)),
+        ("Receita das misturas feitas na casa (aba Sub-Receitas)", ficha, lambda: importar_sub_receitas.importar(ficha, args.apply)),
         ("Custo dos insumos (planilha do Artesanos)", ficha, lambda: importar_custos_insumo.importar(ficha, args.apply)),
     ]
 

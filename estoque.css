@@ -115,6 +115,46 @@
   color: var(--text-muted);
 }
 
+/* Insumo feito na casa (tem receita) — ver modal de receita. */
+.tag-mistura {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: var(--radius-pill);
+}
+
+.btn-acao-icone.ativo { color: var(--primary); }
+
+/* Modal de receita da mistura */
+.receita-ajuda { margin-bottom: var(--space-3); }
+
+.receita-rendimento {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.receita-rendimento label { font-weight: 600; }
+.receita-rendimento input { width: 120px; }
+
+.receita-tabela { width: 100%; margin-bottom: var(--space-3); }
+.receita-tabela select { width: 100%; min-width: 180px; }
+.receita-qtd-cell { white-space: nowrap; }
+.receita-qtd-cell input { width: 100px; }
+.receita-tabela .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.receita-resumo {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: 0.9rem;
+}
+
 /* Coluna "Atual", destacada como o Saldo nas telas de estoque de referência */
 .col-atual-destaque {
   background-color: var(--primary-soft);

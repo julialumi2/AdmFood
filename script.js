@@ -1681,6 +1681,7 @@ function renderEstoqueTab() {
             <div>
               <span class="font-bold">${escaparHtml(insumo.nome)}</span>
               <span class="insumo-unidade">${escaparHtml(insumo.unidadeMedida)}</span>
+              ${insumo.ehMistura ? '<span class="tag-mistura" title="Feito na casa: quando sai, o estoque desconta os ingredientes da receita">mistura</span>' : ''}
             </div>
           </div>
         </td>
@@ -1719,6 +1720,9 @@ function renderEstoqueTab() {
             <button type="button" class="btn-acao-icone" data-acao="editar-insumo" data-insumo-id="${insumo.id}" title="Editar cadastro do insumo (fornecedores, marca)">
               <i data-lucide="settings-2"></i>
             </button>
+            <button type="button" class="btn-acao-icone ${insumo.ehMistura ? 'ativo' : ''}" data-acao="receita-insumo" data-insumo-id="${insumo.id}" title="${insumo.ehMistura ? 'Receita da mistura' : 'Cadastrar receita (insumo feito na casa)'}">
+              <i data-lucide="chef-hat"></i>
+            </button>
             <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)">
               <i data-lucide="trash-2"></i>
             </button>
@@ -1731,6 +1735,152 @@ function renderEstoqueTab() {
   if (isAdmin) wireEstoqueTableEvents();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// --- RECEITA DA MISTURA (insumo feito na casa: tempero, molho...) ---
+// Vendeu um produto que leva a mistura, a baixa desconta os ingredientes
+// daqui, e o custo dela sai desta conta (ver definir_receita_insumo e
+// explodir_receitas_em_ingredientes em armazenamento.py). A API manda o
+// preço de todo insumo junto, pra o custo da batelada recalcular na hora.
+let receitaInsumoAtual = null; // { insumoId, unidadeMedida, precos }
+
+function _formatarCustoPorUnidade(valor, unidade) {
+  const escala = { g: ['kg', 1000], ml: ['L', 1000] }[unidade];
+  return escala ? `${_formatarMoedaBRL(valor * escala[1])}/${escala[0]}` : `${_formatarMoedaBRL(valor)}/${unidade}`;
+}
+
+async function abrirModalReceitaInsumo(insumoId) {
+  try {
+    const resposta = await fetch(`/api/insumos/${insumoId}/receita`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível abrir a receita.');
+    receitaInsumoAtual = { insumoId, unidadeMedida: dados.unidadeMedida, precos: dados.precos || {} };
+    document.getElementById('receita-insumo-nome').textContent = dados.nome;
+    document.getElementById('receita-rendimento').value = dados.rendimento ?? '';
+    document.getElementById('receita-rendimento-unidade').textContent = dados.unidadeMedida;
+    document.getElementById('receita-ingredientes-body').innerHTML = '';
+    (dados.ingredientes.length ? dados.ingredientes : [null]).forEach(_adicionarLinhaReceita);
+    document.getElementById('btn-receita-apagar').style.display = dados.ingredientes.length ? '' : 'none';
+    document.getElementById('receita-erro').style.display = 'none';
+    _atualizarResumoReceita();
+    document.getElementById('modal-receita-insumo').style.display = 'flex';
+  } catch (erro) {
+    alert(erro.message);
+  }
+}
+
+function fecharModalReceitaInsumo() {
+  document.getElementById('modal-receita-insumo').style.display = 'none';
+  receitaInsumoAtual = null;
+}
+
+function _adicionarLinhaReceita(ingrediente) {
+  const opcoes = estoqueInsumos
+    .filter(i => i.id !== receitaInsumoAtual.insumoId)
+    .sort((a, b) => a.nome.localeCompare(b.nome))
+    .map(i => `<option value="${i.id}" ${ingrediente?.insumoId === i.id ? 'selected' : ''}>${escaparHtml(i.nome)}</option>`)
+    .join('');
+  const linha = document.createElement('tr');
+  linha.innerHTML = `
+    <td><select class="receita-ingrediente" aria-label="Ingrediente"><option value="">Escolha o ingrediente...</option>${opcoes}</select></td>
+    <td class="receita-qtd-cell">
+      <input type="number" class="receita-quantidade" min="0" step="any" aria-label="Quantidade na batelada" value="${ingrediente?.quantidade ?? ''}">
+      <span class="receita-unidade text-muted"></span>
+    </td>
+    <td class="num receita-custo">—</td>
+    <td><button type="button" class="btn-acao-icone btn-excluir" title="Tirar da receita"><i data-lucide="x"></i></button></td>`;
+  linha.querySelector('select').addEventListener('change', _atualizarResumoReceita);
+  linha.querySelector('input').addEventListener('input', _atualizarResumoReceita);
+  linha.querySelector('button').addEventListener('click', () => { linha.remove(); _atualizarResumoReceita(); });
+  document.getElementById('receita-ingredientes-body').appendChild(linha);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _linhasReceita() {
+  return [...document.querySelectorAll('#receita-ingredientes-body tr')].map(linha => {
+    const valor = linha.querySelector('input').value;
+    return {
+      linha,
+      insumoId: parseInt(linha.querySelector('select').value, 10) || null,
+      quantidade: valor === '' ? null : parseFloat(valor),
+    };
+  });
+}
+
+function _atualizarResumoReceita() {
+  if (!receitaInsumoAtual) return;
+  let total = 0;
+  let completo = true;
+  let algum = false;
+  _linhasReceita().forEach(({ linha, insumoId, quantidade }) => {
+    const insumo = estoqueInsumos.find(i => i.id === insumoId);
+    linha.querySelector('.receita-unidade').textContent = insumo ? insumo.unidadeMedida : '';
+    const celula = linha.querySelector('.receita-custo');
+    if (!insumoId) {
+      celula.textContent = '—';
+      return;
+    }
+    algum = true;
+    const preco = receitaInsumoAtual.precos[String(insumoId)];
+    if (preco == null || quantidade === null || Number.isNaN(quantidade)) {
+      completo = false;
+      celula.innerHTML = preco == null ? '<span class="text-muted" title="Esse insumo ainda não tem custo cadastrado">sem custo</span>' : '—';
+      return;
+    }
+    total += quantidade * preco;
+    celula.textContent = _formatarMoedaBRL(quantidade * preco);
+  });
+
+  const resumo = document.getElementById('receita-resumo');
+  const rendimento = parseFloat(document.getElementById('receita-rendimento').value);
+  if (!algum) {
+    resumo.textContent = '';
+  } else if (!completo) {
+    // Mesma regra do resto do sistema: metade da conta daria custo menor
+    // que o real. Enquanto isso, vale o custo cadastrado no próprio insumo.
+    resumo.innerHTML = 'Custo da batelada: <strong>incompleto</strong> — falta custo ou quantidade em algum ingrediente. Até completar, vale o custo que o insumo já tinha.';
+  } else {
+    resumo.innerHTML = `Custo da batelada: <strong>${_formatarMoedaBRL(total)}</strong>`
+      + (rendimento > 0 ? ` · <strong>${_formatarCustoPorUnidade(total / rendimento, receitaInsumoAtual.unidadeMedida)}</strong>` : '');
+  }
+}
+
+async function _salvarReceitaInsumo(apagar) {
+  const erro = document.getElementById('receita-erro');
+  erro.style.display = 'none';
+  const corpo = apagar
+    ? { rendimento: null, ingredientes: [] }
+    : {
+        rendimento: document.getElementById('receita-rendimento').value,
+        ingredientes: _linhasReceita().filter(l => l.insumoId).map(l => ({ insumoId: l.insumoId, quantidade: l.quantidade })),
+      };
+  try {
+    const resposta = await fetch(`/api/insumos/${receitaInsumoAtual.insumoId}/receita`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a receita.');
+    fecharModalReceitaInsumo();
+    await carregarInsumos();
+  } catch (e) {
+    erro.textContent = e.message;
+    erro.style.display = 'block';
+  }
+}
+
+document.getElementById('btn-receita-insumo-fechar')?.addEventListener('click', fecharModalReceitaInsumo);
+document.getElementById('btn-receita-cancelar')?.addEventListener('click', fecharModalReceitaInsumo);
+document.getElementById('btn-receita-adicionar')?.addEventListener('click', () => {
+  _adicionarLinhaReceita(null);
+  _atualizarResumoReceita();
+});
+document.getElementById('receita-rendimento')?.addEventListener('input', _atualizarResumoReceita);
+document.getElementById('btn-receita-salvar')?.addEventListener('click', () => _salvarReceitaInsumo(false));
+document.getElementById('btn-receita-apagar')?.addEventListener('click', () => {
+  if (!confirm('Apagar a receita? O insumo volta a ser tratado como comprado pronto: a venda desconta ele mesmo, e não os ingredientes.')) return;
+  _salvarReceitaInsumo(true);
+});
 
 // --- Painel de Integrações do Estoque (Etapa 0 do motor de compra) ---
 async function carregarIntegracoesEstoque() {
@@ -1942,6 +2092,10 @@ function wireEstoqueTableEvents() {
       if (!insumo) return;
       abrirModalNovoInsumo(insumo);
     });
+  });
+
+  document.querySelectorAll('[data-acao="receita-insumo"]').forEach(btn => {
+    btn.addEventListener('click', () => abrirModalReceitaInsumo(parseInt(btn.dataset.insumoId, 10)));
   });
 
   document.querySelectorAll('[data-acao="excluir-insumo"]').forEach(btn => {

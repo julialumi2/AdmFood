@@ -1761,6 +1761,17 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
             anterior = consumo_anterior.get(insumo_id, 0.0)
             diferenca = novo - anterior
             if diferenca:
+                # Ingrediente que a loja nunca tinha usado direto (o sal que
+                # agora sai do Tempero Batata) pode não ter linha de estoque
+                # lá — sem ela o UPDATE não pegaria nada e a baixa sumiria
+                # calada. Cria zerada e vincula à loja: fica negativo, que é
+                # o sinal certo de "precisa contar".
+                conn.execute(
+                    "INSERT OR IGNORE INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+                    "VALUES (?, ?, 0, 0, ?)",
+                    (insumo_id, unidade, agora),
+                )
+                conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, unidade))
                 conn.execute(
                     "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual - ?, atualizado_em = ? "
                     "WHERE insumo_id = ? AND loja = ?",
