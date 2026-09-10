@@ -61,6 +61,30 @@ def _converter_quantidade(quantidade, unidade_planilha, unidade_cadastro):
     return round(quantidade * fator, 4) if fator else None
 
 
+def quantidade_para_insumo(quantidade, unidade_origem, insumo):
+    """Quantidade da planilha na unidade do insumo cadastrado, inclusive o
+    contado por pacote ("un") que tem conteúdo cadastrado (1 un = 1000 g):
+    14 g viram 0,014 un. None quando não dá — pacote sem conteúdo
+    cadastrado, ou grandezas diferentes."""
+    if quantidade is None:
+        return None
+    if _unidade(insumo["unidade_medida"]) == "un" and _unidade(unidade_origem) != "un":
+        conteudo = insumo.get("conteudo_por_unidade")
+        if not conteudo:
+            return None
+        no_conteudo = _converter_quantidade(quantidade, unidade_origem, insumo.get("unidade_conteudo") or "g")
+        return round(no_conteudo / conteudo, 6) if no_conteudo is not None else None
+    return _converter_quantidade(quantidade, unidade_origem, insumo["unidade_medida"])
+
+
+def custo_para_insumo(custo, unidade_origem, insumo):
+    """Preço por unidade da planilha (por kg, por g...) no preço por unidade
+    do insumo cadastrado — o inverso da quantidade: R$ 19,90/kg num saco de
+    1 kg dá R$ 19,90 por saco. None quando a quantidade não converte."""
+    fator = quantidade_para_insumo(1.0, unidade_origem, insumo)
+    return round(custo / fator, 6) if fator else None
+
+
 def _ler_planilha(caminho):
     wb = openpyxl.load_workbook(caminho, data_only=True)
     if ABA not in wb.sheetnames:

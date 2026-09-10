@@ -39,6 +39,54 @@ def sem_sufixo(nome):
     return SUFIXO_PARENTESES.sub("", nome).strip()
 
 
+# Tamanho/embalagem colado no nome de quem cadastra pelo pacote: "Amendoim
+# triturado 1kg", "Confete1kg", "Ovomaltine 750gr", "Farinha de Paçoca
+# (pacote 1kg)". Tirar isso é regra, não similaridade: sobra o produto.
+_TAMANHO_DE_PACOTE = re.compile(r"\d+(?:[.,]\d+)?\s*(?:kg|g|gr|grs|ml|l|lt)\b")
+_PALAVRA_DE_PACOTE = re.compile(r"\b(?:pacote|pct|bisnaga|balde|galao|caixa|cx|fardo|saco)\b")
+
+
+def nome_base(nome):
+    """"Amendoim triturado 1kg" -> "amendoim triturado". Normalizado. O
+    tamanho sai antes de normalizar, que troca a vírgula de "2,5kg" por
+    espaço e deixaria um "2" sobrando."""
+    base = _TAMANHO_DE_PACOTE.sub(" ", sem_sufixo(nome).lower())
+    base = _PALAVRA_DE_PACOTE.sub(" ", _normalizar_nome_insumo(base))
+    return re.sub(r"\s+", " ", base).strip()
+
+
+def localizar_insumo(candidatos, cadastro):
+    """Insumo já cadastrado que corresponde a algum dos `candidatos` (nomes
+    que ele pode ter: o que o import criaria, o da planilha...). `cadastro`
+    é {nome_normalizado: insumo}. Tenta primeiro o nome exato de cada
+    candidato; depois o nome sem o tamanho do pacote — mas só se um único
+    insumo tiver aquela base, porque dois ("Leite condensado caixa" e
+    "Leite condensado bag", digamos) é decisão humana, não regra."""
+    for candidato in candidatos:
+        achado = resolver(candidato, cadastro)
+        if achado:
+            return achado
+    por_base = {}
+    for insumo in cadastro.values():
+        por_base.setdefault(nome_base(insumo["nome"]), []).append(insumo)
+    for candidato in candidatos:
+        # Se os dois nomes dizem o tamanho e ele é diferente, não é o mesmo
+        # insumo: "Lata embalagem 500ml" e "Lata embalagem 300ml" têm a
+        # mesma base, mas numa lata o tamanho É o produto.
+        achados = [
+            insumo for insumo in por_base.get(nome_base(candidato), [])
+            if not (_tamanhos(candidato) and _tamanhos(insumo["nome"]) and _tamanhos(candidato) != _tamanhos(insumo["nome"]))
+        ]
+        if len(achados) == 1:
+            return achados[0]
+    return None
+
+
+def _tamanhos(nome):
+    """{"500ml"} de "Lata embalagem 500ml"; vazio quando o nome não diz."""
+    return {t.replace(" ", "").replace(",", ".") for t in _TAMANHO_DE_PACOTE.findall(nome.lower())}
+
+
 def resolver(nome, mapa_normalizado):
     """Devolve o valor de `mapa_normalizado` (indexado por nome
     normalizado) correspondente a `nome`, tentando, nesta ordem: o nome

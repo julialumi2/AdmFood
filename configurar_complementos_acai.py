@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Complementos do Açaí Na Lata: cada topping vira um item com ficha própria,
-e a receita do "monte o seu" fica só com o que é fixo.
+e a receita do "monte o seu" deixa de ter os complementos de exemplo.
 
 Por que (pedido da Julia em 10/09/2026): no "NaLata 330ml + 3 complementos"
 a receita é o que o cliente escolhe. A Cardápio Web manda as escolhas em
@@ -15,11 +15,19 @@ estoque:
    com um valor de partida pra loja conferir na tela de Cardápio.
 2. Vínculo pros nomes que a Cardápio Web escreve diferente: "Chocoboll",
    "Confetes", "Morango separado"...
-3. Receita base: "+ 3/5 complementos" fica com açaí + embalagem, e o
-   Frutas ao Creme só com a embalagem (as frutas e o creme são escolha do
-   cliente). Sem isso, os 3 complementos de exemplo que vieram da planilha
-   seriam descontados junto com os escolhidos — contagem dupla.
+3. Receita base: tira do "+ 3/5 complementos" os complementos de exemplo
+   da planilha, e do Frutas ao Creme as frutas e o creme (escolha do
+   cliente). Sem isso seriam descontados junto com os escolhidos —
+   contagem dupla. Só sai o insumo de complemento: o resto da receita
+   (açaí, lata, o que a loja montou à mão) fica como está.
 4. Combos: 2 ou 4 copos de açaí base; os complementos vêm do pedido.
+
+Em produção a Julia cadastrou os insumos do Açaí à mão, por pacote
+("Amendoim triturado 1kg", em un). O complemento usa esse insumo (ver
+localizar_insumo_acai) e a porção em grama vira fração do pacote pelo
+conteúdo cadastrado. Complemento cujo insumo não existe fica sem ficha, e
+insumo por pacote sem conteúdo cadastrado deixa a quantidade em branco —
+os dois aparecem no relatório pra resolver na tela, sem travar o resto.
 
 Idempotente: não recria item, não sobrescreve ficha de complemento que já
 existe (pode ter sido ajustada na tela), e tirar da receita base o que já
@@ -42,6 +50,8 @@ from backend.armazenamento import (
     _casar_item_cardapio,
     _normalizar_nome_insumo,
 )
+from importar_ficha_acai import cadastro_de_insumos, descrever_insumo, localizar_insumo_acai
+from importar_ficha_tecnica_faltante import quantidade_para_insumo
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -77,8 +87,9 @@ SEM_PORCAO_NA_PLANILHA = {"Chocoball", "Creme de avelã", "Creme de ninho", "Cre
                           "Creme de Rafaello", "Creme de Ovomaltine", "Creme de Gran Ferreiro"}
 
 # Insumo que só existe por causa de um complemento (a planilha lista o
-# Chocoball, mas nenhuma receita usava). Sem custo: "Chocoball 500gr" a
-# R$ 19,90 pode ser o pacote ou o quilo.
+# Chocoball, mas nenhuma receita usava). Criado só se não houver nenhum com
+# esse nome ou com o da planilha ("Chocoball 500gr"). Sem custo: R$ 19,90
+# pode ser o pacote ou o quilo.
 INSUMOS_NOVOS = {"Chocoball": ("g", "Complementos")}
 
 # Nome que a Cardápio Web usa -> complemento cadastrado
@@ -90,14 +101,15 @@ VARIACOES = {
     "Creme de Cookie separado": "Creme de cookie",
 }
 
-EMBALAGEM = {"Saco de papel", "Colher", "Guardanapo", "Suporte de papelão", "Adesivos da lata (frente e verso)"}
-LATA = {"330ml": "Lata embalagem 330ml", "500ml": "Lata embalagem 500ml"}
-# produto -> o que fica na receita base (o resto é escolha do cliente)
-RECEITA_BASE = {}
+# produto -> insumos que saem da receita base (os de complemento; o resto
+# fica). Os três complementos de exemplo vieram da planilha do chefe.
+COMPLEMENTOS_DE_EXEMPLO = ["Leite condensado", "Leite em pó", "Gotas de chocolate", "Ovomaltine"]
+ESCOLHA_NO_FRUTAS_AO_CREME = ["Creme de Ninho", "Banana", "Morango", "Manga", "Kiwi"]
+RETIRAR_DA_RECEITA_BASE = {}
 for tam in ("330ml", "500ml"):
     for n in (3, 5):
-        RECEITA_BASE[f"NaLata {tam} + {n} complementos"] = {"Mistura pronta de açaí", LATA[tam]} | EMBALAGEM
-    RECEITA_BASE[f"Frutas ao Creme NaLata {tam}"] = {LATA[tam]} | EMBALAGEM
+        RETIRAR_DA_RECEITA_BASE[f"NaLata {tam} + {n} complementos"] = COMPLEMENTOS_DE_EXEMPLO
+    RETIRAR_DA_RECEITA_BASE[f"Frutas ao Creme NaLata {tam}"] = ESCOLHA_NO_FRUTAS_AO_CREME
 
 # combo (nome vendido) -> (copo base, quantos)
 COMBOS = {
@@ -109,9 +121,8 @@ COMBOS = {
 
 def configurar(aplicar=False):
     inicializar_banco()
+    cadastro = cadastro_de_insumos()
     with conexao() as conn:
-        insumos = {_normalizar_nome_insumo(l["nome"]): dict(l)
-                   for l in conn.execute("SELECT id, nome, unidade_medida FROM insumo").fetchall()}
         itens = {_normalizar_nome_insumo(l["nome"]): dict(l)
                  for l in conn.execute("SELECT id, nome, tipo FROM item_cardapio").fetchall()}
         com_ficha = {l["item_id"] for l in conn.execute(
@@ -122,60 +133,83 @@ def configurar(aplicar=False):
             "SELECT DISTINCT nome_produto_normalizado FROM composicao_produto_venda").fetchall()}
 
     print("=== Complementos e porções ===")
-    for nome, (insumo, gramas) in COMPLEMENTOS.items():
+    fichas, sem_insumo, em_branco = {}, [], []
+    for nome, (nome_insumo, gramas) in COMPLEMENTOS.items():
         item = itens.get(_normalizar_nome_insumo(nome))
         if item and item["tipo"] != "complemento":
             raise SystemExit(f"{nome!r} já existe como {item['tipo']} — renomeie antes de continuar.")
-        if not insumos.get(_normalizar_nome_insumo(insumo)) and insumo not in INSUMOS_NOVOS:
-            raise SystemExit(f"Insumo {insumo!r} não existe — rode antes a ficha técnica do Açaí.")
         if item and item["id"] in com_ficha:
             print(f"   {nome:24} já tem ficha no Açaí — mantida")
+            continue
+        insumo = localizar_insumo_acai(nome_insumo, cadastro)
+        aviso = "  ⚠ valor de partida, conferir" if nome in SEM_PORCAO_NA_PLANILHA else ""
+        if insumo is None and nome_insumo in INSUMOS_NOVOS:
+            fichas[nome] = (None, gramas)  # insumo criado na hora, em grama
+            print(f"   {'novo ' if not item else 'ficha'} {nome:24} = {gramas:>3} g de {nome_insumo} (insumo novo){aviso}")
+        elif insumo is None:
+            sem_insumo.append(f"{nome} (procurei {nome_insumo!r})")
+            print(f"   {'novo ' if not item else 'ficha'} {nome:24} SEM FICHA — não achei o insumo {nome_insumo!r}")
+            fichas[nome] = None
         else:
-            aviso = "  ⚠ valor de partida, conferir" if nome in SEM_PORCAO_NA_PLANILHA else ""
-            print(f"   {'novo ' if not item else 'ficha'} {nome:24} = {gramas:>3} g de {insumo}{aviso}")
+            quantidade = quantidade_para_insumo(gramas, "g", insumo)
+            if quantidade is None:
+                em_branco.append(descrever_insumo(insumo))
+            fichas[nome] = (insumo, quantidade)
+            mostrado = f"{gramas} g" if quantidade is None or quantidade == gramas else f"{gramas} g = {quantidade:g} {insumo['unidade_medida']}"
+            branco = "  (quantidade em branco: cadastre quanto tem em 1 unidade)" if quantidade is None else ""
+            print(f"   {'novo ' if not item else 'ficha'} {nome:24} = {mostrado} de {descrever_insumo(insumo)}{aviso}{branco}")
 
     print("\n=== Nomes diferentes na Cardápio Web ===")
     for variacao, destino in VARIACOES.items():
         estado = "já vinculado" if _normalizar_nome_insumo(variacao) in vinculos else "vincula"
         print(f"   {variacao!r:28} -> {destino}  ({estado})")
 
-    print("\n=== Receita base (tira o que é escolha do cliente) ===")
+    print("\n=== Receita base (sai o que é escolha do cliente; o resto fica) ===")
     retirar = []
     with conexao() as conn:
-        for produto, fica in RECEITA_BASE.items():
+        for produto, nomes in RETIRAR_DA_RECEITA_BASE.items():
             item = itens.get(_normalizar_nome_insumo(produto))
             if not item:
-                print(f"   {produto}: não cadastrado — rode antes a ficha técnica do Açaí")
+                print(f"   {produto}: não cadastrado — nada a fazer")
                 continue
+            ids_retirar = {i["id"] for i in (localizar_insumo_acai(n, cadastro) for n in nomes) if i}
             linhas = conn.execute(
                 "SELECT f.insumo_id, i.nome FROM ficha_tecnica f JOIN insumo i ON i.id = f.insumo_id "
                 "WHERE f.item_id = ? AND f.loja = ?", (item["id"], LOJA)).fetchall()
-            sai = [l for l in linhas if l["nome"] not in fica]
-            if sai:
-                retirar += [(item["id"], l["insumo_id"]) for l in sai]
-                print(f"   {produto:34} sai: {', '.join(l['nome'] for l in sai)}")
-            else:
-                print(f"   {produto:34} já está só com o fixo")
+            sai = [l for l in linhas if l["insumo_id"] in ids_retirar]
+            fica = [l["nome"] for l in linhas if l["insumo_id"] not in ids_retirar]
+            retirar += [(item["id"], l["insumo_id"]) for l in sai]
+            print(f"   {produto:34} sai: {', '.join(l['nome'] for l in sai) or 'nada'}")
+            print(f"   {'':34} fica: {', '.join(fica) or '(receita vazia)'}")
 
     print("\n=== Combos ===")
     for combo, (copo, quantos) in COMBOS.items():
         estado = "já definido" if _normalizar_nome_insumo(combo) in compostos else "define"
         print(f"   {combo:36} = {quantos} × {copo}  ({estado})")
 
+    if sem_insumo:
+        print(f"\n   Complemento sem ficha (monte na tela de Cardápio → complementos): {'; '.join(sem_insumo)}")
+    if em_branco:
+        print(f"\n   Quantidade em branco — cadastre quanto tem em 1 unidade: {'; '.join(sorted(set(em_branco)))}")
+
     if not aplicar:
         print("\nSimulação. Rode de novo com --apply pra gravar.")
         return
 
+    novos_ids = {}
     for nome, (unidade, categoria) in INSUMOS_NOVOS.items():
-        if not insumos.get(_normalizar_nome_insumo(nome)):
-            insumos[_normalizar_nome_insumo(nome)] = {"id": criar_insumo(nome, categoria, unidade, [LOJA])}
-    for nome, (insumo, gramas) in COMPLEMENTOS.items():
+        if not localizar_insumo_acai(nome, cadastro):
+            novos_ids[nome] = criar_insumo(nome, categoria, unidade, [LOJA])
+    for nome, (nome_insumo, _gramas) in COMPLEMENTOS.items():
         item = itens.get(_normalizar_nome_insumo(nome))
         item_id = item["id"] if item else criar_item_cardapio(nome, "Complementos", tipo="complemento")
         itens[_normalizar_nome_insumo(nome)] = {"id": item_id, "nome": nome, "tipo": "complemento"}
-        if item_id not in com_ficha:
-            definir_ficha_tecnica(item_id, LOJA, [
-                {"insumoId": insumos[_normalizar_nome_insumo(insumo)]["id"], "quantidade": gramas}])
+        ficha = fichas.get(nome)
+        if item_id in com_ficha or not ficha:
+            continue
+        insumo, quantidade = ficha
+        insumo_id = insumo["id"] if insumo else novos_ids[nome_insumo]
+        definir_ficha_tecnica(item_id, LOJA, [{"insumoId": insumo_id, "quantidade": quantidade}])
     for variacao, destino in VARIACOES.items():
         if _normalizar_nome_insumo(variacao) not in vinculos:
             vincular_produto_venda_manualmente(
@@ -185,18 +219,18 @@ def configurar(aplicar=False):
             conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ? AND insumo_id = ? AND loja = ?",
                          (item_id, insumo_id, LOJA))
     for combo, (copo, quantos) in COMBOS.items():
-        if _normalizar_nome_insumo(combo) not in compostos:
+        copo_item = itens.get(_normalizar_nome_insumo(copo))
+        if _normalizar_nome_insumo(combo) not in compostos and copo_item:
             definir_composicao_produto_venda(
-                combo, [{"itemCardapioId": itens[_normalizar_nome_insumo(copo)]["id"], "quantidade": quantos}],
+                combo, [{"itemCardapioId": copo_item["id"], "quantidade": quantos}],
                 "configurar_complementos_acai.py")
 
     # Complemento vendido antes do cadastro existir ficou sem item: casa de
     # novo agora, pra baixa e CMV enxergarem (a baixa corrige sozinha na
     # próxima sincronização daquele dia).
     with conexao() as conn:
-        catalogo = {k: v["id"] for k, v in itens.items()}
-        catalogo.update({_normalizar_nome_insumo(l["nome"]): l["id"]
-                         for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()})
+        catalogo = {_normalizar_nome_insumo(l["nome"]): l["id"]
+                    for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()}
         vinculos_manuais = {
             l["nome_produto_normalizado"]: {"itemCardapioId": l["item_cardapio_id"],
                                             "quantidadePorUnidade": l["quantidade_por_unidade"]}

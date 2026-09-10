@@ -118,6 +118,12 @@ def limpar(aplicar=False):
         print("\n=== Insumos que saem do estoque de cada loja ===")
         if not lojas_com_copia:
             print("   nenhuma loja com cópia — nada a fazer")
+        # Só candidata a sair o insumo que também é do Artesanos — foi a cópia
+        # que trouxe. Insumo cadastrado pra própria loja (o "Mel" do Açaí,
+        # ainda sem ficha) nunca sai daqui.
+        do_artesanos = {
+            l["insumo_id"] for l in conn.execute("SELECT insumo_id FROM insumo_loja WHERE loja = ?", (ORIGEM,)).fetchall()
+        }
         for loja in lojas_com_copia:
             vinculados = conn.execute(
                 "SELECT i.id, i.nome FROM insumo_loja il JOIN insumo i ON i.id = il.insumo_id "
@@ -148,7 +154,7 @@ def limpar(aplicar=False):
 
             sai, fica_por_historico = [], []
             for insumo in vinculados:
-                if insumo["id"] in usados:
+                if insumo["id"] in usados or insumo["id"] not in do_artesanos:
                     continue
                 motivos = [nome for nome, sql in HISTORICO if conn.execute(sql, (insumo["id"], loja)).fetchone()]
                 estoque = conn.execute(

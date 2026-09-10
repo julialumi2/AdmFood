@@ -45,6 +45,8 @@ from backend.armazenamento import (
     _normalizar_nome_insumo,
     _SUFIXO_PARENTESES,
 )
+from backend.nomes_insumo import localizar_insumo
+from importar_ficha_tecnica_faltante import custo_para_insumo
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -100,6 +102,22 @@ COMPRA_PARA_INSUMO = {
     "saco delivery personalizado": ("Saco delivery Tradiça", 1),
     "pudim de copo": ("Pudim de copo", 1),
 }
+
+# Nomes com que a loja pode ter cadastrado cada insumo à mão: os da planilha
+# de compras (é o que aparece na nota).
+APELIDOS = {}
+for _compra, (_insumo, _fator) in COMPRA_PARA_INSUMO.items():
+    APELIDOS.setdefault(_insumo, []).append(_compra)
+for _insumo, _compra in (
+    ("Salsicha", "Salsicha Perdigão pct 5Kg"),
+    ("Requeijão cremoso (Scala)", "Requeijão cremoso (Scala)"),
+    ("Ketchup", "Ketchup Cepera Galão"),
+    ("Mostarda", "Mostarda Cepera Galão"),
+    ("Bacon", "Bacon Fatiado Smoke-MR BEEF"),
+    ("Queijo mussarela", "Queijo Mussarela FATIADA"),
+    ("Queijo cheddar cremoso", "Molho sabor Cheddar CATUPIRY (bisnaga 1.5kg)"),
+):
+    APELIDOS.setdefault(_insumo, []).append(_compra)
 
 # O que não dá pra precificar sozinho — vira lista de pendência no relatório.
 SEM_CUSTO_POSSIVEL = {
@@ -209,8 +227,13 @@ def montar(aplicar=False, compras=None):
     with conexao() as conn:
         insumos = {
             _normalizar_nome_insumo(l["nome"]): dict(l)
-            for l in conn.execute("SELECT id, nome, unidade_medida, custo_referencia FROM insumo").fetchall()
+            for l in conn.execute(
+                "SELECT id, nome, unidade_medida, custo_referencia, conteudo_por_unidade, unidade_conteudo FROM insumo"
+            ).fetchall()
         }
+        ja_na_loja = [dict(l) for l in conn.execute(
+            "SELECT i.nome, i.unidade_medida FROM insumo i JOIN insumo_loja il ON il.insumo_id = i.id "
+            "WHERE il.loja = ? ORDER BY i.nome", (LOJAS[0],)).fetchall()]
         itens = {
             _normalizar_nome_insumo(l["nome"]): l["id"]
             for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
@@ -233,24 +256,38 @@ def montar(aplicar=False, compras=None):
         else:
             print(f"   {loja}: SEM CARDÁPIO — importe a planilha de preços no Cardápio e rode de novo")
 
+    print(f"\n=== Insumos que a {LOJAS[0]} já tem ({len(ja_na_loja)}) ===")
+    print("   " + ("; ".join(f"{i['nome']} ({i['unidade_medida']})" for i in ja_na_loja) or "nenhum"))
+
     print(f"\n=== Insumos ({len(INSUMOS)}) ===")
     if not compras:
         print("   (sem planilha de compras: insumo novo entra sem custo)")
-    novo_custo = {}
+    novo_custo, existentes, novos = {}, {}, []
     for nome, (unidade, _cat) in INSUMOS.items():
-        existente = insumos.get(_normalizar_nome_insumo(nome))
-        if existente and existente["unidade_medida"] != unidade:
-            raise SystemExit(f"{nome}: já existe em {existente['unidade_medida']!r}, aqui precisa de {unidade!r}")
+        # Insumo que a loja cadastrou à mão pode ter o nome da compra
+        # ("Salsicha Perdigão pct 5Kg") ou outra unidade (pacote, em vez de
+        # grama): reaproveita do mesmo jeito — a receita daqui vai em
+        # branco, então não há quantidade pra converter.
+        existente = localizar_insumo([nome, *APELIDOS.get(nome, [])], insumos)
+        existentes[nome] = existente
+        if not existente:
+            novos.append(nome)
         atual = existente["custo_referencia"] if existente else None
         if atual is None and nome in custos:
-            novo_custo[nome] = custos[nome]
+            convertido = custos[nome] if not existente else custo_para_insumo(custos[nome], unidade, existente)
+            if convertido is not None:
+                novo_custo[nome] = convertido
         if atual is not None:
             preco = f"R$ {atual} (já tinha)"
         elif nome in novo_custo:
             preco = f"R$ {novo_custo[nome]} (da planilha de compras)"
         else:
             preco = f"SEM CUSTO — {SEM_CUSTO_POSSIVEL.get(nome, 'não achado na planilha de compras')}"
-        print(f"   {'reusa' if existente else 'novo '} {nome[:28]:28} {unidade:<3} {preco}")
+        quem = f"reusa {existente['nome']} ({existente['unidade_medida']})" if existente else f"novo  ({unidade})"
+        print(f"   {nome[:28]:28} {quem[:44]:44} {preco}")
+    if novos:
+        print(f"\n   ⚠ {len(novos)} insumo(s) vão ser CRIADOS: {', '.join(novos)}.")
+        print("     Se algum já existe com outro nome, NÃO aplique — mande este relatório pra conferir.")
 
     print("\n=== Esqueleto das receitas ===")
     plano = []
@@ -274,7 +311,7 @@ def montar(aplicar=False, compras=None):
     ids = {}
     agora = datetime.now().isoformat()
     for nome, (unidade, categoria) in INSUMOS.items():
-        existente = insumos.get(_normalizar_nome_insumo(nome))
+        existente = existentes[nome]
         if existente:
             ids[nome] = existente["id"]
             with conexao() as conn:

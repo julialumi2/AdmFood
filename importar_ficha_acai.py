@@ -46,6 +46,8 @@ from backend.armazenamento import (
     inicializar_banco,
     _normalizar_nome_insumo,
 )
+from backend.nomes_insumo import localizar_insumo
+from importar_ficha_tecnica_faltante import custo_para_insumo, quantidade_para_insumo
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -223,19 +225,60 @@ def _ler_receitas(ws):
     return receitas
 
 
+# Nomes do kit de embalagem como aparecem no estoque e na planilha — é como
+# quem cadastrou à mão escreveu.
+APELIDOS_EMBALAGEM = {
+    "Lata embalagem 500ml": ["Lata Embalagem 500ml", "Lata embalagem 13-500ml"],
+    "Lata embalagem 330ml": ["Lata embalagem 7-300ml", "Lata embalagem 300ml"],
+    "Saco de papel": ["Saco Papel"],
+    "Suporte de papelão": ["Suporte Papelao", "Suporte Copos Papelão"],
+    "Adesivos da lata (frente e verso)": ["Adesivos Lata (Frente e verso)"],
+}
+
+
+def candidatos_do_insumo(nome):
+    """Os nomes que um insumo do Açaí pode ter no cadastro: o que este
+    import daria e como a planilha de CMV escreve — que é o nome usado por
+    quem cadastrou à mão em produção ("Amendoim triturado 1kg")."""
+    candidatos = [nome, *APELIDOS_EMBALAGEM.get(nome, [])]
+    return candidatos + [linha for linha, (sistema, _u, _c) in LISTA.items() if sistema == nome]
+
+
+def cadastro_de_insumos():
+    with conexao() as conn:
+        return {
+            _normalizar_nome_insumo(l["nome"]): dict(l)
+            for l in conn.execute(
+                "SELECT id, nome, unidade_medida, custo_referencia, conteudo_por_unidade, unidade_conteudo FROM insumo"
+            ).fetchall()
+        }
+
+
+def localizar_insumo_acai(nome, cadastro):
+    return localizar_insumo(candidatos_do_insumo(nome), cadastro)
+
+
+def descrever_insumo(insumo):
+    conteudo = (f", 1 un = {insumo['conteudo_por_unidade']:g} {insumo['unidade_conteudo']}"
+                if insumo.get("conteudo_por_unidade") else "")
+    return f"{insumo['nome']} ({insumo['unidade_medida']}{conteudo})"
+
+
 def importar(aplicar=False, caminho=PLANILHA):
+    """Reaproveita insumo que já existe — inclusive o cadastrado à mão por
+    pacote, convertendo grama pra pacote pelo conteúdo cadastrado (14 g de
+    um saco de 1 kg = 0,014 un). Só cria o que não achar de jeito nenhum, e
+    avisa: criar um insumo que já existe com outro nome partiria o estoque
+    do mesmo produto em dois."""
     inicializar_banco()
     wb = openpyxl.load_workbook(caminho, data_only=True)
     ws = wb.active
     precos = _ler_lista(ws)
     receitas = _ler_receitas(ws)
     kits = _ler_kits(ws)
+    cadastro = cadastro_de_insumos()
 
     with conexao() as conn:
-        insumos = {
-            _normalizar_nome_insumo(l["nome"]): dict(l)
-            for l in conn.execute("SELECT id, nome, unidade_medida, custo_referencia FROM insumo").fetchall()
-        }
         itens = {
             _normalizar_nome_insumo(l["nome"]): l["id"]
             for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
@@ -247,38 +290,51 @@ def importar(aplicar=False, caminho=PLANILHA):
         com_ficha = {
             l["item_id"] for l in conn.execute("SELECT DISTINCT item_id FROM ficha_tecnica WHERE loja = ?", (LOJA,)).fetchall()
         }
+        ja_na_loja = [dict(l) for l in conn.execute(
+            "SELECT i.nome, i.unidade_medida, i.conteudo_por_unidade, i.unidade_conteudo FROM insumo i "
+            "JOIN insumo_loja il ON il.insumo_id = i.id WHERE il.loja = ? ORDER BY i.nome", (LOJA,)).fetchall()]
+
+    print(f"=== Insumos que o {LOJA} já tem ({len(ja_na_loja)}) ===")
+    print("   " + ("; ".join(descrever_insumo(i) for i in ja_na_loja) if ja_na_loja else "nenhum"))
 
     # --- insumos -------------------------------------------------------------
-    necessarios = {}  # nome no sistema -> (unidade, custo, categoria)
+    # nome no sistema -> unidade de quem é criado aqui, preço e em que
+    # unidade ele vem na planilha (por kg, ou por unidade nos potes e no kit)
+    necessarios = {}
     for linha, (nome, unidade, categoria) in LISTA.items():
         if linha not in precos:
             raise SystemExit(f"Linha {linha!r} não está mais na lista da planilha — confira o arquivo.")
-        custo = precos[linha] / 1000 if unidade == "g" else precos[linha]
-        necessarios[nome] = (unidade, round(custo, 6), categoria)
+        necessarios[nome] = {"unidade": unidade, "preco": precos[linha],
+                             "origem": "kg" if unidade == "g" else "un", "categoria": categoria}
     for itens_kit in kits.values():
         for nome, preco in itens_kit:
-            necessarios.setdefault(nome, ("un", preco, "Embalagens"))
+            necessarios.setdefault(nome, {"unidade": "un", "preco": preco, "origem": "un", "categoria": "Embalagens"})
 
-    print(f"=== Insumos ({len(necessarios)}) ===")
-    conflitos = []
-    for nome, (unidade, custo, _cat) in necessarios.items():
-        existente = insumos.get(_normalizar_nome_insumo(nome))
+    print(f"\n=== Insumos da receita ({len(necessarios)}) ===")
+    novos = []
+    for nome, info in necessarios.items():
+        existente = localizar_insumo_acai(nome, cadastro)
+        info["existente"] = existente
         if not existente:
-            print(f"   novo   {nome[:36]:36} {unidade:<3} R$ {custo}")
-        elif existente["unidade_medida"] != unidade:
-            conflitos.append(nome)
-            print(f"   ! {nome}: já existe em {existente['unidade_medida']!r}, receita pede {unidade!r}")
+            novos.append(nome)
+            info["custo"] = round(info["preco"] / 1000 if info["unidade"] == "g" else info["preco"], 6)
+            print(f"   novo   {nome[:40]:40} {info['unidade']:<3} R$ {info['custo']}")
+            continue
+        info["custo"] = custo_para_insumo(info["preco"], info["origem"], existente)
+        if existente["custo_referencia"] is not None:
+            nota = "mantém o custo que já tinha"
+        elif info["custo"] is None:
+            nota = "SEM CUSTO — cadastre quanto tem em 1 unidade" if existente["unidade_medida"] == "un" else "sem custo"
         else:
-            atual = existente["custo_referencia"]
-            nota = "mesmo custo" if atual == custo else (
-                f"mantém R$ {atual} (planilha diz R$ {custo})" if atual is not None else f"ganha custo R$ {custo}")
-            print(f"   reusa  {nome[:36]:36} {unidade:<3} {nota}")
-    if conflitos:
-        raise SystemExit("\nUnidade incompatível nos insumos acima — resolva antes de importar.")
+            nota = f"ganha custo R$ {info['custo']}"
+        print(f"   reusa  {descrever_insumo(existente)[:52]:52} <- {nome}  ({nota})")
+    if novos:
+        print(f"\n   ⚠ {len(novos)} insumo(s) vão ser CRIADOS: {', '.join(novos)}.")
+        print("     Se algum já existe com outro nome, NÃO aplique — mande este relatório pra conferir.")
 
     # --- produtos e receitas -------------------------------------------------
     print(f"\n=== Receitas ({len(receitas)} blocos × {len(TAMANHOS)} tamanhos) ===")
-    plano = []
+    plano, em_branco = [], set()
     for chave, por_tamanho, tem_embalagem, pendentes in receitas:
         if chave not in PRODUTO:
             print(f"   ! bloco {chave!r} não tem produto correspondente — pulado")
@@ -287,14 +343,25 @@ def importar(aplicar=False, caminho=PLANILHA):
             nome_produto = PRODUTO[chave].format(tam=tam)
             no_cardapio = cardapio.get(_normalizar_nome_insumo(nome_produto))
             nome_final, categoria = no_cardapio or (nome_produto, "MONTE O SEU")
-            links = []
+            linhas = []
             for ingrediente, qtd in por_tamanho[tam]:
                 linha_lista = INGREDIENTE.get(ingrediente)
                 if not linha_lista:
                     raise SystemExit(f"Ingrediente {ingrediente!r} ({chave}) sem correspondência na lista — adicione em INGREDIENTE.")
                 nome_insumo, unidade, _cat = LISTA[linha_lista]
-                links.append((nome_insumo, round(qtd * 1000, 2) if unidade == "g" else qtd))
-            links += [(nome, 1) for nome, _preco in kits[tam]]
+                linhas.append((nome_insumo, qtd, "kg" if unidade == "g" else "un"))
+            linhas += [(nome, 1, "un") for nome, _preco in kits[tam]]
+
+            links = []
+            for nome_insumo, qtd, origem in linhas:
+                existente = necessarios[nome_insumo]["existente"]
+                if existente:
+                    quantidade = quantidade_para_insumo(qtd, origem, existente)
+                    if quantidade is None:
+                        em_branco.add(descrever_insumo(existente))
+                else:
+                    quantidade = round(qtd * 1000, 2) if origem == "kg" else qtd
+                links.append((nome_insumo, quantidade))
             ja_tem = itens.get(_normalizar_nome_insumo(nome_final)) in com_ficha
             plano.append((nome_final, categoria, links, ja_tem))
             marca = "já tem receita — pulado" if ja_tem else f"{len(links)} insumos"
@@ -303,6 +370,10 @@ def importar(aplicar=False, caminho=PLANILHA):
             print(f"   {nome_final[:38]:38} {marca}{fora}{aviso}")
         if pendentes:
             print(f"      ! linha sem quantidade na planilha, fica de fora: {', '.join(pendentes)}")
+    if em_branco:
+        print("\n   Quantidade em branco (insumo contado por unidade, sem conteúdo cadastrado):")
+        for descricao in sorted(em_branco):
+            print(f"      {descricao} — cadastre quanto tem em 1 unidade e ajuste na ficha")
 
     faltando_no_plano = [p for n, (p, _c) in cardapio.items()
                          if n not in {_normalizar_nome_insumo(x[0]) for x in plano}]
@@ -317,8 +388,8 @@ def importar(aplicar=False, caminho=PLANILHA):
 
     ids = {}
     agora = datetime.now().isoformat()
-    for nome, (unidade, custo, categoria) in necessarios.items():
-        existente = insumos.get(_normalizar_nome_insumo(nome))
+    for nome, info in necessarios.items():
+        existente = info["existente"]
         if existente:
             ids[nome] = existente["id"]
             with conexao() as conn:
@@ -328,12 +399,12 @@ def importar(aplicar=False, caminho=PLANILHA):
                     "VALUES (?, ?, 0, 0, ?)",
                     (existente["id"], LOJA, agora),
                 )
-                if existente["custo_referencia"] is None:
-                    conn.execute("UPDATE insumo SET custo_referencia = ? WHERE id = ?", (custo, existente["id"]))
+                if existente["custo_referencia"] is None and info["custo"] is not None:
+                    conn.execute("UPDATE insumo SET custo_referencia = ? WHERE id = ?", (info["custo"], existente["id"]))
         else:
-            ids[nome] = criar_insumo(nome, categoria, unidade, [LOJA])
+            ids[nome] = criar_insumo(nome, info["categoria"], info["unidade"], [LOJA])
             with conexao() as conn:
-                conn.execute("UPDATE insumo SET custo_referencia = ? WHERE id = ?", (custo, ids[nome]))
+                conn.execute("UPDATE insumo SET custo_referencia = ? WHERE id = ?", (info["custo"], ids[nome]))
 
     gravados = 0
     for nome_produto, categoria, links, ja_tem in plano:
