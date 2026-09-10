@@ -16,7 +16,24 @@ import requests
 BASE_URL = "https://integracao.cardapioweb.com/api/partner/v1"
 
 # Fica abaixo do limite de 100 req/min do endpoint de detalhes do pedido.
+# Sincronizar um dia só (o que roda de 15 em 15 min) cabe folgado aqui; carga
+# de histórico longa deve afrouxar isso — ver `sincronizar_periodo.py`.
 ESPERA_ENTRE_CHAMADAS_SEGUNDOS = 0.65
+
+# O histórico tem limite próprio e bem mais apertado (5/min). Um dia com
+# poucos pedidos termina rápido demais e encostaria nesse teto ao emendar o
+# dia seguinte, então a espera é cobrada aqui, não no chamador.
+ESPERA_ENTRE_HISTORICOS_SEGUNDOS = 13
+
+# Quantas vezes repetir uma chamada que voltou 429. Sem isso, estourar o
+# limite uma vez derruba tudo em cascata: a tentativa seguinte cai no mesmo
+# minuto cheio e falha igual. Foi o que aconteceu num backfill de 90 dias em
+# 09/09/2026 — 1 dia gravado e 76 falhas seguidas. O padrão é curto de
+# propósito (a sincronização automática não pode ficar pendurada); scripts de
+# carga aumentam esse número, porque lá esperar é melhor que perder o dia.
+TENTATIVAS_EM_429 = 2
+ESPERA_INICIAL_EM_429_SEGUNDOS = 15
+ESPERA_MAXIMA_EM_429_SEGUNDOS = 120
 
 # Só esses status representam uma venda de fato concluída. Pedidos em
 # andamento (confirmed, ready, released, waiting_to_catch, etc.) ainda podem
@@ -31,6 +48,51 @@ STATUS_CONCLUIDOS = {"closed", "delivered"}
 def _formatar_data_hora(dia, momento):
     hora = "00:00:00" if momento == "inicio" else "23:59:59"
     return f"{dia.strftime('%Y-%m-%d')}T{hora}-03:00"
+
+
+_ultimo_historico = 0.0
+
+
+def _respeitar_janela_historico():
+    """Segura a chamada até completar a janela do /orders/history (5/min).
+    Um dia com poucos pedidos termina em segundos e emendaria no dia
+    seguinte dentro do mesmo minuto — a espera é cobrada aqui pra que
+    nenhum chamador precise saber desse limite."""
+    global _ultimo_historico
+    faltando = ESPERA_ENTRE_HISTORICOS_SEGUNDOS - (time.monotonic() - _ultimo_historico)
+    if _ultimo_historico and faltando > 0:
+        time.sleep(faltando)
+    _ultimo_historico = time.monotonic()
+
+
+def _espera_apos_429(resposta, tentativa):
+    """A API manda `Retry-After` quando sabe o tempo exato; sem ele, dobra a
+    espera a cada tentativa até o teto."""
+    cabecalho = resposta.headers.get("Retry-After")
+    if cabecalho:
+        try:
+            return min(float(cabecalho), ESPERA_MAXIMA_EM_429_SEGUNDOS)
+        except ValueError:
+            pass
+    return min(ESPERA_INICIAL_EM_429_SEGUNDOS * (2 ** tentativa), ESPERA_MAXIMA_EM_429_SEGUNDOS)
+
+
+def _buscar(url, token, descricao, params=None):
+    """GET com repetição em 429. Qualquer outro erro sobe na hora — só o
+    limite de requisição melhora com espera."""
+    for tentativa in range(TENTATIVAS_EM_429 + 1):
+        resposta = requests.get(
+            url, headers={"X-API-KEY": token}, params=params, timeout=15
+        )
+        if resposta.status_code != 429 or tentativa == TENTATIVAS_EM_429:
+            break
+        time.sleep(_espera_apos_429(resposta, tentativa))
+
+    if not resposta.ok:
+        raise RuntimeError(
+            f"Cardápio Web: falha ao buscar {descricao} (status {resposta.status_code})"
+        )
+    return resposta.json()
 
 
 def buscar_pedidos_do_dia(token, dia):
@@ -48,19 +110,8 @@ def buscar_pedidos_do_dia(token, dia):
             "page": pagina,
             "per_page": 100,
         }
-        resposta = requests.get(
-            f"{BASE_URL}/orders/history",
-            headers={"X-API-KEY": token},
-            params=params,
-            timeout=15,
-        )
-
-        if not resposta.ok:
-            raise RuntimeError(
-                f"Cardápio Web: falha ao buscar histórico (status {resposta.status_code})"
-            )
-
-        dados = resposta.json()
+        _respeitar_janela_historico()
+        dados = _buscar(f"{BASE_URL}/orders/history", token, "histórico", params)
         pedidos.extend(
             {
                 "id": p["id"],
@@ -78,16 +129,7 @@ def buscar_pedidos_do_dia(token, dia):
 
 
 def buscar_detalhes_pedido(token, pedido_id):
-    resposta = requests.get(
-        f"{BASE_URL}/orders/{pedido_id}",
-        headers={"X-API-KEY": token},
-        timeout=15,
-    )
-    if not resposta.ok:
-        raise RuntimeError(
-            f"Cardápio Web: falha ao buscar pedido {pedido_id} (status {resposta.status_code})"
-        )
-    return resposta.json()
+    return _buscar(f"{BASE_URL}/orders/{pedido_id}", token, f"pedido {pedido_id}")
 
 
 def _total_com_desconto_ifood(detalhes, sales_channel):

@@ -23,8 +23,18 @@ import openpyxl
 LOJA_POR_ABA = {
     "Comparativo de Preços Art": "Hamburgueria Artesanos",
     "Comparativo de Preços Tradiças": ["Tradiça ZN", "Tradiça Simus"],
+    # A planilha de 02/09/2026 trocou a aba única das Tradiças por uma aba
+    # por loja. Como o nome não batia, as duas eram puladas sem aviso e as
+    # Tradiças ficavam sem cardápio nenhum no sistema.
+    "Comparativo de Preços ZN": "Tradiça ZN",
+    "Comparativo de Preços Simus": "Tradiça Simus",
     "Comparativo de Preços Açaí": "Açaí Na Lata",
 }
+
+# Aba com esse começo é tabela de preço de alguma loja. Se o nome não estiver
+# em LOJA_POR_ABA, a importação para com erro em vez de pular a aba calada —
+# pular foi exatamente o que deixou as Tradiças vazias.
+PREFIXO_ABA_DE_PRECO = "comparativo de preços"
 
 # Nome da coluna do cabeçalho (case-insensitive, sem o "(R$)") -> coluna no banco.
 CANAL_POR_CABECALHO = {
@@ -84,10 +94,24 @@ def ler_precos_da_planilha(caminho_ou_arquivo):
     ValueError se nenhuma das abas esperadas for encontrada."""
     wb = openpyxl.load_workbook(caminho_ou_arquivo, data_only=True)
 
+    # Compara sem espaço nas pontas e sem diferenciar maiúscula: a planilha
+    # já veio com "Art " (espaço no fim) e "preços" minúsculo.
+    conhecidas = {nome.strip().casefold() for nome in LOJA_POR_ABA}
+    desconhecidas = [
+        n.strip() for n in wb.sheetnames
+        if n.strip().casefold().startswith(PREFIXO_ABA_DE_PRECO) and n.strip().casefold() not in conhecidas
+    ]
+    if desconhecidas:
+        raise ValueError(
+            f"A aba {', '.join(repr(n) for n in desconhecidas)} parece ser de preços, mas não é de "
+            "nenhuma loja conhecida. Renomeie pra um destes nomes: "
+            f"{', '.join(LOJA_POR_ABA.keys())}."
+        )
+
     todas_linhas = []
     abas_encontradas = []
     for nome_aba, lojas in LOJA_POR_ABA.items():
-        aba = next((wb[n] for n in wb.sheetnames if n.strip() == nome_aba.strip()), None)
+        aba = next((wb[n] for n in wb.sheetnames if n.strip().casefold() == nome_aba.strip().casefold()), None)
         if aba is None:
             continue
         for loja in (lojas if isinstance(lojas, list) else [lojas]):

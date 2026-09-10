@@ -16,6 +16,7 @@ import sys
 from datetime import date, timedelta
 
 from config import LOJAS
+from backend import cardapio_web
 from backend.cardapio_web import buscar_resumo_do_dia
 from backend.armazenamento import (
     inicializar_banco,
@@ -32,19 +33,29 @@ except (AttributeError, OSError):
 DIA_FECHADO = 0  # segunda-feira
 
 
-def sincronizar_periodo(unidade, dias):
+def sincronizar_periodo(unidade, dias, ate=0):
+    """`dias` = quantos dias atrás começar; `ate` = onde parar (0 = ontem).
+    Rodar em bloco (90..60, 60..30, 30..0) evita processo longo demais e é
+    seguro: cada dia é regravado inteiro e a baixa de estoque é idempotente."""
     if unidade not in LOJAS:
         raise SystemExit(f"Loja {unidade!r} não existe. Opções: {list(LOJAS)}")
     token = LOJAS[unidade].get("cardapio_web_token")
     if not token:
         raise SystemExit(f"{unidade}: token da Cardápio Web não configurado.")
 
+    # Carga de histórico é maratona, não corrida: aqui vale ir mais devagar e
+    # esperar o limite da API passar, porque perder o dia significa voltar
+    # nele depois. A sincronização automática (um dia só, de 15 em 15 min)
+    # continua com os padrões curtos do módulo.
+    cardapio_web.ESPERA_ENTRE_CHAMADAS_SEGUNDOS = 1.0
+    cardapio_web.TENTATIVAS_EM_429 = 5
+
     inicializar_banco()
     hoje = date.today()
     ok = falhas = pulados = 0
     faturamento = 0.0
 
-    for passo in range(dias, 0, -1):
+    for passo in range(dias, ate, -1):
         dia = hoje - timedelta(days=passo)
         if dia.weekday() == DIA_FECHADO:
             pulados += 1
@@ -68,5 +79,5 @@ def sincronizar_periodo(unidade, dias):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        raise SystemExit('Uso: python sincronizar_periodo.py "Nome da Loja" DIAS')
-    sincronizar_periodo(sys.argv[1], int(sys.argv[2]))
+        raise SystemExit('Uso: python sincronizar_periodo.py "Nome da Loja" DIAS [ATE]')
+    sincronizar_periodo(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]) if len(sys.argv) > 3 else 0)

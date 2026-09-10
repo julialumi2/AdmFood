@@ -252,6 +252,14 @@ def inicializar_banco():
             conn.execute("ALTER TABLE insumo ADD COLUMN fator_conversao_compra REAL")
         if "marca_homologada" not in colunas_insumo:
             conn.execute("ALTER TABLE insumo ADD COLUMN marca_homologada TEXT NOT NULL DEFAULT ''")
+        if "rendimento_receita" not in colunas_insumo:
+            # Quanto uma batelada da receita produz, na unidade_medida do
+            # próprio insumo (ex: Tempero Batata rende 1600 g). Não dá pra
+            # deduzir somando os ingredientes: receita que vai ao fogo perde
+            # água (1 kg de cebola não vira 1 kg de cebola caramelizada), e é
+            # o rendimento que transforma o custo da batelada em custo por
+            # grama. NULL = insumo comprado pronto, sem receita.
+            conn.execute("ALTER TABLE insumo ADD COLUMN rendimento_receita REAL")
 
         conn.execute(
             """
@@ -384,6 +392,28 @@ def inicializar_banco():
 
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS receita_insumo (
+                insumo_id INTEGER NOT NULL,
+                ingrediente_id INTEGER NOT NULL,
+                quantidade REAL,
+                PRIMARY KEY (insumo_id, ingrediente_id)
+            )
+            """
+        )
+        # Receita do insumo preparado na própria casa — o Tempero Batata não é
+        # comprado pronto, é 1000 g de sal + 500 g de páprica + 100 g de
+        # açúcar. Duas coisas saem daqui: o custo por grama, calculado em vez
+        # de digitado (e que se corrige sozinho quando o sal muda de preço), e
+        # a baixa de estoque em cascata — vender uma batata desconta sal,
+        # páprica e açúcar, que é o que a casa realmente compra.
+        #
+        # Sem `loja` de propósito, ao contrário da ficha_tecnica: a receita da
+        # mistura é padrão de cozinha, não decisão de cardápio de cada loja.
+        # Receita pode chamar receita (o Molho Especial leva Maionese da
+        # Casa), então quem lê isso resolve em cascata — ver _custo_de_insumo.
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS item_cardapio_custo (
                 item_id INTEGER NOT NULL,
                 loja TEXT NOT NULL,
@@ -455,6 +485,17 @@ def inicializar_banco():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_venda_item_dia ON venda_item(dia)"
         )
+        # Venda gravada antes da coluna nome_normalizado existir ficou com ela
+        # vazia — e aí o combo daquele dia nunca casa com a composição dele.
+        # Só olha as vazias, então depois da primeira vez não custa nada; e
+        # roda aqui pra produção se corrigir sozinha no deploy.
+        for linha in conn.execute(
+            "SELECT DISTINCT nome_produto FROM venda_item WHERE nome_normalizado IS NULL"
+        ).fetchall():
+            conn.execute(
+                "UPDATE venda_item SET nome_normalizado = ? WHERE nome_produto = ? AND nome_normalizado IS NULL",
+                (_normalizar_nome_insumo(linha["nome_produto"]), linha["nome_produto"]),
+            )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_venda_item_item_cardapio ON venda_item(item_cardapio_id)"
         )
@@ -1449,7 +1490,10 @@ def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):
             )
 
 
-def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=None):
+_SUFIXO_PARENTESES = re.compile(r"\s*\([^)]*\)\s*$")
+
+
+def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=None, ignorar_parenteses=False):
     """catalogo_normalizado: {nome_normalizado: id}. vinculos_manuais (Etapa
     0 do motor de compra, 2026-09-08): {nome_normalizado: {"itemCardapioId",
     "quantidadePorUnidade"}} vindo de `vinculo_produto_venda` — checado ANTES
@@ -1475,6 +1519,16 @@ def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=No
     if " - " in nome_vendido:
         prefixo = nome_vendido.split(" - ", 1)[0]
         candidato = catalogo_normalizado.get(_normalizar_nome_insumo(prefixo))
+        if candidato:
+            return candidato, 1
+    # Só pra lista de preços: lá "Calabreso (com Calabresa)" é o "Calabreso"
+    # que a Cardápio Web vende — o parêntese é descrição. Nas VENDAS fica
+    # desligado, porque no Artesanos o parêntese muda o produto ("BACON
+    # (duplo)" não é o BACON simples): na dúvida, a venda vai pra fila de
+    # pendências em vez de descontar a receita errada calada.
+    if ignorar_parenteses:
+        sem_parenteses = _SUFIXO_PARENTESES.sub("", nome_vendido).strip()
+        candidato = catalogo_normalizado.get(_normalizar_nome_insumo(sem_parenteses))
         if candidato:
             return candidato, 1
     return None, 1
@@ -1558,6 +1612,15 @@ SQL_ITENS_CONSUMIDOS = """
 """
 
 
+# Primeiro dia com baixa automática de estoque (Etapa 0 entrou em 08/09/2026).
+# Venda anterior a isso nunca desconta estoque, venha a sincronização de onde
+# vier: o estoque atual já reflete aquele consumo (foi contado depois), então
+# descontar de novo tiraria o mesmo produto duas vezes. Antes dessa trava,
+# carregar 90 dias de histórico (sincronizar_periodo.py) ou ressincronizar um
+# dia antigo pela tela descontava meses de consumo do estoque de hoje.
+INICIO_BAIXA_AUTOMATICA = "2026-09-08"
+
+
 def aplicar_baixa_estoque_dia(unidade, dia_iso):
     """Etapa 0 do motor de compra (2026-09-08): desconta de
     estoque_insumo.quantidade_atual o consumo teórico do dia (venda ×
@@ -1571,6 +1634,8 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
     Deixa o estoque ir negativo de propósito — é sinal real de
     divergência entre teórico e físico (quebra, porcionamento diferente,
     Ficha Técnica desatualizada), não é erro pra esconder."""
+    if dia_iso < INICIO_BAIXA_AUTOMATICA:
+        return
     agora = datetime.now().isoformat()
     with conexao() as conn:
         consumo_novo = {
@@ -2214,6 +2279,103 @@ def mapa_curva_abc_insumos(dias=90):
     return {i["insumoId"]: i["classe"] for i in curva_abc_insumos(dias)["itens"]}
 
 
+def mapa_receita_insumo():
+    """{insumo_id: {"rendimento": float, "ingredientes": {ingrediente_id: qtd}}}
+    pros insumos preparados dentro de casa. Insumo comprado pronto não tem
+    receita e simplesmente não aparece aqui."""
+    receitas = {}
+    with conexao() as conn:
+        rendimentos = {
+            linha["id"]: linha["rendimento_receita"]
+            for linha in conn.execute(
+                "SELECT id, rendimento_receita FROM insumo "
+                "WHERE rendimento_receita IS NOT NULL AND rendimento_receita > 0"
+            ).fetchall()
+        }
+        linhas = conn.execute(
+            "SELECT insumo_id, ingrediente_id, quantidade FROM receita_insumo"
+        ).fetchall()
+
+    for linha in linhas:
+        rendimento = rendimentos.get(linha["insumo_id"])
+        if rendimento is None:
+            # Receita sem rendimento não dá pra dividir — fica inerte até
+            # alguém preencher quanto a batelada produz.
+            continue
+        receita = receitas.setdefault(
+            linha["insumo_id"], {"rendimento": rendimento, "ingredientes": {}}
+        )
+        receita["ingredientes"][linha["ingrediente_id"]] = linha["quantidade"]
+    return receitas
+
+
+def _custo_das_receitas(precos, receitas):
+    """Custo por unidade de cada insumo preparado na casa: o que custa a
+    batelada inteira, dividido pelo que ela rende. Resolve em cascata, porque
+    receita chama receita — o Molho Especial leva 2,8 kg de Maionese da Casa,
+    que tem receita própria.
+
+    Receita incompleta (ingrediente sem preço ou sem quantidade) NÃO derruba
+    o insumo pra "sem custo": ele fica com o custo digitado à mão, que era o
+    que valia antes da receita existir. Ligar a receita nunca pode piorar o
+    que a tela já mostrava — e sem isso um ingrediente esquecido apagaria o
+    CMV de todo produto que usa a mistura.
+
+    Receita circular (A leva B que leva A) é ignorada em vez de estourar em
+    recursão infinita: erro de cadastro não pode derrubar a tela de CMV."""
+    calculados = {}
+
+    def custo(insumo_id, visitando):
+        if insumo_id in calculados:
+            return calculados[insumo_id]
+        receita = receitas.get(insumo_id)
+        if not receita or insumo_id in visitando:
+            return precos.get(insumo_id)
+
+        total = 0.0
+        for ingrediente_id, quantidade in receita["ingredientes"].items():
+            preco = custo(ingrediente_id, visitando | {insumo_id})
+            if preco is None or quantidade is None:
+                return precos.get(insumo_id)
+            total += quantidade * preco
+
+        calculados[insumo_id] = round(total / receita["rendimento"], 6)
+        return calculados[insumo_id]
+
+    for insumo_id in receitas:
+        custo(insumo_id, frozenset())
+    return calculados
+
+
+def explodir_receitas_em_ingredientes(consumo, receitas):
+    """Troca o consumo de um insumo preparado na casa pelo consumo dos
+    ingredientes dele: vender batata gasta sal, páprica e açúcar, que é o que
+    a casa compra, conta e precisa repor. Em cascata e com trava de ciclo,
+    igual ao custo.
+
+    O insumo preparado deixa de ter baixa própria de propósito — descontar o
+    tempero pronto E os ingredientes dele seria descontar a mesma compra duas
+    vezes. O preço disso é que o tempero já misturado no pote conta como
+    consumido antes de ser usado; o erro é de no máximo uma batelada e cai
+    pro lado seguro (repõe um pouco antes)."""
+    final = {}
+
+    def somar(insumo_id, quantidade, visitando):
+        receita = receitas.get(insumo_id)
+        if not receita or insumo_id in visitando:
+            final[insumo_id] = final.get(insumo_id, 0.0) + quantidade
+            return
+        fator = quantidade / receita["rendimento"]
+        for ingrediente_id, quantidade_ingrediente in receita["ingredientes"].items():
+            if quantidade_ingrediente is None:
+                continue
+            somar(ingrediente_id, quantidade_ingrediente * fator, visitando | {insumo_id})
+
+    for insumo_id, quantidade in consumo.items():
+        somar(insumo_id, quantidade, frozenset())
+    return final
+
+
 def _mapa_preco_insumo():
     """Preço de referência de cada insumo pro cálculo de CMV real. Ordem de
     confiança, do menos pro mais confiável (o de baixo sobrescreve): custo
@@ -2461,7 +2623,7 @@ def listar_produtos_por_loja(loja):
 
     resultado = []
     for p in produtos:
-        item_id, _ = _casar_item_cardapio(p["produto"], catalogo)
+        item_id, _ = _casar_item_cardapio(p["produto"], catalogo, ignorar_parenteses=True)
         resultado.append({
             "itemCardapioId": item_id,
             "precoCardapioId": p["id"],
