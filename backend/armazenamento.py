@@ -2874,6 +2874,12 @@ def mapa_custos_item_cardapio():
         return {(l["item_id"], l["loja"]): l["custo"] for l in linhas}
 
 
+# Lojas em que a categoria de combo não aparece na tela de Cardápio (ver
+# listar_produtos_por_loja). Só o Açaí, que foi o pedido de 10/09/2026; os
+# combos do Artesanos continuam na lista.
+LOJAS_SEM_COMBO_NO_CARDAPIO = {"Açaí Na Lata"}
+
+
 def listar_produtos_por_loja(loja):
     """Lista de produtos da loja pra tela unificada de Cardápio (Preços +
     Ficha Técnica numa tela só, 2026-09-09): parte de `preco_cardapio` (que
@@ -2898,6 +2904,13 @@ def listar_produtos_por_loja(loja):
         # mas é um combo de comida, não bebida pura — não pode ser pego
         # junto.
         produtos = [p for p in produtos if _normalizar_nome_insumo(p["categoria"]) != "bebidas"]
+        # Combo do Açaí também sai (pedido da Julia em 10/09/2026): não tem
+        # receita própria — a venda desconta os copos de dentro pela
+        # composição (composicao_produto_venda) e os complementos escolhidos
+        # no pedido. Na lista, era produto sem ficha sem nada pra preencher.
+        # O preço continua gravado e a venda continua contando.
+        if loja in LOJAS_SEM_COMBO_NO_CARDAPIO:
+            produtos = [p for p in produtos if not _normalizar_nome_insumo(p["categoria"]).startswith("combo")]
         catalogo = {
             _normalizar_nome_insumo(i["nome"]): i["id"]
             for i in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
