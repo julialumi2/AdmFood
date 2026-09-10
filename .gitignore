@@ -21,3 +21,5 @@ cardapio_fotos/
 
 # Arquivos do VS Code
 .vscode/
+# Backups que o botão "Atualizar dados pelas planilhas" grava ao lado do banco
+backups/
