@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import time
 import uuid
@@ -2304,29 +2305,34 @@ def _mensagem_whatsapp_pedido_token(token, ids):
     link = f"{esquema}://{request.host}/confirmar_pedido.html?token={token}"
     saudacao = fornecedor["contato_nome"] or fornecedor["nome"]
     prazo = fornecedor["prazo_pagamento"] or "Não Informado"
+    # Prazo que veio da VMarket é só o número ("1,00"); lá a mensagem diz
+    # "1,00 dias". Texto livre ("7 dias boleto") fica como está.
+    if re.fullmatch(r"\d+(?:[.,]\d+)?", prazo.strip()):
+        prazo = f"{prazo.strip()} dias"
     entrega = fornecedor["dias_entrega"] or "Não Informado"
 
     # Linhas em branco exatamente como na mensagem da VMarket que a Julia
-    # mandou de modelo (2026-09-11): duas antes de "Esse pedido foi feito em
-    # conjunto", duas depois de cada loja, e o total geral colado no link.
+    # mandou de modelo (2026-09-11): duas antes dos blocos, duas depois de
+    # cada loja, e o total geral colado no link. Pedido de uma loja só
+    # segue o mesmo formato, sem o "feito em conjunto".
     cabecalho = (
         f"Olá {saudacao},  gostaria de realizar o pedido que fiz com a *{fornecedor['nome']}*\n\n"
         f"*Prazo de Faturamento: {prazo}*\n*Entrega: {entrega}*\n\n"
         f"*✅ Confirme esse pedido aqui: {link}*"
     )
-    if len(pedidos) > 1:
-        blocos_loja = "".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}\n\n\n" for p in pedidos)
-        valor_total_geral = sum(p["valor_total"] for p in pedidos)
-        mensagem = (
-            f"{cabecalho}\n\n\n"
-            "*Esse pedido foi feito em conjunto.*\n"
-            "Abaixo seguem os pedidos separados de cada uma das empresas:\n\n"
-            f"{blocos_loja}{divisor}\n\n"
-            f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*\n"
-            f"*✅ Confirme esse pedido aqui: {link}*"
-        )
-    else:
-        mensagem = f"{cabecalho}\n\n{divisor}\n{_texto_bloco_loja_pedido(pedidos[0])}"
+    conjunto = (
+        "*Esse pedido foi feito em conjunto.*\n"
+        "Abaixo seguem os pedidos separados de cada uma das empresas:\n\n"
+    ) if len(pedidos) > 1 else ""
+    blocos_loja = "".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}\n\n\n" for p in pedidos)
+    valor_total_geral = sum(p["valor_total"] for p in pedidos)
+    mensagem = (
+        f"{cabecalho}\n\n\n"
+        f"{conjunto}"
+        f"{blocos_loja}{divisor}\n\n"
+        f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*\n"
+        f"*✅ Confirme esse pedido aqui: {link}*"
+    )
 
     return {
         "fornecedorId": fornecedor["id"],
