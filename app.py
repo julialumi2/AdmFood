@@ -140,8 +140,6 @@ from backend.armazenamento import (
     listar_misturas,
     localizar_ou_criar_insumo_de_mistura,
     tarefa_visivel_para,
-    tem_cards_de_pendencia,
-    sincronizar_pendencias_no_clickup,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -3735,7 +3733,6 @@ def _formatar_tarefa(tarefa):
             for c in tarefa["comentarios"]
         ],
         "particular": tarefa.get("visivel_para") is not None,
-        "automatico": bool(tarefa.get("chave_automatica")),
     }
 
 
@@ -3753,22 +3750,7 @@ def _tarefa_inacessivel(tarefa_id):
 
 @app.route('/api/tarefas', methods=['GET'])
 def api_listar_tarefas():
-    usuario_id = _id_usuario_logado()
-    # Quem já levou as pendências da ficha pro ClickUp vê os cards
-    # atualizados toda vez que abre o quadro.
-    if usuario_id and tem_cards_de_pendencia(usuario_id):
-        sincronizar_pendencias_no_clickup(usuario_id)
-    return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas(usuario_id)]})
-
-
-@app.route('/api/tarefas/pendencias-ficha', methods=['POST'])
-def api_levar_pendencias_pro_clickup():
-    """Botão "Pendências da ficha técnica" do ClickUp: cria (ou atualiza) os
-    cards particulares de pendência da ficha técnica de quem clicou."""
-    erro_admin = _exigir_admin()
-    if erro_admin:
-        return erro_admin
-    return jsonify({"abertos": sincronizar_pendencias_no_clickup(_id_usuario_logado())})
+    return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas(_id_usuario_logado())]})
 
 
 PRIORIDADES_TAREFA_VALIDAS = {'alta', 'media', 'baixa'}
@@ -3790,7 +3772,13 @@ def api_criar_tarefa():
         dados.get('categoria') or 'Geral',
         prioridade,
         dados.get('dataLimite') or None,
+        # "Só eu vejo este card": fica visível só pra quem criou.
+        visivel_para=_id_usuario_logado() if dados.get('particular') else None,
     )
+    # Checklist já na criação (um item por linha no formulário).
+    for item in dados.get('subtarefas') or []:
+        if str(item).strip():
+            adicionar_subtarefa(tarefa_id, str(item).strip())
     return jsonify({"id": tarefa_id})
 
 

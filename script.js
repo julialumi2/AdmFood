@@ -6180,10 +6180,6 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
-    const btnPendenciasFicha = document.getElementById('btn-pendencias-ficha');
-    if (btnPendenciasFicha && usuario.papel === 'admin') {
-      btnPendenciasFicha.style.display = '';
-    }
     // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto/
     // ficha técnica (só admin). Os dois fetches (usuário logado + produtos)
     // rodam em paralelo — se os cards já tiverem renderizado como "só
@@ -6601,24 +6597,6 @@ function criarNovaTarefa() {
   if (modal) modal.style.display = 'flex';
 }
 
-// "Pendências da ficha técnica": cria (ou atualiza) um card particular por
-// loja e por tipo de pendência, com cada pendência na checklist — só quem
-// clicou vê. Depois do primeiro clique, o quadro atualiza esses cards
-// sozinho toda vez que abre (sincronizar_pendencias_no_clickup).
-async function trazerPendenciasFicha(botao) {
-  botao.disabled = true;
-  try {
-    const resposta = await fetch('/api/tarefas/pendencias-ficha', { method: 'POST' });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível trazer as pendências.');
-    await carregarTarefas();
-  } catch (erro) {
-    alert(erro.message);
-  } finally {
-    botao.disabled = false;
-  }
-}
-
 function fecharModalCriar() {
   const modal = document.getElementById('modalCriarTarefa');
   if (modal) modal.style.display = 'none';
@@ -6637,6 +6615,9 @@ async function salvarNovaTarefa(event) {
     categoria: document.getElementById('categoriaTarefa').value,
     dataLimite: document.getElementById('dataLimiteTarefa').value,
     descricao: document.getElementById('descricaoTarefa').value,
+    particular: !!document.getElementById('particularTarefa')?.checked,
+    subtarefas: (document.getElementById('checklistTarefa')?.value || '')
+      .split('\n').map(linha => linha.trim()).filter(Boolean),
   };
 
   try {

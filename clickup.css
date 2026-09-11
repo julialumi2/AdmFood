@@ -333,3 +333,6 @@
 /* Card particular (só a dona vê) — ex.: pendências da ficha técnica. */
 .task-particular { display: inline-flex; align-items: center; gap: 2px; }
 .task-particular svg { width: 12px; height: 12px; }
+
+/* Opção "Só eu vejo este card" no formulário de nova tarefa */
+.task-particular-opcao { display: flex; align-items: center; gap: 8px; margin: 4px 0 16px; font-size: 0.85rem; cursor: pointer; }

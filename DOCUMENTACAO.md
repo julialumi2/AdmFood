@@ -651,28 +651,20 @@ de propósito: um combo como "Lanche + Batata + Bebida + Maionese" cita
 Só essa lista muda — "Preços" continua mostrando bebida normalmente,
 já que lá o que importa é preço de venda, não receita.
 
-**Pendências da ficha técnica no ClickUp, só pra ela** (2026-09-11,
-pedido da Julia no dia do prazo dela pras fichas). No ClickUp, o botão
-"Pendências da ficha técnica" (só admin) cria um card particular por loja
-e por tipo de pendência, cada pendência como item da checklist
-(`sincronizar_pendencias_no_clickup`, `POST /api/tarefas/pendencias-ficha`).
-As pendências vêm de `pendencias_ficha_tecnica`: produto sem ficha (fora
-combo e bebida), insumo sem quantidade na ficha, complemento sem ficha
-(Açaí), mistura com receita incompleta, insumo sem custo nenhum e o que foi
-vendido nos últimos 30 dias sem casar com ficha — só do que a loja vende
-(ficha de cópia antiga, de produto fora do cardápio, não conta). A tabela
-`tarefa` ganhou `visivel_para` (id do usuário; NULL = equipe toda) e
-`chave_automatica` ("ficha:<loja>:<grupo>"). Quem tem cards de pendência
-tem eles re-sincronizados toda vez que abre o quadro: item resolvido no
-sistema fica marcado como feito, item marcado à mão continua marcado, card
-com a checklist toda feita vai pra "Concluído" (e volta pra "A fazer" se
-entrar pendência nova). Card particular não aparece pra mais ninguém, e
-editar/apagar/comentar nele por outra pessoa responde 404. A mesma lista
-chegou a ficar no Cardápio ("O que falta") por algumas horas; ela preferiu
-só no ClickUp. Junto veio `_recasar_vendas_sem_item`: venda gravada antes
-de o item existir casa de novo com o catálogo de hoje antes de listar
-pendências (antes só casava quando o dia era sincronizado outra vez, e a
-reconferência só volta 7 dias) — vale também pra fila do Estoque.
+**ClickUp: card particular e checklist na criação** (2026-09-11). A Julia
+cadastra as pendências dela no ClickUp pelo "+ Nova Tarefa", que ganhou:
+checklist já na criação (um item por linha, vira subtarefa), categoria
+"Ficha técnica", data limite opcional e "Só eu vejo este card" — a tabela
+`tarefa` ganhou `visivel_para` (id do usuário; NULL = equipe toda). Card
+particular não aparece pra mais ninguém, e editar/apagar/comentar nele por
+outra pessoa responde 404; no quadro ele mostra "só você" e o progresso da
+checklist. Antes disso, no mesmo dia, as pendências chegaram a ser geradas
+sozinhas (uma lista "O que falta" no Cardápio e depois cards automáticos
+no ClickUp); ela preferiu cadastrar à mão, e esse código saiu. Ficou
+`_recasar_vendas_sem_item`: venda gravada antes de o item existir casa de
+novo com o catálogo de hoje antes de listar a fila de pendências do
+Estoque (antes só casava quando o dia era sincronizado outra vez, e a
+reconferência só volta 7 dias).
 
 **Combo do Açaí fora dessa tela** (2026-09-10, pedido da Julia). A
 categoria de combo ("COMBOS NALATA": Família 4 × 330 ml e Filhinho/

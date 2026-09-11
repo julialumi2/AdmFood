@@ -166,10 +166,6 @@
           </div>
           <div class="title-row">
             <h1>Gerenciador de Tarefas</h1>
-            <!-- Cards particulares de pendência da ficha técnica (só admin; só quem clicou vê) -->
-            <button class="total-rede-pill" id="btn-pendencias-ficha" style="display:none;" onclick="trazerPendenciasFicha(this)">
-              Pendências da ficha técnica
-            </button>
             <button class="total-rede-pill" onclick="criarNovaTarefa()">
               + Nova Tarefa
             </button>
@@ -236,8 +232,8 @@
           </div>
 
           <div class="form-group">
-            <label for="dataLimiteTarefa">Data Limite</label>
-            <input type="date" id="dataLimiteTarefa" required>
+            <label for="dataLimiteTarefa">Data Limite (opcional)</label>
+            <input type="date" id="dataLimiteTarefa">
           </div>
         </div>
 
@@ -248,6 +244,7 @@
             <option value="Estoque">Estoque</option>
             <option value="Embalagens">Embalagens</option>
             <option value="Cardápio">Cardápio</option>
+            <option value="Ficha técnica">Ficha técnica</option>
             <option value="Limpeza">Limpeza</option>
             <option value="Geral" selected>Geral</option>
           </select>
@@ -257,6 +254,18 @@
           <label for="descricaoTarefa">Descrição</label>
           <textarea id="descricaoTarefa" rows="3" placeholder="Detalhes da atividade..."></textarea>
         </div>
+
+        <!-- Checklist já na criação, um item por linha (vira subtarefa) -->
+        <div class="form-group">
+          <label for="checklistTarefa">Checklist (um item por linha, opcional)</label>
+          <textarea id="checklistTarefa" rows="5" placeholder="Ex:&#10;Big Art: gramatura do queijo&#10;Catupiry: peso do disco"></textarea>
+        </div>
+
+        <!-- Card particular: só quem criou vê (tarefa.visivel_para) -->
+        <label class="task-particular-opcao">
+          <input type="checkbox" id="particularTarefa">
+          Só eu vejo este card
+        </label>
 
         <div class="modal-actions">
           <button type="button" class="btn-secondary" onclick="fecharModalCriar()">Cancelar</button>

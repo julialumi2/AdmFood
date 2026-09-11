@@ -158,12 +158,8 @@ def inicializar_banco():
         colunas_tarefa = {c["name"] for c in conn.execute("PRAGMA table_info(tarefa)").fetchall()}
         if "visivel_para" not in colunas_tarefa:
             # id do usuário que vê o card; NULL = a equipe toda (o normal).
-            # Os cards de pendência da ficha técnica são só da Julia (11/09).
+            # "Só eu vejo este card" no ClickUp (pedido da Julia, 11/09).
             conn.execute("ALTER TABLE tarefa ADD COLUMN visivel_para INTEGER")
-        if "chave_automatica" not in colunas_tarefa:
-            # Card mantido pelo sistema ("ficha:<loja>:<grupo>"): a checklist
-            # acompanha a lista "O que falta" do Cardápio.
-            conn.execute("ALTER TABLE tarefa ADD COLUMN chave_automatica TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tarefa_comentario (
@@ -1374,15 +1370,17 @@ def listar_tarefas(usuario_id=None):
         return tarefas
 
 
-def criar_tarefa(titulo, descricao, categoria, prioridade, data_limite):
+def criar_tarefa(titulo, descricao, categoria, prioridade, data_limite, visivel_para=None):
+    """`visivel_para`: id do usuário, pra card particular ("Só eu vejo este
+    card"); None = a equipe toda."""
     agora = datetime.now().isoformat()
     with conexao() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite, criado_em, atualizado_em)
-            VALUES (?, ?, ?, ?, 'todo', ?, ?, ?)
+            INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite, criado_em, atualizado_em, visivel_para)
+            VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?)
             """,
-            (titulo, descricao, categoria, prioridade, data_limite, agora, agora),
+            (titulo, descricao, categoria, prioridade, data_limite, agora, agora, visivel_para),
         )
         return cursor.lastrowid
 
@@ -1439,110 +1437,6 @@ def adicionar_comentario(tarefa_id, autor, texto):
         )
         conn.execute("UPDATE tarefa SET atualizado_em = ? WHERE id = ?", (agora, tarefa_id))
         return cursor.lastrowid
-
-
-# Pendências da ficha técnica no ClickUp: um card particular por loja e por
-# grupo de pendencias_ficha_tecnica, com cada pendência na checklist
-# (pedido da Julia em 11/09/2026 — a lista fica no ClickUp, não no Cardápio).
-GRUPOS_PENDENCIA_CLICKUP = [
-    ("produtosSemFicha", "Produtos sem ficha técnica", "alta",
-     "Sem ficha, a venda não desconta nada do estoque e o produto fica sem CMV.",
-     lambda x: x["nome"]),
-    ("fichasSemQuantidade", "Insumo sem quantidade na ficha", "alta",
-     "Linha sem quantidade não desconta estoque e deixa o produto sem custo.",
-     lambda x: f"{x['nome']}: {', '.join(x['insumos'])}"),
-    ("complementosSemFicha", "Complementos sem ficha", "alta",
-     "O cliente escolhe o complemento, mas nada sai do estoque.",
-     lambda x: x["nome"]),
-    ("misturasIncompletas", "Misturas com receita incompleta", "media",
-     "Até completar, a mistura fica com o custo do cadastro e a baixa pula o ingrediente sem quantidade.",
-     lambda x: x["nome"] + "".join(
-         f" — {rotulo}: {', '.join(nomes)}"
-         for rotulo, nomes in (("sem quantidade", x["semQuantidade"]), ("sem custo", x["semCusto"])) if nomes)),
-    ("insumosSemCusto", "Insumos sem custo", "media",
-     "Sem custo digitado, cotação ou compra recebida, quem usa fica sem CMV. Digite em Estoque → engrenagem do insumo → Custo.",
-     lambda x: x["nome"]),
-    ("vendidosSemVinculo", "Vendidos sem ficha (últimos 30 dias)", "media",
-     "Nome da Cardápio Web que não casou com nenhuma ficha: vincule em Estoque → Integrações do Estoque.",
-     lambda x: x["nome"]),
-]
-
-
-def tem_cards_de_pendencia(usuario_id):
-    with conexao() as conn:
-        return bool(conn.execute(
-            "SELECT 1 FROM tarefa WHERE visivel_para = ? AND chave_automatica LIKE 'ficha:%' LIMIT 1",
-            (usuario_id,),
-        ).fetchone())
-
-
-def sincronizar_pendencias_no_clickup(usuario_id):
-    """Cria ou atualiza os cards particulares de pendência da ficha técnica
-    de `usuario_id`: item novo entra na checklist, item resolvido no sistema
-    fica marcado como feito, e o card vai pra "Concluído" quando a checklist
-    inteira está feita (e volta pra "A fazer" se entrar pendência nova). Item
-    que ela marcou à mão continua marcado — ela pode decidir que o brownie
-    comprado pronto não precisa de ficha. Card que ela apagou volta na
-    próxima sincronização se ainda houver pendência. Devolve quantos cards
-    têm pendência aberta."""
-    from config import LOJAS as _LOJAS
-    agora = datetime.now().isoformat()
-    abertos = 0
-    for loja in _LOJAS:
-        pendencias = pendencias_ficha_tecnica(loja)
-        for grupo, titulo, prioridade, descricao, rotulo in GRUPOS_PENDENCIA_CLICKUP:
-            itens = list(dict.fromkeys(rotulo(x) for x in pendencias[grupo]))
-            chave = f"ficha:{loja}:{grupo}"
-            texto = f"{descricao} Este card se atualiza sozinho: o que você resolver no sistema fica marcado como feito."
-            with conexao() as conn:
-                tarefa = conn.execute(
-                    "SELECT id, status, descricao FROM tarefa WHERE visivel_para = ? AND chave_automatica = ?",
-                    (usuario_id, chave),
-                ).fetchone()
-                if tarefa is None:
-                    if not itens:
-                        continue
-                    tarefa_id = conn.execute(
-                        """
-                        INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite,
-                                            criado_em, atualizado_em, visivel_para, chave_automatica)
-                        VALUES (?, ?, 'Ficha técnica', ?, 'todo', NULL, ?, ?, ?, ?)
-                        """,
-                        (f"{loja} · {titulo}", texto, prioridade, agora, agora, usuario_id, chave),
-                    ).lastrowid
-                    status = "todo"
-                else:
-                    tarefa_id, status = tarefa["id"], tarefa["status"]
-                    if tarefa["descricao"] != texto:
-                        conn.execute("UPDATE tarefa SET descricao = ? WHERE id = ?", (texto, tarefa_id))
-                existentes = {
-                    s["titulo"]: s for s in conn.execute(
-                        "SELECT id, titulo, concluida FROM tarefa_subtarefa WHERE tarefa_id = ?", (tarefa_id,)
-                    ).fetchall()
-                }
-                mudou = False
-                ordem = len(existentes)
-                for item in itens:
-                    if item not in existentes:
-                        conn.execute(
-                            "INSERT INTO tarefa_subtarefa (tarefa_id, titulo, concluida, ordem) VALUES (?, ?, 0, ?)",
-                            (tarefa_id, item, ordem),
-                        )
-                        ordem += 1
-                        mudou = True
-                for titulo_sub, sub in existentes.items():
-                    if titulo_sub not in itens and not sub["concluida"]:
-                        conn.execute("UPDATE tarefa_subtarefa SET concluida = 1 WHERE id = ?", (sub["id"],))
-                        mudou = True
-                pendentes = conn.execute(
-                    "SELECT COUNT(*) FROM tarefa_subtarefa WHERE tarefa_id = ? AND concluida = 0", (tarefa_id,)
-                ).fetchone()[0]
-                novo_status = "done" if not pendentes else ("todo" if status == "done" else status)
-                if mudou or novo_status != status:
-                    conn.execute("UPDATE tarefa SET status = ?, atualizado_em = ? WHERE id = ?",
-                                 (novo_status, agora, tarefa_id))
-                abertos += bool(pendentes)
-    return abertos
 
 
 # --- USUÁRIOS (login da equipe) ---------------------------------------------
@@ -3203,123 +3097,6 @@ def listar_produtos_por_loja(loja):
             "fotoArquivo": p["foto_arquivo"],
         })
     return resultado
-
-
-# Lojas que vendem com complemento escolhido no pedido ("monte o seu") — as
-# mesmas em que a tela de Cardápio mostra a aba Complementos (script.js).
-LOJAS_COM_COMPLEMENTOS = {"Açaí Na Lata"}
-
-
-def pendencias_ficha_tecnica(loja):
-    """O que ainda falta pra ficha técnica da loja ficar completa — a lista
-    "O que falta" do Cardápio, que a Julia vai riscando até zerar (pedido de
-    11/09/2026, prazo dela pra terminar as fichas).
-
-    Só olha o que a loja vende: os produtos do cardápio (fora bebida e combo
-    — combo não tem ficha própria, a venda desconta o que vai dentro), os
-    complementos na loja que trabalha com eles e as misturas que entram
-    nessas receitas, em cascata. Ficha que sobrou de cópia antiga, de
-    produto que a loja nem vende, não conta.
-
-    Grupos: produto sem ficha; ficha com insumo sem quantidade (não desconta
-    e trava o custo); complemento sem ficha; mistura com receita incompleta;
-    insumo sem custo nenhum (nem digitado, nem cotação, nem compra); e o
-    que foi vendido nos últimos 30 dias sem casar com ficha nenhuma."""
-    def eh_combo(produto):
-        return any(_normalizar_nome_insumo(produto[campo]).startswith("combo") for campo in ("categoria", "nome"))
-
-    produtos = [p for p in listar_produtos_por_loja(loja) if not eh_combo(p)]
-    complementos = listar_complementos_por_loja(loja) if loja in LOJAS_COM_COMPLEMENTOS else []
-
-    # item_id -> quem é, pra tela saber o que abrir
-    itens = {}
-    for p in produtos:
-        if p["itemCardapioId"]:
-            itens[p["itemCardapioId"]] = {"nome": p["nome"], "tipo": "produto", "precoCardapioId": p["precoCardapioId"]}
-    for c in complementos:
-        itens.setdefault(c["id"], {"nome": c["nome"], "tipo": "complemento", "precoCardapioId": None})
-
-    with conexao() as conn:
-        linhas = conn.execute(
-            "SELECT f.item_id, f.insumo_id, f.quantidade, i.nome FROM ficha_tecnica f "
-            "JOIN insumo i ON i.id = f.insumo_id WHERE f.loja = ?",
-            (loja,),
-        ).fetchall()
-        insumos = {
-            l["id"]: {"nome": l["nome"], "unidadeMedida": l["unidade_medida"]}
-            for l in conn.execute("SELECT id, nome, unidade_medida FROM insumo").fetchall()
-        }
-    ficha = {}
-    for linha in linhas:
-        if linha["item_id"] in itens:
-            ficha.setdefault(linha["item_id"], []).append(linha)
-
-    produtos_sem_ficha = [
-        {"precoCardapioId": p["precoCardapioId"], "nome": p["nome"], "categoria": p["categoria"]}
-        for p in produtos if not (p["itemCardapioId"] and p["itemCardapioId"] in ficha)
-    ]
-    complementos_sem_ficha = [
-        {"itemCardapioId": c["id"], "nome": c["nome"]} for c in complementos if c["id"] not in ficha
-    ]
-    fichas_sem_quantidade = sorted(
-        (
-            {**itens[item_id], "itemCardapioId": item_id,
-             "insumos": sorted(l["nome"] for l in ls if l["quantidade"] is None)}
-            for item_id, ls in ficha.items() if any(l["quantidade"] is None for l in ls)
-        ),
-        key=lambda f: (f["tipo"], _normalizar_nome_insumo(f["nome"])),
-    )
-
-    # Quem usa cada insumo, entrando nas misturas (a batata usa o Tempero
-    # Batata, que usa o sal): o sal sem custo trava o CMV da batata.
-    receitas = mapa_receita_insumo()
-    usado_por = {}
-
-    def visitar(insumo_id, quem, visitando):
-        usado_por.setdefault(insumo_id, set()).add(quem)
-        receita = receitas.get(insumo_id)
-        if receita and insumo_id not in visitando:
-            for ingrediente_id in receita["ingredientes"]:
-                visitar(ingrediente_id, insumos[insumo_id]["nome"], visitando | {insumo_id})
-
-    for item_id, ls in ficha.items():
-        for linha in ls:
-            visitar(linha["insumo_id"], itens[item_id]["nome"], frozenset())
-
-    precos = _mapa_preco_insumo()
-    misturas_incompletas = []
-    for insumo_id in usado_por:
-        receita = receitas.get(insumo_id)
-        if not receita:
-            continue
-        sem_quantidade = sorted(insumos[i]["nome"] for i, q in receita["ingredientes"].items() if q is None)
-        sem_custo = sorted(insumos[i]["nome"] for i in receita["ingredientes"] if precos.get(i) is None)
-        if sem_quantidade or sem_custo:
-            misturas_incompletas.append({"insumoId": insumo_id, "nome": insumos[insumo_id]["nome"],
-                                         "semQuantidade": sem_quantidade, "semCusto": sem_custo})
-
-    # Mistura com receita não entra aqui: o custo dela sai da receita, então
-    # o que falta é o custo dos ingredientes (que aparecem por conta própria).
-    insumos_sem_custo = [
-        {"insumoId": insumo_id, **insumos[insumo_id], "usadoEm": sorted(quem)}
-        for insumo_id, quem in usado_por.items()
-        if insumo_id not in receitas and precos.get(insumo_id) is None
-    ]
-
-    vendidos_sem_vinculo = [
-        {"nome": p["nome_produto"], "vendas": p["vendas"], "complemento": bool(p.get("complemento"))}
-        for p in listar_produtos_pendentes(loja)
-    ]
-
-    grupos = {
-        "produtosSemFicha": produtos_sem_ficha,
-        "fichasSemQuantidade": fichas_sem_quantidade,
-        "complementosSemFicha": complementos_sem_ficha,
-        "misturasIncompletas": sorted(misturas_incompletas, key=lambda m: _normalizar_nome_insumo(m["nome"])),
-        "insumosSemCusto": sorted(insumos_sem_custo, key=lambda i: _normalizar_nome_insumo(i["nome"])),
-        "vendidosSemVinculo": vendidos_sem_vinculo,
-    }
-    return {"loja": loja, **grupos, "total": sum(len(v) for v in grupos.values())}
 
 
 def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
