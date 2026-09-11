@@ -3404,6 +3404,24 @@ document.getElementById('form-cotacao-preco')?.addEventListener('submit', async 
 const ESTAGIO_LABEL_PEDIDO = { enviado: 'Pedido enviado', confirmado: 'Confirmado pelo fornecedor', a_caminho: 'A caminho', recebido: 'Recebido' };
 const STATUS_CLASSE_BADGE_PEDIDO = { enviado: 'neu-orange', confirmado: 'neu-orange', a_caminho: 'neu-orange', recebido: 'pos' };
 
+// Gerar o pedido não manda nada pro fornecedor: até clicar em "Enviar por
+// WhatsApp", o primeiro estágio aparece como pendente (Julia, 2026-09-11).
+function _pedidoPendenteDeEnvio(p) {
+  return p.status === 'enviado' && !p.whatsappEnviadoEm;
+}
+
+function _rotuloEstagioPedido(p, estagio) {
+  return estagio === 'enviado' && _pedidoPendenteDeEnvio(p) ? 'Pendente de envio (WhatsApp)' : ESTAGIO_LABEL_PEDIDO[estagio];
+}
+
+async function _marcarPedidoEnviadoWhatsApp(pedidoId) {
+  try {
+    await fetch(`/api/pedidos/${pedidoId}/whatsapp-enviado`, { method: 'POST' });
+  } catch (erro) {
+    console.error('Falha ao marcar pedido como enviado:', erro);
+  }
+}
+
 let pedidosLista = [];
 let pedidoDetalheAtual = null;
 let pedidoEstagios = ['enviado', 'confirmado', 'a_caminho', 'recebido'];
@@ -3465,10 +3483,10 @@ function renderPedidosTabela() {
       <td class="text-muted">${escaparHtml(p.cotacaoTitulo)}</td>
       <td>${p.totalItens}</td>
       <td>R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${p.abaixoDoMinimo ? ' <span class="badge-pill neu-orange" title="Abaixo do pedido mínimo do fornecedor">abaixo do mínimo</span>' : ''}</td>
-      <td><span class="badge-pill ${STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${ESTAGIO_LABEL_PEDIDO[p.status]}</span></td>
+      <td><span class="badge-pill ${_pedidoPendenteDeEnvio(p) ? 'neg' : STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${_rotuloEstagioPedido(p, p.status)}</span></td>
       <td class="acoes-linha">
         ${pedidosWhatsAppLinks[p.id] ? `
-          <a class="btn-acao-icone" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp">
+          <a class="btn-acao-icone" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp" data-acao="enviar-pedido-whatsapp" data-id="${p.id}">
             <i data-lucide="send"></i>
           </a>
         ` : ''}
@@ -3481,6 +3499,15 @@ function renderPedidosTabela() {
 
   document.querySelectorAll('[data-acao="abrir-pedido"]').forEach(btn => {
     btn.addEventListener('click', () => abrirPedidoDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+
+  // O link abre o WhatsApp numa aba nova (sem bloquear o clique); aqui só
+  // marca o pedido como enviado e atualiza a lista.
+  document.querySelectorAll('[data-acao="enviar-pedido-whatsapp"]').forEach(link => {
+    link.addEventListener('click', async () => {
+      await _marcarPedidoEnviadoWhatsApp(link.dataset.id);
+      await carregarPedidos();
+    });
   });
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -3550,7 +3577,7 @@ function renderPedidoDetalhe() {
     return `
       <div class="pedido-estagio" data-estado="${estado}">
         <div class="pedido-estagio-marcador">${marcador}</div>
-        <div class="pedido-estagio-texto">${escaparHtml(ESTAGIO_LABEL_PEDIDO[estagio])}</div>
+        <div class="pedido-estagio-texto">${escaparHtml(_rotuloEstagioPedido(p, estagio))}</div>
       </div>
       ${linha}
     `;
@@ -3590,6 +3617,15 @@ document.getElementById('btn-pedido-voltar')?.addEventListener('click', () => {
   document.getElementById('pedido-detalhe-view').style.display = 'none';
   document.getElementById('pedidos-lista-view').style.display = '';
   pedidoDetalheAtual = null;
+  carregarPedidos();
+});
+
+// Mesmo esquema do ícone da lista: o link abre o WhatsApp, aqui só marca.
+document.getElementById('link-pedido-whatsapp')?.addEventListener('click', async () => {
+  if (!pedidoDetalheAtual) return;
+  await _marcarPedidoEnviadoWhatsApp(pedidoDetalheAtual.id);
+  pedidoDetalheAtual.whatsappEnviadoEm = new Date().toISOString();
+  renderPedidoDetalhe();
   carregarPedidos();
 });
 

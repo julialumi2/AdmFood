@@ -131,6 +131,7 @@ from backend.armazenamento import (
     confirmar_recebimento_pedido,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
+    marcar_pedidos_enviados_whatsapp,
     confirmar_pedidos_por_token,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
@@ -2355,6 +2356,7 @@ def _formatar_pedido_resumo(pedido):
         "valorTotal": round(pedido["valor_total"], 2),
         "pedidoMinimo": pedido["pedido_minimo"],
         "abaixoDoMinimo": pedido["pedido_minimo"] > 0 and pedido["valor_total"] < pedido["pedido_minimo"],
+        "whatsappEnviadoEm": pedido.get("whatsapp_enviado_em"),
     }
 
 
@@ -2413,6 +2415,20 @@ def api_mensagem_whatsapp_pedido(pedido_id):
     pedidos_do_token = buscar_pedidos_por_token(pedido["token"]) or [pedido]
     mensagem = _mensagem_whatsapp_pedido_token(pedido["token"], [p["id"] for p in pedidos_do_token])
     return jsonify(mensagem)
+
+
+@app.route('/api/pedidos/<int:pedido_id>/whatsapp-enviado', methods=['POST'])
+def api_marcar_pedido_enviado_whatsapp(pedido_id):
+    """Clicou em "Enviar por WhatsApp": o pedido (e os da mesma leva, que vão
+    na mesma mensagem) sai de "Pendente de envio" pra "Pedido enviado"."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    pedido = buscar_pedido(pedido_id)
+    if not pedido or not pedido["token"]:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    marcar_pedidos_enviados_whatsapp(pedido["token"])
+    return jsonify({"ok": True})
 
 
 @app.route('/api/pedidos/<int:pedido_id>/avancar', methods=['POST'])

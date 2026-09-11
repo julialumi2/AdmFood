@@ -838,6 +838,14 @@ def inicializar_banco():
             conn.execute("ALTER TABLE pedido_compra ADD COLUMN valor_nf REAL")
         if "divergencia_nf" not in colunas_pedido:
             conn.execute("ALTER TABLE pedido_compra ADD COLUMN divergencia_nf INTEGER NOT NULL DEFAULT 0")
+        # Quando ela clicou em "Enviar por WhatsApp" (Julia, 2026-09-11):
+        # antes disso o pedido aparece como "Pendente de envio", não como
+        # "Pedido enviado" — gerar o pedido não manda nada pro fornecedor.
+        if "whatsapp_enviado_em" not in colunas_pedido:
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN whatsapp_enviado_em TEXT")
+            # Pedido de antes disso não tem como saber: conta como enviado,
+            # pra não aparecer "Pendente de envio" em pedido que já foi.
+            conn.execute("UPDATE pedido_compra SET whatsapp_enviado_em = criado_em")
 
         # Link sem login pra fornecedor confirmar o pedido recebido — mesmo
         # token pra todo pedido nascido da mesma leva de "Gerar pedidos" pro
@@ -3920,6 +3928,7 @@ def listar_pedidos():
         linhas = conn.execute(
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
+                   pc.whatsapp_enviado_em,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo,
                    COUNT(pi.insumo_id) AS total_itens,
@@ -3940,6 +3949,7 @@ def buscar_pedido(pedido_id):
         linha = conn.execute(
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em, pc.token,
+                   pc.whatsapp_enviado_em,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo
             FROM pedido_compra pc
@@ -4017,6 +4027,17 @@ def excluir_pedido(pedido_id):
     with conexao() as conn:
         conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
         conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
+
+
+def marcar_pedidos_enviados_whatsapp(token):
+    """A mensagem de WhatsApp vale pra todos os pedidos da mesma leva (mesmo
+    fornecedor, um bloco por loja), então marca todos eles juntos."""
+    agora = datetime.now().isoformat(timespec="seconds")
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE pedido_compra SET whatsapp_enviado_em = COALESCE(whatsapp_enviado_em, ?) WHERE token = ?",
+            (agora, token),
+        )
 
 
 def buscar_pedidos_por_token(token):
