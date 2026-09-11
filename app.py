@@ -2306,29 +2306,33 @@ def _mensagem_whatsapp_pedido_token(token, ids):
     prazo = fornecedor["prazo_pagamento"] or "Não Informado"
     entrega = fornecedor["dias_entrega"] or "Não Informado"
 
-    partes = [
-        f"Olá {saudacao},  gostaria de realizar o pedido que fiz com a *{fornecedor['nome']}*",
-        f"*Prazo de Faturamento: {prazo}*\n*Entrega: {entrega}*",
-        f"*✅ Confirme esse pedido aqui: {link}*",
-    ]
+    # Linhas em branco exatamente como na mensagem da VMarket que a Julia
+    # mandou de modelo (2026-09-11): duas antes de "Esse pedido foi feito em
+    # conjunto", duas depois de cada loja, e o total geral colado no link.
+    cabecalho = (
+        f"Olá {saudacao},  gostaria de realizar o pedido que fiz com a *{fornecedor['nome']}*\n\n"
+        f"*Prazo de Faturamento: {prazo}*\n*Entrega: {entrega}*\n\n"
+        f"*✅ Confirme esse pedido aqui: {link}*"
+    )
     if len(pedidos) > 1:
-        blocos_loja = "\n\n\n".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}" for p in pedidos)
+        blocos_loja = "".join(f"{divisor}\n{_texto_bloco_loja_pedido(p)}\n\n\n" for p in pedidos)
         valor_total_geral = sum(p["valor_total"] for p in pedidos)
-        partes.append(
+        mensagem = (
+            f"{cabecalho}\n\n\n"
             "*Esse pedido foi feito em conjunto.*\n"
-            "Abaixo seguem os pedidos separados de cada uma das empresas:"
+            "Abaixo seguem os pedidos separados de cada uma das empresas:\n\n"
+            f"{blocos_loja}{divisor}\n\n"
+            f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*\n"
+            f"*✅ Confirme esse pedido aqui: {link}*"
         )
-        partes.append(f"{blocos_loja}\n\n\n{divisor}")
-        partes.append(f"*Valor total de todos os pedidos: R$ {_formatar_moeda(valor_total_geral)}*")
-        partes.append(f"*✅ Confirme esse pedido aqui: {link}*")
     else:
-        partes.append(f"{divisor}\n{_texto_bloco_loja_pedido(pedidos[0])}")
+        mensagem = f"{cabecalho}\n\n{divisor}\n{_texto_bloco_loja_pedido(pedidos[0])}"
 
     return {
         "fornecedorId": fornecedor["id"],
         "fornecedorNome": fornecedor["nome"],
         "telefone": fornecedor["contato_telefone"],
-        "mensagem": "\n\n".join(partes),
+        "mensagem": mensagem,
     }
 
 
