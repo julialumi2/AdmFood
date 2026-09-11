@@ -1617,8 +1617,19 @@ def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=No
     if candidato:
         return candidato, 1
     if " - " in nome_vendido:
-        prefixo = nome_vendido.split(" - ", 1)[0]
+        prefixo, sufixo = nome_vendido.split(" - ", 1)[0], nome_vendido.rsplit(" - ", 1)[1]
         candidato = catalogo_normalizado.get(_normalizar_nome_insumo(prefixo))
+        if candidato:
+            return candidato, 1
+        # A Tradiça vende "Hot Dog com Bacon - Beicão": o nome do item vem
+        # depois do traço.
+        candidato = catalogo_normalizado.get(_normalizar_nome_insumo(sufixo))
+        if candidato:
+            return candidato, 1
+    # Combo "Lanche + Batata + Bebida" gravado antes de a leitura do pedido
+    # cortar o nome no " + " (o "monte o seu" do Açaí é um produto só).
+    if " + " in nome_vendido and not re.search(r"\+\s*\d+\s*complementos?\b", nome_vendido, re.IGNORECASE):
+        candidato = catalogo_normalizado.get(_normalizar_nome_insumo(nome_vendido.split(" + ", 1)[0]))
         if candidato:
             return candidato, 1
     # Só pra lista de preços: lá "Calabreso (com Calabresa)" é o "Calabreso"
@@ -1634,13 +1645,32 @@ def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=No
     return None, 1
 
 
+def _com_apelidos(catalogo, itens):
+    """Catálogo + o nome curto de cada item: o que vem antes do " - " e o
+    nome sem o parêntese do fim. Em produção os itens têm o nome da lista de
+    preços ("Clássico - Cheese Salada", "Veg (vegetariano)", "Creme de Avelã
+    - Dorella") e a Cardápio Web vende o curto ("CLASSICO", "Veg", "Creme de
+    Avelã") — sem isso, desde 08/09 as vendas dos lanches do Artesanos não
+    casavam e não descontavam estoque (achado em 11/09/2026). Só entra
+    apelido que aponta pra um item só e não é o nome inteiro de outro."""
+    candidatos = {}
+    for item in itens:
+        nome = item["nome"]
+        for apelido in (nome.split(" - ", 1)[0] if " - " in nome else None,
+                        _SUFIXO_PARENTESES.sub("", nome).strip()):
+            chave = _normalizar_nome_insumo(apelido) if apelido and apelido != nome else None
+            if chave and chave not in catalogo:
+                candidatos.setdefault(chave, set()).add(item["id"])
+    return {**catalogo, **{chave: next(iter(ids)) for chave, ids in candidatos.items() if len(ids) == 1}}
+
+
 def _catalogo_e_vinculos(conn):
-    """O que _casar_item_cardapio precisa: {nome normalizado: item_id} de
-    todo item de cardápio e os vínculos manuais da fila de pendências."""
-    catalogo = {
-        _normalizar_nome_insumo(linha["nome"]): linha["id"]
-        for linha in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
-    }
+    """O que _casar_item_cardapio precisa: {nome normalizado: item_id} pra
+    venda de produto e pra complemento — cada um com os apelidos só do seu
+    tipo, pra um adicional "Bacon" nunca virar o lanche BACON — e os
+    vínculos manuais da fila de pendências."""
+    itens = conn.execute("SELECT id, nome, tipo FROM item_cardapio").fetchall()
+    catalogo = {_normalizar_nome_insumo(linha["nome"]): linha["id"] for linha in itens}
     vinculos_manuais = {
         linha["nome_produto_normalizado"]: {
             "itemCardapioId": linha["item_cardapio_id"],
@@ -1650,7 +1680,9 @@ def _catalogo_e_vinculos(conn):
             "SELECT nome_produto_normalizado, item_cardapio_id, quantidade_por_unidade FROM vinculo_produto_venda"
         ).fetchall()
     }
-    return catalogo, vinculos_manuais
+    produtos = _com_apelidos(catalogo, [i for i in itens if i["tipo"] != "complemento"])
+    complementos = _com_apelidos(catalogo, [i for i in itens if i["tipo"] == "complemento"])
+    return produtos, complementos, vinculos_manuais
 
 
 def _recasar_vendas_sem_item(conn, unidade):
@@ -1660,7 +1692,7 @@ def _recasar_vendas_sem_item(conn, unidade):
     Aqui casa com o catálogo e os vínculos de hoje, pelo mesmo critério da
     sincronização. Sem isso a fila de pendências mostrava como pendente o
     "Tradiça Duplo" que já tinha ficha, só porque foi vendido antes dela."""
-    catalogo, vinculos = _catalogo_e_vinculos(conn)
+    catalogo, catalogo_complementos, vinculos = _catalogo_e_vinculos(conn)
     for linha in conn.execute(
         "SELECT DISTINCT nome_produto FROM venda_item WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
     ).fetchall():
@@ -1674,7 +1706,7 @@ def _recasar_vendas_sem_item(conn, unidade):
     for linha in conn.execute(
         "SELECT DISTINCT nome_complemento FROM venda_complemento WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
     ).fetchall():
-        item_id, _ = _casar_item_cardapio(linha["nome_complemento"], catalogo, vinculos)
+        item_id, _ = _casar_item_cardapio(linha["nome_complemento"], catalogo_complementos, vinculos)
         if item_id:
             conn.execute(
                 "UPDATE venda_complemento SET item_cardapio_id = ? "
@@ -1697,7 +1729,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     Ficha Técnica completa o suficiente por enquanto — ver
     aplicar_baixa_estoque_dia)."""
     with conexao() as conn:
-        catalogo, vinculos_manuais = _catalogo_e_vinculos(conn)
+        catalogo, catalogo_complementos, vinculos_manuais = _catalogo_e_vinculos(conn)
         conn.execute(
             "DELETE FROM venda_item WHERE unidade = ? AND dia = ?",
             (unidade, dia_iso),
@@ -1713,7 +1745,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                 # Cardápio Web, tipo "Chocoboll"). Sem casar, fica guardado
                 # com item_cardapio_id nulo e não desconta nada.
                 for ordem, complemento in enumerate(item.get("complementos") or []):
-                    complemento_id, _ = _casar_item_cardapio(complemento["nome"], catalogo, vinculos_manuais)
+                    complemento_id, _ = _casar_item_cardapio(complemento["nome"], catalogo_complementos, vinculos_manuais)
                     conn.execute(
                         """
                         INSERT INTO venda_complemento

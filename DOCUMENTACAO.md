@@ -666,6 +666,20 @@ novo com o catálogo de hoje antes de listar a fila de pendências do
 Estoque (antes só casava quando o dia era sincronizado outra vez, e a
 reconferência só volta 7 dias).
 
+**Nome curto da venda casa com o item de nome longo** (2026-09-11). Em
+produção os itens de cardápio têm o nome da lista de preços ("Clássico -
+Cheese Salada", "Veg (vegetariano)", "Creme de Avelã - Dorella") e a
+Cardápio Web vende o curto ("CLASSICO", "Veg", "Creme de Avelã"): desde
+08/09 as vendas dos lanches do Artesanos não casavam com a ficha e não
+descontavam estoque. `_com_apelidos` põe no catálogo o nome antes do " - "
+e o nome sem o parêntese do fim, só quando aponta pra um item só — e
+separado por tipo, pra um adicional "Bacon" nunca virar o lanche BACON.
+`_casar_item_cardapio` passou a tentar também o que vem depois do " - "
+("Hot Dog com Bacon - Beicão" → Beicão) e a parte antes do " + " (combo
+gravado antes do corte na leitura do pedido; o "monte o seu" do Açaí não
+entra). As vendas antigas casam de novo por `_recasar_vendas_sem_item` e
+pela reconferência de 7 dias, que recalcula a baixa desses dias.
+
 **Combo do Açaí fora dessa tela** (2026-09-10, pedido da Julia). A
 categoria de combo ("COMBOS NALATA": Família 4 × 330 ml e Filhinho/
 Filminho 2 × 500 ml) sai da lista do Açaí (`LOJAS_SEM_COMBO_NO_CARDAPIO`
