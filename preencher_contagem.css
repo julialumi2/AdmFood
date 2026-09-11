@@ -65,10 +65,11 @@ body {
 }
 
 .contagem-publica-icone-ok {
+  display: block;
   width: 40px;
   height: 40px;
   color: var(--success);
-  margin-bottom: var(--space-3);
+  margin: 0 auto var(--space-3);
 }
 
 /* Busca + filtro de seção (o filtro só aparece no computador; no celular
