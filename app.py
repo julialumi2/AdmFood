@@ -72,6 +72,8 @@ from backend.armazenamento import (
     vincular_produto_venda_manualmente,
     definir_composicao_produto_venda,
     listar_composicoes_produto_venda,
+    listar_porcoes_complemento,
+    definir_porcoes_complemento,
     listar_vinculos_manuais,
     listar_itens_cardapio_todos,
     listar_lotes_vencendo,
@@ -1720,6 +1722,41 @@ def api_definir_ficha_tecnica(item_id):
         links.append({"insumoId": insumo_id, "quantidade": quantidade})
 
     definir_ficha_tecnica(item_id, loja, links)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/porcoes-complemento', methods=['GET'])
+def api_listar_porcoes_complemento(item_id):
+    """Porção (g) de cada grupo de complemento escolhido nesse produto — ex:
+    no Frutas ao Creme 500ml, cada fruta 70 g e o adicional 60 g."""
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    return jsonify({"grupos": listar_porcoes_complemento(item_id, loja)})
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/porcoes-complemento', methods=['PUT'])
+def api_definir_porcoes_complemento(item_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    porcoes = []
+    for porcao in dados.get('porcoes') or []:
+        gramas = porcao.get('gramas')
+        if gramas in (None, ''):
+            continue
+        try:
+            gramas = float(gramas)
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Porção inválida."}), 400
+        if gramas <= 0:
+            return jsonify({"erro": "Porção precisa ser maior que zero."}), 400
+        porcoes.append({"grupo": porcao.get('grupo') or '', "gramas": gramas})
+    definir_porcoes_complemento(item_id, loja, porcoes)
     return jsonify({"ok": True})
 
 

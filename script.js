@@ -7474,6 +7474,36 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     }
   }
 
+  // Complemento com porção própria nesse produto (Frutas ao Creme: cada
+  // fruta 70 g no 500) — só no Açaí, única loja com complemento escolhido.
+  let gruposComplemento = [];
+  const temPorcoes = produto.itemCardapioId && fichaTecnicaLojaAtual === 'Açaí Na Lata';
+  if (temPorcoes) {
+    try {
+      const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}/porcoes-complemento?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
+      gruposComplemento = (await resposta.json()).grupos || [];
+    } catch (erro) {
+      console.error('Falha ao carregar porções dos complementos:', erro);
+    }
+  }
+  let porcoesAlteradas = false;
+  const porcoesHTML = temPorcoes && gruposComplemento.length ? `
+    <div class="detalhe-produto-secao">
+      <div class="receita-eyebrow">Complementos que o cliente escolhe</div>
+      <p class="panel-subtitle">Porção de cada complemento escolhido neste produto. Em branco, vale a ficha do complemento.</p>
+      <div class="detalhe-produto-linha">
+        ${gruposComplemento.map((g, indice) => `
+          <div class="detalhe-produto-campo">
+            <label>${escaparHtml(g.grupo || 'Sem grupo')}</label>
+            ${isAdmin
+              ? `<input type="number" step="1" min="0" data-acao="detalhe-porcao-complemento" data-indice="${indice}" value="${g.gramas ?? ''}" placeholder="g">`
+              : `<span>${g.gramas != null ? `${g.gramas} g` : '—'}</span>`}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
   // Alterações de preço/custo só vão pro servidor quando clicar Salvar
   // (a pedido da Julia, 2026-09-09 — layout novo troca o antigo
   // autosave-por-campo por um formulário de verdade, igual a referência).
@@ -7543,6 +7573,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       <div class="detalhe-produto-campos">
         ${precoHTML}
         ${fichaTecnicaHTML}
+        ${porcoesHTML}
       </div>
     </div>
     ${isAdmin ? `
@@ -7561,6 +7592,13 @@ async function abrirModalDetalheProduto(precoCardapioId) {
 
   document.getElementById('detalhe-produto-input-custo')?.addEventListener('input', (evento) => {
     custoAlterado = evento.target.value;
+  });
+
+  corpo.querySelectorAll('[data-acao="detalhe-porcao-complemento"]').forEach((input) => {
+    input.addEventListener('input', () => {
+      gruposComplemento[Number(input.dataset.indice)].gramas = input.value === '' ? null : input.value;
+      porcoesAlteradas = true;
+    });
   });
 
   document.getElementById('btn-detalhe-produto-cancelar')?.addEventListener('click', fecharModalDetalheProduto);
@@ -7582,6 +7620,15 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       }
       if (custoAlterado !== null && produto.itemCardapioId) {
         await salvarCustoProduto(produto.itemCardapioId, custoAlterado);
+      }
+      if (porcoesAlteradas) {
+        const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}/porcoes-complemento`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loja: fichaTecnicaLojaAtual, porcoes: gruposComplemento }),
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar porções');
       }
       fecharModalDetalheProduto();
       renderFichaTecnicaConteudo();
