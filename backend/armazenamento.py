@@ -1616,6 +1616,55 @@ def _casar_item_cardapio(nome_vendido, catalogo_normalizado, vinculos_manuais=No
     return None, 1
 
 
+def _catalogo_e_vinculos(conn):
+    """O que _casar_item_cardapio precisa: {nome normalizado: item_id} de
+    todo item de cardápio e os vínculos manuais da fila de pendências."""
+    catalogo = {
+        _normalizar_nome_insumo(linha["nome"]): linha["id"]
+        for linha in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+    }
+    vinculos_manuais = {
+        linha["nome_produto_normalizado"]: {
+            "itemCardapioId": linha["item_cardapio_id"],
+            "quantidadePorUnidade": linha["quantidade_por_unidade"],
+        }
+        for linha in conn.execute(
+            "SELECT nome_produto_normalizado, item_cardapio_id, quantidade_por_unidade FROM vinculo_produto_venda"
+        ).fetchall()
+    }
+    return catalogo, vinculos_manuais
+
+
+def _recasar_vendas_sem_item(conn, unidade):
+    """Venda gravada antes de o item existir (ou antes do vínculo manual)
+    ficou sem item_cardapio_id, e só casaria de novo quando o dia fosse
+    sincronizado outra vez — a reconferência automática só volta 7 dias.
+    Aqui casa com o catálogo e os vínculos de hoje, pelo mesmo critério da
+    sincronização. Sem isso a fila de pendências mostrava como pendente o
+    "Tradiça Duplo" que já tinha ficha, só porque foi vendido antes dela."""
+    catalogo, vinculos = _catalogo_e_vinculos(conn)
+    for linha in conn.execute(
+        "SELECT DISTINCT nome_produto FROM venda_item WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
+    ).fetchall():
+        item_id, multiplicador = _casar_item_cardapio(linha["nome_produto"], catalogo, vinculos)
+        if item_id:
+            conn.execute(
+                "UPDATE venda_item SET item_cardapio_id = ?, multiplicador = ? "
+                "WHERE unidade = ? AND nome_produto = ? AND item_cardapio_id IS NULL",
+                (item_id, multiplicador, unidade, linha["nome_produto"]),
+            )
+    for linha in conn.execute(
+        "SELECT DISTINCT nome_complemento FROM venda_complemento WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
+    ).fetchall():
+        item_id, _ = _casar_item_cardapio(linha["nome_complemento"], catalogo, vinculos)
+        if item_id:
+            conn.execute(
+                "UPDATE venda_complemento SET item_cardapio_id = ? "
+                "WHERE unidade = ? AND nome_complemento = ? AND item_cardapio_id IS NULL",
+                (item_id, unidade, linha["nome_complemento"]),
+            )
+
+
 def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     """Grava quais itens de cardápio foram vendidos em cada pedido do dia,
     casando pelo nome com item_cardapio (ver _casar_item_cardapio — nomes vêm
@@ -1630,19 +1679,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     Ficha Técnica completa o suficiente por enquanto — ver
     aplicar_baixa_estoque_dia)."""
     with conexao() as conn:
-        catalogo = {
-            _normalizar_nome_insumo(linha["nome"]): linha["id"]
-            for linha in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
-        }
-        vinculos_manuais = {
-            linha["nome_produto_normalizado"]: {
-                "itemCardapioId": linha["item_cardapio_id"],
-                "quantidadePorUnidade": linha["quantidade_por_unidade"],
-            }
-            for linha in conn.execute(
-                "SELECT nome_produto_normalizado, item_cardapio_id, quantidade_por_unidade FROM vinculo_produto_venda"
-            ).fetchall()
-        }
+        catalogo, vinculos_manuais = _catalogo_e_vinculos(conn)
         conn.execute(
             "DELETE FROM venda_item WHERE unidade = ? AND dia = ?",
             (unidade, dia_iso),
@@ -1842,9 +1879,11 @@ def listar_produtos_pendentes(unidade, dias=30):
     baixa de estoque — fila de pendência da Etapa 0 (painel de integrações
     do estoque). Sai da fila tanto quem casou com um item de Ficha Técnica
     quanto o combo que já teve a composição definida. Agrupado por nome (o
-    mesmo prato costuma aparecer várias vezes)."""
+    mesmo prato costuma aparecer várias vezes). Antes de listar, casa de
+    novo o que foi vendido antes de o item existir (_recasar_vendas_sem_item)."""
     inicio = (datetime.now().date() - timedelta(days=dias)).isoformat()
     with conexao() as conn:
+        _recasar_vendas_sem_item(conn, unidade)
         linhas = conn.execute(
             """
             SELECT nome_produto, COUNT(*) AS vendas, SUM(quantidade) AS quantidade_total, MIN(dia) AS primeira_vez
@@ -3040,6 +3079,123 @@ def listar_produtos_por_loja(loja):
             "fotoArquivo": p["foto_arquivo"],
         })
     return resultado
+
+
+# Lojas que vendem com complemento escolhido no pedido ("monte o seu") — as
+# mesmas em que a tela de Cardápio mostra a aba Complementos (script.js).
+LOJAS_COM_COMPLEMENTOS = {"Açaí Na Lata"}
+
+
+def pendencias_ficha_tecnica(loja):
+    """O que ainda falta pra ficha técnica da loja ficar completa — a lista
+    "O que falta" do Cardápio, que a Julia vai riscando até zerar (pedido de
+    11/09/2026, prazo dela pra terminar as fichas).
+
+    Só olha o que a loja vende: os produtos do cardápio (fora bebida e combo
+    — combo não tem ficha própria, a venda desconta o que vai dentro), os
+    complementos na loja que trabalha com eles e as misturas que entram
+    nessas receitas, em cascata. Ficha que sobrou de cópia antiga, de
+    produto que a loja nem vende, não conta.
+
+    Grupos: produto sem ficha; ficha com insumo sem quantidade (não desconta
+    e trava o custo); complemento sem ficha; mistura com receita incompleta;
+    insumo sem custo nenhum (nem digitado, nem cotação, nem compra); e o
+    que foi vendido nos últimos 30 dias sem casar com ficha nenhuma."""
+    def eh_combo(produto):
+        return any(_normalizar_nome_insumo(produto[campo]).startswith("combo") for campo in ("categoria", "nome"))
+
+    produtos = [p for p in listar_produtos_por_loja(loja) if not eh_combo(p)]
+    complementos = listar_complementos_por_loja(loja) if loja in LOJAS_COM_COMPLEMENTOS else []
+
+    # item_id -> quem é, pra tela saber o que abrir
+    itens = {}
+    for p in produtos:
+        if p["itemCardapioId"]:
+            itens[p["itemCardapioId"]] = {"nome": p["nome"], "tipo": "produto", "precoCardapioId": p["precoCardapioId"]}
+    for c in complementos:
+        itens.setdefault(c["id"], {"nome": c["nome"], "tipo": "complemento", "precoCardapioId": None})
+
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT f.item_id, f.insumo_id, f.quantidade, i.nome FROM ficha_tecnica f "
+            "JOIN insumo i ON i.id = f.insumo_id WHERE f.loja = ?",
+            (loja,),
+        ).fetchall()
+        insumos = {
+            l["id"]: {"nome": l["nome"], "unidadeMedida": l["unidade_medida"]}
+            for l in conn.execute("SELECT id, nome, unidade_medida FROM insumo").fetchall()
+        }
+    ficha = {}
+    for linha in linhas:
+        if linha["item_id"] in itens:
+            ficha.setdefault(linha["item_id"], []).append(linha)
+
+    produtos_sem_ficha = [
+        {"precoCardapioId": p["precoCardapioId"], "nome": p["nome"], "categoria": p["categoria"]}
+        for p in produtos if not (p["itemCardapioId"] and p["itemCardapioId"] in ficha)
+    ]
+    complementos_sem_ficha = [
+        {"itemCardapioId": c["id"], "nome": c["nome"]} for c in complementos if c["id"] not in ficha
+    ]
+    fichas_sem_quantidade = sorted(
+        (
+            {**itens[item_id], "itemCardapioId": item_id,
+             "insumos": sorted(l["nome"] for l in ls if l["quantidade"] is None)}
+            for item_id, ls in ficha.items() if any(l["quantidade"] is None for l in ls)
+        ),
+        key=lambda f: (f["tipo"], _normalizar_nome_insumo(f["nome"])),
+    )
+
+    # Quem usa cada insumo, entrando nas misturas (a batata usa o Tempero
+    # Batata, que usa o sal): o sal sem custo trava o CMV da batata.
+    receitas = mapa_receita_insumo()
+    usado_por = {}
+
+    def visitar(insumo_id, quem, visitando):
+        usado_por.setdefault(insumo_id, set()).add(quem)
+        receita = receitas.get(insumo_id)
+        if receita and insumo_id not in visitando:
+            for ingrediente_id in receita["ingredientes"]:
+                visitar(ingrediente_id, insumos[insumo_id]["nome"], visitando | {insumo_id})
+
+    for item_id, ls in ficha.items():
+        for linha in ls:
+            visitar(linha["insumo_id"], itens[item_id]["nome"], frozenset())
+
+    precos = _mapa_preco_insumo()
+    misturas_incompletas = []
+    for insumo_id in usado_por:
+        receita = receitas.get(insumo_id)
+        if not receita:
+            continue
+        sem_quantidade = sorted(insumos[i]["nome"] for i, q in receita["ingredientes"].items() if q is None)
+        sem_custo = sorted(insumos[i]["nome"] for i in receita["ingredientes"] if precos.get(i) is None)
+        if sem_quantidade or sem_custo:
+            misturas_incompletas.append({"insumoId": insumo_id, "nome": insumos[insumo_id]["nome"],
+                                         "semQuantidade": sem_quantidade, "semCusto": sem_custo})
+
+    # Mistura com receita não entra aqui: o custo dela sai da receita, então
+    # o que falta é o custo dos ingredientes (que aparecem por conta própria).
+    insumos_sem_custo = [
+        {"insumoId": insumo_id, **insumos[insumo_id], "usadoEm": sorted(quem)}
+        for insumo_id, quem in usado_por.items()
+        if insumo_id not in receitas and precos.get(insumo_id) is None
+    ]
+
+    vendidos_sem_vinculo = [
+        {"nome": p["nome_produto"], "vendas": p["vendas"], "complemento": bool(p.get("complemento"))}
+        for p in listar_produtos_pendentes(loja)
+    ]
+
+    grupos = {
+        "produtosSemFicha": produtos_sem_ficha,
+        "fichasSemQuantidade": fichas_sem_quantidade,
+        "complementosSemFicha": complementos_sem_ficha,
+        "misturasIncompletas": sorted(misturas_incompletas, key=lambda m: _normalizar_nome_insumo(m["nome"])),
+        "insumosSemCusto": sorted(insumos_sem_custo, key=lambda i: _normalizar_nome_insumo(i["nome"])),
+        "vendidosSemVinculo": vendidos_sem_vinculo,
+    }
+    return {"loja": loja, **grupos, "total": sum(len(v) for v in grupos.values())}
 
 
 def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):

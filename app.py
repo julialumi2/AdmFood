@@ -139,6 +139,7 @@ from backend.armazenamento import (
     definir_inicio_baixa_automatica,
     listar_misturas,
     localizar_ou_criar_insumo_de_mistura,
+    pendencias_ficha_tecnica,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -1055,6 +1056,16 @@ def api_buscar_receita_insumo(insumo_id):
         for i in _insumos_unicos(listar_insumos())
     ]
     return jsonify({**receita, "precos": {str(k): v for k, v in precos.items()}, "insumos": insumos})
+
+
+@app.route('/api/cardapio/pendencias', methods=['GET'])
+def api_pendencias_ficha_tecnica():
+    """Cardápio → "O que falta": o que ainda falta pra ficha técnica da
+    loja ficar completa (ver pendencias_ficha_tecnica)."""
+    loja = request.args.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    return jsonify(pendencias_ficha_tecnica(loja))
 
 
 @app.route('/api/misturas', methods=['GET'])

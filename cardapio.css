@@ -823,3 +823,67 @@
   margin: var(--space-3) 0 var(--space-2);
   font-size: 0.9rem;
 }
+
+/* "O que falta" (Cardápio): lista de trabalho até a ficha técnica da loja
+   ficar completa. Cada item abre onde se resolve; custo se digita aqui. */
+.pendencias-grupo { margin-bottom: var(--space-5); }
+.pendencias-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+.pendencias-contagem {
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-radius: var(--radius-pill);
+}
+.pendencias-dica { margin: 0 0 var(--space-2); font-size: 0.8rem; color: var(--text-muted); }
+.pendencias-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.pendencia-item,
+.pendencia-custo,
+.pendencia-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-dark);
+  font: inherit;
+  text-align: left;
+}
+.pendencia-item { cursor: pointer; }
+.pendencia-item:hover { border-color: var(--primary); }
+.pendencia-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.pendencia-custo { flex-wrap: wrap; }
+.pendencia-nome { font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+.pendencia-detalhe { font-size: 0.8rem; font-weight: 400; color: var(--text-muted); text-align: right; }
+.pendencia-nome .pendencia-detalhe { text-align: left; }
+.pendencia-custo-campo { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; font-size: 0.8rem; color: var(--text-muted); }
+.pendencia-custo-campo input {
+  width: 110px;
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.pendencias-tudo-certo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  color: var(--success);
+  font-weight: 600;
+}

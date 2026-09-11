@@ -651,6 +651,20 @@ de propósito: um combo como "Lanche + Batata + Bebida + Maionese" cita
 Só essa lista muda — "Preços" continua mostrando bebida normalmente,
 já que lá o que importa é preço de venda, não receita.
 
+**"O que falta"** (2026-09-11, pedido da Julia no dia do prazo dela pras
+fichas). Primeiro item do menu de categorias do Cardápio (só admin), com o
+número de pendências da loja: produto sem ficha (fora combo e bebida),
+insumo sem quantidade na ficha, complemento sem ficha (Açaí), mistura com
+receita incompleta, insumo sem custo nenhum — custo que dá pra digitar ali
+mesmo — e o que foi vendido nos últimos 30 dias sem casar com ficha
+(`pendencias_ficha_tecnica`, `GET /api/cardapio/pendencias`). Só conta o
+que a loja vende: ficha de cópia antiga, de produto fora do cardápio, não
+entra. Cada item abre onde se resolve, e a lista se atualiza ao voltar pra
+ela. Junto veio `_recasar_vendas_sem_item`: venda gravada antes de o item
+existir casa de novo com o catálogo de hoje antes de listar pendências
+(antes ela só casava quando o dia era sincronizado outra vez, e a
+reconferência só volta 7 dias) — vale também pra fila do Estoque.
+
 **Combo do Açaí fora dessa tela** (2026-09-10, pedido da Julia). A
 categoria de combo ("COMBOS NALATA": Família 4 × 330 ml e Filhinho/
 Filminho 2 × 500 ml) sai da lista do Açaí (`LOJAS_SEM_COMBO_NO_CARDAPIO`
