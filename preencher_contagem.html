@@ -48,9 +48,15 @@
         <p class="contagem-publica-prazo" id="contagem-publica-subtitulo">—</p>
         <p class="panel-subtitle">Preencha a quantidade que tem hoje de cada item (os que estiverem zerados, preencha com 0 mesmo assim).</p>
         <p class="contagem-publica-progresso" id="contagem-publica-progresso">Você preencheu 0 de 0 itens</p>
-        <div class="search-box contagem-publica-busca">
-          <i data-lucide="search"></i>
-          <input type="text" id="contagem-publica-busca" placeholder="Busque pelo nome do produto...">
+        <div class="contagem-publica-filtros">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="contagem-publica-busca" placeholder="Busque pelo nome do produto...">
+          </div>
+          <!-- Só no computador; no celular a seção é pelo botão flutuante "Seções" -->
+          <select id="contagem-publica-filtro-secao">
+            <option value="">Todas as seções</option>
+          </select>
         </div>
       </div>
 

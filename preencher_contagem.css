@@ -71,8 +71,24 @@ body {
   margin-bottom: var(--space-3);
 }
 
-/* Busca no topo (a seção agora é pelo botão flutuante "Seções") */
-.contagem-publica-busca { max-width: none; margin-top: var(--space-3); }
+/* Busca + filtro de seção (o filtro só aparece no computador; no celular
+   a seção é pelo botão flutuante "Seções") */
+.contagem-publica-filtros { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); }
+.contagem-publica-filtros .search-box { max-width: none; flex: 1; }
+
+#contagem-publica-filtro-secao {
+  display: none;
+  padding: 8px var(--space-3);
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+/* Cabeçalho de tabela: só no computador */
+.contagem-cabecalho { display: none; }
 
 .contagem-publica-secao-titulo {
   font-size: 1.05rem;
@@ -265,3 +281,80 @@ body {
 
 .contagem-previsao-bloco { display: flex; flex-direction: column; gap: 6px; }
 .contagem-previsao-bloco[hidden] { display: none; }
+
+/* Computador: volta a tabela de antes (pedido da Julia — o formato de card
+   é só pro celular). Mesmos elementos, cada card vira uma linha: Nome |
+   Gramatura | Marca | Qtde | Sugestão; o resto do card some. */
+@media (min-width: 768px) {
+  .contagem-publica-wrap { max-width: 1180px; }
+
+  #form-contagem-publica {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-5);
+  }
+
+  #form-contagem-publica > .contagem-publica-card { border: none; box-shadow: none; padding: 0; background: none; }
+
+  #contagem-publica-filtro-secao { display: block; }
+  .contagem-secoes { display: none; }
+
+  .contagem-publica-secao-titulo {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: var(--space-5) 0 var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-color);
+  }
+
+  .contagem-publica-secao:first-child .contagem-publica-secao-titulo { border-top: none; padding-top: 0; }
+
+  .contagem-cabecalho,
+  .contagem-card {
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.2fr) 130px minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: center;
+  }
+
+  .contagem-cabecalho {
+    padding: 10px var(--space-3);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .contagem-card {
+    padding: 12px var(--space-3);
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid var(--surface-muted-border);
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  .contagem-card.preenchido { background-color: var(--success-soft); box-shadow: none; border-color: var(--surface-muted-border); }
+
+  .contagem-card .contagem-rotulo,
+  .contagem-card .contagem-previsao-bloco,
+  .contagem-card .contagem-conversao,
+  .contagem-card .contagem-proximo,
+  .contagem-stepper button { display: none; }
+
+  .contagem-card .contagem-nome { padding: 0; border: none; background: none; color: var(--text-dark); font-weight: 700; font-size: 0.9rem; }
+  .contagem-card .contagem-campo-leitura:not(.contagem-nome) { padding: 8px 10px; font-size: 0.85rem; }
+
+  .contagem-stepper { display: block; }
+  .contagem-stepper input { width: 110px; padding: 8px 10px; font-size: 0.9rem; text-align: left; }
+
+  #btn-contagem-publica-enviar { margin: var(--space-4) 0 0; }
+}

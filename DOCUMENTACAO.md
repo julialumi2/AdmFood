@@ -1906,7 +1906,10 @@ não há sugestão ou o insumo não tem custo), Conversão ("1 cx = 12 kg",
 quando o insumo tem quantidade por unidade de compra) e "Próximo", que vai
 pro card seguinte e já abre o teclado. O filtro de seção virou o botão
 flutuante "Seções". `listar_itens_contagem` passou a mandar `custoUnitario`
-e `unidadeCompra`.
+e `unidadeCompra`. O card é só no celular: a partir de 768px de largura
+(computador) cada card volta a ser uma linha da tabela de antes (Nome |
+Gramatura | Marca | Qtde | Sugestão, com o filtro de seção no topo) — pedido
+da Julia no mesmo dia, pelo CSS, com o mesmo HTML.
 
 ### 6.9b Sugestão de compra no formulário público de Contagem/Requisição
 

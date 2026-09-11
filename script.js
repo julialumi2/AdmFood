@@ -4214,10 +4214,14 @@ async function inicializarContagemPublica() {
     container.innerHTML = Object.entries(porCategoria).map(([categoria, itens], indiceSecao) => `
       <section class="contagem-publica-secao" id="contagem-secao-${indiceSecao}" data-categoria="${escaparHtml(categoria)}">
         <h3 class="contagem-publica-secao-titulo">Seção: ${escaparHtml(categoria)}</h3>
+        <!-- Cabeçalho da tabela: só no computador, onde cada card vira uma linha -->
+        <div class="contagem-cabecalho" aria-hidden="true">
+          <span>Nome do Produto</span><span>Gramatura</span><span>Marca</span><span>Qtde em Estoque</span><span>Sugestão</span>
+        </div>
         ${itens.map((item) => `
           <div class="contagem-card" data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
             <span class="contagem-rotulo">Nome</span>
-            <div class="contagem-campo-leitura">${escaparHtml(item.nome)}</div>
+            <div class="contagem-campo-leitura contagem-nome">${escaparHtml(item.nome)}</div>
             <span class="contagem-rotulo">Gramatura</span>
             <div class="contagem-campo-leitura">${escaparHtml(item.unidadeMedida)}</div>
             <span class="contagem-rotulo">Marca</span>
@@ -4290,12 +4294,18 @@ async function inicializarContagemPublica() {
       });
     });
 
+    // Filtro de seção do computador (no celular ele fica escondido e vale "todas").
+    const filtroSecao = document.getElementById('contagem-publica-filtro-secao');
+    filtroSecao.innerHTML = '<option value="">Todas as seções</option>' +
+      Object.keys(porCategoria).map((categoria) => `<option value="${escaparHtml(categoria)}">${escaparHtml(categoria)}</option>`).join('');
+
     function aplicarFiltros() {
       const termo = document.getElementById('contagem-publica-busca').value.trim().toLowerCase();
+      const categoria = filtroSecao.value;
       container.querySelectorAll('.contagem-publica-secao').forEach((secao) => {
         let algumVisivelNaSecao = false;
         secao.querySelectorAll('.contagem-card').forEach((card) => {
-          const visivel = !termo || card.dataset.nomeBusca.includes(termo);
+          const visivel = (!termo || card.dataset.nomeBusca.includes(termo)) && (!categoria || secao.dataset.categoria === categoria);
           card.style.display = visivel ? '' : 'none';
           if (visivel) algumVisivelNaSecao = true;
         });
@@ -4303,6 +4313,7 @@ async function inicializarContagemPublica() {
       });
     }
     document.getElementById('contagem-publica-busca').addEventListener('input', aplicarFiltros);
+    filtroSecao.addEventListener('change', aplicarFiltros);
 
     // Botão flutuante "Seções": lista as seções e pula direto pra uma.
     const secoes = document.getElementById('contagem-secoes');
