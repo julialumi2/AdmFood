@@ -1758,6 +1758,26 @@ def _recasar_vendas_sem_item(conn, unidade):
             )
 
 
+# Complemento pedido separado da lata (grupo "Extras separados do NaLata")
+# vai num pote: 30 ml pra granola e ovomaltine, 60 ml pro resto (Julia,
+# 2026-09-10/11). O pote vira mais uma linha de complemento, que casa com o
+# item "Pote 30ml (separado)" / "Pote 60ml (separado)" — a ficha dele é o
+# pote. A porção do separado fica em porcao_complemento_item com
+# produto_item_id = PRODUTO_SEPARADO (Banana 60 g, Granola 30 g); sem ela,
+# vale a porção de dentro da lata daquele produto.
+PRODUTO_SEPARADO = 0
+COMPLEMENTOS_POTE_30ML = {"granola", "ovomaltine"}
+
+
+def _eh_separado(grupo):
+    return "separad" in (grupo or "").lower()
+
+
+def _pote_do_separado(nome_complemento):
+    pote = "30ml" if _normalizar_nome_insumo(nome_complemento) in COMPLEMENTOS_POTE_30ML else "60ml"
+    return f"Pote {pote} (separado)"
+
+
 def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     """Grava quais itens de cardápio foram vendidos em cada pedido do dia,
     casando pelo nome com item_cardapio (ver _casar_item_cardapio — nomes vêm
@@ -1787,7 +1807,16 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                 # normalizado + vínculo manual pros erros de digitação da
                 # Cardápio Web, tipo "Chocoboll"). Sem casar, fica guardado
                 # com item_cardapio_id nulo e não desconta nada.
-                for ordem, complemento in enumerate(item.get("complementos") or []):
+                linhas_complemento = []
+                for complemento in item.get("complementos") or []:
+                    linhas_complemento.append(complemento)
+                    if _eh_separado(complemento.get("grupo")):
+                        linhas_complemento.append({
+                            "nome": _pote_do_separado(complemento["nome"]),
+                            "quantidade": complemento["quantidade"],
+                            "grupo": complemento.get("grupo"),
+                        })
+                for ordem, complemento in enumerate(linhas_complemento):
                     complemento_id, _ = _casar_item_cardapio(complemento["nome"], catalogo_complementos, vinculos_manuais)
                     conn.execute(
                         """
@@ -1871,8 +1900,13 @@ SQL_ITENS_CONSUMIDOS = f"""
     WHERE v.item_cardapio_id IS NULL
     UNION ALL
     SELECT c.unidade, c.dia, c.item_cardapio_id AS item_id,
-           c.quantidade * COALESCE(p.gramas / NULLIF(g.gramas, 0), 1) AS quantidade
+           c.quantidade * COALESCE(COALESCE(s.gramas, p.gramas) / NULLIF(g.gramas, 0), 1) AS quantidade
     FROM venda_complemento c
+    -- Pedido separado da lata (Banana separada = 60 g): porção própria,
+    -- guardada com produto 0; sem ela, vale a porção do produto.
+    LEFT JOIN porcao_complemento_item s
+      ON s.loja = c.unidade AND s.produto_item_id = 0 AND s.complemento_item_id = c.item_cardapio_id
+     AND LOWER(COALESCE(c.grupo, '')) LIKE '%separad%'
     LEFT JOIN venda_item v
       ON v.unidade = c.unidade AND v.pedido_id = c.pedido_id AND v.linha = c.linha
     -- Combo com composição (Combo Filhinho = 2 "NaLata 500ml + 3
