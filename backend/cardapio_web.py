@@ -178,6 +178,19 @@ def _tamanho_da_opcao(opcao):
     return nome if _eh_tamanho(opcao) and _TAMANHO.match(nome) else None
 
 
+def _achatar_combos(itens, multiplicador=1):
+    """Item com `kind == "combo"` traz os produtos de verdade em `items` —
+    visto ao vivo no Açaí em 2026-09-11: "Combo Filminho NaLata - 2 x 500ml"
+    vem com dois "NaLata 500ml + 3 complementos", cada um com os próprios
+    toppings. Desce até eles, multiplicando pela quantidade do combo."""
+    for item in itens or []:
+        quantidade = (item.get("quantity") or 0) * multiplicador
+        if item.get("items"):
+            yield from _achatar_combos(item["items"], quantidade)
+        else:
+            yield item, quantidade
+
+
 def _itens_vendidos(detalhes):
     """Achata `detalhes["items"]` numa lista [{"nome", "quantidade"}] — usado
     pra estimar consumo de insumo (ficha técnica × vendas reais, seção 6.6) e
@@ -209,10 +222,13 @@ def _itens_vendidos(detalhes):
     Frutas ao Creme — vai em `complementos`, com a quantidade já
     multiplicada pela do item (dá pra escolher o mesmo duas vezes). A opção
     de tamanho não é complemento: ela completa o nome do produto. No
-    formato 1 as outras opções continuam de fora, como antes."""
+    formato 1 as outras opções continuam de fora, como antes.
+
+    `kind == "combo"` apareceu no Açaí (2026-09-11) com os produtos dentro
+    de `items` — `_achatar_combos` entrega cada um deles aqui, como se
+    tivessem sido vendidos soltos."""
     itens = []
-    for item in detalhes.get("items") or []:
-        quantidade = item.get("quantity") or 0
+    for item, quantidade in _achatar_combos(detalhes.get("items")):
         if not quantidade:
             continue
         opcoes = item.get("options") or []
