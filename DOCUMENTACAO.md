@@ -1897,6 +1897,17 @@ vs o nome real no catálogo "Coca Cola Ks (Coca)", sem o sufixo de
 unidade) — corrigidos manualmente, um por um, depois de conferir o nome
 real via busca no modal.
 
+**Link de contagem no formato da VMarket** (2026-09-11, print do link da
+VMarket que a Julia usa de modelo). A tela pública (`preencher_contagem.html`)
+trocou a tabela, que no celular rolava pro lado, por um card por item com
+os campos empilhados: Nome, Gramatura, Marca, "Qtde em estoque" com − e +,
+Sugestão, Previsão compra (sugestão × custo em uso do insumo — some quando
+não há sugestão ou o insumo não tem custo), Conversão ("1 cx = 12 kg",
+quando o insumo tem quantidade por unidade de compra) e "Próximo", que vai
+pro card seguinte e já abre o teclado. O filtro de seção virou o botão
+flutuante "Seções". `listar_itens_contagem` passou a mandar `custoUnitario`
+e `unidadeCompra`.
+
 ### 6.9b Sugestão de compra no formulário público de Contagem/Requisição
 
 **Sugestão passa a recalcular ao vivo enquanto o funcionário digita**

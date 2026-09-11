@@ -14,7 +14,7 @@ body {
 
 .contagem-publica-wrap {
   width: 100%;
-  max-width: 1180px;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -71,88 +71,163 @@ body {
   margin-bottom: var(--space-3);
 }
 
-.contagem-publica-filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: var(--space-4) 0;
-}
-
-.contagem-publica-filtros .search-box { max-width: none; flex: 1; }
-
-#contagem-publica-filtro-secao {
-  padding: 8px var(--space-3);
-  border: 1px solid var(--input-border);
-  background-color: var(--input-bg);
-  color: var(--text-dark);
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  outline: none;
-}
+/* Busca no topo (a seção agora é pelo botão flutuante "Seções") */
+.contagem-publica-busca { max-width: none; margin-top: var(--space-3); }
 
 .contagem-publica-secao-titulo {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-muted);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-dark);
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin: var(--space-5) 0 var(--space-3);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-color);
+  margin: var(--space-6) 0 var(--space-4);
+  scroll-margin-top: var(--space-4);
 }
 
-.contagem-publica-secao-titulo:first-child {
-  border-top: none;
-  padding-top: 0;
+/* Um card por item, campos empilhados — formato do link da VMarket que a
+   Julia usa de modelo (11/09/2026), nas cores do sistema. */
+.contagem-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5) var(--space-4);
+  margin-bottom: var(--space-4);
+  scroll-margin-top: var(--space-4);
 }
 
-#contagem-publica-itens th,
-#contagem-publica-itens td {
+.contagem-card.preenchido { border-color: var(--success); box-shadow: 0 0 0 1px var(--success) inset; }
+
+.contagem-rotulo { font-weight: 700; font-size: 0.95rem; color: var(--text-dark); margin-top: 6px; }
+
+.contagem-campo-leitura {
   padding: 12px var(--space-3);
-}
-
-.contagem-item-somente-leitura {
-  padding: 8px 10px;
   border: 1px solid var(--surface-muted-border);
   background-color: var(--surface-muted);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  min-width: 80px;
+  font-size: 1rem;
 }
 
-#contagem-publica-itens td input {
-  width: 110px;
-  padding: 8px 10px;
+.contagem-stepper { display: grid; grid-template-columns: 52px 1fr 52px; gap: 4px; }
+
+.contagem-stepper button {
+  border: 1px solid var(--input-border);
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+.contagem-stepper button:active { background-color: var(--primary-soft); }
+
+.contagem-stepper input {
+  min-width: 0;
+  padding: 12px;
   border: 1px solid var(--input-border);
   background-color: var(--input-bg);
   color: var(--text-dark);
   border-radius: var(--radius-sm);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
+  text-align: center;
   outline: none;
-  box-sizing: border-box;
   -moz-appearance: textfield;
 }
 
-#contagem-publica-itens td input::-webkit-outer-spin-button,
-#contagem-publica-itens td input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+.contagem-stepper input::-webkit-outer-spin-button,
+.contagem-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.contagem-stepper input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+
+.contagem-previsao { display: flex; justify-content: center; }
+
+.contagem-previsao-pill {
+  padding: 8px var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--success);
+  color: #fff;
+  font-size: 0.9rem;
 }
 
-#contagem-publica-itens td input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+.contagem-conversao { text-align: center; color: var(--text-muted); font-size: 0.9rem; }
+
+.contagem-proximo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
 }
 
-#contagem-publica-itens tbody tr.preenchido {
-  background-color: var(--success-soft);
+.contagem-proximo svg { width: 18px; height: 18px; }
+
+/* Botão flutuante "Seções" */
+.contagem-secoes { position: fixed; left: var(--space-4); bottom: var(--space-4); z-index: 50; }
+
+.contagem-secoes-botao {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 12px var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background-color: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+.contagem-secoes-botao svg { width: 18px; height: 18px; transition: transform 0.15s ease; }
+.contagem-secoes-botao[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.contagem-secoes-menu {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: var(--space-2);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.contagem-secoes-menu[hidden] { display: none; }
+
+.contagem-secoes-menu button {
+  padding: 12px var(--space-4);
+  border: none;
+  border-bottom: 1px solid var(--surface-muted-border);
+  background: none;
+  color: var(--text-dark);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contagem-secoes-menu button:last-child { border-bottom: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .contagem-secoes-botao svg { transition: none; }
 }
 
 #btn-contagem-publica-enviar {
   width: 100%;
-  margin-top: var(--space-4);
+  margin: var(--space-4) 0 80px;
 }
 
 .form-erro {
@@ -187,3 +262,6 @@ body {
   width: 100%;
   margin-top: var(--space-4);
 }
+
+.contagem-previsao-bloco { display: flex; flex-direction: column; gap: 6px; }
+.contagem-previsao-bloco[hidden] { display: none; }

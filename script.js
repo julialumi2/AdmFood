@@ -4206,76 +4206,121 @@ async function inicializarContagemPublica() {
       document.getElementById('contagem-publica-progresso').textContent = `Você preencheu ${preenchidos} de ${totalItens} itens`;
     }
 
-    const filtroSecao = document.getElementById('contagem-publica-filtro-secao');
-    filtroSecao.innerHTML = '<option value="">Todas as seções</option>' +
-      Object.keys(porCategoria).map((categoria) => `<option value="${escaparHtml(categoria)}">${escaparHtml(categoria)}</option>`).join('');
-
+    // Um card por item, no formato do link da VMarket que a Julia usa de
+    // modelo (11/09/2026): campos empilhados, quantidade com − e +,
+    // sugestão, previsão de compra, conversão da embalagem e "Próximo".
+    const itensPorId = new Map(dados.itens.map((item) => [String(item.insumoId), item]));
     const container = document.getElementById('contagem-publica-itens');
-    container.innerHTML = Object.entries(porCategoria).map(([categoria, itens]) => `
-      <div class="contagem-publica-secao" data-categoria="${escaparHtml(categoria)}">
+    container.innerHTML = Object.entries(porCategoria).map(([categoria, itens], indiceSecao) => `
+      <section class="contagem-publica-secao" id="contagem-secao-${indiceSecao}" data-categoria="${escaparHtml(categoria)}">
         <h3 class="contagem-publica-secao-titulo">Seção: ${escaparHtml(categoria)}</h3>
-        <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Nome do Produto</th>
-              <th>Gramatura</th>
-              <th>Marca</th>
-              <th>Qtde em Estoque</th>
-              <th>Sugestão</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itens.map((item) => `
-              <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
-                <td class="font-bold">${escaparHtml(item.nome)}</td>
-                <td><div class="contagem-item-somente-leitura">${escaparHtml(item.unidadeMedida)}</div></td>
-                <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '')}</div></td>
-                <td><input type="number" step="0.01" min="0" placeholder="0" data-insumo-id="${item.insumoId}" required></td>
-                <td><div class="contagem-item-somente-leitura" data-sugestao-insumo-id="${item.insumoId}" data-ideal="${item.quantidadeIdeal !== null ? item.quantidadeIdeal : ''}" data-fator="${item.fatorConversaoCompra || ''}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        </div>
-      </div>
+        ${itens.map((item) => `
+          <div class="contagem-card" data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
+            <span class="contagem-rotulo">Nome</span>
+            <div class="contagem-campo-leitura">${escaparHtml(item.nome)}</div>
+            <span class="contagem-rotulo">Gramatura</span>
+            <div class="contagem-campo-leitura">${escaparHtml(item.unidadeMedida)}</div>
+            <span class="contagem-rotulo">Marca</span>
+            <div class="contagem-campo-leitura">${escaparHtml(item.marcaHomologada || '—')}</div>
+            <label class="contagem-rotulo" for="contagem-qtd-${item.insumoId}">Qtde em estoque</label>
+            <div class="contagem-stepper">
+              <button type="button" data-passo="-1" aria-label="Diminuir">−</button>
+              <input type="number" step="any" min="0" inputmode="decimal" placeholder="0" id="contagem-qtd-${item.insumoId}" data-insumo-id="${item.insumoId}" required>
+              <button type="button" data-passo="1" aria-label="Aumentar">+</button>
+            </div>
+            <span class="contagem-rotulo">Sugestão</span>
+            <div class="contagem-campo-leitura" data-sugestao-insumo-id="${item.insumoId}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div>
+            ${item.custoUnitario != null ? `
+              <div class="contagem-previsao-bloco" data-previsao-bloco="${item.insumoId}">
+                <span class="contagem-rotulo">Previsão compra</span>
+                <div class="contagem-previsao"><span class="contagem-previsao-pill" data-previsao-insumo-id="${item.insumoId}"></span></div>
+              </div>` : ''}
+            ${item.fatorConversaoCompra ? `
+              <span class="contagem-rotulo">Conversão</span>
+              <div class="contagem-conversao">1 ${escaparHtml(item.unidadeCompra || 'embalagem')} = ${escaparHtml(String(item.fatorConversaoCompra).replace('.', ','))} ${escaparHtml(item.unidadeMedida)}</div>` : ''}
+            <button type="button" class="contagem-proximo"><i data-lucide="chevron-down"></i> Próximo</button>
+          </div>
+        `).join('')}
+      </section>
     `).join('');
 
-    container.querySelectorAll('input[data-insumo-id]').forEach((input) => {
-      input.addEventListener('input', () => {
-        input.closest('tr').classList.toggle('preenchido', input.value !== '');
-        const elSugestao = container.querySelector(`[data-sugestao-insumo-id="${input.dataset.insumoId}"]`);
-        const ideal = elSugestao.dataset.ideal;
-        if (ideal === '') {
-          elSugestao.textContent = '—';
-        } else if (input.value === '') {
-          elSugestao.textContent = ideal;
-        } else {
-          const fator = parseFloat(elSugestao.dataset.fator) || null;
-          elSugestao.textContent = arredondarQuantidadeCompra(parseFloat(ideal) - parseFloat(input.value), fator);
+    // Sugestão = ideal − o que tem (arredondado pra embalagem); previsão =
+    // sugestão × custo do insumo.
+    function atualizarSugestao(input) {
+      const item = itensPorId.get(input.dataset.insumoId);
+      const elSugestao = container.querySelector(`[data-sugestao-insumo-id="${input.dataset.insumoId}"]`);
+      let sugestao = null;
+      if (item.quantidadeIdeal !== null) {
+        sugestao = input.value === ''
+          ? item.quantidadeIdeal
+          : arredondarQuantidadeCompra(item.quantidadeIdeal - parseFloat(input.value), item.fatorConversaoCompra || null);
+      }
+      elSugestao.textContent = sugestao === null ? '—' : sugestao;
+      // Sem sugestão (ou nada a comprar), a previsão some em vez de mostrar R$ 0,00.
+      const blocoPrevisao = container.querySelector(`[data-previsao-bloco="${input.dataset.insumoId}"]`);
+      if (blocoPrevisao) {
+        blocoPrevisao.hidden = !sugestao;
+        if (sugestao) {
+          blocoPrevisao.querySelector('.contagem-previsao-pill').innerHTML = `${escaparHtml(_formatarCustoPorUnidade(item.custoUnitario, item.unidadeMedida))} × ${escaparHtml(_formatarQuantidade(sugestao, item.unidadeMedida))} = <strong>${escaparHtml(_formatarMoedaBRL(sugestao * item.custoUnitario))}</strong>`;
         }
+      }
+    }
+
+    const cards = [...container.querySelectorAll('.contagem-card')];
+    cards.forEach((card, indice) => {
+      const input = card.querySelector('input[data-insumo-id]');
+      atualizarSugestao(input);
+      input.addEventListener('input', () => {
+        card.classList.toggle('preenchido', input.value !== '');
+        atualizarSugestao(input);
         atualizarProgresso();
+      });
+      card.querySelectorAll('[data-passo]').forEach((botao) => botao.addEventListener('click', () => {
+        const atual = parseFloat(input.value) || 0;
+        input.value = Math.max(0, Math.round((atual + parseFloat(botao.dataset.passo)) * 1000) / 1000);
+        input.dispatchEvent(new Event('input'));
+      }));
+      // Próximo: vai pro card seguinte visível (a busca pode ter escondido
+      // alguns) e já abre o teclado nele; no último, vai pro botão de enviar.
+      card.querySelector('.contagem-proximo').addEventListener('click', () => {
+        const seguinte = cards.slice(indice + 1).find((c) => c.style.display !== 'none' && c.closest('section').style.display !== 'none');
+        const alvo = seguinte || document.getElementById('btn-contagem-publica-enviar');
+        alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (seguinte) seguinte.querySelector('input[data-insumo-id]').focus({ preventScroll: true });
       });
     });
 
     function aplicarFiltros() {
       const termo = document.getElementById('contagem-publica-busca').value.trim().toLowerCase();
-      const categoria = filtroSecao.value;
       container.querySelectorAll('.contagem-publica-secao').forEach((secao) => {
         let algumVisivelNaSecao = false;
-        secao.querySelectorAll('tbody tr').forEach((linha) => {
-          const bateNome = !termo || linha.dataset.nomeBusca.includes(termo);
-          const bateCategoria = !categoria || secao.dataset.categoria === categoria;
-          const visivel = bateNome && bateCategoria;
-          linha.style.display = visivel ? '' : 'none';
+        secao.querySelectorAll('.contagem-card').forEach((card) => {
+          const visivel = !termo || card.dataset.nomeBusca.includes(termo);
+          card.style.display = visivel ? '' : 'none';
           if (visivel) algumVisivelNaSecao = true;
         });
         secao.style.display = algumVisivelNaSecao ? '' : 'none';
       });
     }
-
     document.getElementById('contagem-publica-busca').addEventListener('input', aplicarFiltros);
-    filtroSecao.addEventListener('change', aplicarFiltros);
+
+    // Botão flutuante "Seções": lista as seções e pula direto pra uma.
+    const secoes = document.getElementById('contagem-secoes');
+    const menuSecoes = document.getElementById('contagem-secoes-menu');
+    const botaoSecoes = document.getElementById('contagem-secoes-botao');
+    menuSecoes.innerHTML = Object.keys(porCategoria).map((categoria, indice) =>
+      `<button type="button" data-secao="contagem-secao-${indice}">${escaparHtml(categoria)}</button>`).join('');
+    botaoSecoes.addEventListener('click', () => {
+      menuSecoes.hidden = !menuSecoes.hidden;
+      botaoSecoes.setAttribute('aria-expanded', String(!menuSecoes.hidden));
+    });
+    menuSecoes.querySelectorAll('[data-secao]').forEach((botao) => botao.addEventListener('click', () => {
+      document.getElementById(botao.dataset.secao).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      menuSecoes.hidden = true;
+      botaoSecoes.setAttribute('aria-expanded', 'false');
+    }));
+    secoes.hidden = false;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     atualizarProgresso();
     elCarregando.style.display = 'none';

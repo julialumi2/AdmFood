@@ -41,28 +41,33 @@
       <p class="panel-subtitle">Já registramos o que você preencheu.</p>
     </div>
 
-    <form id="form-contagem-publica" class="contagem-publica-card" style="display:none;">
-      <h2 id="contagem-publica-titulo">Preencher requisição de estoque</h2>
-      <p class="contagem-publica-prazo" id="contagem-publica-subtitulo">—</p>
-      <p class="panel-subtitle">Preencha a quantidade que tem hoje de cada item (os que estiverem zerados, preencha com 0 mesmo assim).</p>
-      <p class="contagem-publica-progresso" id="contagem-publica-progresso">Você preencheu 0 de 0 itens</p>
-
-      <div class="contagem-publica-filtros">
-        <div class="search-box">
+    <!-- Um card por item, no formato do link da VMarket (pedido da Julia, 11/09/2026) -->
+    <form id="form-contagem-publica" style="display:none;">
+      <div class="contagem-publica-card">
+        <h2 id="contagem-publica-titulo">Preencher requisição de estoque</h2>
+        <p class="contagem-publica-prazo" id="contagem-publica-subtitulo">—</p>
+        <p class="panel-subtitle">Preencha a quantidade que tem hoje de cada item (os que estiverem zerados, preencha com 0 mesmo assim).</p>
+        <p class="contagem-publica-progresso" id="contagem-publica-progresso">Você preencheu 0 de 0 itens</p>
+        <div class="search-box contagem-publica-busca">
           <i data-lucide="search"></i>
           <input type="text" id="contagem-publica-busca" placeholder="Busque pelo nome do produto...">
         </div>
-        <select id="contagem-publica-filtro-secao">
-          <option value="">Todas as seções</option>
-        </select>
       </div>
 
       <div id="contagem-publica-itens">
-        <!-- Renderizado dinamicamente via JS, agrupado por categoria -->
+        <!-- Renderizado dinamicamente via JS, agrupado por seção -->
       </div>
 
       <button type="submit" class="btn-primary" id="btn-contagem-publica-enviar">Enviar requisição</button>
     </form>
+  </div>
+
+  <!-- Botão flutuante de seções: pula direto pra uma seção -->
+  <div class="contagem-secoes" id="contagem-secoes" hidden>
+    <div class="contagem-secoes-menu" id="contagem-secoes-menu" hidden></div>
+    <button type="button" class="contagem-secoes-botao" id="contagem-secoes-botao" aria-expanded="false">
+      Seções <i data-lucide="chevron-up"></i>
+    </button>
   </div>
 
 </body>

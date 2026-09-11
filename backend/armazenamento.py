@@ -4337,12 +4337,15 @@ def listar_itens_contagem(contagem_id, loja):
     mapa_minimo = _mapa_minimo_loja(loja)
     mapa_ajustes = mapa_ajustes_quantidade_ideal(loja)
     multiplicador = multiplicador_quantidade_ideal(loja)
+    # Custo pra "Previsão compra" do link (sugestão × custo), no formato do
+    # link da VMarket que a Julia usa de modelo (11/09/2026).
+    custos = custo_em_uso_por_insumo()
     with conexao() as conn:
         linhas = conn.execute(
             """
             SELECT ci.insumo_id, ci.quantidade_preenchida,
                    i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
-                   i.fator_conversao_compra
+                   i.fator_conversao_compra, i.unidade_compra
             FROM contagem_item ci
             JOIN insumo i ON i.id = ci.insumo_id
             WHERE ci.contagem_id = ?
@@ -4369,6 +4372,8 @@ def listar_itens_contagem(contagem_id, loja):
             "quantidadeIdeal": quantidade_ideal,
             "quantidadeIdealAjustada": ajustada,
             "fatorConversaoCompra": linha["fator_conversao_compra"],
+            "unidadeCompra": linha["unidade_compra"],
+            "custoUnitario": (custos.get(linha["insumo_id"]) or {}).get("valor"),
         })
     return itens
 
