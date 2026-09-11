@@ -2458,9 +2458,11 @@ perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
   uma batelada, pro lado seguro. A baixa cria a linha de estoque do
   ingrediente na loja quando ainda não existe, pra não sumir calada.
 - **Tela**: Cardápio → item **"Misturas"** no menu lateral de categorias,
-  em toda loja (a receita é global) — pedido da Julia em 10/09 pra ficha
-  técnica, complemento e mistura ficarem num lugar só; antes era um botão de
-  chapéu de chef no Estoque, que saiu. A lista (`GET /api/misturas`,
+  no Artesanos e nos Tradiças (a receita é global) — pedido da Julia em
+  10/09 pra ficha técnica, complemento e mistura ficarem num lugar só; antes
+  era um botão de chapéu de chef no Estoque, que saiu. No Açaí Na Lata o
+  item não aparece (pedido dela em 11/09: a loja não faz mistura) —
+  `_lojaTemMisturas` no script.js. A lista (`GET /api/misturas`,
   `listar_misturas`) mostra quanto cada uma rende, quantos ingredientes e o
   custo por kg/L — ou "N sem quantidade" / "falta custo de ingrediente".
   Clicar abre a receita, com o custo da batelada recalculando enquanto

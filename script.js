@@ -6944,21 +6944,27 @@ function _fichaTecnicaItensAtuais() {
 // renderFichaTecnicaConteudo. Precisa buscar as duas listas de uma vez
 // pra montar esse menu com o item extra desde o primeiro render.
 const FICHA_TECNICA_COMPLEMENTOS_ITEM = 'Complementos';
-// Mistura feita na casa (tempero, molho...) entra no mesmo menu, em toda
-// loja: a receita dela é global, e ficha técnica, complemento e mistura
-// ficam num lugar só (pedido da Julia, 2026-09-10).
+// Mistura feita na casa (tempero, molho...) entra no mesmo menu: a receita
+// dela é global, e ficha técnica, complemento e mistura ficam num lugar só
+// (pedido da Julia, 2026-09-10). Só no Artesanos e nos Tradiças — o Açaí
+// Na Lata não tem mistura (pedido dela, 2026-09-11).
 const FICHA_TECNICA_MISTURAS_ITEM = 'Misturas';
+
+function _lojaTemMisturas(loja) {
+  return loja !== 'Açaí Na Lata';
+}
 
 function carregarFichaTecnicaAtual() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   if (!conteudoEl) return;
   const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
+  const temMisturas = _lojaTemMisturas(fichaTecnicaLojaAtual);
   return Promise.all([
     fetch(`/api/cardapio/produtos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => r.json()),
     temComplementos
       ? fetch(`/api/complementos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => r.json())
       : Promise.resolve({ complementos: [] }),
-    fetch('/api/misturas').then(r => r.json()),
+    temMisturas ? fetch('/api/misturas').then(r => r.json()) : Promise.resolve({ misturas: [] }),
   ]).then(([dadosProdutos, dadosComplementos, dadosMisturas]) => {
     fichaTecnicaMisturas = dadosMisturas.misturas || [];
     fichaTecnicaProdutos = dadosProdutos.produtos || [];
@@ -6971,6 +6977,9 @@ function carregarFichaTecnicaAtual() {
     fichaTecnicaExpandidos.clear();
     fichaTecnicaInsumosCache.clear();
     if (!temComplementos && fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM) {
+      fichaTecnicaCategoriaSelecionada = null;
+    }
+    if (!temMisturas && fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM) {
       fichaTecnicaCategoriaSelecionada = null;
     }
     renderFichaTecnicaConteudo();
@@ -7118,9 +7127,12 @@ function renderFichaTecnicaConteudo() {
   });
 
   const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
+  const temMisturas = _lojaTemMisturas(fichaTecnicaLojaAtual);
   const categoriaValida = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM
     ? temComplementos
-    : fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM || categorias.includes(fichaTecnicaCategoriaSelecionada);
+    : fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM
+      ? temMisturas
+      : categorias.includes(fichaTecnicaCategoriaSelecionada);
   if (!fichaTecnicaCategoriaSelecionada || !categoriaValida) {
     fichaTecnicaCategoriaSelecionada = categorias[0] || (temComplementos ? FICHA_TECNICA_COMPLEMENTOS_ITEM : null);
   }
@@ -7130,7 +7142,7 @@ function renderFichaTecnicaConteudo() {
 
   const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
   if (temComplementos) categoriasComContagem.push({ nome: FICHA_TECNICA_COMPLEMENTOS_ITEM, contagem: fichaTecnicaComplementos.length });
-  categoriasComContagem.push({ nome: FICHA_TECNICA_MISTURAS_ITEM, contagem: fichaTecnicaMisturas.length });
+  if (temMisturas) categoriasComContagem.push({ nome: FICHA_TECNICA_MISTURAS_ITEM, contagem: fichaTecnicaMisturas.length });
   _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
     fichaTecnicaCategoriaSelecionada = nome;
     renderFichaTecnicaConteudo();
