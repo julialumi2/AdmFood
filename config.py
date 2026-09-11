@@ -56,9 +56,10 @@ LOJAS = {
         "nome_aba": "DIÁRIO AÇAÍ ",  # Nome exato da aba no Google Sheets
         "cardapio_web_token": os.environ.get("TOKEN_ACAI", ""),
         "grupo_whatsapp_id": os.environ.get("GRUPO_WHATSAPP_ACAI", ""),
-        "nome_fantasia": "",
-        "razao_social": "",
-        "cnpj": "",
+        # Passados pela Julia em 2026-09-11.
+        "nome_fantasia": "Açaí NaLata",
+        "razao_social": "Açaí naLata SP 01",
+        "cnpj": "68.073.248/0001-16",
     },
     "Tradiça ZN": {
         "nome_aba": "DIARIO ZN",  # Nome exato da aba no Google Sheets
