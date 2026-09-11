@@ -7476,32 +7476,35 @@ async function abrirModalDetalheProduto(precoCardapioId) {
 
   // Complemento com porção própria nesse produto (Frutas ao Creme: cada
   // fruta 70 g no 500) — só no Açaí, única loja com complemento escolhido.
-  let gruposComplemento = [];
+  let porcoesComplemento = [];
   const temPorcoes = produto.itemCardapioId && fichaTecnicaLojaAtual === 'Açaí Na Lata';
   if (temPorcoes) {
     try {
       const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}/porcoes-complemento?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
-      gruposComplemento = (await resposta.json()).grupos || [];
+      porcoesComplemento = (await resposta.json()).complementos || [];
     } catch (erro) {
       console.error('Falha ao carregar porções dos complementos:', erro);
     }
   }
   let porcoesAlteradas = false;
-  const porcoesHTML = temPorcoes && gruposComplemento.length ? `
-    <div class="detalhe-produto-secao">
-      <div class="receita-eyebrow">Complementos que o cliente escolhe</div>
-      <p class="panel-subtitle">Porção de cada complemento escolhido neste produto. Em branco, vale a ficha do complemento.</p>
+  // Fechado por padrão: são uns 20 complementos, e só "monte o seu" e
+  // Frutas ao Creme usam (nos outros, vale a ficha do complemento).
+  const porcoesPreenchidas = porcoesComplemento.filter((c) => c.gramas != null).length;
+  const porcoesHTML = temPorcoes && porcoesComplemento.length ? `
+    <details class="detalhe-produto-secao">
+      <summary class="receita-eyebrow" style="cursor:pointer;">Complementos que o cliente escolhe (${porcoesPreenchidas} com porção)</summary>
+      <p class="panel-subtitle">Quanto sai de cada complemento escolhido neste produto. Em branco, vale a ficha do complemento.</p>
       <div class="detalhe-produto-linha">
-        ${gruposComplemento.map((g, indice) => `
+        ${porcoesComplemento.map((c, indice) => `
           <div class="detalhe-produto-campo">
-            <label>${escaparHtml(g.grupo || 'Sem grupo')}</label>
+            <label>${escaparHtml(c.nome)}</label>
             ${isAdmin
-              ? `<input type="number" step="1" min="0" data-acao="detalhe-porcao-complemento" data-indice="${indice}" value="${g.gramas ?? ''}" placeholder="g">`
-              : `<span>${g.gramas != null ? `${g.gramas} g` : '—'}</span>`}
+              ? `<input type="number" step="1" min="0" data-acao="detalhe-porcao-complemento" data-indice="${indice}" value="${c.gramas ?? ''}" placeholder="g">`
+              : `<span>${c.gramas != null ? `${c.gramas} g` : '—'}</span>`}
           </div>
         `).join('')}
       </div>
-    </div>
+    </details>
   ` : '';
 
   // Alterações de preço/custo só vão pro servidor quando clicar Salvar
@@ -7596,7 +7599,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
 
   corpo.querySelectorAll('[data-acao="detalhe-porcao-complemento"]').forEach((input) => {
     input.addEventListener('input', () => {
-      gruposComplemento[Number(input.dataset.indice)].gramas = input.value === '' ? null : input.value;
+      porcoesComplemento[Number(input.dataset.indice)].gramas = input.value === '' ? null : input.value;
       porcoesAlteradas = true;
     });
   });
@@ -7625,7 +7628,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}/porcoes-complemento`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ loja: fichaTecnicaLojaAtual, porcoes: gruposComplemento }),
+          body: JSON.stringify({ loja: fichaTecnicaLojaAtual, complementos: porcoesComplemento }),
         });
         const dados = await resposta.json();
         if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar porções');

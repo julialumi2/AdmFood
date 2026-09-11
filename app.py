@@ -1727,12 +1727,12 @@ def api_definir_ficha_tecnica(item_id):
 
 @app.route('/api/itens-cardapio/<int:item_id>/porcoes-complemento', methods=['GET'])
 def api_listar_porcoes_complemento(item_id):
-    """Porção (g) de cada grupo de complemento escolhido nesse produto — ex:
-    no Frutas ao Creme 500ml, cada fruta 70 g e o adicional 60 g."""
+    """Porção (g) de cada complemento escolhido nesse produto — ex: no
+    Frutas ao Creme 500ml, cada fruta 70 g e o adicional 60 g."""
     loja = request.args.get('loja')
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
-    return jsonify({"grupos": listar_porcoes_complemento(item_id, loja)})
+    return jsonify({"complementos": listar_porcoes_complemento(item_id, loja)})
 
 
 @app.route('/api/itens-cardapio/<int:item_id>/porcoes-complemento', methods=['PUT'])
@@ -1745,17 +1745,18 @@ def api_definir_porcoes_complemento(item_id):
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     porcoes = []
-    for porcao in dados.get('porcoes') or []:
+    for porcao in dados.get('complementos') or []:
         gramas = porcao.get('gramas')
         if gramas in (None, ''):
             continue
         try:
             gramas = float(gramas)
-        except (TypeError, ValueError):
+            complemento_id = int(porcao['complementoId'])
+        except (KeyError, TypeError, ValueError):
             return jsonify({"erro": "Porção inválida."}), 400
         if gramas <= 0:
             return jsonify({"erro": "Porção precisa ser maior que zero."}), 400
-        porcoes.append({"grupo": porcao.get('grupo') or '', "gramas": gramas})
+        porcoes.append({"complementoId": complemento_id, "gramas": gramas})
     definir_porcoes_complemento(item_id, loja, porcoes)
     return jsonify({"ok": True})
 

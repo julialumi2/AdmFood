@@ -546,6 +546,21 @@ def inicializar_banco():
             )
             """
         )
+        # A porção por grupo não bastou: no "monte o seu" todo topping vem
+        # no mesmo grupo e cada um tem a sua porção (leite condensado 70 g
+        # no +3 de 500, granulado 30 g, fruta 70 g). Agora é por
+        # complemento dentro do produto; a tabela de grupo acima ficou sem uso.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS porcao_complemento_item (
+                loja TEXT NOT NULL,
+                produto_item_id INTEGER NOT NULL,
+                complemento_item_id INTEGER NOT NULL,
+                gramas REAL NOT NULL,
+                PRIMARY KEY (loja, produto_item_id, complemento_item_id)
+            )
+            """
+        )
 
         # Venda gravada antes da coluna nome_normalizado existir ficou com ela
         # vazia — e aí o combo daquele dia nunca casa com a composição dele.
@@ -1821,7 +1836,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
 # Usada pela baixa de estoque e pelo consumo médio, pra não existirem duas
 # definições de "quanto saiu".
 #
-# Complemento com porção própria no produto (porcao_complemento_produto)
+# Complemento com porção própria no produto (porcao_complemento_item)
 # escala a ficha dele: ficha do Morango = 50 g, no Frutas ao Creme 500 a
 # porção é 70 g -> desconta 1,4 ficha. Precisa saber quantos gramas a ficha
 # do complemento soma — SQL_GRAMAS_DA_FICHA; sem dar pra converter (insumo
@@ -1860,9 +1875,14 @@ SQL_ITENS_CONSUMIDOS = f"""
     FROM venda_complemento c
     LEFT JOIN venda_item v
       ON v.unidade = c.unidade AND v.pedido_id = c.pedido_id AND v.linha = c.linha
-    LEFT JOIN porcao_complemento_produto p
-      ON p.loja = c.unidade AND p.produto_item_id = v.item_cardapio_id
-     AND p.grupo = COALESCE(c.grupo, '')
+    -- Combo com composição (Combo Filhinho = 2 "NaLata 500ml + 3
+    -- complementos"): os toppings dele usam a porção do produto de dentro.
+    LEFT JOIN (SELECT nome_produto_normalizado, MIN(item_cardapio_id) AS item_id
+               FROM composicao_produto_venda GROUP BY nome_produto_normalizado) cp
+      ON v.item_cardapio_id IS NULL AND cp.nome_produto_normalizado = v.nome_normalizado
+    LEFT JOIN porcao_complemento_item p
+      ON p.loja = c.unidade AND p.produto_item_id = COALESCE(v.item_cardapio_id, cp.item_id)
+     AND p.complemento_item_id = c.item_cardapio_id
     LEFT JOIN ({SQL_GRAMAS_DA_FICHA}) g
       ON g.item_id = c.item_cardapio_id AND g.loja = c.unidade
     WHERE c.item_cardapio_id IS NOT NULL
@@ -2036,44 +2056,35 @@ def listar_produtos_pendentes(unidade, dias=30):
 
 
 def listar_porcoes_complemento(produto_item_id, loja):
-    """Grupos de complemento que já apareceram nas vendas desse produto
-    (últimos 90 dias) + os que já têm porção salva, cada um com a porção em
-    gramas (None = vale a ficha do complemento)."""
+    """Todo complemento do catálogo com a porção (g) dele nesse produto
+    (None = vale a ficha do complemento)."""
     with conexao() as conn:
-        vistos = [
-            linha["grupo"] for linha in conn.execute(
-                """
-                SELECT DISTINCT COALESCE(c.grupo, '') AS grupo
-                FROM venda_complemento c
-                JOIN venda_item v ON v.unidade = c.unidade AND v.pedido_id = c.pedido_id AND v.linha = c.linha
-                WHERE v.item_cardapio_id = ? AND c.unidade = ? AND c.dia >= date('now', '-90 day')
-                """,
-                (produto_item_id, loja),
-            ).fetchall()
-        ]
         salvos = {
-            linha["grupo"]: linha["gramas"] for linha in conn.execute(
-                "SELECT grupo, gramas FROM porcao_complemento_produto WHERE produto_item_id = ? AND loja = ?",
+            linha["complemento_item_id"]: linha["gramas"] for linha in conn.execute(
+                "SELECT complemento_item_id, gramas FROM porcao_complemento_item WHERE produto_item_id = ? AND loja = ?",
                 (produto_item_id, loja),
             ).fetchall()
         }
-    grupos = sorted(set(vistos) | set(salvos))
-    return [{"grupo": grupo, "gramas": salvos.get(grupo)} for grupo in grupos]
+    return [
+        {"complementoId": c["id"], "nome": c["nome"], "gramas": salvos.get(c["id"])}
+        for c in listar_complementos_por_loja(loja)
+    ]
 
 
 def definir_porcoes_complemento(produto_item_id, loja, porcoes):
-    """Substitui as porções do produto: [{"grupo", "gramas"}]; gramas vazio
-    tira a porção própria (volta a valer a ficha do complemento)."""
+    """Substitui as porções do produto: [{"complementoId", "gramas"}];
+    gramas vazio tira a porção própria (volta a valer a ficha do
+    complemento)."""
     with conexao() as conn:
         conn.execute(
-            "DELETE FROM porcao_complemento_produto WHERE produto_item_id = ? AND loja = ?",
+            "DELETE FROM porcao_complemento_item WHERE produto_item_id = ? AND loja = ?",
             (produto_item_id, loja),
         )
         for porcao in porcoes:
             if porcao.get("gramas"):
                 conn.execute(
-                    "INSERT INTO porcao_complemento_produto (loja, produto_item_id, grupo, gramas) VALUES (?, ?, ?, ?)",
-                    (loja, produto_item_id, porcao.get("grupo") or "", float(porcao["gramas"])),
+                    "INSERT INTO porcao_complemento_item (loja, produto_item_id, complemento_item_id, gramas) VALUES (?, ?, ?, ?)",
+                    (loja, produto_item_id, int(porcao["complementoId"]), float(porcao["gramas"])),
                 )
 
 
