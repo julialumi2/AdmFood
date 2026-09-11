@@ -1356,7 +1356,8 @@ const STATUS_ICONE_ESTOQUE = { ok: 'check', baixo: 'trending-down', critico: 'al
 
 let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
-let integracoesEstoqueUltimaLoja = null;
+// Loja escolhida no painel de Integrações do Estoque (Configurações).
+let integracoesLojaAtual = 'Hamburgueria Artesanos';
 let itensCardapioTodosCache = null;
 let vincularProdutoContexto = null; // nome do produto vendido pendente, enquanto o modal está aberto
 let estoqueEditandoContexto = null; // { insumoId, loja }
@@ -1614,21 +1615,6 @@ function renderEstoqueTab() {
 
   const btnInsumosLoja = document.getElementById('btn-insumos-loja');
   if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
-
-  // Painel de Integrações do Estoque (Etapa 0 do motor de compra) — na aba
-  // de toda loja: é nele que a baixa automática liga e desliga, e com ela
-  // desligada a fila de pendências mostra o que falta casar antes de ligar.
-  // Carrega uma vez por troca de loja, não a cada tecla da busca (que
-  // também chama renderEstoqueTab).
-  const cardIntegracoes = document.getElementById('integracoes-estoque-card');
-  if (cardIntegracoes) {
-    const mostrarIntegracoes = isAdmin && !ehGeral;
-    cardIntegracoes.style.display = mostrarIntegracoes ? '' : 'none';
-    if (mostrarIntegracoes && integracoesEstoqueUltimaLoja !== estoqueTabAtual) {
-      integracoesEstoqueUltimaLoja = estoqueTabAtual;
-      carregarIntegracoesEstoque();
-    }
-  }
 
   let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
 
@@ -1910,17 +1896,20 @@ document.getElementById('btn-receita-apagar')?.addEventListener('click', () => {
 });
 
 // --- Painel de Integrações do Estoque (Etapa 0 do motor de compra) ---
+// Mora em Configurações desde 2026-09-11 (pedido da Julia: ocupava espaço
+// na tela de Estoque e é pouco usado), com a loja escolhida no próprio painel.
 async function carregarIntegracoesEstoque() {
+  const loja = integracoesLojaAtual;
   try {
     const [respPendentes, respVinculos, respBaixa] = await Promise.all([
-      fetch(`/api/produtos-pendentes?unidade=${encodeURIComponent(estoqueTabAtual)}`),
+      fetch(`/api/produtos-pendentes?unidade=${encodeURIComponent(loja)}`),
       fetch('/api/vinculos-manuais'),
       fetch('/api/estoque/baixa-automatica'),
     ]);
     const dadosPendentes = await respPendentes.json();
     const dadosVinculos = await respVinculos.json();
     const dadosBaixa = await respBaixa.json();
-    renderBaixaAutomatica(estoqueTabAtual, (dadosBaixa.lojas || {})[estoqueTabAtual] || null);
+    renderBaixaAutomatica(loja, (dadosBaixa.lojas || {})[loja] || null);
     renderProdutosPendentesTabela(dadosPendentes.pendentes || []);
     renderVinculosManuaisTabela(dadosVinculos.vinculos || []);
   } catch (erro) {
@@ -6281,6 +6270,17 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
+    const painelIntegracoes = document.getElementById('painel-integracoes-estoque');
+    if (painelIntegracoes && usuario.papel === 'admin') {
+      painelIntegracoes.style.display = '';
+      const seletorLoja = document.getElementById('integracoes-loja');
+      seletorLoja.value = integracoesLojaAtual;
+      seletorLoja.addEventListener('change', () => {
+        integracoesLojaAtual = seletorLoja.value;
+        carregarIntegracoesEstoque();
+      });
+      carregarIntegracoesEstoque();
+    }
     // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto/
     // ficha técnica (só admin). Os dois fetches (usuário logado + produtos)
     // rodam em paralelo — se os cards já tiverem renderizado como "só
@@ -8105,7 +8105,7 @@ function renderCurvaAbc() {
   const semCmv = d.itens.filter(i => i.margem === null).length;
   const partes = [];
   if (d.vendasNaoCasadas) {
-    partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em Insumos → Integrações do Estoque.`);
+    partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em Configurações → Integrações do Estoque.`);
   }
   if (semCmv) {
     partes.push(`${semCmv} produto(s) aparecem sem CMV: falta preço de algum insumo da receita (ou a receita não está cadastrada), então a margem não dá pra calcular.`);

@@ -2212,7 +2212,9 @@ o dobro depois de resincronizar; testes anteriores (produto simples,
 sem combo) continuam passando sem mudança de comportamento.
 
 **Painel de Integrações do Estoque** (novo card em Estoque, só admin +
-só na aba Hamburgueria Artesanos) mostra:
+só na aba Hamburgueria Artesanos; desde 2026-09-11 mora em **Configurações**,
+com um seletor de loja no próprio painel — a Julia pediu pra tirar da tela
+de Estoque, que é de uso diário, e é pouco usado) mostra:
 - **Pendências**: produtos vendidos sem `item_cardapio_id` nos últimos
   30 dias (`listar_produtos_pendentes`), com quantas vendas, quantidade
   total e desde quando — e um botão "Vincular" que abre um modal pra
