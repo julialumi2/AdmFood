@@ -6532,7 +6532,11 @@ function renderKanban() {
             </div>
             <p>${escaparHtml(t.descricao)}</p>
             <div class="card-bottom">
-              <span class="task-meta">${escaparHtml(t.categoria)}</span>
+              <span class="task-meta">
+                ${escaparHtml(t.categoria)}
+                ${t.subtarefas.length ? ` · ${t.subtarefas.filter(s => s.concluida).length}/${t.subtarefas.length}` : ''}
+                ${t.particular ? ' · <span class="task-particular" title="Card particular: só você vê"><i data-lucide="lock"></i> só você</span>' : ''}
+              </span>
               <span class="task-date">${t.dataLimiteFormatada || ''}</span>
             </div>
           </div>
@@ -7230,7 +7234,13 @@ function _desenharPendencias(conteudoEl) {
     </button></li>`;
 
   conteudoEl.innerHTML = `
-    <div class="cardapio-categoria-titulo">${FICHA_TECNICA_PENDENCIAS_ITEM} · ${p.total}</div>
+    <div class="pendencias-topo">
+      <div class="cardapio-categoria-titulo">${FICHA_TECNICA_PENDENCIAS_ITEM} · ${p.total}</div>
+      <button type="button" class="btn-secondary-sm" id="btn-pendencias-clickup">
+        <i data-lucide="kanban-square"></i> Levar pro meu ClickUp
+      </button>
+    </div>
+    <p class="pendencias-dica" id="pendencias-clickup-status" hidden></p>
     ${grupo('Produtos sem ficha técnica',
       'Sem ficha, a venda do produto não desconta nada do estoque e ele fica sem CMV. Combo e bebida não entram: não têm ficha própria.',
       p.produtosSemFicha,
@@ -7263,6 +7273,26 @@ function _desenharPendencias(conteudoEl) {
           <span class="pendencia-detalhe">${x.vendas} venda${x.vendas === 1 ? '' : 's'}</span>
         </li>`)}
   `;
+
+  // Cards particulares no ClickUp (só ela vê), um por loja e grupo; depois
+  // do primeiro clique eles se atualizam sozinhos toda vez que o quadro abre.
+  document.getElementById('btn-pendencias-clickup')?.addEventListener('click', async (evento) => {
+    const botao = evento.currentTarget;
+    const status = document.getElementById('pendencias-clickup-status');
+    botao.disabled = true;
+    try {
+      const resposta = await fetch('/api/tarefas/pendencias-ficha', { method: 'POST' });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível criar os cards.');
+      status.innerHTML = `Pronto: ${dados.abertos} card${dados.abertos === 1 ? '' : 's'} com pendência no seu <a href="clickup.html">ClickUp</a>, das 4 lojas. Só você vê, e eles se atualizam sozinhos conforme você resolve.`;
+    } catch (erro) {
+      status.textContent = erro.message;
+    } finally {
+      status.hidden = false;
+      botao.disabled = false;
+    }
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 
   conteudoEl.querySelectorAll('[data-acao="pend-produto"]').forEach(b => b.addEventListener('click', () =>
     abrirModalDetalheProduto(parseInt(b.dataset.precoCardapioId, 10))));

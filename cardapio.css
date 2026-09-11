@@ -887,3 +887,7 @@
   color: var(--success);
   font-weight: 600;
 }
+
+.pendencias-topo { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.pendencias-topo .btn-secondary-sm { display: inline-flex; align-items: center; gap: var(--space-1); }
+.pendencias-topo .btn-secondary-sm svg { width: 14px; height: 14px; }

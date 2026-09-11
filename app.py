@@ -140,6 +140,9 @@ from backend.armazenamento import (
     listar_misturas,
     localizar_ou_criar_insumo_de_mistura,
     pendencias_ficha_tecnica,
+    tarefa_visivel_para,
+    tem_cards_de_pendencia,
+    sincronizar_pendencias_no_clickup,
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
@@ -3742,12 +3745,41 @@ def _formatar_tarefa(tarefa):
             {"id": c["id"], "autor": c["autor"], "texto": c["texto"], "criadoEm": c["criado_em"]}
             for c in tarefa["comentarios"]
         ],
+        "particular": tarefa.get("visivel_para") is not None,
+        "automatico": bool(tarefa.get("chave_automatica")),
     }
+
+
+def _id_usuario_logado():
+    usuario = _usuario_logado()
+    return usuario['id'] if usuario else None
+
+
+def _tarefa_inacessivel(tarefa_id):
+    """Card particular de outra pessoa responde como se não existisse."""
+    if not tarefa_visivel_para(tarefa_id, _id_usuario_logado()):
+        return jsonify({"erro": "Tarefa não encontrada."}), 404
+    return None
 
 
 @app.route('/api/tarefas', methods=['GET'])
 def api_listar_tarefas():
-    return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas()]})
+    usuario_id = _id_usuario_logado()
+    # Quem já levou as pendências da ficha pro ClickUp vê os cards
+    # atualizados toda vez que abre o quadro.
+    if usuario_id and tem_cards_de_pendencia(usuario_id):
+        sincronizar_pendencias_no_clickup(usuario_id)
+    return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas(usuario_id)]})
+
+
+@app.route('/api/tarefas/pendencias-ficha', methods=['POST'])
+def api_levar_pendencias_pro_clickup():
+    """Botão "Levar pro meu ClickUp" da lista "O que falta" do Cardápio:
+    cria (ou atualiza) os cards particulares de pendência da ficha técnica."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"abertos": sincronizar_pendencias_no_clickup(_id_usuario_logado())})
 
 
 PRIORIDADES_TAREFA_VALIDAS = {'alta', 'media', 'baixa'}
@@ -3786,6 +3818,9 @@ CAMPOS_TAREFA_PERMITIDOS = {
 
 @app.route('/api/tarefas/<int:tarefa_id>', methods=['PUT'])
 def api_atualizar_tarefa(tarefa_id):
+    erro = _tarefa_inacessivel(tarefa_id)
+    if erro:
+        return erro
     dados = request.get_json(silent=True) or {}
     campos = {
         coluna: dados[chave]
@@ -3804,12 +3839,18 @@ def api_atualizar_tarefa(tarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>', methods=['DELETE'])
 def api_excluir_tarefa(tarefa_id):
+    erro = _tarefa_inacessivel(tarefa_id)
+    if erro:
+        return erro
     excluir_tarefa(tarefa_id)
     return jsonify({"ok": True})
 
 
 @app.route('/api/tarefas/<int:tarefa_id>/subtarefas', methods=['POST'])
 def api_adicionar_subtarefa(tarefa_id):
+    erro = _tarefa_inacessivel(tarefa_id)
+    if erro:
+        return erro
     dados = request.get_json(silent=True) or {}
     titulo = (dados.get('titulo') or '').strip()
     if not titulo:
@@ -3820,6 +3861,9 @@ def api_adicionar_subtarefa(tarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>/subtarefas/<int:subtarefa_id>', methods=['PUT'])
 def api_alternar_subtarefa(tarefa_id, subtarefa_id):
+    erro = _tarefa_inacessivel(tarefa_id)
+    if erro:
+        return erro
     dados = request.get_json(silent=True) or {}
     alternar_subtarefa(subtarefa_id, bool(dados.get('concluida')))
     return jsonify({"ok": True})
@@ -3827,6 +3871,9 @@ def api_alternar_subtarefa(tarefa_id, subtarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>/comentarios', methods=['POST'])
 def api_adicionar_comentario(tarefa_id):
+    erro = _tarefa_inacessivel(tarefa_id)
+    if erro:
+        return erro
     dados = request.get_json(silent=True) or {}
     texto = (dados.get('texto') or '').strip()
     if not texto:

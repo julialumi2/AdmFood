@@ -155,6 +155,15 @@ def inicializar_banco():
             )
             """
         )
+        colunas_tarefa = {c["name"] for c in conn.execute("PRAGMA table_info(tarefa)").fetchall()}
+        if "visivel_para" not in colunas_tarefa:
+            # id do usuário que vê o card; NULL = a equipe toda (o normal).
+            # Os cards de pendência da ficha técnica são só da Julia (11/09).
+            conn.execute("ALTER TABLE tarefa ADD COLUMN visivel_para INTEGER")
+        if "chave_automatica" not in colunas_tarefa:
+            # Card mantido pelo sistema ("ficha:<loja>:<grupo>"): a checklist
+            # acompanha a lista "O que falta" do Cardápio.
+            conn.execute("ALTER TABLE tarefa ADD COLUMN chave_automatica TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tarefa_comentario (
@@ -1335,9 +1344,20 @@ def listar_unidades():
 
 # --- TAREFAS (quadro do ClickUp) -------------------------------------------
 
-def listar_tarefas():
+def tarefa_visivel_para(tarefa_id, usuario_id):
+    """Card particular de outra pessoa não existe pra quem não é dono."""
     with conexao() as conn:
-        tarefas = [dict(t) for t in conn.execute("SELECT * FROM tarefa ORDER BY criado_em DESC").fetchall()]
+        linha = conn.execute("SELECT visivel_para FROM tarefa WHERE id = ?", (tarefa_id,)).fetchone()
+    return bool(linha) and linha["visivel_para"] in (None, usuario_id)
+
+
+def listar_tarefas(usuario_id=None):
+    """Cards da equipe toda + os particulares de `usuario_id`."""
+    with conexao() as conn:
+        tarefas = [dict(t) for t in conn.execute(
+            "SELECT * FROM tarefa WHERE visivel_para IS NULL OR visivel_para = ? ORDER BY criado_em DESC",
+            (usuario_id,),
+        ).fetchall()]
         for tarefa in tarefas:
             tarefa["subtarefas"] = [
                 dict(s) for s in conn.execute(
@@ -1419,6 +1439,106 @@ def adicionar_comentario(tarefa_id, autor, texto):
         )
         conn.execute("UPDATE tarefa SET atualizado_em = ? WHERE id = ?", (agora, tarefa_id))
         return cursor.lastrowid
+
+
+# Pendências da ficha técnica no ClickUp: um card particular por loja e por
+# grupo da lista "O que falta", com cada pendência na checklist.
+GRUPOS_PENDENCIA_CLICKUP = [
+    ("produtosSemFicha", "Produtos sem ficha técnica", "alta",
+     "Sem ficha, a venda não desconta nada do estoque e o produto fica sem CMV.",
+     lambda x: x["nome"]),
+    ("fichasSemQuantidade", "Insumo sem quantidade na ficha", "alta",
+     "Linha sem quantidade não desconta estoque e deixa o produto sem custo.",
+     lambda x: f"{x['nome']}: {', '.join(x['insumos'])}"),
+    ("complementosSemFicha", "Complementos sem ficha", "alta",
+     "O cliente escolhe o complemento, mas nada sai do estoque.",
+     lambda x: x["nome"]),
+    ("misturasIncompletas", "Misturas com receita incompleta", "media",
+     "Até completar, a mistura fica com o custo do cadastro e a baixa pula o ingrediente sem quantidade.",
+     lambda x: x["nome"] + "".join(
+         f" — {rotulo}: {', '.join(nomes)}"
+         for rotulo, nomes in (("sem quantidade", x["semQuantidade"]), ("sem custo", x["semCusto"])) if nomes)),
+    ("insumosSemCusto", "Insumos sem custo", "media",
+     "Sem custo digitado, cotação ou compra recebida, quem usa fica sem CMV. Dá pra digitar no Cardápio → O que falta.",
+     lambda x: x["nome"]),
+    ("vendidosSemVinculo", "Vendidos sem ficha (últimos 30 dias)", "media",
+     "Nome da Cardápio Web que não casou com nenhuma ficha: vincule em Estoque → Integrações do Estoque.",
+     lambda x: x["nome"]),
+]
+
+
+def tem_cards_de_pendencia(usuario_id):
+    with conexao() as conn:
+        return bool(conn.execute(
+            "SELECT 1 FROM tarefa WHERE visivel_para = ? AND chave_automatica LIKE 'ficha:%' LIMIT 1",
+            (usuario_id,),
+        ).fetchone())
+
+
+def sincronizar_pendencias_no_clickup(usuario_id):
+    """Cria ou atualiza os cards particulares de pendência da ficha técnica
+    de `usuario_id`: item novo entra na checklist, item resolvido no Cardápio
+    fica marcado como feito, e o card vai pra "Concluído" quando zera (e
+    volta pra "A fazer" se aparecer pendência de novo). Card que ela apagou
+    volta na próxima sincronização se ainda houver pendência. Devolve
+    quantos cards estão abertos."""
+    from config import LOJAS as _LOJAS
+    agora = datetime.now().isoformat()
+    abertos = 0
+    for loja in _LOJAS:
+        pendencias = pendencias_ficha_tecnica(loja)
+        for grupo, titulo, prioridade, descricao, rotulo in GRUPOS_PENDENCIA_CLICKUP:
+            itens = list(dict.fromkeys(rotulo(x) for x in pendencias[grupo]))
+            chave = f"ficha:{loja}:{grupo}"
+            with conexao() as conn:
+                tarefa = conn.execute(
+                    "SELECT id, status FROM tarefa WHERE visivel_para = ? AND chave_automatica = ?",
+                    (usuario_id, chave),
+                ).fetchone()
+                if tarefa is None:
+                    if not itens:
+                        continue
+                    tarefa_id = conn.execute(
+                        """
+                        INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite,
+                                            criado_em, atualizado_em, visivel_para, chave_automatica)
+                        VALUES (?, ?, 'Ficha técnica', ?, 'todo', NULL, ?, ?, ?, ?)
+                        """,
+                        (f"{loja} · {titulo}",
+                         f"{descricao} Este card se atualiza sozinho com a lista \"O que falta\" do Cardápio.",
+                         prioridade, agora, agora, usuario_id, chave),
+                    ).lastrowid
+                    status = "todo"
+                else:
+                    tarefa_id, status = tarefa["id"], tarefa["status"]
+                existentes = {
+                    s["titulo"]: s for s in conn.execute(
+                        "SELECT id, titulo, concluida FROM tarefa_subtarefa WHERE tarefa_id = ?", (tarefa_id,)
+                    ).fetchall()
+                }
+                mudou = False
+                ordem = len(existentes)
+                for item in itens:
+                    if item not in existentes:
+                        conn.execute(
+                            "INSERT INTO tarefa_subtarefa (tarefa_id, titulo, concluida, ordem) VALUES (?, ?, 0, ?)",
+                            (tarefa_id, item, ordem),
+                        )
+                        ordem += 1
+                        mudou = True
+                    elif existentes[item]["concluida"]:
+                        conn.execute("UPDATE tarefa_subtarefa SET concluida = 0 WHERE id = ?", (existentes[item]["id"],))
+                        mudou = True
+                for titulo_sub, sub in existentes.items():
+                    if titulo_sub not in itens and not sub["concluida"]:
+                        conn.execute("UPDATE tarefa_subtarefa SET concluida = 1 WHERE id = ?", (sub["id"],))
+                        mudou = True
+                novo_status = "done" if not itens else ("todo" if status == "done" else status)
+                if mudou or novo_status != status:
+                    conn.execute("UPDATE tarefa SET status = ?, atualizado_em = ? WHERE id = ?",
+                                 (novo_status, agora, tarefa_id))
+                abertos += bool(itens)
+    return abertos
 
 
 # --- USUÁRIOS (login da equipe) ---------------------------------------------

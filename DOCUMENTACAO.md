@@ -665,6 +665,18 @@ existir casa de novo com o catálogo de hoje antes de listar pendências
 (antes ela só casava quando o dia era sincronizado outra vez, e a
 reconferência só volta 7 dias) — vale também pra fila do Estoque.
 
+**Pendências no ClickUp, só pra ela** (2026-09-11). Botão "Levar pro meu
+ClickUp" na lista "O que falta": cria um card particular por loja e por
+grupo (`sincronizar_pendencias_no_clickup`, `POST
+/api/tarefas/pendencias-ficha`), cada pendência como item da checklist. A
+tabela `tarefa` ganhou `visivel_para` (id do usuário; NULL = equipe toda) e
+`chave_automatica` ("ficha:<loja>:<grupo>"). Quem já tem cards de pendência
+tem eles re-sincronizados toda vez que abre o quadro: item resolvido no
+Cardápio fica marcado como feito, card zerado vai pra "Concluído" (e volta
+pra "A fazer" se aparecer pendência de novo). Card particular não aparece
+pra mais ninguém, e editar/apagar/comentar nele por outra pessoa responde
+404. No quadro, o card mostra o progresso da checklist e "só você".
+
 **Combo do Açaí fora dessa tela** (2026-09-10, pedido da Julia). A
 categoria de combo ("COMBOS NALATA": Família 4 × 330 ml e Filhinho/
 Filminho 2 × 500 ml) sai da lista do Açaí (`LOJAS_SEM_COMBO_NO_CARDAPIO`

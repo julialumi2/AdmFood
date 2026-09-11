@@ -329,3 +329,7 @@
   .kanban-board { grid-template-columns: 1fr; }
   .task-info-grid { grid-template-columns: 1fr; }
 }
+
+/* Card particular (só a dona vê) — ex.: pendências da ficha técnica. */
+.task-particular { display: inline-flex; align-items: center; gap: 2px; }
+.task-particular svg { width: 12px; height: 12px; }
