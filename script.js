@@ -6180,6 +6180,10 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
+    const btnPendenciasFicha = document.getElementById('btn-pendencias-ficha');
+    if (btnPendenciasFicha && usuario.papel === 'admin') {
+      btnPendenciasFicha.style.display = '';
+    }
     // Tela de Cardápio: botão "Importar planilha" e edição de preço/foto/
     // ficha técnica (só admin). Os dois fetches (usuário logado + produtos)
     // rodam em paralelo — se os cards já tiverem renderizado como "só
@@ -6597,6 +6601,24 @@ function criarNovaTarefa() {
   if (modal) modal.style.display = 'flex';
 }
 
+// "Pendências da ficha técnica": cria (ou atualiza) um card particular por
+// loja e por tipo de pendência, com cada pendência na checklist — só quem
+// clicou vê. Depois do primeiro clique, o quadro atualiza esses cards
+// sozinho toda vez que abre (sincronizar_pendencias_no_clickup).
+async function trazerPendenciasFicha(botao) {
+  botao.disabled = true;
+  try {
+    const resposta = await fetch('/api/tarefas/pendencias-ficha', { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível trazer as pendências.');
+    await carregarTarefas();
+  } catch (erro) {
+    alert(erro.message);
+  } finally {
+    botao.disabled = false;
+  }
+}
+
 function fecharModalCriar() {
   const modal = document.getElementById('modalCriarTarefa');
   if (modal) modal.style.display = 'none';
@@ -6889,12 +6911,6 @@ const FICHA_TECNICA_COMPLEMENTOS_ITEM = 'Complementos';
 // loja: a receita dela é global, e ficha técnica, complemento e mistura
 // ficam num lugar só (pedido da Julia, 2026-09-10).
 const FICHA_TECNICA_MISTURAS_ITEM = 'Misturas';
-// "O que falta": a lista de trabalho até a ficha técnica da loja ficar
-// completa (pendencias_ficha_tecnica em armazenamento.py) — pedido da Julia
-// em 11/09/2026, dia do prazo dela pra terminar as fichas.
-const FICHA_TECNICA_PENDENCIAS_ITEM = 'O que falta';
-let fichaTecnicaPendencias = null;
-let _pendenciasBuscando = false;
 
 function carregarFichaTecnicaAtual() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
@@ -6906,10 +6922,8 @@ function carregarFichaTecnicaAtual() {
       ? fetch(`/api/complementos?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => r.json())
       : Promise.resolve({ complementos: [] }),
     fetch('/api/misturas').then(r => r.json()),
-    fetch(`/api/cardapio/pendencias?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`).then(r => (r.ok ? r.json() : null)),
-  ]).then(([dadosProdutos, dadosComplementos, dadosMisturas, dadosPendencias]) => {
+  ]).then(([dadosProdutos, dadosComplementos, dadosMisturas]) => {
     fichaTecnicaMisturas = dadosMisturas.misturas || [];
-    fichaTecnicaPendencias = dadosPendencias;
     fichaTecnicaProdutos = dadosProdutos.produtos || [];
     fichaTecnicaComplementos = (dadosComplementos.complementos || []).map(c => ({
       itemCardapioId: c.id,
@@ -7040,11 +7054,10 @@ function _wireReceitaCardsEventos(conteudoEl) {
 // "Complementos" no fim, só quando a loja é Açaí Na Lata) e decide se o
 // conteúdo é a grade de receitas ou a lista de complementos, conforme o
 // que tá selecionado nesse menu.
-function renderFichaTecnicaConteudo(opcoes = {}) {
+function renderFichaTecnicaConteudo() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
   const subtitulo = document.getElementById('ficha-tecnica-subtitulo');
-  const btnNovo = document.getElementById('btn-novo-item-cardapio');
   const btnNovoTexto = document.getElementById('btn-novo-item-cardapio-texto');
   const btnColarComplementos = document.getElementById('btn-colar-lista-complementos');
   if (!conteudoEl) return;
@@ -7068,25 +7081,19 @@ function renderFichaTecnicaConteudo(opcoes = {}) {
   });
 
   const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
-  const itensEspeciais = [FICHA_TECNICA_MISTURAS_ITEM, ...(isAdmin ? [FICHA_TECNICA_PENDENCIAS_ITEM] : [])];
   const categoriaValida = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM
     ? temComplementos
-    : itensEspeciais.includes(fichaTecnicaCategoriaSelecionada) || categorias.includes(fichaTecnicaCategoriaSelecionada);
+    : fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM || categorias.includes(fichaTecnicaCategoriaSelecionada);
   if (!fichaTecnicaCategoriaSelecionada || !categoriaValida) {
     fichaTecnicaCategoriaSelecionada = categorias[0] || (temComplementos ? FICHA_TECNICA_COMPLEMENTOS_ITEM : null);
   }
-  fichaTecnicaTipoAtual = {
-    [FICHA_TECNICA_COMPLEMENTOS_ITEM]: 'complemento',
-    [FICHA_TECNICA_MISTURAS_ITEM]: 'mistura',
-    [FICHA_TECNICA_PENDENCIAS_ITEM]: 'pendencias',
-  }[fichaTecnicaCategoriaSelecionada] || 'produto';
+  fichaTecnicaTipoAtual = fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM
+    ? 'complemento'
+    : fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_MISTURAS_ITEM ? 'mistura' : 'produto';
 
   const categoriasComContagem = categorias.map(nome => ({ nome, contagem: porCategoria.get(nome).length }));
   if (temComplementos) categoriasComContagem.push({ nome: FICHA_TECNICA_COMPLEMENTOS_ITEM, contagem: fichaTecnicaComplementos.length });
   categoriasComContagem.push({ nome: FICHA_TECNICA_MISTURAS_ITEM, contagem: fichaTecnicaMisturas.length });
-  // "O que falta" vem primeiro no menu: é a lista de trabalho até a ficha
-  // da loja ficar completa (só admin, que é quem resolve).
-  if (isAdmin) categoriasComContagem.unshift({ nome: FICHA_TECNICA_PENDENCIAS_ITEM, contagem: fichaTecnicaPendencias ? fichaTecnicaPendencias.total : '…' });
   _renderSidebarCategorias('ficha-tecnica-categorias-sidebar', categoriasComContagem, fichaTecnicaCategoriaSelecionada, (nome) => {
     fichaTecnicaCategoriaSelecionada = nome;
     renderFichaTecnicaConteudo();
@@ -7094,21 +7101,15 @@ function renderFichaTecnicaConteudo(opcoes = {}) {
 
   const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
   const ehMistura = fichaTecnicaTipoAtual === 'mistura';
-  const ehPendencias = fichaTecnicaTipoAtual === 'pendencias';
-  if (subtitulo) subtitulo.textContent = ehPendencias
-    ? 'O que ainda falta pra ficha técnica desta loja ficar completa. Clique num item pra resolver; a lista se atualiza conforme você vai resolvendo.'
-    : ehMistura
-      ? 'Receita do que é feito na casa (tempero, molho, maionese...): quanto rende e o que vai dentro. Quando sai um produto que leva a mistura, o estoque desconta os ingredientes, e o custo dela sai desta conta. A receita vale pra todas as lojas.'
-      : ehComplemento
-        ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
-        : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
-  if (btnNovo) btnNovo.style.display = ehPendencias ? 'none' : '';
+  if (subtitulo) subtitulo.textContent = ehMistura
+    ? 'Receita do que é feito na casa (tempero, molho, maionese...): quanto rende e o que vai dentro. Quando sai um produto que leva a mistura, o estoque desconta os ingredientes, e o custo dela sai desta conta. A receita vale pra todas as lojas.'
+    : ehComplemento
+      ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
+      : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
   if (btnNovoTexto) btnNovoTexto.textContent = ehMistura ? 'Nova mistura' : ehComplemento ? 'Novo complemento' : 'Novo item';
   if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
 
-  if (ehPendencias) {
-    _renderPendenciasConteudo(conteudoEl, !opcoes.semBuscar);
-  } else if (ehMistura) {
+  if (ehMistura) {
     _renderMisturasConteudo(conteudoEl, isAdmin);
   } else if (ehComplemento) {
     _renderComplementosConteudo(conteudoEl, isAdmin);
@@ -7183,185 +7184,6 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
   fichaTecnicaExpandidos.forEach(itemId => renderPainelFichaTecnicaExpandido(itemId));
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-// "O que falta": desenha o que já está em memória e busca a versão nova —
-// cada correção feita nas outras telas (ficha, receita, custo) tira o item
-// da lista na próxima vez que ela aparece.
-function _renderPendenciasConteudo(conteudoEl, buscar) {
-  _desenharPendencias(conteudoEl);
-  if (!buscar || _pendenciasBuscando) return;
-  _pendenciasBuscando = true;
-  const loja = fichaTecnicaLojaAtual;
-  fetch(`/api/cardapio/pendencias?loja=${encodeURIComponent(loja)}`)
-    .then(r => (r.ok ? r.json() : null))
-    .then(dados => {
-      if (dados && loja === fichaTecnicaLojaAtual) fichaTecnicaPendencias = dados;
-    })
-    .catch(erro => console.error('Falha ao atualizar o que falta:', erro))
-    .finally(() => {
-      _pendenciasBuscando = false;
-      if (fichaTecnicaTipoAtual === 'pendencias') renderFichaTecnicaConteudo({ semBuscar: true });
-    });
-}
-
-function _desenharPendencias(conteudoEl) {
-  const p = fichaTecnicaPendencias;
-  if (!p) {
-    conteudoEl.innerHTML = '<p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>';
-    return;
-  }
-  if (!p.total) {
-    conteudoEl.innerHTML = `
-      <div class="pendencias-tudo-certo">
-        <i data-lucide="check-circle-2"></i>
-        Nada faltando na ficha técnica de ${escaparHtml(fichaTecnicaLojaAtual)}.
-      </div>`;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    return;
-  }
-
-  const grupo = (titulo, dica, itens, desenhar) => (itens.length ? `
-    <section class="pendencias-grupo">
-      <h4 class="pendencias-titulo">${titulo} <span class="pendencias-contagem">${itens.length}</span></h4>
-      <p class="pendencias-dica">${dica}</p>
-      <ul class="pendencias-lista">${itens.map(desenhar).join('')}</ul>
-    </section>` : '');
-  const botao = (atributos, nome, detalhe) => `
-    <li><button type="button" class="pendencia-item" ${atributos}>
-      <span class="pendencia-nome">${escaparHtml(nome)}</span>
-      ${detalhe ? `<span class="pendencia-detalhe">${detalhe}</span>` : ''}
-    </button></li>`;
-
-  conteudoEl.innerHTML = `
-    <div class="pendencias-topo">
-      <div class="cardapio-categoria-titulo">${FICHA_TECNICA_PENDENCIAS_ITEM} · ${p.total}</div>
-      <button type="button" class="btn-secondary-sm" id="btn-pendencias-clickup">
-        <i data-lucide="kanban-square"></i> Levar pro meu ClickUp
-      </button>
-    </div>
-    <p class="pendencias-dica" id="pendencias-clickup-status" hidden></p>
-    ${grupo('Produtos sem ficha técnica',
-      'Sem ficha, a venda do produto não desconta nada do estoque e ele fica sem CMV. Combo e bebida não entram: não têm ficha própria.',
-      p.produtosSemFicha,
-      x => botao(`data-acao="pend-produto" data-preco-cardapio-id="${x.precoCardapioId}"`, x.nome, escaparHtml(x.categoria)))}
-    ${grupo('Insumo sem quantidade na ficha',
-      'Linha sem quantidade não desconta estoque e deixa o produto sem custo.',
-      p.fichasSemQuantidade,
-      x => botao(`data-acao="pend-ficha" data-tipo="${x.tipo}" data-item-id="${x.itemCardapioId}"`, x.nome,
-        `sem quantidade: ${escaparHtml(x.insumos.join(', '))}`))}
-    ${grupo('Complementos sem ficha',
-      'O cliente escolhe, mas nada sai do estoque.',
-      p.complementosSemFicha,
-      x => botao(`data-acao="pend-complemento" data-item-id="${x.itemCardapioId}"`, x.nome, ''))}
-    ${grupo('Misturas com receita incompleta',
-      'Até completar, a mistura fica com o custo digitado no cadastro, e a baixa pula o ingrediente sem quantidade.',
-      p.misturasIncompletas,
-      x => botao(`data-acao="pend-mistura" data-insumo-id="${x.insumoId}"`, x.nome, [
-        x.semQuantidade.length ? `sem quantidade: ${escaparHtml(x.semQuantidade.join(', '))}` : '',
-        x.semCusto.length ? `sem custo: ${escaparHtml(x.semCusto.join(', '))}` : '',
-      ].filter(Boolean).join(' · ')))}
-    ${grupo('Insumos sem custo',
-      'Nem custo digitado, nem cotação, nem compra recebida: quem usa fica sem CMV. Digite aqui mesmo e aperte Enter.',
-      p.insumosSemCusto, _pendenciaCustoHTML)}
-    ${grupo('Vendidos sem ficha (últimos 30 dias)',
-      'A Cardápio Web vende com outro nome, ou é combo sem composição definida: vincule em Estoque → aba da loja → Integrações do Estoque.',
-      p.vendidosSemVinculo,
-      x => `
-        <li class="pendencia-info">
-          <span class="pendencia-nome">${escaparHtml(x.nome)}${x.complemento ? ' <span class="text-muted">· complemento</span>' : ''}</span>
-          <span class="pendencia-detalhe">${x.vendas} venda${x.vendas === 1 ? '' : 's'}</span>
-        </li>`)}
-  `;
-
-  // Cards particulares no ClickUp (só ela vê), um por loja e grupo; depois
-  // do primeiro clique eles se atualizam sozinhos toda vez que o quadro abre.
-  document.getElementById('btn-pendencias-clickup')?.addEventListener('click', async (evento) => {
-    const botao = evento.currentTarget;
-    const status = document.getElementById('pendencias-clickup-status');
-    botao.disabled = true;
-    try {
-      const resposta = await fetch('/api/tarefas/pendencias-ficha', { method: 'POST' });
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível criar os cards.');
-      status.innerHTML = `Pronto: ${dados.abertos} card${dados.abertos === 1 ? '' : 's'} com pendência no seu <a href="clickup.html">ClickUp</a>, das 4 lojas. Só você vê, e eles se atualizam sozinhos conforme você resolve.`;
-    } catch (erro) {
-      status.textContent = erro.message;
-    } finally {
-      status.hidden = false;
-      botao.disabled = false;
-    }
-  });
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-
-  conteudoEl.querySelectorAll('[data-acao="pend-produto"]').forEach(b => b.addEventListener('click', () =>
-    abrirModalDetalheProduto(parseInt(b.dataset.precoCardapioId, 10))));
-  conteudoEl.querySelectorAll('[data-acao="pend-ficha"]').forEach(b => b.addEventListener('click', () => {
-    const itemId = parseInt(b.dataset.itemId, 10);
-    if (b.dataset.tipo === 'complemento') _abrirComplementoNaLista(itemId);
-    else abrirModalFichaTecnicaItem(itemId);
-  }));
-  conteudoEl.querySelectorAll('[data-acao="pend-complemento"]').forEach(b => b.addEventListener('click', () =>
-    _abrirComplementoNaLista(parseInt(b.dataset.itemId, 10))));
-  conteudoEl.querySelectorAll('[data-acao="pend-mistura"]').forEach(b => b.addEventListener('click', () =>
-    abrirModalReceitaInsumo(parseInt(b.dataset.insumoId, 10))));
-  conteudoEl.querySelectorAll('.pendencia-custo').forEach(li => {
-    li.querySelector('button').addEventListener('click', () => _salvarCustoPendente(li));
-    li.querySelector('input').addEventListener('keydown', (evento) => {
-      if (evento.key === 'Enter') _salvarCustoPendente(li);
-    });
-  });
-}
-
-// Insumo sem custo: o campo já vem na unidade que ela pensa (por kg/litro
-// em grama e ml, como no cadastro do insumo).
-function _pendenciaCustoHTML(x) {
-  const { rotulo } = _escalaDeCusto(x.unidadeMedida);
-  const usos = x.usadoEm.slice(0, 3).join(', ') + (x.usadoEm.length > 3 ? ` e mais ${x.usadoEm.length - 3}` : '');
-  return `
-    <li class="pendencia-custo" data-insumo-id="${x.insumoId}" data-unidade="${escaparHtml(x.unidadeMedida)}">
-      <span class="pendencia-nome">${escaparHtml(x.nome)}<span class="pendencia-detalhe">usado em ${escaparHtml(usos)}</span></span>
-      <label class="pendencia-custo-campo">R$ por ${escaparHtml(rotulo)}
-        <input type="number" min="0" step="any" inputmode="decimal">
-      </label>
-      <button type="button" class="btn-secondary-sm">Salvar</button>
-    </li>`;
-}
-
-async function _salvarCustoPendente(li) {
-  const campo = li.querySelector('input');
-  const botao = li.querySelector('button');
-  const valor = parseFloat(campo.value);
-  if (campo.value === '' || Number.isNaN(valor) || valor < 0) {
-    campo.focus();
-    return;
-  }
-  botao.disabled = true;
-  try {
-    const resposta = await fetch(`/api/insumos/${li.dataset.insumoId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ custoReferencia: valor / _escalaDeCusto(li.dataset.unidade).fator }),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar o custo.');
-    // Sai da lista na hora; a busca que vem em seguida traz o resto certo
-    // (o custo novo também pode completar alguma mistura).
-    const id = parseInt(li.dataset.insumoId, 10);
-    fichaTecnicaPendencias.insumosSemCusto = fichaTecnicaPendencias.insumosSemCusto.filter(i => i.insumoId !== id);
-    fichaTecnicaPendencias.total -= 1;
-    renderFichaTecnicaConteudo();
-  } catch (erro) {
-    botao.disabled = false;
-    alert(erro.message);
-  }
-}
-
-function _abrirComplementoNaLista(itemId) {
-  fichaTecnicaCategoriaSelecionada = FICHA_TECNICA_COMPLEMENTOS_ITEM;
-  fichaTecnicaExpandidos.add(itemId);
-  renderFichaTecnicaConteudo();
-  document.querySelector(`[data-painel-item-id="${itemId}"]`)?.closest('.ficha-tecnica-produto')?.scrollIntoView({ block: 'center' });
 }
 
 // Misturas: uma linha por insumo feito na casa, com quanto rende e o custo
@@ -7785,7 +7607,7 @@ document.getElementById('form-novo-item-cardapio')?.addEventListener('submit', a
   const corpo = {
     nome: document.getElementById('novo-item-nome').value,
     categoria: document.getElementById('novo-item-categoria').value,
-    // Aberto a partir de "O que falta" ou de Misturas, o item é um produto.
+    // Fora da aba Complementos (em Misturas, por exemplo), o item é um produto.
     tipo: fichaTecnicaTipoAtual === 'complemento' ? 'complemento' : 'produto',
     loja: fichaTecnicaLojaAtual,
   };

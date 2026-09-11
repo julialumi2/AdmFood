@@ -1442,7 +1442,8 @@ def adicionar_comentario(tarefa_id, autor, texto):
 
 
 # Pendências da ficha técnica no ClickUp: um card particular por loja e por
-# grupo da lista "O que falta", com cada pendência na checklist.
+# grupo de pendencias_ficha_tecnica, com cada pendência na checklist
+# (pedido da Julia em 11/09/2026 — a lista fica no ClickUp, não no Cardápio).
 GRUPOS_PENDENCIA_CLICKUP = [
     ("produtosSemFicha", "Produtos sem ficha técnica", "alta",
      "Sem ficha, a venda não desconta nada do estoque e o produto fica sem CMV.",
@@ -1459,7 +1460,7 @@ GRUPOS_PENDENCIA_CLICKUP = [
          f" — {rotulo}: {', '.join(nomes)}"
          for rotulo, nomes in (("sem quantidade", x["semQuantidade"]), ("sem custo", x["semCusto"])) if nomes)),
     ("insumosSemCusto", "Insumos sem custo", "media",
-     "Sem custo digitado, cotação ou compra recebida, quem usa fica sem CMV. Dá pra digitar no Cardápio → O que falta.",
+     "Sem custo digitado, cotação ou compra recebida, quem usa fica sem CMV. Digite em Estoque → engrenagem do insumo → Custo.",
      lambda x: x["nome"]),
     ("vendidosSemVinculo", "Vendidos sem ficha (últimos 30 dias)", "media",
      "Nome da Cardápio Web que não casou com nenhuma ficha: vincule em Estoque → Integrações do Estoque.",
@@ -1477,11 +1478,13 @@ def tem_cards_de_pendencia(usuario_id):
 
 def sincronizar_pendencias_no_clickup(usuario_id):
     """Cria ou atualiza os cards particulares de pendência da ficha técnica
-    de `usuario_id`: item novo entra na checklist, item resolvido no Cardápio
-    fica marcado como feito, e o card vai pra "Concluído" quando zera (e
-    volta pra "A fazer" se aparecer pendência de novo). Card que ela apagou
-    volta na próxima sincronização se ainda houver pendência. Devolve
-    quantos cards estão abertos."""
+    de `usuario_id`: item novo entra na checklist, item resolvido no sistema
+    fica marcado como feito, e o card vai pra "Concluído" quando a checklist
+    inteira está feita (e volta pra "A fazer" se entrar pendência nova). Item
+    que ela marcou à mão continua marcado — ela pode decidir que o brownie
+    comprado pronto não precisa de ficha. Card que ela apagou volta na
+    próxima sincronização se ainda houver pendência. Devolve quantos cards
+    têm pendência aberta."""
     from config import LOJAS as _LOJAS
     agora = datetime.now().isoformat()
     abertos = 0
@@ -1490,9 +1493,10 @@ def sincronizar_pendencias_no_clickup(usuario_id):
         for grupo, titulo, prioridade, descricao, rotulo in GRUPOS_PENDENCIA_CLICKUP:
             itens = list(dict.fromkeys(rotulo(x) for x in pendencias[grupo]))
             chave = f"ficha:{loja}:{grupo}"
+            texto = f"{descricao} Este card se atualiza sozinho: o que você resolver no sistema fica marcado como feito."
             with conexao() as conn:
                 tarefa = conn.execute(
-                    "SELECT id, status FROM tarefa WHERE visivel_para = ? AND chave_automatica = ?",
+                    "SELECT id, status, descricao FROM tarefa WHERE visivel_para = ? AND chave_automatica = ?",
                     (usuario_id, chave),
                 ).fetchone()
                 if tarefa is None:
@@ -1504,13 +1508,13 @@ def sincronizar_pendencias_no_clickup(usuario_id):
                                             criado_em, atualizado_em, visivel_para, chave_automatica)
                         VALUES (?, ?, 'Ficha técnica', ?, 'todo', NULL, ?, ?, ?, ?)
                         """,
-                        (f"{loja} · {titulo}",
-                         f"{descricao} Este card se atualiza sozinho com a lista \"O que falta\" do Cardápio.",
-                         prioridade, agora, agora, usuario_id, chave),
+                        (f"{loja} · {titulo}", texto, prioridade, agora, agora, usuario_id, chave),
                     ).lastrowid
                     status = "todo"
                 else:
                     tarefa_id, status = tarefa["id"], tarefa["status"]
+                    if tarefa["descricao"] != texto:
+                        conn.execute("UPDATE tarefa SET descricao = ? WHERE id = ?", (texto, tarefa_id))
                 existentes = {
                     s["titulo"]: s for s in conn.execute(
                         "SELECT id, titulo, concluida FROM tarefa_subtarefa WHERE tarefa_id = ?", (tarefa_id,)
@@ -1526,18 +1530,18 @@ def sincronizar_pendencias_no_clickup(usuario_id):
                         )
                         ordem += 1
                         mudou = True
-                    elif existentes[item]["concluida"]:
-                        conn.execute("UPDATE tarefa_subtarefa SET concluida = 0 WHERE id = ?", (existentes[item]["id"],))
-                        mudou = True
                 for titulo_sub, sub in existentes.items():
                     if titulo_sub not in itens and not sub["concluida"]:
                         conn.execute("UPDATE tarefa_subtarefa SET concluida = 1 WHERE id = ?", (sub["id"],))
                         mudou = True
-                novo_status = "done" if not itens else ("todo" if status == "done" else status)
+                pendentes = conn.execute(
+                    "SELECT COUNT(*) FROM tarefa_subtarefa WHERE tarefa_id = ? AND concluida = 0", (tarefa_id,)
+                ).fetchone()[0]
+                novo_status = "done" if not pendentes else ("todo" if status == "done" else status)
                 if mudou or novo_status != status:
                     conn.execute("UPDATE tarefa SET status = ?, atualizado_em = ? WHERE id = ?",
                                  (novo_status, agora, tarefa_id))
-                abertos += bool(itens)
+                abertos += bool(pendentes)
     return abertos
 
 

@@ -139,7 +139,6 @@ from backend.armazenamento import (
     definir_inicio_baixa_automatica,
     listar_misturas,
     localizar_ou_criar_insumo_de_mistura,
-    pendencias_ficha_tecnica,
     tarefa_visivel_para,
     tem_cards_de_pendencia,
     sincronizar_pendencias_no_clickup,
@@ -1059,16 +1058,6 @@ def api_buscar_receita_insumo(insumo_id):
         for i in _insumos_unicos(listar_insumos())
     ]
     return jsonify({**receita, "precos": {str(k): v for k, v in precos.items()}, "insumos": insumos})
-
-
-@app.route('/api/cardapio/pendencias', methods=['GET'])
-def api_pendencias_ficha_tecnica():
-    """Cardápio → "O que falta": o que ainda falta pra ficha técnica da
-    loja ficar completa (ver pendencias_ficha_tecnica)."""
-    loja = request.args.get('loja')
-    if loja not in LOJAS:
-        return jsonify({"erro": "Loja inválida."}), 400
-    return jsonify(pendencias_ficha_tecnica(loja))
 
 
 @app.route('/api/misturas', methods=['GET'])
@@ -3774,8 +3763,8 @@ def api_listar_tarefas():
 
 @app.route('/api/tarefas/pendencias-ficha', methods=['POST'])
 def api_levar_pendencias_pro_clickup():
-    """Botão "Levar pro meu ClickUp" da lista "O que falta" do Cardápio:
-    cria (ou atualiza) os cards particulares de pendência da ficha técnica."""
+    """Botão "Pendências da ficha técnica" do ClickUp: cria (ou atualiza) os
+    cards particulares de pendência da ficha técnica de quem clicou."""
     erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
