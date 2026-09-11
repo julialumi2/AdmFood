@@ -2998,7 +2998,7 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
       body: JSON.stringify({ prazoValidade }),
     });
     const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao enviar convites');
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar convites');
     document.getElementById('modal-convidar-fornecedores').style.display = 'none';
     await carregarConvitesCotacao();
 
@@ -3014,7 +3014,7 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
     alert(mensagem);
   } catch (erro) {
     console.error('Falha ao convidar fornecedores:', erro);
-    alert(erro.message || 'Não foi possível enviar os convites.');
+    alert(erro.message || 'Não foi possível gerar os convites.');
   }
 });
 

@@ -2049,7 +2049,11 @@ Julia clicando de verdade nos links mandados por WhatsApp):
   - Tela de **Cotações**: a tabela de convites (`renderConvitesCotacao`)
     já tinha esse padrão certo desde antes (link de verdade por
     fornecedor) — só removido o `window.open` automático que tentava
-    (e falhava) rodar em cima disso.
+    (e falhava) rodar em cima disso. O texto do modal "Convidar
+    fornecedores" continuou dizendo que abria o WhatsApp até 2026-09-11,
+    quando a Julia perguntou se o botão mandava direto pro fornecedor:
+    texto corrigido ("nada é enviado sozinho", o envio é pelo "Enviar
+    por WhatsApp" de cada linha) e o botão virou "Gerar convites".
   Testado isolado: `GET /api/pedidos/<id>/whatsapp` devolve telefone +
   mensagem com o link de confirmação, mesmo pra um pedido criado antes
   (simulando "abri a tela dias depois").
