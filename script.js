@@ -2463,6 +2463,7 @@ function renderFornecedoresTabela() {
       <td>
         <span class="font-bold">${escaparHtml(f.nome)}</span>
         ${f.cnpj ? `<span class="insumo-unidade">${escaparHtml(f.cnpj)}</span>` : ''}
+        ${(f.lojas || []).length ? `<span class="insumo-unidade">Compra: ${escaparHtml(f.lojas.join(', '))}</span>` : ''}
       </td>
       <td class="text-muted">${escaparHtml(f.categoria)}</td>
       <td class="fornecedor-contato-cell">
@@ -2534,6 +2535,8 @@ function abrirModalFornecedor(fornecedor) {
   document.getElementById('fornecedor-dias-entrega').value = fornecedor?.diasEntrega || '';
   document.getElementById('fornecedor-pedido-minimo').value = fornecedor?.pedidoMinimo || 0;
   document.getElementById('fornecedor-observacoes').value = fornecedor?.observacoes || '';
+  const lojasFornecedor = fornecedor?.lojas || [];
+  document.querySelectorAll('#fornecedor-lojas input').forEach((caixa) => { caixa.checked = lojasFornecedor.includes(caixa.value); });
   document.getElementById('modal-fornecedor').style.display = 'flex';
 }
 
@@ -2559,6 +2562,7 @@ document.getElementById('form-fornecedor')?.addEventListener('submit', async (ev
     diasEntrega: document.getElementById('fornecedor-dias-entrega').value,
     pedidoMinimo: document.getElementById('fornecedor-pedido-minimo').value,
     observacoes: document.getElementById('fornecedor-observacoes').value,
+    lojas: Array.from(document.querySelectorAll('#fornecedor-lojas input:checked')).map((caixa) => caixa.value),
   };
   try {
     const url = fornecedorEditandoId ? `/api/fornecedores/${fornecedorEditandoId}` : '/api/fornecedores';
@@ -2880,6 +2884,7 @@ async function carregarConvitesCotacao() {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`);
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
+    lojasCotacaoAtual = dados.lojas || [];
     renderConvitesCotacao(dados.convites || []);
   } catch (erro) {
     console.error('Falha ao carregar convites:', erro);
@@ -2888,6 +2893,40 @@ async function carregarConvitesCotacao() {
 
 const STATUS_LABEL_CONVITE = { aberta: 'Aguardando resposta', respondida: 'Respondido' };
 let convitesCotacaoAtuais = [];
+let lojasCotacaoAtual = [];
+
+// Lista do "Convidar fornecedores": quem fornece pras lojas dessa cotação
+// (Fornecedores → "Lojas que compram dele") já vem marcado, o resto fica
+// desmarcado embaixo. Sem ninguém marcado pra essas lojas, marca todo
+// fornecedor ativo — o jeito de antes (pedido da Julia, 2026-09-11).
+async function renderListaConvidarFornecedores() {
+  const lista = document.getElementById('convidar-fornecedores-lista');
+  if (!lista) return;
+  lista.innerHTML = '<p class="panel-subtitle">Carregando...</p>';
+  try {
+    const resposta = await fetch('/api/fornecedores');
+    const dados = await resposta.json();
+    const ativos = (dados.fornecedores || []).filter((f) => f.ativo);
+    const ehSugerido = (f) => (lojasCotacaoAtual.length
+      ? f.lojas.some((loja) => lojasCotacaoAtual.includes(loja))
+      : f.lojas.length > 0);
+    const sugeridos = ativos.filter(ehSugerido);
+    const outros = ativos.filter((f) => !ehSugerido(f));
+    const semSugestao = !sugeridos.length;
+    const linha = (f, marcado, dica) => `
+      <label class="convidar-fornecedor-item">
+        <input type="checkbox" value="${f.id}" ${marcado ? 'checked' : ''}>
+        <span>${escaparHtml(f.nome)}</span>
+        ${dica ? `<span class="text-muted">${dica}</span>` : ''}
+      </label>`;
+    lista.innerHTML = semSugestao
+      ? `<p class="panel-subtitle">Nenhum fornecedor marcado pra ${lojasCotacaoAtual.length ? escaparHtml(lojasCotacaoAtual.join(', ')) : 'essa cotação'} em Fornecedores — marquei todos.</p>` + ativos.map((f) => linha(f, true, '')).join('')
+      : sugeridos.map((f) => linha(f, true, `compramos pra ${escaparHtml(f.lojas.filter((l) => !lojasCotacaoAtual.length || lojasCotacaoAtual.includes(l)).join(', '))}`)).join('') + outros.map((f) => linha(f, false, '')).join('');
+  } catch (erro) {
+    console.error('Falha ao carregar fornecedores:', erro);
+    lista.innerHTML = '<p class="form-erro">Não foi possível carregar os fornecedores.</p>';
+  }
+}
 
 // Sem API oficial do WhatsApp Business ainda (pendência separada, travada
 // esperando credencial) — wa.me é o jeito de já deixar a mensagem e o link
@@ -2980,6 +3019,7 @@ function renderConvitesCotacao(convites) {
 document.getElementById('btn-cotacao-convidar-fornecedores')?.addEventListener('click', () => {
   document.getElementById('convidar-fornecedores-prazo').value = '';
   document.getElementById('modal-convidar-fornecedores').style.display = 'flex';
+  renderListaConvidarFornecedores();
 });
 document.getElementById('btn-convidar-fornecedores-fechar')?.addEventListener('click', () => {
   document.getElementById('modal-convidar-fornecedores').style.display = 'none';
@@ -2991,11 +3031,16 @@ document.getElementById('btn-convidar-fornecedores-cancelar')?.addEventListener(
 document.getElementById('form-convidar-fornecedores')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
   const prazoValidade = document.getElementById('convidar-fornecedores-prazo').value;
+  const fornecedorIds = Array.from(document.querySelectorAll('#convidar-fornecedores-lista input:checked')).map((caixa) => parseInt(caixa.value, 10));
+  if (!fornecedorIds.length) {
+    alert('Marque pelo menos um fornecedor.');
+    return;
+  }
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prazoValidade }),
+      body: JSON.stringify({ prazoValidade, fornecedorIds }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar convites');

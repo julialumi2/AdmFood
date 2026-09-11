@@ -431,12 +431,17 @@
           <button type="button" class="btn-close" id="btn-convidar-fornecedores-fechar" aria-label="Fechar">&times;</button>
         </div>
         <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
-          Gera o link de preenchimento de cada fornecedor ativo (só com os insumos dessa cotação que ainda não têm fornecedor vinculado — cada um diz, item por item, se vende ou não). Nada é enviado sozinho: depois, na tabela de convites logo abaixo, clique em "Enviar por WhatsApp" em cada fornecedor. O WhatsApp abre com a mensagem e o link prontos, e a mensagem só vai quando você apertar "Enviar" lá. Convites de antes que ainda aguardam resposta também aparecem na tabela.
+          Gera o link de preenchimento dos fornecedores marcados abaixo (só com os insumos dessa cotação que ainda não têm fornecedor vinculado — cada um diz, item por item, se vende ou não). Nada é enviado sozinho: depois, na tabela de convites logo abaixo, clique em "Enviar por WhatsApp" em cada fornecedor. O WhatsApp abre com a mensagem e o link prontos, e a mensagem só vai quando você apertar "Enviar" lá. Convites de antes que ainda aguardam resposta também aparecem na tabela.
         </p>
         <form id="form-convidar-fornecedores">
           <div class="form-group">
             <label for="convidar-fornecedores-prazo">Prazo pra responder</label>
             <input type="datetime-local" id="convidar-fornecedores-prazo" required>
+          </div>
+          <!-- Já vem marcado quem fornece pras lojas dessa cotação (Fornecedores → "Lojas que compram dele") -->
+          <div class="form-group">
+            <label>Fornecedores</label>
+            <div class="convidar-fornecedores-lista" id="convidar-fornecedores-lista"></div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-convidar-fornecedores-cancelar">Cancelar</button>

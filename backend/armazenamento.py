@@ -649,6 +649,18 @@ def inicializar_banco():
             )
             """
         )
+        # De quais lojas a gente já compra desse fornecedor (pedido da Julia,
+        # 2026-09-11: no Açaí são 3 dos 70). O "Convidar fornecedores" já
+        # vem com esses marcados, em vez de mandar pra todo fornecedor ativo.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fornecedor_loja (
+                fornecedor_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                PRIMARY KEY (fornecedor_id, loja)
+            )
+            """
+        )
 
         # Cotação (RFQ manual) — fase 2 do módulo de Compras (ver seção 6.7/9
         # da documentação). "Manual" porque não tem coleta automática de
@@ -3204,7 +3216,28 @@ def listar_fornecedores():
         linhas = conn.execute(
             "SELECT * FROM fornecedor ORDER BY ativo DESC, nome"
         ).fetchall()
-        return [dict(linha) for linha in linhas]
+        lojas = {}
+        for linha in conn.execute("SELECT fornecedor_id, loja FROM fornecedor_loja ORDER BY loja").fetchall():
+            lojas.setdefault(linha["fornecedor_id"], []).append(linha["loja"])
+        return [{**dict(linha), "lojas": lojas.get(linha["id"], [])} for linha in linhas]
+
+
+def definir_lojas_fornecedor(fornecedor_id, lojas):
+    """Substitui de quais lojas a gente compra desse fornecedor."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM fornecedor_loja WHERE fornecedor_id = ?", (fornecedor_id,))
+        for loja in lojas:
+            conn.execute("INSERT INTO fornecedor_loja (fornecedor_id, loja) VALUES (?, ?)", (fornecedor_id, loja))
+
+
+def lojas_da_cotacao(cotacao_id):
+    """Lojas que pediram algum insumo dessa cotação (vazio na cotação manual,
+    que não nasce de Requisição)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT DISTINCT loja FROM cotacao_item_loja WHERE cotacao_id = ? ORDER BY loja", (cotacao_id,)
+        ).fetchall()
+    return [linha["loja"] for linha in linhas]
 
 
 def buscar_fornecedor_por_id(fornecedor_id):
@@ -3536,19 +3569,23 @@ def _insumos_sem_fornecedor_vinculado(cotacao_id):
     return [linha["insumo_id"] for linha in linhas if not mapa.get(linha["insumo_id"])]
 
 
-def criar_convites_cotacao(cotacao_id, prazo_validade):
-    """Manda o link de preenchimento pra TODO fornecedor ativo (não filtra
-    por vínculo — decisão do Guilherme em 2026-08-27: o próprio fornecedor
-    decide por insumo se vende ou não dentro do link, em vez do sistema
-    tentar adivinhar). Só considera insumo sem fornecedor vinculado ainda;
-    quem já tem, continua sendo cotado na mão. Fornecedor que já tem
-    convite pra essa cotação não recebe outro (evita resetar o token de
-    quem já está respondendo ou já respondeu)."""
+def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
+    """Manda o link de preenchimento pros fornecedores ativos escolhidos na
+    tela (`fornecedor_ids`; None = todo fornecedor ativo, como era antes de
+    2026-09-11). Não filtra por vínculo — decisão do Guilherme em
+    2026-08-27: o próprio fornecedor decide por insumo se vende ou não
+    dentro do link, em vez do sistema tentar adivinhar. Só considera insumo
+    sem fornecedor vinculado ainda; quem já tem, continua sendo cotado na
+    mão. Fornecedor que já tem convite pra essa cotação não recebe outro
+    (evita resetar o token de quem já está respondendo ou já respondeu)."""
     insumo_ids = _insumos_sem_fornecedor_vinculado(cotacao_id)
     if not insumo_ids:
         return {"convites": [], "insumosSemFornecedor": 0}
 
     fornecedores = [f for f in listar_fornecedores() if f["ativo"]]
+    if fornecedor_ids is not None:
+        escolhidos = set(fornecedor_ids)
+        fornecedores = [f for f in fornecedores if f["id"] in escolhidos]
     agora = datetime.now().isoformat()
     convites = []
     with conexao() as conn:

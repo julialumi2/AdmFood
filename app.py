@@ -79,6 +79,8 @@ from backend.armazenamento import (
     criar_fornecedor,
     listar_fornecedores,
     atualizar_fornecedor,
+    definir_lojas_fornecedor,
+    lojas_da_cotacao,
     definir_fornecedores_insumo,
     mapa_insumo_fornecedores,
     criar_cotacao,
@@ -1768,7 +1770,17 @@ def _formatar_fornecedor(linha):
         "pedidoMinimo": linha["pedido_minimo"],
         "observacoes": linha["observacoes"],
         "ativo": bool(linha["ativo"]),
+        "lojas": linha.get("lojas") or [],
     }
+
+
+def _lojas_fornecedor_do_corpo(dados):
+    """`lojas` do corpo (de quais lojas a gente compra dele) — None quando
+    não veio, pra não apagar as lojas de quem só mudou outro campo."""
+    if 'lojas' not in dados:
+        return None
+    lojas = [loja for loja in (dados.get('lojas') or []) if loja in LOJAS]
+    return list(dict.fromkeys(lojas))
 
 
 def _campos_fornecedor_do_corpo(dados, exigir_nome=True):
@@ -1823,6 +1835,9 @@ def api_criar_fornecedor():
         return erro_resposta, status
 
     fornecedor_id = criar_fornecedor(campos)
+    lojas = _lojas_fornecedor_do_corpo(dados)
+    if lojas is not None:
+        definir_lojas_fornecedor(fornecedor_id, lojas)
     return jsonify({"id": fornecedor_id})
 
 
@@ -1838,6 +1853,9 @@ def api_atualizar_fornecedor(fornecedor_id):
         return erro_resposta, status
 
     atualizar_fornecedor(fornecedor_id, campos)
+    lojas = _lojas_fornecedor_do_corpo(dados)
+    if lojas is not None:
+        definir_lojas_fornecedor(fornecedor_id, lojas)
     return jsonify({"ok": True})
 
 
@@ -2065,7 +2083,11 @@ def api_listar_convites_cotacao(cotacao_id):
     erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
-    return jsonify({"convites": [_formatar_convite(c) for c in listar_convites_cotacao(cotacao_id)]})
+    return jsonify({
+        "convites": [_formatar_convite(c) for c in listar_convites_cotacao(cotacao_id)],
+        # Pro "Convidar fornecedores" já marcar quem fornece pra essas lojas.
+        "lojas": lojas_da_cotacao(cotacao_id),
+    })
 
 
 @app.route('/api/cotacoes/<int:cotacao_id>/convites', methods=['POST'])
@@ -2085,8 +2107,17 @@ def api_criar_convites_cotacao(cotacao_id):
     prazo_validade = (dados.get('prazoValidade') or '').strip()
     if not prazo_validade:
         return jsonify({"erro": "Informe o prazo de validade do convite."}), 400
+    # Sem `fornecedorIds` = todo fornecedor ativo (comportamento antigo).
+    fornecedor_ids = None
+    if 'fornecedorIds' in dados:
+        try:
+            fornecedor_ids = [int(f) for f in (dados['fornecedorIds'] or [])]
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Lista de fornecedores inválida."}), 400
+        if not fornecedor_ids:
+            return jsonify({"erro": "Marque pelo menos um fornecedor."}), 400
 
-    resultado = criar_convites_cotacao(cotacao_id, prazo_validade)
+    resultado = criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids)
     if resultado["insumosSemFornecedor"] == 0:
         return jsonify({"erro": "Todos os insumos dessa cotação já têm fornecedor vinculado — não há nada pra cotar em aberto."}), 400
     return jsonify({"ok": True, **resultado})

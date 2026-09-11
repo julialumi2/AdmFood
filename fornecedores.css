@@ -4,3 +4,6 @@
 .fornecedor-contato-cell span {
   display: block;
 }
+
+.fornecedor-lojas { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.fornecedor-lojas label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; }

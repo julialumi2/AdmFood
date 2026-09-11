@@ -1707,6 +1707,17 @@ modela), **Tipo** (Todas/Manual/Requisição, usando o mesmo campo
 **Busca** (por nome ou pelo número/id da cotação) e **Dias** (criada nos
 últimos 7/15/30, ou Todos).
 
+**Fornecedor sugerido por loja no convite** (2026-09-11, pedido da Julia:
+o Açaí compra de 3 dos 70 fornecedores — Guilherme Nunes, PXT e
+Riberfoods). Tabela `fornecedor_loja` (de quais lojas a gente compra
+dele), marcada no cadastro do fornecedor ("Lojas que compram dele"). O
+"Convidar fornecedores" lista os ativos com quem fornece pras lojas da
+cotação (`lojas_da_cotacao`, de `cotacao_item_loja`; na cotação manual,
+qualquer fornecedor com loja marcada) já marcado, e `POST
+/api/cotacoes/<id>/convites` aceita `fornecedorIds` — só esses recebem
+convite. Sem ninguém marcado pra loja, a tela marca todos os ativos, e sem
+`fornecedorIds` o backend convida todos, como antes.
+
 **Convite de fornecedor direto pro WhatsApp** (concluído em 2026-09-03,
 pedido da Julia: "clico um botão e já envia os links pros fornecedores").
 Sem a API oficial do WhatsApp Business (pendência 2 da seção 9, travada
