@@ -641,6 +641,29 @@ essa coluna a mais) e a sidebar de categorias (ver seção 6.1) — as duas
 mudanças vieram junto do pedido da Julia de deixar essa tela com a cara
 do Catálogo da Cardápio Web.
 
+**Renomear e Tirar do cardápio** (2026-09-14, pedido da Julia; os dois
+pedem confirmação antes de mudar qualquer coisa, só admin):
+- **Renomear** (lápis ao lado do nome: no título do modal do produto e na
+  linha de cada complemento): com item
+  do cardápio, `PUT /api/itens-cardapio/<id>/nome` (`renomear_item_cardapio`)
+  troca o nome do item e das linhas de `preco_cardapio` que casavam com
+  ele em todas as lojas, e grava o nome antigo como vínculo manual pro
+  mesmo item. É isso que mantém a venda reconhecida: ela chega da Cardápio
+  Web com o nome cadastrado lá, e enquanto lá estiver o antigo, o vínculo
+  casa. Vínculo já existente pra esse nome não é trocado. Loja que já tem
+  outro produto com o nome novo mantém o antigo (índice único loja+produto)
+  e o aviso diz qual. Produto sem item (sem ficha) muda só naquela loja:
+  `PUT /api/precos-cardapio/<id>/nome`. Nome já usado por outro item é
+  recusado. Cuidado: reimportar a planilha de preços com o nome antigo
+  traz a linha antiga de volta.
+- **Tirar do cardápio desta loja** (modal do produto):
+  `DELETE /api/precos-cardapio/<id>` (`remover_produto_do_cardapio`) apaga só
+  a linha de preço daquela loja (preços e foto). O item e a ficha técnica
+  ficam: se o produto voltar com o mesmo nome, a ficha volta junto, e se
+  ainda for vendido, a baixa continua certa. As outras lojas não mudam.
+  O "Excluir item" antigo (painel do complemento) continua apagando o item
+  e a ficha em todas as lojas.
+
 **Bebida fora dessa tela** (concluído em 2026-09-02, pedido da Julia —
 bebida é produto pronto comprado assim, não tem receita/ficha técnica de
 verdade). `listar_produtos_por_loja` filtra fora qualquer produto cuja

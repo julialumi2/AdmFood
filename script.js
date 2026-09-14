@@ -7796,7 +7796,13 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
         return `
         <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
           <div class="ficha-tecnica-produto-linha ficha-tecnica-complemento-linha" data-acao="expandir-produto" data-item-id="${c.itemCardapioId}">
-            <div class="ficha-tecnica-produto-nome">${escaparHtml(c.nome)}</div>
+            <div class="ficha-tecnica-produto-nome">
+              ${escaparHtml(c.nome)}
+              ${isAdmin ? `
+                <button type="button" class="btn-lapis-nome" data-acao="renomear-complemento" data-item-id="${c.itemCardapioId}" data-nome="${escaparHtml(c.nome)}" title="Renomear" aria-label="Renomear ${escaparHtml(c.nome)}">
+                  <i data-lucide="pencil"></i>
+                </button>` : ''}
+            </div>
             <i data-lucide="chevron-down" class="ficha-tecnica-chevron"></i>
           </div>
           <div class="ficha-tecnica-produto-expandido" style="display:${expandido ? '' : 'none'};" data-painel-item-id="${c.itemCardapioId}"></div>
@@ -7808,6 +7814,14 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
 
   conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
     linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));
+  });
+  // O lápis fica dentro da linha que abre/fecha: o clique nele não pode
+  // abrir/fechar junto.
+  conteudoEl.querySelectorAll('[data-acao="renomear-complemento"]').forEach(btn => {
+    btn.addEventListener('click', (evento) => {
+      evento.stopPropagation();
+      _renomearProdutoCardapio({ itemId: parseInt(btn.dataset.itemId, 10), nomeAtual: btn.dataset.nome });
+    });
   });
 
   fichaTecnicaExpandidos.forEach(itemId => renderPainelFichaTecnicaExpandido(itemId));
@@ -7981,6 +7995,40 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
   }
 }
 
+// Renomear (lápis ao lado do nome, 2026-09-14 — no modal do produto e na
+// linha do complemento): pede o nome novo e confirma antes de mudar. Com
+// item do cardápio, muda em todas as lojas e o nome antigo fica como
+// vínculo, pra venda que ainda chegar com ele continuar reconhecida
+// (renomear_item_cardapio); produto sem item (sem ficha) muda só naquela
+// loja. Devolve true se renomeou.
+async function _renomearProdutoCardapio({ itemId, precoCardapioId, nomeAtual }) {
+  const novoNome = (prompt(`Novo nome pra "${nomeAtual}":`, nomeAtual) || '').trim();
+  if (!novoNome || novoNome === nomeAtual) return false;
+  const aviso = itemId
+    ? `Renomear "${nomeAtual}" para "${novoNome}" em todas as lojas?\n\nTroque o nome na Cardápio Web também. O nome antigo fica guardado como vínculo: os pedidos que ainda chegarem com ele continuam descontando do estoque.`
+    : `Renomear "${nomeAtual}" para "${novoNome}" no cardápio da ${fichaTecnicaLojaAtual}?`;
+  if (!confirm(aviso)) return false;
+  try {
+    const rota = itemId ? `/api/itens-cardapio/${itemId}/nome` : `/api/precos-cardapio/${precoCardapioId}/nome`;
+    const resposta = await fetch(rota, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: novoNome }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível renomear.');
+    itensCardapioTodosCache = null;
+    await carregarFichaTecnicaAtual();
+    if (dados.lojasIgnoradas?.length) {
+      alert(`Renomeado. Em ${dados.lojasIgnoradas.join(', ')} já existia um produto chamado "${novoNome}", então lá ficou o nome antigo.`);
+    }
+    return true;
+  } catch (erro) {
+    alert(erro.message);
+    return false;
+  }
+}
+
 // Modal de detalhe do produto — abre ao clicar no cartão inteiro (sem
 // lápis/lixeira soltos, a pedido da Julia, 2026-09-09), inspirado no modal
 // de produto da própria Cardápio Web (foto + campos, um só lugar pra tudo).
@@ -8115,7 +8163,13 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       </div>
     </div>
     ${isAdmin ? `
-      <div class="modal-actions">
+      <div class="modal-actions detalhe-produto-acoes">
+        <div class="detalhe-produto-acoes-extra">
+          <button type="button" class="btn-secondary-sm btn-excluir" id="btn-detalhe-produto-tirar">
+            <i data-lucide="circle-minus"></i>
+            Tirar do cardápio desta loja
+          </button>
+        </div>
         <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-cancelar">Cancelar</button>
         <button type="button" class="btn-primary-sm" id="btn-detalhe-produto-salvar">Salvar</button>
       </div>
@@ -8181,6 +8235,48 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   document.getElementById('btn-detalhe-produto-editar-insumos')?.addEventListener('click', () => {
     fecharModalDetalheProduto();
     abrirModalFichaTecnicaItem(produto.itemCardapioId);
+  });
+
+  // Lápis ao lado do nome (Renomear) e "Tirar do cardápio desta loja"
+  // (2026-09-14): cada um pede confirmação antes de mudar qualquer coisa.
+  // O lápis mora no cabeçalho fixo do modal, por isso onclick (e não
+  // addEventListener): cada produto aberto troca o clique do anterior.
+  const temAlteracoesPendentes = () => Object.keys(alteracoesPreco).length > 0 || custoAlterado !== null || porcoesAlteradas;
+  const lapis = document.getElementById('btn-detalhe-produto-renomear');
+  if (lapis) {
+    lapis.hidden = !isAdmin;
+    lapis.onclick = async () => {
+      if (temAlteracoesPendentes()) {
+        alert('Salve ou cancele as alterações de preço e custo antes de renomear.');
+        return;
+      }
+      const renomeado = await _renomearProdutoCardapio({
+        itemId: produto.itemCardapioId,
+        precoCardapioId,
+        nomeAtual: produto.nome,
+      });
+      if (renomeado) fecharModalDetalheProduto();
+    };
+  }
+
+  document.getElementById('btn-detalhe-produto-tirar')?.addEventListener('click', async () => {
+    const aviso = [
+      `Tirar "${produto.nome}" do cardápio da ${fichaTecnicaLojaAtual}?`,
+      '',
+      'Ele some da lista desta loja, junto com os preços e a foto.',
+      produto.itemCardapioId ? 'A ficha técnica fica guardada: se ele voltar pro cardápio com o mesmo nome, ela volta junto.' : '',
+      'Nas outras lojas nada muda.',
+    ].filter((linha, i) => linha || i === 1).join('\n');
+    if (!confirm(aviso)) return;
+    try {
+      const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, { method: 'DELETE' });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível tirar do cardápio.');
+      fecharModalDetalheProduto();
+      await carregarFichaTecnicaAtual();
+    } catch (erro) {
+      alert(erro.message);
+    }
   });
 
   document.getElementById('btn-detalhe-produto-criar-ficha')?.addEventListener('click', () => {

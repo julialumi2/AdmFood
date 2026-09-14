@@ -57,6 +57,9 @@ from backend.armazenamento import (
     distribuir_entrada_insumo,
     criar_item_cardapio,
     excluir_item_cardapio,
+    renomear_item_cardapio,
+    renomear_linha_cardapio,
+    remover_produto_do_cardapio,
     criar_complementos_em_lote,
     listar_complementos_por_loja,
     definir_ficha_tecnica,
@@ -942,6 +945,32 @@ def api_atualizar_preco_cardapio(item_id):
     return jsonify(_formatar_item_cardapio(buscar_preco_cardapio_por_id(item_id)))
 
 
+@app.route('/api/precos-cardapio/<int:item_id>/nome', methods=['PUT'])
+def api_renomear_linha_cardapio(item_id):
+    """Renomeia um produto do cardápio de uma loja que ainda não tem ficha
+    técnica. Com ficha, o nome muda pelo item (api_renomear_item_cardapio)."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    dados = request.get_json(silent=True) or {}
+    try:
+        return jsonify(renomear_linha_cardapio(item_id, dados.get('nome')))
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+
+
+@app.route('/api/precos-cardapio/<int:item_id>', methods=['DELETE'])
+def api_remover_produto_do_cardapio(item_id):
+    """Tira o produto do cardápio de uma loja — ver remover_produto_do_cardapio."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    try:
+        return jsonify(remover_produto_do_cardapio(item_id))
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 404
+
+
 @app.route('/api/precos-cardapio/<int:item_id>/foto', methods=['POST'])
 def api_upload_foto_cardapio(item_id):
     # Admin-only — sobe uma foto pro produto, guardada no mesmo volume
@@ -1707,6 +1736,21 @@ def api_excluir_item_cardapio(item_id):
 
     excluir_item_cardapio(item_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/nome', methods=['PUT'])
+def api_renomear_item_cardapio(item_id):
+    """Renomeia o item em todas as lojas, guardando o nome antigo como
+    vínculo — ver renomear_item_cardapio."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    usuario = _usuario_logado()
+    try:
+        return jsonify(renomear_item_cardapio(item_id, dados.get('nome'), usuario['nome'] if usuario else None))
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
 
 
 @app.route('/api/complementos', methods=['GET'])

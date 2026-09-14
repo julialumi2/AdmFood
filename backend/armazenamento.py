@@ -2717,6 +2717,114 @@ def excluir_item_cardapio(item_id):
         conn.execute("DELETE FROM item_cardapio WHERE id = ?", (item_id,))
 
 
+def renomear_item_cardapio(item_id, novo_nome, criado_por=None):
+    """Troca o nome de um item do cardápio (produto ou complemento) em todas
+    as lojas (botão "Renomear" da tela de Cardápio, 2026-09-14): o item do
+    catálogo e a linha do cardápio de preços de cada loja que casava com ele
+    — é dela que a tela tira o nome do cartão.
+
+    O nome antigo vira vínculo manual pro mesmo item: a venda chega da
+    Cardápio Web com o nome que estiver cadastrado LÁ, e enquanto lá ainda
+    estiver o antigo, ela continua reconhecida (e descontando a ficha) em vez
+    de cair em "Vendas não reconhecidas". Vínculo que alguém já fez pra esse
+    nome não é trocado. Ficha técnica, custo e porções são pelo id do item,
+    então não mudam.
+
+    Loja que já tem outro produto com o nome novo fica com o nome antigo
+    (o cardápio de uma loja não repete nome) e volta em `lojasIgnoradas`."""
+    novo_nome = (novo_nome or "").strip()
+    novo_normalizado = _normalizar_nome_insumo(novo_nome)
+    if not novo_normalizado:
+        raise ValueError("Informe o nome novo.")
+    with conexao() as conn:
+        item = conn.execute("SELECT id, nome FROM item_cardapio WHERE id = ?", (item_id,)).fetchone()
+        if not item:
+            raise ValueError("Item não encontrado.")
+        catalogo = {
+            _normalizar_nome_insumo(i["nome"]): i["id"]
+            for i in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+        }
+        dono_do_nome = catalogo.get(novo_normalizado)
+        if dono_do_nome and dono_do_nome != item_id:
+            raise ValueError(f'Já existe outro item chamado "{novo_nome}" no cardápio.')
+
+        # As linhas de preço são casadas ANTES de trocar o nome, pelo mesmo
+        # critério da tela (listar_produtos_por_loja).
+        casadas = [
+            linha for linha in conn.execute("SELECT id, loja, produto FROM preco_cardapio ORDER BY ordem").fetchall()
+            if _casar_item_cardapio(linha["produto"], catalogo, ignorar_parenteses=True)[0] == item_id
+        ]
+        nomes_antigos = {item["nome"]} | {linha["produto"] for linha in casadas}
+
+        conn.execute("UPDATE item_cardapio SET nome = ? WHERE id = ?", (novo_nome, item_id))
+        lojas_renomeadas, lojas_ignoradas = [], []
+        for linha in casadas:
+            ocupado = conn.execute(
+                "SELECT 1 FROM preco_cardapio WHERE loja = ? AND produto = ? AND id != ?",
+                (linha["loja"], novo_nome, linha["id"]),
+            ).fetchone()
+            if ocupado:
+                lojas_ignoradas.append(linha["loja"])
+                continue
+            conn.execute("UPDATE preco_cardapio SET produto = ? WHERE id = ?", (novo_nome, linha["id"]))
+            lojas_renomeadas.append(linha["loja"])
+
+        agora = datetime.now().isoformat()
+        for nome in nomes_antigos:
+            normalizado = _normalizar_nome_insumo(nome)
+            if not normalizado or normalizado == novo_normalizado:
+                continue
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO vinculo_produto_venda
+                    (nome_produto_normalizado, item_cardapio_id, criado_em, criado_por, quantidade_por_unidade)
+                VALUES (?, ?, ?, ?, 1)
+                """,
+                (normalizado, item_id, agora, criado_por),
+            )
+    return {
+        "nome": novo_nome,
+        "nomeAntigo": item["nome"],
+        "lojasRenomeadas": sorted(set(lojas_renomeadas)),
+        "lojasIgnoradas": sorted(set(lojas_ignoradas)),
+    }
+
+
+def renomear_linha_cardapio(preco_cardapio_id, novo_nome):
+    """Troca o nome de um produto do cardápio de UMA loja que ainda não tem
+    item do cardápio (sem ficha técnica) — sem item, não há venda
+    reconhecida pra proteger com vínculo."""
+    novo_nome = (novo_nome or "").strip()
+    if not _normalizar_nome_insumo(novo_nome):
+        raise ValueError("Informe o nome novo.")
+    with conexao() as conn:
+        linha = conn.execute("SELECT id, loja FROM preco_cardapio WHERE id = ?", (preco_cardapio_id,)).fetchone()
+        if not linha:
+            raise ValueError("Produto não encontrado.")
+        if conn.execute(
+            "SELECT 1 FROM preco_cardapio WHERE loja = ? AND produto = ? AND id != ?",
+            (linha["loja"], novo_nome, preco_cardapio_id),
+        ).fetchone():
+            raise ValueError(f'O cardápio dessa loja já tem um produto chamado "{novo_nome}".')
+        conn.execute("UPDATE preco_cardapio SET produto = ? WHERE id = ?", (novo_nome, preco_cardapio_id))
+    return {"nome": novo_nome}
+
+
+def remover_produto_do_cardapio(preco_cardapio_id):
+    """Tira um produto do cardápio de UMA loja (botão "Tirar do cardápio
+    desta loja", 2026-09-14): apaga só a linha de preço dessa loja (preço
+    por canal e foto). O item do cardápio e a ficha técnica ficam
+    guardados — se o produto voltar pro cardápio com o mesmo nome, a ficha
+    volta junto, e se ele ainda for vendido, a baixa continua certa. As
+    outras lojas não mudam."""
+    with conexao() as conn:
+        linha = conn.execute("SELECT id, loja, produto FROM preco_cardapio WHERE id = ?", (preco_cardapio_id,)).fetchone()
+        if not linha:
+            raise ValueError("Produto não encontrado.")
+        conn.execute("DELETE FROM preco_cardapio WHERE id = ?", (preco_cardapio_id,))
+    return {"loja": linha["loja"], "produto": linha["produto"]}
+
+
 def definir_ficha_tecnica(item_id, loja, links):
     """Substitui a lista inteira de insumos do item **naquela loja** por
     `links` (`[{"insumoId": int, "quantidade": float|None}, ...]`) — mais

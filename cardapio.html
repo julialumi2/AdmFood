@@ -300,7 +300,13 @@
     <div class="modal-overlay" id="modal-detalhe-produto" style="display:none;">
       <div class="modal-content modal-detalhe-produto">
         <div class="modal-header">
-          <h3 class="panel-title" id="detalhe-produto-titulo">Produto</h3>
+          <div class="detalhe-produto-titulo-linha">
+            <h3 class="panel-title" id="detalhe-produto-titulo">Produto</h3>
+            <!-- Renomear (só admin, mostrado por abrirModalDetalheProduto) -->
+            <button type="button" class="btn-lapis-nome" id="btn-detalhe-produto-renomear" title="Renomear" aria-label="Renomear produto" hidden>
+              <i data-lucide="pencil"></i>
+            </button>
+          </div>
           <button type="button" class="btn-close" id="btn-detalhe-produto-fechar" aria-label="Fechar">&times;</button>
         </div>
         <div id="detalhe-produto-corpo">

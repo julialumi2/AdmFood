@@ -333,6 +333,51 @@
    Web que ela mandou de referência). */
 .modal-content.modal-detalhe-produto { max-width: 640px; }
 
+/* Lápis de renomear ao lado do nome (2026-09-14): no título do modal do
+   produto e na linha de cada complemento. Discreto até passar o mouse. */
+.detalhe-produto-titulo-linha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.btn-lapis-nome {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-lapis-nome[hidden] { display: none; }
+.btn-lapis-nome:hover { background-color: var(--surface-muted); color: var(--primary); }
+.btn-lapis-nome:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.btn-lapis-nome svg { width: 15px; height: 15px; pointer-events: none; }
+
+.ficha-tecnica-complemento-linha .ficha-tecnica-produto-nome {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Tirar do cardápio (2026-09-14): à esquerda, longe do Salvar. */
+.detalhe-produto-acoes { flex-wrap: wrap; }
+
+.detalhe-produto-acoes-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-right: auto;
+}
+
 .detalhe-produto-grid {
   display: grid;
   grid-template-columns: 160px 1fr;
