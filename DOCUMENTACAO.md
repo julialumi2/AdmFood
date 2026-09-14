@@ -2230,8 +2230,7 @@ ranking do dia (ver "Mais Vendidos" logo abaixo). A fila mostra:
 
 **Mais Vendidos** (`mais-vendidos.html`, Insights, 2026-09-14): produtos
 de um dia por loja, no layout de painel que a Julia mandou de referência
-(com a identidade do sistema): abas de loja (valem pra tela inteira),
-4 cartões-comanda (faturamento, unidades, pedidos, ticket médio), top 8
+(com a identidade do sistema): abas de loja (valem pra tela inteira), top 8
 produtos por volume, receita por categoria (rosca), comparativo de
 faturamento entre as lojas e o ranking detalhado (busca, loja, ordem).
 Tudo comparado com o mesmo dia da semana anterior. Cada loja tem uma

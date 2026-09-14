@@ -2394,55 +2394,10 @@ function renderMaisVendidos(animar = true) {
   document.querySelector('.page-content').classList.toggle('mv-animar', animar);
   const lojas = _mvLojasFiltradas();
   const rotuloComparado = _mvRotuloComparado();
-  _renderMvCartoes(lojas, rotuloComparado);
   _renderMvTopProdutos(lojas);
   _renderMvCategorias(lojas);
   _renderMvComparativo(dados.lojas, rotuloComparado);
   _renderMvRanking();
-}
-
-// --- Cartões do dia ---
-function _mvTendenciaCartao(id, variacao, rotuloComparado) {
-  const elemento = document.getElementById(id);
-  if (!elemento) return;
-  if (variacao === null || !isFinite(variacao)) {
-    elemento.innerHTML = `<span class="trend-sub">sem venda em ${escaparHtml(rotuloComparado)} pra comparar</span>`;
-    return;
-  }
-  const pct = Math.round(variacao * 100);
-  const classe = pct > 0 ? 'trend-up' : pct < 0 ? 'trend-down' : '';
-  const icone = pct > 0 ? 'trending-up' : pct < 0 ? 'trending-down' : 'minus';
-  elemento.innerHTML = `
-    <span class="trend-value ${classe}"><i data-lucide="${icone}"></i> ${pct > 0 ? '+' : ''}${pct}%</span>
-    <span class="trend-sub">vs. ${escaparHtml(rotuloComparado)}</span>`;
-}
-
-function _renderMvCartoes(lojas, rotuloComparado) {
-  const somar = (lista, campo) => lista.reduce((total, l) => total + (l[campo] || 0), 0);
-  const faturamento = somar(lojas, 'faturamento');
-  const pedidos = somar(lojas, 'pedidos');
-  document.getElementById('mv-kpi-faturamento').textContent = _mvMoeda(faturamento);
-  document.getElementById('mv-kpi-unidades').textContent = _formatarQuantidadeVendida(somar(lojas, 'itens'));
-  document.getElementById('mv-kpi-pedidos').textContent = pedidos.toLocaleString('pt-BR');
-  document.getElementById('mv-kpi-ticket').textContent = pedidos ? _mvMoeda(faturamento / pedidos) : '—';
-
-  // A variação só conta as lojas que têm o dia anterior sincronizado —
-  // senão "Todas" compararia 4 lojas hoje com 2 na semana passada.
-  const comFaturamento = lojas.filter((l) => l.faturamentoComparado !== null && l.faturamentoComparado !== undefined);
-  const comItens = lojas.filter((l) => l.itensComparado > 0);
-  const variacao = (lista, atual, anterior) => (lista.length ? _mvVariacao(somar(lista, atual), somar(lista, anterior)) : null);
-  _mvTendenciaCartao('mv-kpi-faturamento-trend', variacao(comFaturamento, 'faturamento', 'faturamentoComparado'), rotuloComparado);
-  _mvTendenciaCartao('mv-kpi-unidades-trend', variacao(comItens, 'itens', 'itensComparado'), rotuloComparado);
-  _mvTendenciaCartao('mv-kpi-pedidos-trend', variacao(comFaturamento, 'pedidos', 'pedidosComparado'), rotuloComparado);
-  const pedidosHoje = somar(comFaturamento, 'pedidos');
-  const pedidosAntes = somar(comFaturamento, 'pedidosComparado');
-  _mvTendenciaCartao(
-    'mv-kpi-ticket-trend',
-    pedidosHoje && pedidosAntes
-      ? _mvVariacao(somar(comFaturamento, 'faturamento') / pedidosHoje, somar(comFaturamento, 'faturamentoComparado') / pedidosAntes)
-      : null,
-    rotuloComparado,
-  );
 }
 
 // --- Top produtos por volume (barras deitadas) ---

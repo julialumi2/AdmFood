@@ -128,12 +128,6 @@ body.dark-mode {
 /* Abas de loja: a bolinha é a cor da loja nos gráficos. */
 #mv-lojas-tabs .tab-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 
-/* --- Cartões ------------------------------------------------------------ */
-.mv-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-.mv-kpis .card-trend { min-height: 18px; flex-wrap: wrap; }
-.mv-kpis .trend-value svg { width: 14px; height: 14px; }
-
 /* --- Top produtos (barras deitadas) + categorias (rosca) ---------------- */
 .mv-graficos {
   display: grid;
@@ -709,7 +703,6 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
 
 /* --- Telas menores ------------------------------------------------------ */
 @media (max-width: 1180px) {
-  .mv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mv-graficos { grid-template-columns: 1fr; }
 }
 
@@ -734,7 +727,6 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
 }
 
 @media (max-width: 640px) {
-  .mv-kpis { grid-template-columns: 1fr; }
   .mv-barras { --rotulo: 112px; --valor: 34px; }
   .mv-colunas { --altura: 170px; grid-template-columns: 40px minmax(0, 1fr); }
   .mv-coluna-valor { font-size: 0.66rem; }
