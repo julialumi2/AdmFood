@@ -2933,6 +2933,17 @@ sistema está pronto, falta o número):
   Técnica dentro de "Cardápio"), o modo vem de um `?aba=` na URL e o
   próprio JS da página marca o sub-item ativo e alterna os `#modo-*` — o
   grupo em si não sabe a diferença entre os dois casos.
+- Visual do menu lateral (redesenhado em 2026-09-14, pedido da Julia; só
+  CSS em `theme.css`, o HTML das páginas não mudou): encostado na borda da
+  tela e sem cantos arredondados (deixou de ser o cartão flutuante, então
+  `--sidebar-width-collapsed` voltou a 80px); a tela aberta é uma
+  "comanda" creme com a borda da direita picotada (`::after` com meias-luas
+  da cor do menu); o picote tracejado separa a logo e o rodapé e prende os
+  subitens ao grupo; o grupo da tela aberta acende (e, com o menu
+  recolhido, vira a própria comanda, via `:has(.menu-subitem.active)`). O
+  rótulo "Painel" ficou escondido, a logo usa Plus Jakarta Sans (a
+  Montserrat não era carregada nas telas internas) e o nome do usuário
+  voltou a aparecer na gaveta do celular.
 - **Dado de negócio é cadastrado na tela, em produção.** O banco de
   produção não vai no push, então script de dado rodado no banco local não
   chega lá — e a Julia quer tudo mantido no sistema, sem planilha (desde
