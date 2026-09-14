@@ -555,6 +555,16 @@ insumos, com quantidade **opcional** (`NULL` quando não sabemos a
 gramatura exata) — **por loja desde 2026-09-01** (ver subseção abaixo):
 o mesmo prato pode ter receita diferente em cada unidade.
 
+**Exceção: as duas Tradiças dividem a ficha** (2026-09-14, pedido da
+Julia — vendem as mesmas coisas). `GRUPOS_FICHA_COMPARTILHADA` em
+`armazenamento.py`: a ficha continua gravada linha a linha por loja (a
+baixa, o custo e o consumo médio leem a da própria loja), mas
+`definir_ficha_tecnica` grava a mesma lista nas duas, e o título do
+editor diz "Tradiça ZN e Tradiça Simus". Na subida, `inicializar_banco`
+copia pra outra loja a ficha de item que só uma delas tinha (em produção,
+só a ZN tinha; o Simus estava vazio) — item com ficha nas duas não é
+tocado. Estoque, preço e custo digitado à mão continuam por loja.
+
 **Carga inicial** (2026-08-24): os primeiros 20 itens (lanches, porções e
 uma salada) foram montados a partir da descrição de cada produto no
 painel da Cardápio Web (`portal.cardapioweb.com/cardapio/produtos`), que

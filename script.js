@@ -8638,7 +8638,10 @@ async function abrirModalFichaTecnicaItem(itemId) {
   }
   const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
   fichaTecnicaEditandoItemId = itemId;
-  document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${produto?.nome || ''} (${fichaTecnicaLojaAtual})`;
+  // As duas Tradiças dividem a ficha (GRUPOS_FICHA_COMPARTILHADA no backend):
+  // salvar numa grava nas duas.
+  const lojasDaFicha = fichaTecnicaLojaAtual.startsWith('Tradiça ') ? 'Tradiça ZN e Tradiça Simus' : fichaTecnicaLojaAtual;
+  document.getElementById('ficha-tecnica-item-titulo').textContent = `Ficha técnica — ${produto?.nome || ''} (${lojasDaFicha})`;
   document.getElementById('ficha-tecnica-colar-texto').value = '';
   document.getElementById('ficha-tecnica-colar-resultado').textContent = '';
 

@@ -408,6 +408,12 @@ def inicializar_banco():
                     )
             conn.execute("DROP TABLE ficha_tecnica_old")
 
+        # As duas Tradiças dividem a ficha desde 2026-09-14 (ver
+        # GRUPOS_FICHA_COMPARTILHADA): a receita que só uma delas tinha
+        # passa pra outra.
+        for grupo in GRUPOS_FICHA_COMPARTILHADA:
+            _igualar_fichas_do_grupo(conn, grupo)
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS receita_insumo (
@@ -2825,19 +2831,62 @@ def remover_produto_do_cardapio(preco_cardapio_id):
     return {"loja": linha["loja"], "produto": linha["produto"]}
 
 
+# Lojas que vendem os mesmos produtos com a mesma receita: a ficha técnica é
+# uma só pro grupo (pedido da Julia, 2026-09-14 — "as duas lojas vendem as
+# mesmas coisas"). Continua gravada linha a linha por loja, porque a baixa,
+# o custo e o consumo médio leem a ficha da própria loja; o que muda é que
+# salvar numa grava em todas do grupo. Estoque e preço seguem por loja.
+GRUPOS_FICHA_COMPARTILHADA = [("Tradiça ZN", "Tradiça Simus")]
+
+
+def lojas_da_mesma_ficha(loja):
+    for grupo in GRUPOS_FICHA_COMPARTILHADA:
+        if loja in grupo:
+            return list(grupo)
+    return [loja]
+
+
+def _igualar_fichas_do_grupo(conn, grupo):
+    """Item com ficha numa loja do grupo e nenhuma linha nas outras ganha a
+    mesma ficha nelas (quando as Tradiças passaram a dividir a ficha, só a
+    ZN tinha receita). Roda a cada início e não faz nada de novo depois da
+    primeira vez; item com ficha nas duas lojas não é tocado."""
+    marcadores = ",".join("?" * len(grupo))
+    por_item = {}
+    for linha in conn.execute(
+        f"SELECT item_id, insumo_id, loja, quantidade FROM ficha_tecnica WHERE loja IN ({marcadores})",
+        grupo,
+    ).fetchall():
+        por_item.setdefault(linha["item_id"], {}).setdefault(linha["loja"], []).append(linha)
+    for item_id, por_loja in por_item.items():
+        origens = [loja for loja in grupo if por_loja.get(loja)]
+        if len(origens) != 1:
+            continue
+        for destino in grupo:
+            if destino == origens[0]:
+                continue
+            for linha in por_loja[origens[0]]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                    (item_id, linha["insumo_id"], destino, linha["quantidade"]),
+                )
+
+
 def definir_ficha_tecnica(item_id, loja, links):
     """Substitui a lista inteira de insumos do item **naquela loja** por
     `links` (`[{"insumoId": int, "quantidade": float|None}, ...]`) — mais
     simples que fazer diff, e a tela sempre manda a lista completa mesmo.
     Não mexe na receita das outras lojas (ficha técnica é por loja desde
-    2026-09-01, ver seção 6.5)."""
+    2026-09-01, ver seção 6.5), a não ser as do mesmo grupo de ficha
+    compartilhada (as duas Tradiças), que recebem a mesma lista."""
     with conexao() as conn:
-        conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ? AND loja = ?", (item_id, loja))
-        for link in links:
-            conn.execute(
-                "INSERT INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
-                (item_id, link["insumoId"], loja, link.get("quantidade")),
-            )
+        for loja_do_grupo in lojas_da_mesma_ficha(loja):
+            conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ? AND loja = ?", (item_id, loja_do_grupo))
+            for link in links:
+                conn.execute(
+                    "INSERT INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                    (item_id, link["insumoId"], loja_do_grupo, link.get("quantidade")),
+                )
 
 
 def buscar_ficha_tecnica_item(item_id, loja):
