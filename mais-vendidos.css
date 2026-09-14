@@ -1,0 +1,744 @@
+/* Tela de Mais Vendidos (Insights) — ranking de produtos de um dia, por
+   loja. A base compartilhada (sidebar, cabeçalho, cartões-comanda, abas,
+   painéis, busca, modal) está em theme.css; aqui fica só o que é desta
+   tela.
+
+   Cada loja tem uma cor, a mesma em todo gráfico da tela: o tijolo da
+   marca pro Artesanos, açaí pro Açaí Na Lata e, pros dois Tradiças, as
+   cores do cachorro-quente — mostarda (ZN) e picles (Simus). Mostarda e
+   picles já são tokens do sistema (--ember, --pickle). A rosca de
+   categorias usa tons da cor da loja escolhida (tijolo em "Todas"), pra
+   não inventar uma quinta paleta. */
+
+.page-content { max-width: 1320px; }
+
+.loja-artesanos { --cor-loja: var(--loja-artesanos); }
+.loja-acai { --cor-loja: var(--loja-acai); }
+.loja-zn { --cor-loja: var(--loja-zn); }
+.loja-simus { --cor-loja: var(--loja-simus); }
+
+:root {
+  --loja-artesanos: #d93829;
+  --loja-acai: #7b3f6e;
+  --loja-zn: #c97a1f;
+  --loja-simus: #4c7a4a;
+}
+
+body.dark-mode {
+  --loja-artesanos: #e5584a;
+  --loja-acai: #c083b2;
+  --loja-zn: #e0a052;
+  --loja-simus: #7fae7b;
+}
+
+.mv-ponto {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background-color: var(--cor-loja);
+  flex-shrink: 0;
+}
+
+/* --- Cabeçalho ----------------------------------------------------------- */
+.mv-title-row { align-items: flex-end; }
+
+.mv-explica {
+  max-width: 560px;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* Navegador de dia: ‹ domingo 13/09 › */
+.dia-navegador {
+  display: inline-flex;
+  align-items: stretch;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.dia-seta {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  background: none;
+  border: none;
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dia-seta:first-child { border-right: 1px solid var(--border-color); border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.dia-seta:last-child { border-left: 1px solid var(--border-color); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.dia-seta:hover:not(:disabled) { background-color: var(--primary-soft); color: var(--primary); }
+.dia-seta:disabled { color: var(--text-faint); cursor: default; opacity: 0.5; }
+.dia-seta svg { width: 18px; height: 18px; }
+
+.dia-rotulo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 132px;
+  padding: 6px var(--space-4);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.dia-rotulo:hover { background-color: var(--surface-muted); }
+
+.dia-semana {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.dia-data {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* O campo de data fica por baixo do rótulo: o clique abre o calendário
+   (showPicker, em script.js) sem mostrar um input no meio do cabeçalho. */
+.dia-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+}
+
+.dia-seta:focus-visible,
+.dia-rotulo:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Abas de loja: a bolinha é a cor da loja nos gráficos. */
+#mv-lojas-tabs .tab-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* --- Cartões ------------------------------------------------------------ */
+.mv-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.mv-kpis .card-trend { min-height: 18px; flex-wrap: wrap; }
+.mv-kpis .trend-value svg { width: 14px; height: 14px; }
+
+/* --- Top produtos (barras deitadas) + categorias (rosca) ---------------- */
+.mv-graficos {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.mv-graficos > .panel { min-width: 0; }
+
+.mv-barras {
+  --rotulo: 190px;
+  --valor: 44px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.mv-barras-linhas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Linhas verticais da escala, só na faixa das barras. */
+.mv-barras-grade {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: calc(var(--rotulo) + 12px);
+  right: calc(var(--valor) + 12px);
+  pointer-events: none;
+}
+
+.mv-barras-grade span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--surface-muted-border);
+}
+
+.mv-barra-linha {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--rotulo) minmax(0, 1fr) var(--valor);
+  gap: 12px;
+  align-items: center;
+}
+
+.mv-barra-rotulo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 0;
+}
+
+.mv-barra-nome {
+  max-width: 100%;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv-barra-loja {
+  font-size: 0.66rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.mv-barra-trilho { height: 22px; display: flex; align-items: center; }
+
+.mv-barra {
+  height: 100%;
+  min-width: 3px;
+  border-radius: 0 6px 6px 0;
+  background-color: var(--cor-loja);
+  transform-origin: left;
+}
+
+.mv-barra-valor {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-barras-eixo {
+  position: relative;
+  height: 18px;
+  margin: 10px calc(var(--valor) + 12px) 0 calc(var(--rotulo) + 12px);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  color: var(--text-faint);
+}
+
+.mv-barras-eixo span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+
+.mv-legenda-lojas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.mv-legenda-lojas span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Rosca: tons da cor da loja escolhida. */
+.mv-rosca-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  flex: 1;
+}
+
+.mv-rosca {
+  position: relative;
+  width: min(210px, 100%);
+  aspect-ratio: 1;
+  margin: var(--space-2) auto 0;
+}
+
+.mv-rosca svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.mv-rosca circle { fill: none; }
+
+.mv-rosca-centro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.mv-rosca-total {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-rosca-rotulo {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.mv-rosca-legenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mv-rosca-legenda li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.mv-rosca-legenda i { width: 10px; height: 10px; border-radius: 50%; }
+
+.mv-rosca-legenda .mv-cat-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mv-rosca-legenda .mv-cat-pct {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-rosca-legenda .mv-cat-valor {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mv-nota {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+/* --- Comparativo entre lojas (colunas) ---------------------------------- */
+.mv-colunas {
+  --altura: 220px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 0 var(--space-3);
+}
+
+.mv-colunas-eixo {
+  position: relative;
+  height: var(--altura);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  color: var(--text-faint);
+}
+
+.mv-colunas-eixo span { position: absolute; right: 0; transform: translateY(50%); white-space: nowrap; }
+
+.mv-colunas-plot {
+  position: relative;
+  height: var(--altura);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mv-colunas-grade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mv-colunas-grade span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--surface-muted-border);
+}
+
+.mv-coluna {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.2s ease;
+}
+
+.mv-coluna-valor {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-coluna-barra {
+  width: min(56px, 46%);
+  min-height: 2px;
+  border-radius: 6px 6px 0 0;
+  background-color: var(--cor-loja);
+  transform-origin: bottom;
+}
+
+.mv-colunas-rotulos {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-top: var(--space-2);
+}
+
+.mv-coluna-rotulo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.mv-coluna-delta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Com uma loja escolhida, as outras ficam de fundo. */
+.mv-colunas.com-foco .mv-coluna:not(.foco),
+.mv-colunas.com-foco .mv-coluna-rotulo:not(.foco) { opacity: 0.35; }
+
+/* --- Ranking detalhado -------------------------------------------------- */
+.mv-ranking-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mv-ranking-controles .search-box { width: 240px; }
+.mv-ranking-controles .search-box input::-webkit-search-cancel-button { cursor: pointer; }
+
+.mv-select {
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.mv-select:focus-visible,
+.mv-ranking-controles .search-box:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.mv-ranking-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mv-ranking-linha {
+  display: grid;
+  grid-template-columns: 30px 48px minmax(0, 1fr) minmax(150px, 220px) 96px 76px;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 14px var(--space-6);
+  border-bottom: 1px solid var(--surface-muted-border);
+  transition: background-color 0.15s ease;
+}
+
+.mv-ranking-linha:hover { background-color: var(--surface-muted); }
+
+.mv-posicao {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  border: 1px solid var(--surface-muted-border);
+}
+
+.mv-posicao.podio {
+  background-color: var(--text-dark);
+  color: var(--card-bg);
+  border-color: var(--text-dark);
+}
+
+.mv-foto {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  object-fit: cover;
+  background-color: var(--surface-muted);
+}
+
+/* Sem foto no Cardápio: as iniciais, no tom da loja. */
+.mv-foto-vazia {
+  display: grid;
+  place-items: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--cor-loja);
+  background-color: color-mix(in srgb, var(--cor-loja) 13%, var(--card-bg));
+}
+
+.mv-produto { min-width: 0; }
+
+.mv-produto-nome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--space-2);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.mv-produto-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.mv-produto-meta span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mv-volume { display: flex; flex-direction: column; gap: 6px; }
+
+.mv-volume-texto {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-volume-texto strong { color: var(--text-dark); }
+
+.mv-volume-trilho {
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  overflow: hidden;
+}
+
+.mv-volume-barra {
+  height: 100%;
+  border-radius: 999px;
+  background-color: var(--cor-loja);
+  transform-origin: left;
+}
+
+.mv-preco {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-preco small {
+  display: block;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.mv-tendencia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mv-tendencia svg { width: 15px; height: 15px; }
+.mv-tendencia.alta { color: var(--success); }
+.mv-tendencia.queda { color: var(--danger); }
+.mv-tendencia.igual { color: var(--text-faint); }
+
+.mv-tendencia.novo {
+  justify-self: end;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+  background-color: var(--primary-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.mv-ranking-vazio {
+  padding: var(--space-6);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.mv-ranking-mais {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  background: none;
+  border: none;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mv-ranking-mais[hidden] { display: none; }
+.mv-ranking-mais:hover { color: var(--primary); background-color: var(--surface-muted); }
+.mv-ranking-mais:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* Produto que o estoque não reconhece: não desconta nada até ser vinculado. */
+.tag-pendente {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warning);
+  background-color: var(--warning-soft);
+  border: none;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+button.tag-pendente { cursor: pointer; }
+button.tag-pendente:hover { text-decoration: underline; }
+button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-offset: 2px; }
+
+/* Barras crescem ao abrir o dia; ao filtrar ou atualizar sozinho, não. */
+@media (prefers-reduced-motion: no-preference) {
+  .mv-animar .mv-barra,
+  .mv-animar .mv-volume-barra { animation: mv-cresce-x 0.5s ease-out both; }
+  .mv-animar .mv-coluna-barra { animation: mv-cresce-y 0.5s ease-out both; }
+  @keyframes mv-cresce-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes mv-cresce-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+}
+
+/* --- Vendas não reconhecidas (veio de Configurações em 2026-09-14) ----- */
+.integracoes-loja {
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
+/* Linhas do combo no modal de vincular: item + quantidade + tirar. */
+.combo-linha {
+  display: grid;
+  grid-template-columns: 1fr 86px 32px;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.combo-linha select,
+.combo-linha input {
+  padding: 8px 10px;
+  border: 1px solid var(--input-border);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.88rem;
+  outline: none;
+  min-width: 0;
+}
+
+.combo-linha input { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+
+.combo-linha select:focus,
+.combo-linha input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+/* --- Telas menores ------------------------------------------------------ */
+@media (max-width: 1180px) {
+  .mv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-graficos { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 900px) {
+  .mv-ranking-linha {
+    grid-template-columns: 30px 44px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "pos foto produto tendencia"
+      "pos foto volume preco";
+    row-gap: 8px;
+    padding: 12px var(--space-4);
+  }
+  .mv-ranking-linha .mv-posicao { grid-area: pos; align-self: start; }
+  .mv-ranking-linha .mv-foto { grid-area: foto; width: 44px; height: 44px; align-self: start; }
+  .mv-ranking-linha .mv-produto { grid-area: produto; }
+  .mv-ranking-linha .mv-volume { grid-area: volume; }
+  .mv-ranking-linha .mv-preco { grid-area: preco; }
+  .mv-ranking-linha .mv-tendencia { grid-area: tendencia; }
+  .mv-ranking-controles { width: 100%; }
+  .mv-ranking-controles .search-box { flex: 1 1 100%; width: auto; max-width: none; }
+  .mv-select { flex: 1; }
+}
+
+@media (max-width: 640px) {
+  .mv-kpis { grid-template-columns: 1fr; }
+  .mv-barras { --rotulo: 112px; --valor: 34px; }
+  .mv-colunas { --altura: 170px; grid-template-columns: 40px minmax(0, 1fr); }
+  .mv-coluna-valor { font-size: 0.66rem; }
+  .mv-coluna-rotulo { font-size: 0.7rem; }
+  .dia-navegador { width: 100%; }
+  .dia-rotulo { flex: 1; }
+}

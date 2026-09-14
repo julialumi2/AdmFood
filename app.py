@@ -70,6 +70,7 @@ from backend.armazenamento import (
     definir_produto_protegido,
     consumo_medio_insumo,
     listar_produtos_pendentes,
+    produtos_mais_vendidos_do_dia,
     vincular_produto_venda_manualmente,
     definir_composicao_produto_venda,
     listar_composicoes_produto_venda,
@@ -1490,6 +1491,43 @@ def api_vincular_produto_pendente():
         nome_produto, item_cardapio_id, usuario['nome'] if usuario else None, quantidade_por_unidade
     )
     return jsonify({"ok": True})
+
+
+def _totais_do_dia_por_loja(dia_iso):
+    """Faturamento e pedidos de cada loja num dia, com a mesma conta das
+    Vendas Diárias (venda presencial lançada à mão + ajuste manual de canal),
+    pros números das duas telas baterem."""
+    linhas_periodo = _aplicar_presencial(
+        buscar_faturamento_periodo(dia_iso, dia_iso), buscar_presencial_periodo(dia_iso, dia_iso)
+    )
+    _, linhas_periodo = _aplicar_ajustes_canal(
+        _linhas_canais_com_presencial(dia_iso, dia_iso), linhas_periodo, buscar_ajustes_canal_periodo(dia_iso, dia_iso)
+    )
+    return {l["unidade"]: l for l in linhas_periodo}
+
+
+@app.route('/api/vendas/mais-vendidos', methods=['GET'])
+def api_mais_vendidos_do_dia():
+    """Ranking de produtos de um dia, por loja (Insights → Mais Vendidos),
+    com o faturamento real da loja no dia e no mesmo dia da semana anterior.
+    Sem `dia`, o último dia que teve venda."""
+    dia = request.args.get('dia') or None
+    if dia:
+        try:
+            dia = date.fromisoformat(dia).isoformat()
+        except ValueError:
+            return jsonify({"erro": "Data inválida."}), 400
+    resultado = produtos_mais_vendidos_do_dia(list(LOJAS), dia)
+    totais = _totais_do_dia_por_loja(resultado["dia"])
+    totais_comparado = _totais_do_dia_por_loja(resultado["diaComparado"])
+    for loja in resultado["lojas"]:
+        dia_loja = totais.get(loja["loja"])
+        comparado = totais_comparado.get(loja["loja"])
+        loja["faturamento"] = dia_loja["faturamento_dia"] if dia_loja else 0.0
+        loja["pedidos"] = dia_loja["quantidade_pedidos"] if dia_loja else 0
+        loja["faturamentoComparado"] = comparado["faturamento_dia"] if comparado else None
+        loja["pedidosComparado"] = comparado["quantidade_pedidos"] if comparado else None
+    return jsonify(resultado)
 
 
 @app.route('/api/vinculos-manuais', methods=['GET'])

@@ -2097,6 +2097,144 @@ def listar_produtos_pendentes(unidade, dias=30):
         return pendentes
 
 
+# Qual preço de preco_cardapio vale pra cada canal de venda (venda_item.canal)
+# na receita estimada da tela de Mais Vendidos. Balcão (portal) cobra o
+# preço do cardápio próprio.
+_COLUNA_PRECO_POR_CANAL = {"ifood": "ifood", "food99": "food99", "catalog": "cardapio_web", "portal": "cardapio_web"}
+
+
+def produtos_mais_vendidos_do_dia(lojas, dia_iso=None):
+    """Ranking de um dia por loja (Insights → Mais Vendidos): quanto saiu de
+    cada produto, somando os canais, e a mesma conta no mesmo dia da semana
+    anterior (a comparação que faz sentido em restaurante: domingo com
+    domingo). O que casou com o cardápio é agrupado pelo item — o mesmo
+    lanche vem com nome diferente no iFood e na Cardápio Web; o que não
+    casou fica pelo nome vendido e volta como pendente (é o que a fila de
+    vendas não reconhecidas, na mesma tela, resolve). Mesma contagem da
+    Curva ABC: quantidade vendida, sem o multiplicador de vínculo.
+
+    A venda por item não traz preço, então a receita de cada produto é
+    ESTIMADA: unidades de cada canal × preço do cardápio da loja nesse canal
+    (preco_cardapio). Sem preço cadastrado, fica None. O faturamento real do
+    dia vem de faturamento_diario (montado em app.py, com presencial e
+    ajuste de canal, igual às Vendas Diárias).
+
+    Sem dia, abre no último que teve venda (segunda as lojas não abrem)."""
+    hoje = datetime.now().date().isoformat()
+    with conexao() as conn:
+        if not dia_iso:
+            dia_iso = conn.execute(
+                "SELECT MAX(dia) AS dia FROM venda_item WHERE dia <= ?", (hoje,)
+            ).fetchone()["dia"] or hoje
+        comparado = (datetime.fromisoformat(dia_iso) - timedelta(days=7)).date().isoformat()
+        anterior = conn.execute(
+            "SELECT MAX(dia) AS dia FROM venda_item WHERE dia < ?", (dia_iso,)
+        ).fetchone()["dia"]
+        proximo = conn.execute(
+            "SELECT MIN(dia) AS dia FROM venda_item WHERE dia > ? AND dia <= ?", (dia_iso, hoje)
+        ).fetchone()["dia"]
+        for loja in lojas:
+            _recasar_vendas_sem_item(conn, loja)
+        linhas = conn.execute(
+            """
+            SELECT v.dia, v.unidade, v.canal, v.item_cardapio_id,
+                   i.nome AS nome_item, i.categoria AS categoria_item,
+                   COALESCE(v.nome_normalizado, v.nome_produto) AS nome_chave,
+                   MIN(v.nome_produto) AS nome_vendido, SUM(v.quantidade) AS quantidade,
+                   MAX(CASE WHEN v.item_cardapio_id IS NULL AND NOT EXISTS (
+                           SELECT 1 FROM composicao_produto_venda c
+                           WHERE c.nome_produto_normalizado = v.nome_normalizado
+                       ) THEN 1 ELSE 0 END) AS pendente
+            FROM venda_item v
+            LEFT JOIN item_cardapio i ON i.id = v.item_cardapio_id
+            WHERE v.dia IN (?, ?)
+            GROUP BY v.dia, v.unidade, v.canal,
+                     COALESCE('i' || v.item_cardapio_id, 'n' || COALESCE(v.nome_normalizado, v.nome_produto))
+            """,
+            (dia_iso, comparado),
+        ).fetchall()
+        precos = conn.execute(
+            "SELECT loja, categoria, produto, ifood, food99, cardapio_web, foto_arquivo "
+            "FROM preco_cardapio ORDER BY ordem"
+        ).fetchall()
+        catalogo = {
+            _normalizar_nome_insumo(i["nome"]): i["id"]
+            for i in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+        }
+
+    # Linha de preço de cada produto da loja: pelo item do cardápio (mesmo
+    # casamento da tela de Cardápio) e, pro que não casou, pelo nome.
+    preco_por_item, preco_por_nome = {}, {}
+    for p in precos:
+        if p["loja"] not in lojas:
+            continue
+        preco_por_nome.setdefault((p["loja"], _normalizar_nome_insumo(p["produto"])), p)
+        item_id, _ = _casar_item_cardapio(p["produto"], catalogo, ignorar_parenteses=True)
+        if item_id:
+            preco_por_item.setdefault((p["loja"], item_id), p)
+
+    def _preco(linha_preco, canal):
+        if not linha_preco:
+            return None
+        for coluna in (_COLUNA_PRECO_POR_CANAL.get(canal), "cardapio_web", "ifood", "food99"):
+            if coluna and linha_preco[coluna]:
+                return linha_preco[coluna]
+        return None
+
+    produtos, itens_comparado = {}, {}
+    for linha in linhas:
+        loja = linha["unidade"]
+        if loja not in lojas:
+            continue
+        if linha["dia"] == comparado:
+            itens_comparado[loja] = itens_comparado.get(loja, 0) + linha["quantidade"]
+        chave = (loja, linha["item_cardapio_id"] or linha["nome_chave"])
+        linha_preco = (
+            preco_por_item.get((loja, linha["item_cardapio_id"])) if linha["item_cardapio_id"]
+            else preco_por_nome.get((loja, _normalizar_nome_insumo(linha["nome_vendido"])))
+        )
+        produto = produtos.setdefault(chave, {
+            "loja": loja,
+            "nome": linha["nome_item"] or linha["nome_vendido"],
+            "nomeVendido": linha["nome_vendido"],
+            "categoria": linha["categoria_item"] or (linha_preco["categoria"] if linha_preco else None),
+            "fotoUrl": f"/cardapio-fotos/{linha_preco['foto_arquivo']}" if linha_preco and linha_preco["foto_arquivo"] else None,
+            "quantidade": 0,
+            "quantidadeComparada": 0,
+            "receita": None,
+            "pendente": False,
+        })
+        if linha["dia"] == comparado:
+            produto["quantidadeComparada"] += linha["quantidade"]
+            continue
+        produto["quantidade"] += linha["quantidade"]
+        produto["pendente"] = produto["pendente"] or bool(linha["pendente"])
+        preco = _preco(linha_preco, linha["canal"])
+        if preco is not None:
+            produto["receita"] = (produto["receita"] or 0.0) + linha["quantidade"] * preco
+
+    por_loja = {loja: [] for loja in lojas}
+    for produto in produtos.values():
+        if produto["quantidade"]:
+            por_loja[produto.pop("loja")].append(produto)
+    return {
+        "dia": dia_iso,
+        "diaComparado": comparado,
+        "hoje": hoje,
+        "anterior": anterior,
+        "proximo": proximo,
+        "lojas": [
+            {
+                "loja": loja,
+                "itens": sum(p["quantidade"] for p in lista),
+                "itensComparado": itens_comparado.get(loja, 0),
+                "produtos": sorted(lista, key=lambda p: (-p["quantidade"], p["nome"])),
+            }
+            for loja, lista in por_loja.items()
+        ],
+    }
+
+
 def listar_porcoes_complemento(produto_item_id, loja):
     """Todo complemento do catálogo com a porção (g) dele nesse produto
     (None = vale a ficha do complemento)."""

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdmFood - Mais Vendidos</title>
+  <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
+  <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="mais-vendidos.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- CONTAINER PAI DO GRID -->
+  <div class="dashboard-wrapper" id="dashboardWrapper">
+
+    <!-- SIDEBAR LATERAL -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <i data-lucide="utensils-crossed"></i>
+        </div>
+        <div class="brand">
+          <span class="brand-name">
+            <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Painel</div>
+
+      <nav class="sidebar-menu">
+        <a href="index.html" class="menu-item">
+          <i data-lucide="bar-chart-2"></i>
+          <span>Resumo</span>
+        </a>
+        <a href="estoque.html" class="menu-item">
+          <i data-lucide="box"></i>
+          <span>Insumos</span>
+        </a>
+        <div class="menu-group">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="shopping-cart"></i>
+            <span>Compras</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="fornecedores.html" class="menu-subitem">
+              <i data-lucide="truck"></i>
+              <span>Fornecedores</span>
+            </a>
+            <a href="cotacoes.html" class="menu-subitem">
+              <i data-lucide="list-checks"></i>
+              <span>Cotações</span>
+            </a>
+            <a href="contagens.html" class="menu-subitem">
+              <i data-lucide="clipboard-list"></i>
+              <span>Requisições</span>
+            </a>
+            <a href="pedidos.html" class="menu-subitem">
+              <i data-lucide="package-check"></i>
+              <span>Pedidos</span>
+            </a>
+            <a href="recebimentos.html" class="menu-subitem">
+              <i data-lucide="clipboard-check"></i>
+              <span>Recebimentos</span>
+            </a>
+            <a href="guia-compras.html" class="menu-subitem" target="_blank" rel="noopener">
+              <i data-lucide="compass"></i>
+              <span>Guia</span>
+            </a>
+          </div>
+        </div>
+        <a href="cardapio.html" class="menu-item">
+          <i data-lucide="book-open"></i>
+          <span>Cardápio</span>
+        </a>
+        <a href="clickup.html" class="menu-item">
+          <i data-lucide="check-square"></i>
+          <span>ClickUp</span>
+        </a>
+        <div class="menu-group expandido">
+          <button type="button" class="menu-item menu-group-toggle">
+            <i data-lucide="lightbulb"></i>
+            <span>Insights</span>
+            <i data-lucide="chevron-down" class="menu-group-chevron"></i>
+          </button>
+          <div class="menu-subgroup">
+            <a href="curva-abc.html" class="menu-subitem">
+              <i data-lucide="chart-no-axes-combined"></i>
+              <span>Curva ABC</span>
+            </a>
+            <a href="insight.html" class="menu-subitem">
+              <i data-lucide="activity"></i>
+              <span>Vendas Diárias</span>
+            </a>
+            <a href="mais-vendidos.html" class="menu-subitem active">
+              <i data-lucide="receipt-text"></i>
+              <span>Mais Vendidos</span>
+            </a>
+            <a href="vendas-semanais.html" class="menu-subitem">
+              <i data-lucide="calendar-range"></i>
+              <span>Vendas Semanais</span>
+            </a>
+          </div>
+        </div>
+        <a href="configuracoes.html" class="menu-item">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+
+      <a href="configuracoes.html" class="sidebar-user-card">
+        <div class="avatar sidebar-user-avatar">JS</div>
+        <div class="user-info">
+          <span class="user-name sidebar-user-name">Julia Suzuki</span>
+          <span class="user-role sidebar-user-role">Admin</span>
+        </div>
+        <i data-lucide="chevron-right" class="sidebar-user-card-icon"></i>
+      </a>
+    </aside>
+
+    <!-- Fecha a gaveta de menu ao tocar fora, só no celular -->
+    <div class="mobile-menu-backdrop" id="mobile-menu-backdrop"></div>
+
+    <!-- CONTEÚDO PRINCIPAL (DIREITA) -->
+    <main class="main-wrapper">
+
+      <!-- HEADER SUPERIOR -->
+      <header class="top-header">
+        <div class="header-left">
+          <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+          <span class="header-page-title">INSIGHTS</span>
+        </div>
+
+        <div class="header-right">
+          <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+            <input type="checkbox" id="theme-toggle-checkbox">
+            <span class="slider">
+              <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+              </svg>
+              <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+          </label>
+        </div>
+      </header>
+
+      <!-- PÁGINA DE MAIS VENDIDOS -->
+      <div class="page-content">
+
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="receipt-text" class="icon-pin"></i>
+            <span>PRODUTOS VENDIDOS · <span id="mv-eyebrow-dia">—</span></span>
+          </div>
+          <div class="title-row mv-title-row">
+            <div class="mv-titulo">
+              <h1>Mais vendidos por loja</h1>
+              <p class="mv-explica">
+                Unidades, faturamento e ranking das 4 lojas no dia, comparados com o mesmo dia da semana anterior.
+              </p>
+            </div>
+
+            <!-- Anda de dia em dia com venda (pula segunda, que as lojas não abrem) -->
+            <div class="dia-navegador" id="mv-dia-navegador">
+              <button type="button" class="dia-seta" id="mv-dia-anterior" aria-label="Dia anterior com venda">
+                <i data-lucide="chevron-left"></i>
+              </button>
+              <label class="dia-rotulo" for="mv-dia-input">
+                <span class="dia-semana" id="mv-dia-semana">—</span>
+                <span class="dia-data" id="mv-dia-data">--/--</span>
+                <input type="date" id="mv-dia-input" class="dia-input" aria-label="Escolher o dia">
+              </label>
+              <button type="button" class="dia-seta" id="mv-dia-proximo" aria-label="Próximo dia com venda">
+                <i data-lucide="chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- FILTRO DE LOJA (vale pra tela inteira) -->
+        <div class="tabs-bar" id="mv-lojas-tabs" role="tablist" aria-label="Loja">
+          <button type="button" class="tab-btn active" data-loja="todas" role="tab">
+            <i data-lucide="store"></i>
+            <span>Todas as lojas</span>
+            <span class="tab-badge">4 lojas</span>
+          </button>
+          <button type="button" class="tab-btn" data-loja="Hamburgueria Artesanos" role="tab">
+            <span class="mv-ponto loja-artesanos"></span>
+            <span>Hamburgueria Artesanos</span>
+          </button>
+          <button type="button" class="tab-btn" data-loja="Açaí Na Lata" role="tab">
+            <span class="mv-ponto loja-acai"></span>
+            <span>Açaí Na Lata</span>
+          </button>
+          <button type="button" class="tab-btn" data-loja="Tradiça ZN" role="tab">
+            <span class="mv-ponto loja-zn"></span>
+            <span>Tradiça ZN</span>
+          </button>
+          <button type="button" class="tab-btn" data-loja="Tradiça Simus" role="tab">
+            <span class="mv-ponto loja-simus"></span>
+            <span>Tradiça Simus</span>
+          </button>
+        </div>
+
+        <!-- CARTÕES DO DIA -->
+        <div class="metrics-grid mv-kpis">
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Faturamento</span>
+              <div class="card-icon"><i data-lucide="dollar-sign"></i></div>
+            </div>
+            <div class="card-value" id="mv-kpi-faturamento">—</div>
+            <div class="card-trend" id="mv-kpi-faturamento-trend"></div>
+          </div>
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Unidades vendidas</span>
+              <div class="card-icon"><i data-lucide="package"></i></div>
+            </div>
+            <div class="card-value" id="mv-kpi-unidades">—</div>
+            <div class="card-trend" id="mv-kpi-unidades-trend"></div>
+          </div>
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Pedidos</span>
+              <div class="card-icon"><i data-lucide="shopping-bag"></i></div>
+            </div>
+            <div class="card-value" id="mv-kpi-pedidos">—</div>
+            <div class="card-trend" id="mv-kpi-pedidos-trend"></div>
+          </div>
+          <div class="metric-card">
+            <div class="card-header">
+              <span class="card-label">Ticket médio</span>
+              <div class="card-icon"><i data-lucide="receipt"></i></div>
+            </div>
+            <div class="card-value" id="mv-kpi-ticket">—</div>
+            <div class="card-trend" id="mv-kpi-ticket-trend"></div>
+          </div>
+        </div>
+
+        <!-- TOP PRODUTOS + RECEITA POR CATEGORIA -->
+        <div class="mv-graficos">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Top produtos por volume</h3>
+                <span class="panel-subtitle" id="mv-top-subtitulo">Todas as lojas</span>
+              </div>
+            </div>
+            <div class="mv-barras" id="mv-top-grafico"><!-- Renderizado via JS --></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Receita por categoria</h3>
+                <span class="panel-subtitle">Estimada: unidades × preço do cardápio em cada canal</span>
+              </div>
+            </div>
+            <div class="mv-rosca-area" id="mv-categorias-grafico"><!-- Renderizado via JS --></div>
+          </section>
+        </div>
+
+        <!-- COMPARATIVO ENTRE LOJAS -->
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Comparativo entre lojas</h3>
+              <span class="panel-subtitle" id="mv-comparativo-subtitulo">Faturamento do dia</span>
+            </div>
+          </div>
+          <div class="mv-colunas" id="mv-comparativo-grafico"><!-- Renderizado via JS --></div>
+        </section>
+
+        <!-- RANKING DETALHADO -->
+        <section class="panel panel-table mv-ranking">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Ranking detalhado</h3>
+              <span class="panel-subtitle" id="mv-ranking-subtitulo">—</span>
+            </div>
+            <div class="mv-ranking-controles">
+              <label class="search-box">
+                <i data-lucide="search"></i>
+                <input type="search" id="mv-busca" placeholder="Buscar produto..." aria-label="Buscar produto">
+              </label>
+              <select id="mv-ranking-loja" class="mv-select" aria-label="Loja">
+                <option value="todas">Todas</option>
+                <option value="Hamburgueria Artesanos">Artesanos</option>
+                <option value="Açaí Na Lata">Açaí Na Lata</option>
+                <option value="Tradiça ZN">Tradiça ZN</option>
+                <option value="Tradiça Simus">Tradiça Simus</option>
+              </select>
+              <select id="mv-ordem" class="mv-select" aria-label="Ordenar">
+                <option value="quantidade">Mais vendidos</option>
+                <option value="receita">Maior receita</option>
+                <option value="alta">Maior alta</option>
+                <option value="nome">Nome (A–Z)</option>
+              </select>
+            </div>
+          </div>
+          <ol class="mv-ranking-lista" id="mv-ranking-lista" aria-live="polite"><!-- Renderizado via JS --></ol>
+          <button type="button" class="mv-ranking-mais" id="mv-ranking-mais" hidden></button>
+        </section>
+
+        <!-- VENDAS NÃO RECONHECIDAS (só admin) — era "Integrações do Estoque", em Configurações, até 2026-09-14 -->
+        <div class="panel panel-table" id="painel-integracoes-estoque" style="display:none;">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Vendas não reconhecidas</h3>
+              <span class="panel-subtitle">Produtos vendidos nos últimos 30 dias que o estoque não sabe de qual item do cardápio são, por isso não descontam nada. Vincule uma vez e vale pras próximas vendas.</span>
+            </div>
+            <select id="integracoes-loja" class="integracoes-loja" aria-label="Loja">
+              <option value="Hamburgueria Artesanos">Artesanos</option>
+              <option value="Açaí Na Lata">Açaí Na Lata</option>
+              <option value="Tradiça ZN">Tradiça ZN</option>
+              <option value="Tradiça Simus">Tradiça Simus</option>
+            </select>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto vendido</th>
+                  <th>Vendas</th>
+                  <th>Quantidade</th>
+                  <th>Pendente desde</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="produtos-pendentes-tabela-body">
+                <tr><td colspan="5" class="panel-subtitle">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <details style="margin-top: var(--space-3);">
+            <summary style="cursor:pointer; font-weight:600; font-size:0.85rem;">Histórico de vínculos manuais</summary>
+            <div class="table-responsive" style="margin-top: var(--space-2);">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Produto vendido</th>
+                    <th>Vinculado a</th>
+                    <th>Por quem</th>
+                    <th>Quando</th>
+                  </tr>
+                </thead>
+                <tbody id="vinculos-manuais-tabela-body"></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+
+      </div> <!-- /page-content -->
+    </main> <!-- /main-wrapper -->
+
+    <!-- MODAL: VINCULAR PRODUTO VENDIDO -->
+    <div class="modal-overlay" id="modal-vincular-produto" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Vincular produto vendido</h3>
+          <button type="button" class="btn-close" id="btn-vincular-produto-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <form id="form-vincular-produto">
+          <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+            <span id="vincular-produto-nome" class="font-bold">—</span> passa a descontar do estoque — vale pra sempre, inclusive pras próximas vendas com esse mesmo nome.
+          </p>
+
+          <div class="tabs-bar" id="vincular-modo-tabs" style="margin-bottom: var(--space-4);">
+            <button type="button" class="tab-btn active" data-modo="simples">
+              <i data-lucide="package"></i>
+              <span>Um item só</span>
+            </button>
+            <button type="button" class="tab-btn" data-modo="combo">
+              <i data-lucide="layers"></i>
+              <span>Combo</span>
+            </button>
+          </div>
+
+          <div id="vincular-modo-simples">
+            <div class="form-group">
+              <label for="vincular-produto-item-select">Item do cardápio</label>
+              <select id="vincular-produto-item-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="vincular-produto-quantidade">Quantos "unidade do item acima" cada venda representa</label>
+              <input type="number" id="vincular-produto-quantidade" value="1" min="0.01" step="0.01">
+              <p class="panel-subtitle" style="margin-top: var(--space-1);">Normalmente 1. Só muda quando o mesmo nome vale por vários (ex: "2 smash's tradicionais" = 2).</p>
+            </div>
+          </div>
+
+          <div id="vincular-modo-combo" style="display:none;">
+            <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
+              Liste do que o combo é feito. A baixa segue a Ficha Técnica de cada item — assim, mudar a receita do lanche já corrige o combo junto.
+            </p>
+            <div id="combo-componentes"><!-- Renderizado dinamicamente via JS --></div>
+            <button type="button" class="btn-secondary-sm" id="btn-combo-adicionar" style="margin-top: var(--space-2);">
+              <i data-lucide="plus"></i>
+              Adicionar item
+            </button>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary-sm" id="btn-vincular-produto-cancelar">Cancelar</button>
+            <button type="submit" class="btn-primary-sm">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div> <!-- /dashboard-wrapper -->
+
+</body>
+</html>

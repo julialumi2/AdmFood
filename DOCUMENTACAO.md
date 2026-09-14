@@ -2212,9 +2212,14 @@ o dobro depois de resincronizar; testes anteriores (produto simples,
 sem combo) continuam passando sem mudança de comportamento.
 
 **Painel de Integrações do Estoque** (novo card em Estoque, só admin +
-só na aba Hamburgueria Artesanos; desde 2026-09-11 mora em **Configurações**,
-com um seletor de loja no próprio painel — a Julia pediu pra tirar da tela
-de Estoque, que é de uso diário, e é pouco usado) mostra:
+só na aba Hamburgueria Artesanos; de 2026-09-11 a 2026-09-14 morou em
+**Configurações**, com um seletor de loja no próprio painel — a Julia
+pediu pra tirar da tela de Estoque, que é de uso diário, e é pouco usado).
+Desde 2026-09-14 foi dividido: o liga/desliga da **baixa automática**
+ficou em Configurações ("Baixa automática do estoque", uma linha por loja
+com o estado, a data e o botão), e a fila abaixo, com o nome de **Vendas
+não reconhecidas**, foi pra **Insights → Mais Vendidos**, embaixo do
+ranking do dia (ver "Mais Vendidos" logo abaixo). A fila mostra:
 - **Pendências**: produtos vendidos sem `item_cardapio_id` nos últimos
   30 dias (`listar_produtos_pendentes`), com quantas vendas, quantidade
   total e desde quando — e um botão "Vincular" que abre um modal pra
@@ -2222,6 +2227,36 @@ de Estoque, que é de uso diário, e é pouco usado) mostra:
   corresponde.
 - **Histórico de vínculos manuais** (`listar_vinculos_manuais`,
   colapsável) — quem vinculou o quê e quando, pra auditoria.
+
+**Mais Vendidos** (`mais-vendidos.html`, Insights, 2026-09-14): produtos
+de um dia por loja, no layout de painel que a Julia mandou de referência
+(com a identidade do sistema): abas de loja (valem pra tela inteira),
+4 cartões-comanda (faturamento, unidades, pedidos, ticket médio), top 8
+produtos por volume, receita por categoria (rosca), comparativo de
+faturamento entre as lojas e o ranking detalhado (busca, loja, ordem).
+Tudo comparado com o mesmo dia da semana anterior. Cada loja tem uma
+cor fixa em todos os gráficos: tijolo (Artesanos), açaí (Açaí Na Lata),
+mostarda (ZN) e picles (Simus); a rosca usa tons da cor da loja escolhida.
+
+Vem de `GET /api/vendas/mais-vendidos?dia=AAAA-MM-DD`
+(`produtos_mais_vendidos_do_dia` + `_totais_do_dia_por_loja` em app.py):
+- unidades: soma de `venda_item.quantidade` no dia, somando os canais — o
+  que casou com o cardápio agrupa pelo item (o mesmo lanche tem nome
+  diferente no iFood e na Cardápio Web), o resto pelo nome vendido,
+  marcado como pendente. Mesma contagem da Curva ABC (sem o
+  multiplicador de vínculo). Venda presencial lançada à mão não tem
+  produto e não entra;
+- faturamento e pedidos: os reais do dia, com a mesma conta das Vendas
+  Diárias (presencial + ajuste de canal);
+- receita por produto: ESTIMADA (a venda por item não traz preço) —
+  unidades de cada canal × preço do cardápio da loja nesse canal
+  (`preco_cardapio`; balcão usa o do cardápio próprio). Produto sem preço
+  fica fora da rosca, com aviso.
+Sem `dia`, abre no último dia com venda; `anterior`/`proximo` são os dias
+com venda vizinhos, então as setas pulam a segunda. A variação só compara
+lojas que têm o dia da semana anterior sincronizado. Pra admin, a marca
+"não reconhecido" abre o mesmo modal de vincular da fila; olhando o dia
+de hoje, a tela se atualiza a cada 2 min.
 
 Novo endpoint de apoio `GET /api/itens-cardapio/todos`
 (`listar_itens_cardapio_todos`) — lista produto+complemento de toda

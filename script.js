@@ -241,6 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
       ?.addEventListener('change', importarPlanilhaVendasSemanais);
   }
 
+  // 4.097b2 TELA DE MAIS VENDIDOS (Insights — ranking do dia, uma comanda
+  // por loja, e a fila de vendas não reconhecidas logo abaixo)
+  if (document.getElementById('mv-ranking-lista')) {
+    iniciarMaisVendidos();
+  }
+
   // 4.097c TELA DE CURVA ABC DE CARDÁPIO (Etapa 10 do motor de compra —
   // volume × margem × CMV real por produto)
   if (document.getElementById('curva-loja-select')) {
@@ -1895,75 +1901,96 @@ document.getElementById('btn-receita-apagar')?.addEventListener('click', () => {
   _salvarReceitaInsumo(true);
 });
 
-// --- Painel de Integrações do Estoque (Etapa 0 do motor de compra) ---
-// Mora em Configurações desde 2026-09-11 (pedido da Julia: ocupava espaço
-// na tela de Estoque e é pouco usado), com a loja escolhida no próprio painel.
+// --- Vendas não reconhecidas (Etapa 0 do motor de compra) ---
+// Era o painel "Integrações do Estoque": saiu do Estoque pra Configurações
+// em 2026-09-11 e de lá pra Insights → Mais Vendidos em 2026-09-14 (pedido
+// da Julia), junto do ranking do dia. Em Configurações ficou só o liga/
+// desliga da baixa automática. A loja da fila é escolhida no próprio painel.
 async function carregarIntegracoesEstoque() {
   const loja = integracoesLojaAtual;
   try {
-    const [respPendentes, respVinculos, respBaixa] = await Promise.all([
+    const [respPendentes, respVinculos] = await Promise.all([
       fetch(`/api/produtos-pendentes?unidade=${encodeURIComponent(loja)}`),
       fetch('/api/vinculos-manuais'),
-      fetch('/api/estoque/baixa-automatica'),
     ]);
     const dadosPendentes = await respPendentes.json();
     const dadosVinculos = await respVinculos.json();
-    const dadosBaixa = await respBaixa.json();
-    renderBaixaAutomatica(loja, (dadosBaixa.lojas || {})[loja] || null);
     renderProdutosPendentesTabela(dadosPendentes.pendentes || []);
     renderVinculosManuaisTabela(dadosVinculos.vinculos || []);
   } catch (erro) {
-    console.error('Falha ao carregar integrações do estoque:', erro);
+    console.error('Falha ao carregar as vendas não reconhecidas:', erro);
   }
 }
 
-// Liga/desliga da baixa automática da loja (api_definir_baixa_automatica).
-// Ligada, cada venda desconta a ficha técnica do estoque; desligada, nada
-// desconta e a fila abaixo serve de lista do que falta casar. Liga só de
-// hoje em diante, e o padrão é amanhã: dá tempo de contar o estoque antes
-// do primeiro pedido.
+// Liga/desliga da baixa automática (api_definir_baixa_automatica), as quatro
+// lojas numa lista em Configurações. Ligada, cada venda desconta a ficha
+// técnica do estoque; desligada, nada desconta. Liga só de hoje em diante,
+// e o padrão é amanhã: dá tempo de contar o estoque antes do primeiro pedido.
 function _dataIsoLocal(data) {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
 }
 
-function renderBaixaAutomatica(loja, inicio) {
-  const caixa = document.getElementById('baixa-automatica-estado');
-  if (!caixa) return;
+async function carregarBaixaAutomatica() {
+  try {
+    const resposta = await fetch('/api/estoque/baixa-automatica');
+    const dados = await resposta.json();
+    renderBaixaAutomatica(dados.lojas || {});
+  } catch (erro) {
+    console.error('Falha ao carregar a baixa automática:', erro);
+  }
+}
+
+function renderBaixaAutomatica(inicios) {
+  const lista = document.getElementById('baixa-automatica-lojas');
+  if (!lista) return;
   const hoje = new Date();
   const hojeIso = _dataIsoLocal(hoje);
+  const amanhaIso = _dataIsoLocal(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1));
   const dataCurta = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
 
-  if (inicio && inicio > hojeIso) {
-    caixa.innerHTML = `
-      <span class="badge-pill neu-orange">Baixa automática liga em ${dataCurta(inicio)}</span>
-      <button type="button" class="btn-secondary-sm" id="btn-baixa-desligar">Cancelar</button>
-      <p class="baixa-automatica-ajuda">A partir de ${dataCurta(inicio)}, cada venda desconta a ficha técnica do estoque desta loja. Conte o estoque antes do primeiro pedido desse dia.</p>`;
-  } else if (inicio) {
-    caixa.innerHTML = `
-      <span class="badge-pill pos">Baixa automática ligada desde ${dataCurta(inicio)}</span>
-      <button type="button" class="btn-secondary-sm" id="btn-baixa-desligar">Desligar</button>
-      <p class="baixa-automatica-ajuda">Cada venda desconta a ficha técnica do estoque desta loja.</p>`;
-  } else {
-    const amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
-    caixa.innerHTML = `
-      <span class="badge-pill badge-neutral">Baixa automática desligada</span>
-      <label class="baixa-automatica-ligar">
-        Ligar a partir de
-        <input type="date" id="baixa-automatica-inicio" min="${hojeIso}" value="${_dataIsoLocal(amanha)}">
-      </label>
-      <button type="button" class="btn-primary-sm" id="btn-baixa-ligar">Ligar</button>
-      <p class="baixa-automatica-ajuda">Enquanto estiver desligada, as vendas não descontam nada do estoque. Ligue quando a ficha técnica da loja estiver pronta, e conte o estoque antes do primeiro pedido do dia escolhido.</p>`;
-  }
+  lista.innerHTML = LOJAS_ESTOQUE.map((loja) => {
+    const inicio = inicios[loja] || null;
+    const lojaAttr = escaparHtml(loja);
+    let estado;
+    let controles;
+    if (inicio && inicio > hojeIso) {
+      estado = `<span class="badge-pill neu-orange">Liga em ${dataCurta(inicio)}</span>`;
+      controles = `<button type="button" class="btn-secondary-sm" data-baixa-desligar="${lojaAttr}">Cancelar</button>`;
+    } else if (inicio) {
+      estado = `<span class="badge-pill pos">Ligada desde ${dataCurta(inicio)}</span>`;
+      controles = `<button type="button" class="btn-secondary-sm" data-baixa-desligar="${lojaAttr}">Desligar</button>`;
+    } else {
+      estado = `<span class="badge-pill badge-neutral">Desligada</span>`;
+      controles = `
+        <label class="baixa-automatica-ligar">
+          Ligar a partir de
+          <input type="date" min="${hojeIso}" value="${amanhaIso}" data-baixa-inicio="${lojaAttr}">
+        </label>
+        <button type="button" class="btn-primary-sm" data-baixa-ligar="${lojaAttr}">Ligar</button>`;
+    }
+    return `
+      <div class="baixa-loja">
+        <span class="baixa-loja-nome">${lojaAttr}</span>
+        ${estado}
+        <div class="baixa-loja-controles">${controles}</div>
+      </div>`;
+  }).join('');
 
-  document.getElementById('btn-baixa-ligar')?.addEventListener('click', () => {
-    const data = document.getElementById('baixa-automatica-inicio').value;
-    if (!data) return;
-    if (!confirm(`Ligar a baixa automática de ${loja} a partir de ${dataCurta(data)}? As vendas desse dia em diante vão descontar a ficha técnica do estoque.`)) return;
-    _salvarBaixaAutomatica(loja, data);
+  lista.querySelectorAll('[data-baixa-ligar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const loja = btn.dataset.baixaLigar;
+      const data = [...lista.querySelectorAll('[data-baixa-inicio]')].find((i) => i.dataset.baixaInicio === loja)?.value;
+      if (!data) return;
+      if (!confirm(`Ligar a baixa automática de ${loja} a partir de ${dataCurta(data)}? As vendas desse dia em diante vão descontar a ficha técnica do estoque. Conte o estoque antes do primeiro pedido desse dia.`)) return;
+      _salvarBaixaAutomatica(loja, data);
+    });
   });
-  document.getElementById('btn-baixa-desligar')?.addEventListener('click', () => {
-    if (!confirm(`Desligar a baixa automática de ${loja}? O que já foi descontado continua descontado; as próximas vendas não descontam mais.`)) return;
-    _salvarBaixaAutomatica(loja, null);
+  lista.querySelectorAll('[data-baixa-desligar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const loja = btn.dataset.baixaDesligar;
+      if (!confirm(`Desligar a baixa automática de ${loja}? O que já foi descontado continua descontado; as próximas vendas não descontam mais.`)) return;
+      _salvarBaixaAutomatica(loja, null);
+    });
   });
 }
 
@@ -1976,7 +2003,7 @@ async function _salvarBaixaAutomatica(loja, inicio) {
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar.');
-    renderBaixaAutomatica(loja, dados.inicio);
+    carregarBaixaAutomatica();
   } catch (erro) {
     alert(erro.message);
   }
@@ -2151,11 +2178,521 @@ document.getElementById('form-vincular-produto')?.addEventListener('submit', asy
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
     fecharModalVincularProduto();
     await carregarIntegracoesEstoque();
+    if (maisVendidosDados) carregarMaisVendidos(maisVendidosDados.dia);
   } catch (erro) {
     console.error('Falha ao vincular produto:', erro);
     alert(erro.message || 'Não foi possível vincular esse produto.');
   }
 });
+
+// --- Mais Vendidos (Insights) ---
+// Ranking de produtos de um dia por loja (api_mais_vendidos_do_dia), no
+// layout que a Julia mandou de referência em 2026-09-14: abas de loja,
+// cartões do dia, top produtos, receita por categoria, comparativo entre
+// lojas e ranking detalhado. A aba de loja vale pra tela inteira. As setas
+// andam entre dias que tiveram venda, então a segunda (lojas fechadas) é
+// pulada sozinha. Tudo é comparado com o mesmo dia da semana anterior.
+// Produto que o estoque não reconhece vem marcado; pra admin, a marca abre
+// o vincular.
+let maisVendidosDados = null;
+let mvLojaFiltro = 'todas';
+let mvBusca = '';
+let mvOrdem = 'quantidade';
+const MV_RANKING_PASSO = 15;
+let mvRankingLimite = MV_RANKING_PASSO;
+const MV_TOP_PRODUTOS = 8;
+const DIAS_DA_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+// A cor de cada loja (em mais-vendidos.css) é a mesma em todos os gráficos.
+const MV_LOJAS = {
+  'Hamburgueria Artesanos': { classe: 'loja-artesanos', curto: 'Artesanos' },
+  'Açaí Na Lata': { classe: 'loja-acai', curto: 'Açaí Na Lata' },
+  'Tradiça ZN': { classe: 'loja-zn', curto: 'Tradiça ZN' },
+  'Tradiça Simus': { classe: 'loja-simus', curto: 'Tradiça Simus' },
+};
+// Tons da cor da loja, em %, pras fatias da rosca de categorias.
+const MV_TONS_CATEGORIA = [100, 74, 52, 34, 20];
+
+function _formatarQuantidadeVendida(valor) {
+  return Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+}
+
+function _mvMoeda(valor) {
+  return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// "R$ 6,9 mil" pros eixos e rótulos curtos dos gráficos.
+function _mvMoedaCurta(valor) {
+  if (Math.abs(valor) >= 1000) {
+    return `R$ ${(valor / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  }
+  return `R$ ${Math.round(valor).toLocaleString('pt-BR')}`;
+}
+
+function _mvData(iso) {
+  const [ano, mes, dia] = iso.split('-').map(Number);
+  return {
+    data: new Date(ano, mes - 1, dia),
+    texto: `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`,
+  };
+}
+
+// "dom. 06/09" — o dia com que tudo na tela é comparado.
+function _mvRotuloComparado() {
+  const { data, texto } = _mvData(maisVendidosDados.diaComparado);
+  return `${DIAS_DA_SEMANA[data.getDay()].slice(0, 3).toLowerCase()}. ${texto}`;
+}
+
+function _mvTextoSemVenda() {
+  return _mvData(maisVendidosDados.dia).data.getDay() === 1
+    ? 'Segunda-feira: as lojas não abrem.'
+    : 'Nenhuma venda nesse dia.';
+}
+
+function _mvNormalizar(texto) {
+  return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Categoria como veio do cardápio ("QUERIDINHOS", "Smash - Clássicos"): o
+// que vem todo em maiúscula fica só com a primeira letra grande.
+function _mvCategoria(nome) {
+  if (!nome) return 'Sem categoria';
+  const limpo = nome.trim();
+  if (limpo !== limpo.toUpperCase()) return limpo;
+  const minusculo = limpo.toLocaleLowerCase('pt-BR');
+  return minusculo.charAt(0).toLocaleUpperCase('pt-BR') + minusculo.slice(1);
+}
+
+// Escala redonda pros eixos (0, 10, 20, 30 em vez de 0, 9, 18, 27).
+// `inteiro`: unidade vendida não tem marca de 0,5.
+function _mvEscala(maximo, inteiro = false, divisoes = 4) {
+  if (!maximo || maximo <= 0) return { topo: 1, passo: 1 };
+  const bruto = maximo / divisoes;
+  const potencia = 10 ** Math.floor(Math.log10(bruto));
+  let passo = [1, 2, 2.5, 5, 10].map((m) => m * potencia).find((p) => p >= bruto);
+  if (inteiro) passo = Math.max(1, Math.ceil(passo));
+  return { topo: passo * Math.ceil(maximo / passo), passo };
+}
+
+function _mvMarcas({ topo, passo }) {
+  const marcas = [];
+  for (let valor = 0; valor <= topo + passo / 1000; valor += passo) marcas.push(valor);
+  return marcas;
+}
+
+// Variação contra o mesmo dia da semana anterior. null = não tem aquele dia
+// pra comparar; Infinity = não tinha vendido nada e agora vendeu.
+function _mvVariacao(atual, anterior) {
+  if (anterior === null || anterior === undefined) return null;
+  if (!anterior) return atual ? Infinity : 0;
+  return (atual - anterior) / anterior;
+}
+
+function _mvLojasFiltradas() {
+  return maisVendidosDados.lojas.filter((l) => mvLojaFiltro === 'todas' || l.loja === mvLojaFiltro);
+}
+
+function _mvProdutos(lojas) {
+  return lojas.flatMap((l) => l.produtos.map((p) => ({ ...p, loja: l.loja })));
+}
+
+function iniciarMaisVendidos() {
+  document.getElementById('mv-dia-anterior').addEventListener('click', () => {
+    if (maisVendidosDados?.anterior) carregarMaisVendidos(maisVendidosDados.anterior);
+  });
+  document.getElementById('mv-dia-proximo').addEventListener('click', () => {
+    if (maisVendidosDados?.proximo) carregarMaisVendidos(maisVendidosDados.proximo);
+  });
+  const input = document.getElementById('mv-dia-input');
+  input.closest('.dia-rotulo').addEventListener('click', (evento) => {
+    evento.preventDefault();
+    try {
+      input.showPicker();
+    } catch (e) {
+      input.focus();
+    }
+  });
+  input.addEventListener('change', () => {
+    if (input.value) carregarMaisVendidos(input.value);
+  });
+
+  document.querySelectorAll('#mv-lojas-tabs .tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => _mvFiltrarLoja(btn.dataset.loja));
+  });
+  document.getElementById('mv-ranking-loja').addEventListener('change', (evento) => {
+    _mvFiltrarLoja(evento.target.value);
+  });
+  document.getElementById('mv-busca').addEventListener('input', (evento) => {
+    mvBusca = evento.target.value;
+    mvRankingLimite = MV_RANKING_PASSO;
+    _renderMvRanking();
+  });
+  document.getElementById('mv-ordem').addEventListener('change', (evento) => {
+    mvOrdem = evento.target.value;
+    _renderMvRanking();
+  });
+  document.getElementById('mv-ranking-mais').addEventListener('click', () => {
+    mvRankingLimite += MV_RANKING_PASSO;
+    _renderMvRanking();
+  });
+
+  carregarMaisVendidos(null);
+  // Hoje a sincronização roda a cada 15 min: olhando o dia de hoje, a tela
+  // acompanha sozinha.
+  iniciarAtualizacaoAutomatica(() => {
+    if (maisVendidosDados && maisVendidosDados.dia === maisVendidosDados.hoje) {
+      carregarMaisVendidos(maisVendidosDados.dia);
+    }
+  });
+}
+
+function _mvFiltrarLoja(loja) {
+  mvLojaFiltro = loja;
+  mvRankingLimite = MV_RANKING_PASSO;
+  document.querySelectorAll('#mv-lojas-tabs .tab-btn').forEach((btn) => {
+    const ativa = btn.dataset.loja === loja;
+    btn.classList.toggle('active', ativa);
+    btn.setAttribute('aria-selected', ativa ? 'true' : 'false');
+  });
+  document.getElementById('mv-ranking-loja').value = loja;
+  renderMaisVendidos(true);
+}
+
+async function carregarMaisVendidos(dia) {
+  const mesmoDia = Boolean(dia && maisVendidosDados && dia === maisVendidosDados.dia);
+  try {
+    const resposta = await fetch(`/api/vendas/mais-vendidos${dia ? `?dia=${encodeURIComponent(dia)}` : ''}`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
+    if (!mesmoDia) mvRankingLimite = MV_RANKING_PASSO;
+    maisVendidosDados = dados;
+    renderMaisVendidos(!mesmoDia);
+  } catch (erro) {
+    console.error('Falha ao carregar os mais vendidos:', erro);
+    if (!maisVendidosDados) {
+      document.getElementById('mv-ranking-lista').innerHTML =
+        '<li class="mv-ranking-vazio">Não deu pra carregar as vendas agora. Recarregue a página em instantes.</li>';
+    }
+  }
+}
+
+function renderMaisVendidos(animar = true) {
+  const dados = maisVendidosDados;
+  if (!dados || !document.getElementById('mv-ranking-lista')) return;
+
+  const { data, texto } = _mvData(dados.dia);
+  const ehHoje = dados.dia === dados.hoje;
+  const semana = DIAS_DA_SEMANA[data.getDay()];
+  document.getElementById('mv-dia-semana').textContent = ehHoje ? 'Hoje, até agora' : semana;
+  document.getElementById('mv-dia-data').textContent = texto;
+  document.getElementById('mv-eyebrow-dia').textContent = `${ehHoje ? 'HOJE' : semana.toUpperCase()}, ${texto}`;
+  const input = document.getElementById('mv-dia-input');
+  input.value = dados.dia;
+  input.max = dados.hoje;
+  document.getElementById('mv-dia-anterior').disabled = !dados.anterior;
+  document.getElementById('mv-dia-proximo').disabled = !dados.proximo;
+
+  document.querySelector('.page-content').classList.toggle('mv-animar', animar);
+  const lojas = _mvLojasFiltradas();
+  const rotuloComparado = _mvRotuloComparado();
+  _renderMvCartoes(lojas, rotuloComparado);
+  _renderMvTopProdutos(lojas);
+  _renderMvCategorias(lojas);
+  _renderMvComparativo(dados.lojas, rotuloComparado);
+  _renderMvRanking();
+}
+
+// --- Cartões do dia ---
+function _mvTendenciaCartao(id, variacao, rotuloComparado) {
+  const elemento = document.getElementById(id);
+  if (!elemento) return;
+  if (variacao === null || !isFinite(variacao)) {
+    elemento.innerHTML = `<span class="trend-sub">sem venda em ${escaparHtml(rotuloComparado)} pra comparar</span>`;
+    return;
+  }
+  const pct = Math.round(variacao * 100);
+  const classe = pct > 0 ? 'trend-up' : pct < 0 ? 'trend-down' : '';
+  const icone = pct > 0 ? 'trending-up' : pct < 0 ? 'trending-down' : 'minus';
+  elemento.innerHTML = `
+    <span class="trend-value ${classe}"><i data-lucide="${icone}"></i> ${pct > 0 ? '+' : ''}${pct}%</span>
+    <span class="trend-sub">vs. ${escaparHtml(rotuloComparado)}</span>`;
+}
+
+function _renderMvCartoes(lojas, rotuloComparado) {
+  const somar = (lista, campo) => lista.reduce((total, l) => total + (l[campo] || 0), 0);
+  const faturamento = somar(lojas, 'faturamento');
+  const pedidos = somar(lojas, 'pedidos');
+  document.getElementById('mv-kpi-faturamento').textContent = _mvMoeda(faturamento);
+  document.getElementById('mv-kpi-unidades').textContent = _formatarQuantidadeVendida(somar(lojas, 'itens'));
+  document.getElementById('mv-kpi-pedidos').textContent = pedidos.toLocaleString('pt-BR');
+  document.getElementById('mv-kpi-ticket').textContent = pedidos ? _mvMoeda(faturamento / pedidos) : '—';
+
+  // A variação só conta as lojas que têm o dia anterior sincronizado —
+  // senão "Todas" compararia 4 lojas hoje com 2 na semana passada.
+  const comFaturamento = lojas.filter((l) => l.faturamentoComparado !== null && l.faturamentoComparado !== undefined);
+  const comItens = lojas.filter((l) => l.itensComparado > 0);
+  const variacao = (lista, atual, anterior) => (lista.length ? _mvVariacao(somar(lista, atual), somar(lista, anterior)) : null);
+  _mvTendenciaCartao('mv-kpi-faturamento-trend', variacao(comFaturamento, 'faturamento', 'faturamentoComparado'), rotuloComparado);
+  _mvTendenciaCartao('mv-kpi-unidades-trend', variacao(comItens, 'itens', 'itensComparado'), rotuloComparado);
+  _mvTendenciaCartao('mv-kpi-pedidos-trend', variacao(comFaturamento, 'pedidos', 'pedidosComparado'), rotuloComparado);
+  const pedidosHoje = somar(comFaturamento, 'pedidos');
+  const pedidosAntes = somar(comFaturamento, 'pedidosComparado');
+  _mvTendenciaCartao(
+    'mv-kpi-ticket-trend',
+    pedidosHoje && pedidosAntes
+      ? _mvVariacao(somar(comFaturamento, 'faturamento') / pedidosHoje, somar(comFaturamento, 'faturamentoComparado') / pedidosAntes)
+      : null,
+    rotuloComparado,
+  );
+}
+
+// --- Top produtos por volume (barras deitadas) ---
+function _renderMvTopProdutos(lojas) {
+  const alvo = document.getElementById('mv-top-grafico');
+  const todas = mvLojaFiltro === 'todas';
+  document.getElementById('mv-top-subtitulo').textContent =
+    `${todas ? 'Todas as lojas' : mvLojaFiltro} · unidades vendidas`;
+  const top = _mvProdutos(lojas)
+    .sort((a, b) => b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, 'pt-BR'))
+    .slice(0, MV_TOP_PRODUTOS);
+  if (!top.length) {
+    alvo.innerHTML = `<p class="mv-nota">${_mvTextoSemVenda()}</p>`;
+    return;
+  }
+
+  const escala = _mvEscala(top[0].quantidade, true);
+  const marcas = _mvMarcas(escala);
+  const pct = (valor) => (valor / escala.topo) * 100;
+  alvo.innerHTML = `
+    <div class="mv-barras-linhas">
+      <div class="mv-barras-grade" aria-hidden="true">${marcas.map((v) => `<span style="left: ${pct(v)}%"></span>`).join('')}</div>
+      ${top.map((p, indice) => `
+        <div class="mv-barra-linha ${MV_LOJAS[p.loja]?.classe || ''}">
+          <span class="mv-barra-rotulo">
+            <span class="mv-barra-nome" title="${escaparHtml(p.nome)}">${escaparHtml(p.nome)}</span>
+            ${todas ? `<span class="mv-barra-loja">${escaparHtml(MV_LOJAS[p.loja]?.curto || p.loja)}</span>` : ''}
+          </span>
+          <span class="mv-barra-trilho"><span class="mv-barra" style="width: ${pct(p.quantidade).toFixed(2)}%; animation-delay: ${indice * 40}ms;"></span></span>
+          <span class="mv-barra-valor">${_formatarQuantidadeVendida(p.quantidade)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="mv-barras-eixo" aria-hidden="true">${marcas.map((v) => `<span style="left: ${pct(v)}%">${_formatarQuantidadeVendida(v)}</span>`).join('')}</div>
+    ${todas ? `
+      <div class="mv-legenda-lojas">
+        ${Object.values(MV_LOJAS).map((l) => `<span><i class="mv-ponto ${l.classe}"></i>${escaparHtml(l.curto)}</span>`).join('')}
+      </div>` : ''}`;
+}
+
+// --- Receita por categoria (rosca) ---
+function _renderMvCategorias(lojas) {
+  const alvo = document.getElementById('mv-categorias-grafico');
+  alvo.className = `mv-rosca-area ${mvLojaFiltro === 'todas' ? 'loja-artesanos' : MV_LOJAS[mvLojaFiltro]?.classe || ''}`;
+  const produtos = _mvProdutos(lojas);
+  const porCategoria = new Map();
+  let semPreco = 0;
+  produtos.forEach((p) => {
+    if (p.receita === null || p.receita === undefined) {
+      semPreco += 1;
+      return;
+    }
+    const nome = _mvCategoria(p.categoria);
+    porCategoria.set(nome, (porCategoria.get(nome) || 0) + p.receita);
+  });
+  const ordenadas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]);
+  if (!ordenadas.length) {
+    alvo.innerHTML = `<p class="mv-nota">${produtos.length
+      ? 'Os produtos vendidos nesse dia não têm preço no Cardápio, então não dá pra estimar a receita.'
+      : _mvTextoSemVenda()}</p>`;
+    return;
+  }
+
+  const fatias = ordenadas.slice(0, MV_TONS_CATEGORIA.length).map(([nome, valor], i) => ({
+    nome, valor, cor: `color-mix(in srgb, var(--cor-loja) ${MV_TONS_CATEGORIA[i]}%, var(--card-bg))`,
+  }));
+  const resto = ordenadas.slice(MV_TONS_CATEGORIA.length).reduce((total, [, valor]) => total + valor, 0);
+  if (resto > 0) fatias.push({ nome: 'Outras', valor: resto, cor: 'var(--text-faint)' });
+  const total = fatias.reduce((soma, f) => soma + f.valor, 0);
+
+  // Circunferência 100: cada fatia é a própria porcentagem, com um vão
+  // entre elas.
+  const raio = 15.9155;
+  const vao = fatias.length > 1 ? 0.8 : 0;
+  let inicio = 0;
+  const arcos = fatias.map((f) => {
+    const parte = (f.valor / total) * 100;
+    const traco = Math.max(parte - vao, 0.2);
+    const arco = `
+      <circle cx="21" cy="21" r="${raio}" stroke-width="6" style="stroke: ${f.cor};"
+              stroke-dasharray="${traco.toFixed(3)} ${(100 - traco).toFixed(3)}" stroke-dashoffset="${(-inicio).toFixed(3)}">
+        <title>${escaparHtml(f.nome)}: ${_mvMoeda(f.valor)}</title>
+      </circle>`;
+    inicio += parte;
+    return arco;
+  }).join('');
+
+  alvo.innerHTML = `
+    <div class="mv-rosca">
+      <svg viewBox="0 0 42 42" role="img" aria-label="Receita estimada por categoria">${arcos}</svg>
+      <div class="mv-rosca-centro">
+        <span class="mv-rosca-total">${_mvMoedaCurta(total)}</span>
+        <span class="mv-rosca-rotulo">estimado</span>
+      </div>
+    </div>
+    <ul class="mv-rosca-legenda">
+      ${fatias.map((f) => `
+        <li>
+          <i style="background-color: ${f.cor};"></i>
+          <span class="mv-cat-nome" title="${escaparHtml(f.nome)}">${escaparHtml(f.nome)}</span>
+          <span class="mv-cat-pct">${Math.round((f.valor / total) * 100)}%</span>
+          <span class="mv-cat-valor">${_mvMoeda(f.valor)}</span>
+        </li>`).join('')}
+    </ul>
+    ${semPreco ? `<p class="mv-nota">${semPreco} ${semPreco === 1 ? 'produto sem preço' : 'produtos sem preço'} no Cardápio ${semPreco === 1 ? 'ficou' : 'ficaram'} fora da conta.</p>` : ''}`;
+}
+
+// --- Comparativo entre lojas (colunas) ---
+function _renderMvComparativo(lojas, rotuloComparado) {
+  const alvo = document.getElementById('mv-comparativo-grafico');
+  document.getElementById('mv-comparativo-subtitulo').textContent =
+    `Faturamento do dia · variação contra ${rotuloComparado}`;
+  // Folga no topo pro valor em cima da coluna mais alta.
+  const escala = _mvEscala(Math.max(...lojas.map((l) => l.faturamento || 0)) * 1.15);
+  const marcas = _mvMarcas(escala);
+  const pct = (valor) => (valor / escala.topo) * 100;
+  alvo.classList.toggle('com-foco', mvLojaFiltro !== 'todas');
+
+  const rotulos = lojas.map((l) => {
+    const variacao = _mvVariacao(l.faturamento || 0, l.faturamentoComparado);
+    let delta = '<span class="mv-coluna-delta trend-sub">—</span>';
+    if (variacao !== null && isFinite(variacao)) {
+      const valor = Math.round(variacao * 100);
+      delta = `<span class="mv-coluna-delta ${valor > 0 ? 'trend-up' : valor < 0 ? 'trend-down' : 'trend-sub'}">${valor > 0 ? '+' : ''}${valor}%</span>`;
+    }
+    return `
+      <span class="mv-coluna-rotulo${l.loja === mvLojaFiltro ? ' foco' : ''}">
+        ${escaparHtml(MV_LOJAS[l.loja]?.curto || l.loja)}
+        ${delta}
+      </span>`;
+  }).join('');
+
+  alvo.innerHTML = `
+    <div class="mv-colunas-eixo" aria-hidden="true">${marcas.map((v) => `<span style="bottom: ${pct(v)}%">${_mvMoedaCurta(v)}</span>`).join('')}</div>
+    <div class="mv-colunas-plot">
+      <div class="mv-colunas-grade" aria-hidden="true">${marcas.slice(1).map((v) => `<span style="bottom: ${pct(v)}%"></span>`).join('')}</div>
+      ${lojas.map((l, indice) => `
+        <div class="mv-coluna ${MV_LOJAS[l.loja]?.classe || ''}${l.loja === mvLojaFiltro ? ' foco' : ''}" title="${escaparHtml(l.loja)}: ${_mvMoeda(l.faturamento || 0)}">
+          <span class="mv-coluna-valor">${_mvMoedaCurta(l.faturamento || 0)}</span>
+          <span class="mv-coluna-barra" style="height: ${pct(l.faturamento || 0).toFixed(2)}%; animation-delay: ${indice * 60}ms;"></span>
+        </div>`).join('')}
+    </div>
+    <div class="mv-colunas-rotulos">${rotulos}</div>`;
+}
+
+// --- Ranking detalhado ---
+function _mvChaveAlta(produto) {
+  if (produto.variacao === null) return -Infinity;
+  return isFinite(produto.variacao) ? produto.variacao : Number.MAX_VALUE;
+}
+
+function _renderMvRanking() {
+  const dados = maisVendidosDados;
+  const lista = document.getElementById('mv-ranking-lista');
+  const botaoMais = document.getElementById('mv-ranking-mais');
+  if (!dados || !lista) return;
+
+  const lojas = _mvLojasFiltradas();
+  const rotuloComparado = _mvRotuloComparado();
+  const lojasComparaveis = new Set(lojas.filter((l) => l.itensComparado > 0).map((l) => l.loja));
+  // A posição é sempre a do ranking por unidades: buscar ou reordenar não
+  // muda quem é o 1º.
+  let produtos = _mvProdutos(lojas)
+    .sort((a, b) => b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, 'pt-BR'));
+  produtos.forEach((p, indice) => {
+    p.posicao = indice + 1;
+    p.variacao = lojasComparaveis.has(p.loja) ? _mvVariacao(p.quantidade, p.quantidadeComparada) : null;
+  });
+  const maximo = produtos.length ? produtos[0].quantidade : 1;
+  const total = produtos.length;
+
+  const busca = _mvNormalizar(mvBusca.trim());
+  if (busca) {
+    produtos = produtos.filter((p) => _mvNormalizar(p.nome).includes(busca) || _mvNormalizar(p.nomeVendido).includes(busca));
+  }
+  const ordens = {
+    quantidade: (a, b) => a.posicao - b.posicao,
+    receita: (a, b) => (b.receita ?? -1) - (a.receita ?? -1) || a.posicao - b.posicao,
+    alta: (a, b) => _mvChaveAlta(b) - _mvChaveAlta(a) || a.posicao - b.posicao,
+    nome: (a, b) => a.nome.localeCompare(b.nome, 'pt-BR'),
+  };
+  produtos.sort(ordens[mvOrdem] || ordens.quantidade);
+
+  const onde = mvLojaFiltro === 'todas' ? 'todas as lojas' : mvLojaFiltro;
+  document.getElementById('mv-ranking-subtitulo').textContent =
+    `${total} ${total === 1 ? 'produto' : 'produtos'} · ${onde}${busca ? ` · ${produtos.length} com "${mvBusca.trim()}"` : ''}`;
+
+  const admin = window.usuarioLogado?.papel === 'admin';
+  const visiveis = produtos.slice(0, mvRankingLimite);
+  lista.innerHTML = visiveis.length
+    ? visiveis.map((p, indice) => _mvLinhaRanking(p, maximo, admin, rotuloComparado, indice)).join('')
+    : `<li class="mv-ranking-vazio">${busca ? `Nenhum produto com "${escaparHtml(mvBusca.trim())}" nesse dia.` : _mvTextoSemVenda()}</li>`;
+
+  const faltam = produtos.length - visiveis.length;
+  botaoMais.hidden = faltam <= 0;
+  botaoMais.textContent = faltam > MV_RANKING_PASSO
+    ? `Mostrar mais ${MV_RANKING_PASSO} (faltam ${faltam})`
+    : `Mostrar os outros ${faltam}`;
+
+  lista.querySelectorAll('[data-mv-vincular]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirModalVincularProduto(btn.dataset.mvVincular));
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _mvLinhaRanking(p, maximo, admin, rotuloComparado, indice) {
+  const loja = MV_LOJAS[p.loja] || { classe: '', curto: p.loja };
+  const aviso = 'O estoque não sabe de qual item do cardápio é esse produto, então ele não desconta nada.';
+  const tag = !p.pendente ? '' : admin
+    ? `<button type="button" class="tag-pendente" data-mv-vincular="${escaparHtml(p.nomeVendido)}" title="${aviso} Clique pra vincular.">não reconhecido</button>`
+    : `<span class="tag-pendente" title="${aviso}">não reconhecido</span>`;
+  const iniciais = p.nome.split(/\s+/).filter(Boolean).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase();
+  const foto = p.fotoUrl
+    ? `<img class="mv-foto" src="${escaparHtml(p.fotoUrl)}" alt="" loading="lazy">`
+    : `<span class="mv-foto mv-foto-vazia" aria-hidden="true">${escaparHtml(iniciais)}</span>`;
+  const temReceita = p.receita !== null && p.receita !== undefined;
+
+  let tendencia;
+  if (p.variacao === null) {
+    tendencia = `<span class="mv-tendencia igual" title="Sem venda em ${escaparHtml(rotuloComparado)} pra comparar">—</span>`;
+  } else if (!isFinite(p.variacao)) {
+    tendencia = `<span class="mv-tendencia novo" title="Não vendeu em ${escaparHtml(rotuloComparado)}">novo</span>`;
+  } else {
+    const pct = Math.round(p.variacao * 100);
+    const classe = pct > 0 ? 'alta' : pct < 0 ? 'queda' : 'igual';
+    const icone = pct > 0 ? 'trending-up' : pct < 0 ? 'trending-down' : 'minus';
+    tendencia = `
+      <span class="mv-tendencia ${classe}" title="${_formatarQuantidadeVendida(p.quantidadeComparada)} un. em ${escaparHtml(rotuloComparado)}">
+        <i data-lucide="${icone}"></i>${pct > 0 ? '+' : ''}${pct}%
+      </span>`;
+  }
+
+  return `
+    <li class="mv-ranking-linha ${loja.classe}">
+      <span class="mv-posicao${p.posicao <= 3 ? ' podio' : ''}">${p.posicao}</span>
+      ${foto}
+      <div class="mv-produto">
+        <div class="mv-produto-nome">${escaparHtml(p.nome)}${tag}</div>
+        <div class="mv-produto-meta">
+          <span class="mv-ponto"></span>
+          <span>${escaparHtml(_mvCategoria(p.categoria))} · ${escaparHtml(loja.curto)}</span>
+        </div>
+      </div>
+      <div class="mv-volume">
+        <span class="mv-volume-texto"><strong>${_formatarQuantidadeVendida(p.quantidade)} un.</strong>${temReceita ? ` · ${_mvMoeda(p.receita)}` : ''}</span>
+        <span class="mv-volume-trilho"><span class="mv-volume-barra" style="width: ${Math.max(2, (p.quantidade / maximo) * 100).toFixed(1)}%; animation-delay: ${Math.min(indice, 12) * 25}ms;"></span></span>
+      </div>
+      <span class="mv-preco">${temReceita && p.quantidade ? _mvMoeda(p.receita / p.quantidade) : '—'}<small>preço médio</small></span>
+      ${tendencia}
+    </li>`;
+}
 
 function wireEstoqueTableEvents() {
   document.querySelectorAll('[data-acao="editar-estoque"]').forEach(btn => {
@@ -6306,6 +6843,13 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
+    const painelBaixa = document.getElementById('painel-baixa-automatica');
+    if (painelBaixa && usuario.papel === 'admin') {
+      painelBaixa.style.display = '';
+      carregarBaixaAutomatica();
+    }
+    // Mais Vendidos: pra admin, a marca "não reconhecido" vira botão de vincular
+    if (maisVendidosDados && usuario.papel === 'admin') renderMaisVendidos(false);
     const painelIntegracoes = document.getElementById('painel-integracoes-estoque');
     if (painelIntegracoes && usuario.papel === 'admin') {
       painelIntegracoes.style.display = '';
