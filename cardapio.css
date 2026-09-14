@@ -368,6 +368,61 @@
   gap: 4px;
 }
 
+/* Nome editável (2026-09-14): pra admin, o nome no título do modal do
+   produto é um campo que parece o próprio título até passar o mouse ou
+   clicar — o mesmo recurso do valor editável da Vendas Semanais. Salva
+   junto no Salvar do modal. No complemento, o lápis abre o mesmo campo
+   na linha (Enter salva). */
+.detalhe-produto-titulo-linha { flex: 1; flex-wrap: wrap; }
+.detalhe-produto-titulo-linha .panel-title[hidden] { display: none; }
+
+.nome-editavel {
+  field-sizing: content;
+  min-width: 6ch;
+  max-width: 100%;
+  margin-left: -9px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nome-editavel:hover { border-color: var(--input-border); }
+
+.nome-editavel:focus {
+  background-color: var(--input-bg);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.nome-editavel[hidden] { display: none; }
+
+.nome-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.nome-inline-ajuda {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.nome-inline-ajuda.erro { color: var(--danger); }
+.nome-inline-ajuda[hidden] { display: none; }
+
 /* Tirar do cardápio (2026-09-14): à esquerda, longe do Salvar. */
 .detalhe-produto-acoes { flex-wrap: wrap; }
 

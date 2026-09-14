@@ -302,10 +302,12 @@
         <div class="modal-header">
           <div class="detalhe-produto-titulo-linha">
             <h3 class="panel-title" id="detalhe-produto-titulo">Produto</h3>
-            <!-- Renomear (só admin, mostrado por abrirModalDetalheProduto) -->
-            <button type="button" class="btn-lapis-nome" id="btn-detalhe-produto-renomear" title="Renomear" aria-label="Renomear produto" hidden>
+            <!-- Pra admin, o título é este campo (salva junto no Salvar do modal) -->
+            <input type="text" class="nome-editavel" id="detalhe-produto-nome-input" aria-label="Nome do produto" autocomplete="off" hidden>
+            <button type="button" class="btn-lapis-nome" id="btn-detalhe-produto-renomear" title="Editar nome" aria-label="Editar nome do produto" hidden>
               <i data-lucide="pencil"></i>
             </button>
+            <p class="nome-inline-ajuda" id="detalhe-produto-nome-ajuda" hidden></p>
           </div>
           <button type="button" class="btn-close" id="btn-detalhe-produto-fechar" aria-label="Fechar">&times;</button>
         </div>

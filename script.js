@@ -7502,6 +7502,8 @@ let fichaTecnicaMisturas = [];
 let fichaTecnicaInsumosDisponiveis = [];
 let fichaTecnicaEditandoItemId = null;
 const fichaTecnicaExpandidos = new Set();
+// Complemento com o nome aberto pra edição (lápis ao lado do nome).
+let complementoEditandoNomeId = null;
 const fichaTecnicaInsumosCache = new Map();
 let fichaTecnicaProdutoPendente = null;
 let fichaTecnicaCategoriaSelecionada = null;
@@ -7556,6 +7558,7 @@ function carregarFichaTecnicaAtual() {
     }));
     fichaTecnicaExpandidos.clear();
     fichaTecnicaInsumosCache.clear();
+    complementoEditandoNomeId = null;
     if (!temComplementos && fichaTecnicaCategoriaSelecionada === FICHA_TECNICA_COMPLEMENTOS_ITEM) {
       fichaTecnicaCategoriaSelecionada = null;
     }
@@ -7797,11 +7800,17 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
         <div class="ficha-tecnica-produto ${expandido ? 'expandido' : ''}">
           <div class="ficha-tecnica-produto-linha ficha-tecnica-complemento-linha" data-acao="expandir-produto" data-item-id="${c.itemCardapioId}">
             <div class="ficha-tecnica-produto-nome">
-              ${escaparHtml(c.nome)}
-              ${isAdmin ? `
-                <button type="button" class="btn-lapis-nome" data-acao="renomear-complemento" data-item-id="${c.itemCardapioId}" data-nome="${escaparHtml(c.nome)}" title="Renomear" aria-label="Renomear ${escaparHtml(c.nome)}">
-                  <i data-lucide="pencil"></i>
-                </button>` : ''}
+              ${isAdmin && complementoEditandoNomeId === c.itemCardapioId ? `
+                <form class="nome-inline-form" data-acao="form-nome-complemento" data-item-id="${c.itemCardapioId}">
+                  <input type="text" class="nome-editavel" value="${escaparHtml(c.nome)}" aria-label="Nome do complemento" autocomplete="off">
+                  <p class="nome-inline-ajuda">Enter salva, Esc desiste. ${AJUDA_RENOMEAR_ITEM}</p>
+                  <p class="nome-inline-ajuda erro" hidden></p>
+                </form>` : `
+                ${escaparHtml(c.nome)}
+                ${isAdmin ? `
+                  <button type="button" class="btn-lapis-nome" data-acao="renomear-complemento" data-item-id="${c.itemCardapioId}" title="Renomear" aria-label="Renomear ${escaparHtml(c.nome)}">
+                    <i data-lucide="pencil"></i>
+                  </button>` : ''}`}
             </div>
             <i data-lucide="chevron-down" class="ficha-tecnica-chevron"></i>
           </div>
@@ -7815,14 +7824,51 @@ function _renderComplementosConteudo(conteudoEl, isAdmin) {
   conteudoEl.querySelectorAll('[data-acao="expandir-produto"]').forEach(linha => {
     linha.addEventListener('click', () => alternarProdutoFichaTecnica(parseInt(linha.dataset.itemId, 10)));
   });
-  // O lápis fica dentro da linha que abre/fecha: o clique nele não pode
-  // abrir/fechar junto.
+  // O lápis e o campo de nome ficam dentro da linha que abre/fecha: clicar
+  // neles não pode abrir/fechar junto.
   conteudoEl.querySelectorAll('[data-acao="renomear-complemento"]').forEach(btn => {
     btn.addEventListener('click', (evento) => {
       evento.stopPropagation();
-      _renomearProdutoCardapio({ itemId: parseInt(btn.dataset.itemId, 10), nomeAtual: btn.dataset.nome });
+      complementoEditandoNomeId = parseInt(btn.dataset.itemId, 10);
+      renderFichaTecnicaConteudo();
     });
   });
+  const formNome = conteudoEl.querySelector('[data-acao="form-nome-complemento"]');
+  if (formNome) {
+    const input = formNome.querySelector('input');
+    const erro = formNome.querySelector('.nome-inline-ajuda.erro');
+    const fechar = () => {
+      complementoEditandoNomeId = null;
+      renderFichaTecnicaConteudo();
+    };
+    formNome.addEventListener('click', (evento) => evento.stopPropagation());
+    input.addEventListener('keydown', (evento) => {
+      if (evento.key === 'Escape') {
+        evento.preventDefault();
+        fechar();
+      }
+    });
+    formNome.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const itemId = parseInt(formNome.dataset.itemId, 10);
+      const complemento = fichaTecnicaComplementos.find(c => c.itemCardapioId === itemId);
+      const novoNome = input.value.trim();
+      if (!complemento || !novoNome || novoNome === complemento.nome) {
+        fechar();
+        return;
+      }
+      try {
+        const dados = await _salvarNovoNomeCardapio({ itemId, novoNome });
+        complemento.nome = dados.nome;
+        fechar();
+      } catch (falha) {
+        erro.textContent = falha.message;
+        erro.hidden = false;
+      }
+    });
+    input.focus();
+    input.select();
+  }
 
   fichaTecnicaExpandidos.forEach(itemId => renderPainelFichaTecnicaExpandido(itemId));
 
@@ -7996,37 +8042,26 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
 }
 
 // Renomear (lápis ao lado do nome, 2026-09-14 — no modal do produto e na
-// linha do complemento): pede o nome novo e confirma antes de mudar. Com
+// linha do complemento). O nome vira um campo ali mesmo, com "Salvar nome"
+// e "Cancelar" — sem janela do navegador, a pedido da Julia; o clique em
+// Salvar é a confirmação, e a ajuda embaixo do campo diz o que muda. Com
 // item do cardápio, muda em todas as lojas e o nome antigo fica como
 // vínculo, pra venda que ainda chegar com ele continuar reconhecida
 // (renomear_item_cardapio); produto sem item (sem ficha) muda só naquela
-// loja. Devolve true se renomeou.
-async function _renomearProdutoCardapio({ itemId, precoCardapioId, nomeAtual }) {
-  const novoNome = (prompt(`Novo nome pra "${nomeAtual}":`, nomeAtual) || '').trim();
-  if (!novoNome || novoNome === nomeAtual) return false;
-  const aviso = itemId
-    ? `Renomear "${nomeAtual}" para "${novoNome}" em todas as lojas?\n\nTroque o nome na Cardápio Web também. O nome antigo fica guardado como vínculo: os pedidos que ainda chegarem com ele continuam descontando do estoque.`
-    : `Renomear "${nomeAtual}" para "${novoNome}" no cardápio da ${fichaTecnicaLojaAtual}?`;
-  if (!confirm(aviso)) return false;
-  try {
-    const rota = itemId ? `/api/itens-cardapio/${itemId}/nome` : `/api/precos-cardapio/${precoCardapioId}/nome`;
-    const resposta = await fetch(rota, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: novoNome }),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível renomear.');
-    itensCardapioTodosCache = null;
-    await carregarFichaTecnicaAtual();
-    if (dados.lojasIgnoradas?.length) {
-      alert(`Renomeado. Em ${dados.lojasIgnoradas.join(', ')} já existia um produto chamado "${novoNome}", então lá ficou o nome antigo.`);
-    }
-    return true;
-  } catch (erro) {
-    alert(erro.message);
-    return false;
-  }
+// loja. Erro volta como exceção, pra aparecer embaixo do campo.
+const AJUDA_RENOMEAR_ITEM = 'Muda em todas as lojas. Troque na Cardápio Web também: enquanto lá estiver o nome antigo, os pedidos continuam sendo reconhecidos.';
+
+async function _salvarNovoNomeCardapio({ itemId, precoCardapioId, novoNome }) {
+  const rota = itemId ? `/api/itens-cardapio/${itemId}/nome` : `/api/precos-cardapio/${precoCardapioId}/nome`;
+  const resposta = await fetch(rota, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome: novoNome }),
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível renomear.');
+  itensCardapioTodosCache = null;
+  return dados;
 }
 
 // Modal de detalhe do produto — abre ao clicar no cartão inteiro (sem
@@ -8199,6 +8234,27 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     const botao = evento.currentTarget;
     botao.disabled = true;
     botao.textContent = 'Salvando...';
+    // Nome primeiro: se ele for recusado (já existe outro com esse nome), o
+    // aviso aparece embaixo do título e nada mais é salvo.
+    const campoNome = document.getElementById('detalhe-produto-nome-input');
+    const novoNome = campoNome && !campoNome.hidden ? campoNome.value.trim() : '';
+    if (novoNome && novoNome !== produto.nome) {
+      try {
+        const dados = await _salvarNovoNomeCardapio({ itemId: produto.itemCardapioId, precoCardapioId, novoNome });
+        produto.nome = dados.nome;
+        if (dados.lojasIgnoradas?.length) {
+          alert(`Em ${dados.lojasIgnoradas.join(', ')} já existia um produto chamado "${dados.nome}", então lá ficou o nome antigo.`);
+        }
+      } catch (falha) {
+        const ajudaNome = document.getElementById('detalhe-produto-nome-ajuda');
+        ajudaNome.textContent = falha.message;
+        ajudaNome.classList.add('erro');
+        ajudaNome.hidden = false;
+        botao.disabled = false;
+        botao.textContent = 'Salvar';
+        return;
+      }
+    }
     try {
       if (Object.keys(alteracoesPreco).length) {
         const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, {
@@ -8237,25 +8293,39 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     abrirModalFichaTecnicaItem(produto.itemCardapioId);
   });
 
-  // Lápis ao lado do nome (Renomear) e "Tirar do cardápio desta loja"
-  // (2026-09-14): cada um pede confirmação antes de mudar qualquer coisa.
-  // O lápis mora no cabeçalho fixo do modal, por isso onclick (e não
-  // addEventListener): cada produto aberto troca o clique do anterior.
-  const temAlteracoesPendentes = () => Object.keys(alteracoesPreco).length > 0 || custoAlterado !== null || porcoesAlteradas;
+  // Nome editável direto no título (pedido da Julia, 2026-09-14): pra
+  // admin, o título é um campo; o lápis só leva o cursor pra ele. O nome
+  // novo é salvo junto com preço e custo, no Salvar do modal — ver o
+  // handler de Salvar acima e _salvarNovoNomeCardapio. Os elementos são
+  // fixos no cabeçalho do modal, por isso on* (cada produto aberto troca os
+  // do anterior).
+  const inputNome = document.getElementById('detalhe-produto-nome-input');
   const lapis = document.getElementById('btn-detalhe-produto-renomear');
-  if (lapis) {
+  if (inputNome && lapis) {
+    const ajudaNome = document.getElementById('detalhe-produto-nome-ajuda');
+    document.getElementById('detalhe-produto-titulo').hidden = isAdmin;
+    inputNome.hidden = !isAdmin;
     lapis.hidden = !isAdmin;
-    lapis.onclick = async () => {
-      if (temAlteracoesPendentes()) {
-        alert('Salve ou cancele as alterações de preço e custo antes de renomear.');
-        return;
+    inputNome.value = produto.nome;
+    ajudaNome.hidden = true;
+    ajudaNome.classList.remove('erro');
+    inputNome.oninput = () => {
+      const mudou = inputNome.value.trim() !== produto.nome;
+      ajudaNome.classList.remove('erro');
+      ajudaNome.textContent = produto.itemCardapioId
+        ? `Ao salvar, o nome muda em todas as lojas. ${AJUDA_RENOMEAR_ITEM.replace(/^Muda em todas as lojas\. /, '')}`
+        : `Ao salvar, o nome muda só no cardápio da ${fichaTecnicaLojaAtual}.`;
+      ajudaNome.hidden = !mudou;
+    };
+    inputNome.onkeydown = (evento) => {
+      if (evento.key === 'Enter') {
+        evento.preventDefault();
+        document.getElementById('btn-detalhe-produto-salvar')?.click();
       }
-      const renomeado = await _renomearProdutoCardapio({
-        itemId: produto.itemCardapioId,
-        precoCardapioId,
-        nomeAtual: produto.nome,
-      });
-      if (renomeado) fecharModalDetalheProduto();
+    };
+    lapis.onclick = () => {
+      inputNome.focus();
+      inputNome.select();
     };
   }
 

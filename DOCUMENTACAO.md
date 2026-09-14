@@ -643,8 +643,12 @@ do Catálogo da Cardápio Web.
 
 **Renomear e Tirar do cardápio** (2026-09-14, pedido da Julia; os dois
 pedem confirmação antes de mudar qualquer coisa, só admin):
-- **Renomear** (lápis ao lado do nome: no título do modal do produto e na
-  linha de cada complemento): com item
+- **Renomear**: no modal do produto, o próprio título é um campo pra
+  admin (o lápis ao lado só põe o cursor nele), salvo junto com preço e
+  custo no Salvar do modal — sem janela do navegador, a pedido da Julia;
+  a ajuda embaixo do título diz o que muda assim que o nome é alterado, e
+  um nome recusado aparece ali mesmo, sem salvar o resto. No complemento,
+  o lápis abre o mesmo campo na linha (Enter salva, Esc desiste). Com item
   do cardápio, `PUT /api/itens-cardapio/<id>/nome` (`renomear_item_cardapio`)
   troca o nome do item e das linhas de `preco_cardapio` que casavam com
   ele em todas as lojas, e grava o nome antigo como vínculo manual pro
