@@ -4715,7 +4715,10 @@ def criar_contagem(loja, descricao, prazo_validade, categorias=None):
     escolhidas se filtrado, esperando preenchimento. `categorias` vazio/None
     inclui todos os insumos dessa loja. Assim o funcionário do Artesanos não
     vê insumo que só existe nos Tradiças, e vice-versa (ajustável na tela
-    "Insumos da loja" do Estoque)."""
+    "Insumos da loja" do Estoque).
+
+    Mistura feita na casa (com receita) fica de fora: ela não é contada,
+    só os insumos comprados (Julia, 2026-09-15)."""
     token = secrets.token_urlsafe(24)
     agora = datetime.now().isoformat()
     with conexao() as conn:
@@ -4725,7 +4728,7 @@ def criar_contagem(loja, descricao, prazo_validade, categorias=None):
                 f"""
                 SELECT i.id FROM insumo i
                 JOIN insumo_loja il ON il.insumo_id = i.id AND il.loja = ?
-                WHERE i.categoria IN ({marcadores})
+                WHERE i.categoria IN ({marcadores}) AND i.rendimento_receita IS NULL
                 """,
                 [loja, *categorias],
             ).fetchall()
@@ -4734,6 +4737,7 @@ def criar_contagem(loja, descricao, prazo_validade, categorias=None):
                 """
                 SELECT i.id FROM insumo i
                 JOIN insumo_loja il ON il.insumo_id = i.id AND il.loja = ?
+                WHERE i.rendimento_receita IS NULL
                 """,
                 (loja,),
             ).fetchall()

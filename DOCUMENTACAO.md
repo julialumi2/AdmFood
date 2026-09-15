@@ -2598,6 +2598,13 @@ perde água). Global, sem loja: a receita da mistura é padrão de cozinha.
   preço disso é que o tempero já no pote conta como consumido — no máximo
   uma batelada, pro lado seguro. A baixa cria a linha de estoque do
   ingrediente na loja quando ainda não existe, pra não sumir calada.
+- **Mistura não é contada** (Julia, 2026-09-15): só os insumos comprados.
+  Desde então ela fica fora da tela de Estoque (tabela, cards, saúde e
+  valor em estoque — `_linhasEstoqueParaTab` no script.js) e da contagem
+  (`criar_contagem` pula insumo com `rendimento_receita`). O saldo dela não
+  diz nada: a venda desconta os ingredientes.
+- **Chimichurri** (15/09, provisório até a cozinha confirmar): 100 g de
+  Chimichurri Tempero + 0,1 galão (500 ml) de Azeite composto, rende 550 ml.
 - **Tela**: Cardápio → item **"Misturas"** no menu lateral de categorias,
   no Artesanos e nos Tradiças (a receita é global) — pedido da Julia em
   10/09 pra ficha técnica, complemento e mistura ficarem num lugar só; antes

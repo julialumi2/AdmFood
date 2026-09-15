@@ -1524,9 +1524,15 @@ function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
 // "geral" traz uma linha por insumo, SOMANDO quantidade e mínimo das 4
 // lojas (visão consolidada da rede) — não separa por loja. Uma loja
 // específica traz a linha real daquela loja.
+// Mistura feita na casa (tem receita) não é contada — só os insumos
+// comprados são (pedido da Julia, 2026-09-15). A venda já desconta os
+// ingredientes dela, então o saldo da mistura não diz nada: fica fora da
+// tabela, dos cards e do valor em estoque. A receita continua em
+// Cardápio → Misturas.
 function _linhasEstoqueParaTab(tab) {
+  const insumosContados = estoqueInsumos.filter((insumo) => !insumo.ehMistura);
   if (tab === 'geral') {
-    return estoqueInsumos
+    return insumosContados
       .filter((insumo) => LOJAS_ESTOQUE.some((loja) => insumo.porLoja[loja]?.aplica))
       .map((insumo) => {
       let quantidadeAtual = 0;
@@ -1554,7 +1560,7 @@ function _linhasEstoqueParaTab(tab) {
     });
   }
 
-  return estoqueInsumos
+  return insumosContados
     .filter((insumo) => insumo.porLoja[tab]?.aplica)
     .map((insumo) => {
       const ideal = _quantidadeIdealParaLinha(insumo.id, tab);
