@@ -495,6 +495,22 @@ aparece em qualquer aba, já que remove de todas as lojas de qualquer
 jeito. Leitura liberada pra todo mundo logado; cadastrar/editar/excluir é
 só admin.
 
+**Valor em estoque** (2026-09-15, pedido do chefe da Julia, com base num
+print do sistema "Gerenciar"): 5º card do resumo, **só admin** (é quem
+recebe custo em `GET /api/insumos`). Soma quantidade atual × `custoEmUso`
+de cada insumo, o mesmo custo do CMV (`custo_em_uso_por_insumo`: última
+compra recebida > cotação > custo do cadastro; mistura usa a receita).
+Estoque negativo conta como zero, e a Visão Geral soma loja por loja, pra
+um negativo numa loja não descontar o estoque de outra. Insumo com estoque
+e sem custo nenhum fica de fora e aparece contado embaixo do valor ("3
+itens sem custo ficaram de fora"). Acompanha a busca, igual aos outros
+cards. Conta no navegador (`_renderValorEmEstoque` no `script.js`), sem
+rota nova. Layout: lado a lado com as 4 contagens (pedido da Julia), numa
+5ª coluna um pouco mais larga; o número diminui junto com o card
+(container query) em vez de vazar, e os números dos 5 cards ficam
+alinhados no pé mesmo quando "ITENS CADASTRADOS" quebra em duas linhas.
+No celular (2x2), o valor ocupa a linha de baixo inteira.
+
 **Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
 de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
 topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via

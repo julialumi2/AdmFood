@@ -264,7 +264,7 @@
         </div>
 
         <!-- CARDS DE RESUMO DO ESTOQUE -->
-        <div class="cards-grid cards-grid-2x2-mobile">
+        <div class="cards-grid cards-grid-2x2-mobile" id="estoque-cards">
           <div class="store-card store-card--total">
             <span class="card-subtitle">ITENS CADASTRADOS</span>
             <div class="metric-card-content">
@@ -294,6 +294,17 @@
             <div class="metric-card-content">
               <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
               <span class="store-value" id="estoque-val-critico">0</span>
+            </div>
+          </div>
+
+          <!-- Valor em estoque: só admin, porque mostra custo -->
+          <div class="store-card store-card--valor" id="estoque-card-valor" style="display:none;"
+               title="Quantidade atual × custo de cada insumo, com o mesmo custo do CMV (última compra recebida, cotação, receita da mistura ou custo do cadastro). Estoque negativo conta como zero.">
+            <span class="card-subtitle">VALOR EM ESTOQUE</span>
+            <span class="estoque-valor-nota" id="estoque-valor-nota" style="display:none;"></span>
+            <div class="metric-card-content">
+              <i data-lucide="banknote" class="metric-icon icon-valor"></i>
+              <span class="store-value" id="estoque-val-valor">R$ 0,00</span>
             </div>
           </div>
         </div>

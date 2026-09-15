@@ -1596,6 +1596,39 @@ function _formatarQuantidade(valor, unidade) {
   return `${texto} ${escaparHtml(rotulo)}`.trim();
 }
 
+// Card "Valor em estoque" (pedido do chefe da Julia, 2026-09-15): quantidade
+// atual × custo de cada insumo, com o mesmo custo que o CMV usa (ver
+// custo_em_uso_por_insumo). Só admin, que é quem recebe custo da API.
+// Estoque negativo (a baixa automática passou do contado) conta como zero,
+// e na Visão Geral a soma é loja por loja, pra um negativo numa loja não
+// descontar o estoque de outra. Segue a busca, igual aos outros cards.
+function _renderValorEmEstoque(linhas, isAdmin) {
+  const card = document.getElementById('estoque-card-valor');
+  if (!card) return;
+  card.style.display = isAdmin ? '' : 'none';
+  document.getElementById('estoque-cards').classList.toggle('estoque-cards--com-valor', isAdmin);
+  if (!isAdmin) return;
+
+  let valor = 0;
+  let semCusto = 0;
+  linhas.forEach(({ insumo, loja }) => {
+    const lojas = loja ? [loja] : LOJAS_ESTOQUE.filter((l) => insumo.porLoja[l]?.aplica);
+    const quantidade = lojas.reduce((soma, l) => soma + Math.max(0, Number(insumo.porLoja[l]?.quantidadeAtual) || 0), 0);
+    if (quantidade <= 0) return;
+    const custo = insumo.custoEmUso?.valor;
+    if (custo === null || custo === undefined) {
+      semCusto += 1;
+      return;
+    }
+    valor += quantidade * custo;
+  });
+
+  document.getElementById('estoque-val-valor').textContent = _formatarMoedaBRL(valor);
+  const nota = document.getElementById('estoque-valor-nota');
+  nota.textContent = semCusto === 1 ? '1 item sem custo ficou de fora' : `${semCusto} itens sem custo ficaram de fora`;
+  nota.style.display = semCusto ? '' : 'none';
+}
+
 function renderEstoqueTab() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const tbody = document.getElementById('estoque-tabela-body');
@@ -1635,6 +1668,7 @@ function renderEstoqueTab() {
   document.getElementById('estoque-val-ok').textContent = contagem.ok;
   document.getElementById('estoque-val-baixo').textContent = contagem.baixo;
   document.getElementById('estoque-val-critico').textContent = contagem.critico;
+  _renderValorEmEstoque(linhas, isAdmin);
 
   const totalSaude = linhas.length || 1;
   const pctOk = Math.round((contagem.ok / totalSaude) * 100);

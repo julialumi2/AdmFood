@@ -225,6 +225,44 @@
 .store-card--baixo { border-left: 3px solid var(--warning); }
 .store-card--critico { border-left: 3px solid var(--danger); }
 
+/* Valor em estoque (só admin). Dinheiro não é status, então o acento é o
+   marrom do texto, não uma cor semântica. Fica lado a lado com as
+   contagens (pedido da Julia), numa 5ª coluna um pouco mais larga, porque
+   "R$ 12.345,67" é mais comprido que uma contagem. */
+.cards-grid.estoque-cards--com-valor {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.4fr);
+}
+
+.store-card--valor {
+  border-left: 3px solid var(--text-dark);
+  container-type: inline-size;
+}
+
+.icon-valor { color: var(--text-dark); }
+
+/* Com 5 colunas, "ITENS CADASTRADOS" pode quebrar em duas linhas: o número
+   desce pro pé do card, pra todos ficarem na mesma altura. */
+.estoque-cards--com-valor .metric-card-content { margin-top: auto; }
+
+/* O valor diminui junto com o card em vez de vazar pra fora dele: a conta
+   é a largura do card menos o ícone (26px + 8px de espaço), dividida pelo
+   tamanho de "R$ 123.456,78" (13 caracteres de 0,6em na fonte mono). Em
+   card estreito demais, o ícone sai pra sobrar lugar pro número. */
+.store-card--valor .store-value {
+  font-size: clamp(0.8rem, calc((100cqi - 34px) / 7.8), 1.4rem);
+  white-space: nowrap;
+}
+
+@container (max-width: 150px) {
+  .icon-valor { display: none; }
+}
+
+.estoque-valor-nota {
+  margin-top: -4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 /* Saúde do estoque — faixa proporcional (ideal/baixo/crítico sobre o
    total), como o fechamento de subtotal de uma comanda: os 4 cards acima
    são as partes, esta barra é a leitura de conjunto. */
@@ -329,6 +367,10 @@
 }
 
 @media (max-width: 768px) {
+  /* No celular os cards são 2x2: o valor ocupa a linha de baixo inteira */
+  .cards-grid.estoque-cards--com-valor { grid-template-columns: 1fr 1fr; }
+  .estoque-cards--com-valor .store-card--valor { grid-column: 1 / -1; }
+
   .estoque-saude-rotulo {
     flex-direction: column;
     align-items: flex-start;
