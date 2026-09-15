@@ -173,6 +173,24 @@ _BATATAS_COM_QUANTIDADE = re.compile(r"(\d+)\s*batatas?\b", re.IGNORECASE)
 _BATATA = re.compile(r"\bbatatas?\b", re.IGNORECASE)
 
 
+def _grupo_de_lanche(grupo):
+    """Grupo de opções em que cada opção escolhida é um lanche vendido:
+    "SEUS BURGERS" (Combo Casal do Artesanos) e "Escolha seus 3 Dogs com
+    20%OFF" (combos das Tradiças, 2026-09-15 — sem isso o combo ficava
+    como produto não reconhecido e os dogs escolhidos não saíam do estoque).
+    "Quer Purê nos 3 dogs?" não é escolha de lanche."""
+    grupo = (grupo or "").lower()
+    return "burger" in grupo or ("dog" in grupo and "escolha" in grupo)
+
+
+def _eh_bebida_escolhida(opcao):
+    """Bebida escolhida dentro do combo ("E uma bebida, vai?"): vira item
+    vendido, menos a resposta "Não, obrigado!"."""
+    grupo = (opcao.get("option_group_name") or "").lower()
+    nome = (opcao.get("name") or "").strip().lower()
+    return "bebida" in grupo and bool(nome) and not nome.startswith(("não", "nao"))
+
+
 def _batatas_do_combo(texto):
     """Quantas batatas o texto do combo menciona: "02 batatas" = 2, "Batata" = 1, nenhuma = 0."""
     quantidade = _BATATAS_COM_QUANTIDADE.search(texto or "")
@@ -219,12 +237,14 @@ def _itens_vendidos(detalhes):
     combo/kit vem como `kind == "regular_item"` só mesmo, e existem 3
     formatos reais diferentes, tratados nessa ordem:
 
-    1. Tem `options` com um grupo de escolha de lanche (nome do grupo
-       contém "burger", ex: "SEUS BURGERS" no COMBO CASAL) — cada opção
-       desse grupo É um lanche vendido, com a quantidade certa já vindo
-       separada (dá pra ter 2 lanches diferentes num combo pra duas
-       pessoas). Não entra bebida/batata/maionese aqui de propósito —
-       complemento escolhido fica fora desta entrega (ver seção 6.11).
+    1. Tem `options` com um grupo de escolha de lanche (ver
+       _grupo_de_lanche: "SEUS BURGERS" no COMBO CASAL, "Escolha seus 3
+       Dogs" nos combos das Tradiças) — cada opção desse grupo É um lanche
+       vendido, com a quantidade certa já vindo separada (dá pra ter 2
+       lanches diferentes num combo pra duas pessoas). A bebida escolhida
+       no combo também vira item (desde 2026-09-15); a batata entra pelo
+       nome do combo (_batatas_do_combo); maionese e o resto das opções
+       ficam de fora.
     2. Sem esse grupo, mas o nome do item tem um "Lanche + Extra + Extra"
        colado (ex: "Tasty + Batata + Bebida + Maionese") — o lanche é a
        parte antes do primeiro " + ".
@@ -252,10 +272,10 @@ def _itens_vendidos(detalhes):
 
         opcoes_lanche = [
             opcao for opcao in opcoes
-            if "burger" in (opcao.get("option_group_name") or "").lower()
+            if _grupo_de_lanche(opcao.get("option_group_name"))
         ]
         if opcoes_lanche:
-            for opcao in opcoes_lanche:
+            for opcao in opcoes_lanche + [o for o in opcoes if _eh_bebida_escolhida(o)]:
                 itens.append({
                     "nome": opcao.get("name", ""),
                     "quantidade": (opcao.get("quantity") or 0) * quantidade,

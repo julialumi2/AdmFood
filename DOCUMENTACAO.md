@@ -2395,6 +2395,12 @@ ausência da linha, visível abrindo a Ficha Técnica de qualquer um deles).
   no nome. Bebida e maionese continuam de fora (o nome não diz qual é).
   "Batata Individual" é um item com ficha por loja: nas Tradiças ainda não
   desconta nada até a ficha da batata delas existir.
+- **Combos de dogs das Tradiças** ("3 Dogs à escolha", "5 Dogs à
+  escolha"): os dogs escolhidos vêm como opções do grupo "Escolha seus N
+  Dogs" — `_grupo_de_lanche` trata esse grupo como o "SEUS BURGERS" do
+  Combo Casal, e cada dog vira um item vendido. A bebida escolhida no
+  combo ("E uma bebida, vai?") também vira item (`_eh_bebida_escolhida`),
+  menos o "Não, obrigado!"; "Quer purê nos 3 dogs?" fica de fora.
 - **Carne em dobro** (promo de terça do Artesanos): em qualquer lanche, o
   de uma carne vai com duas e o de duas vai com quatro. A venda vem numa
   linha solta ("terça é Carne em Dobro"), vinculada ao item "Carne em
