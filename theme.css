@@ -12,8 +12,10 @@
   --primary-hover: #B92E21;
   --primary-soft: rgba(217, 56, 41, 0.08);
 
-  /* Neutros grafite (modo claro) */
-  --bg-main: #FAFAFA;
+  /* Neutros grafite (modo claro); fundo creme (#F3EBDB, pedido da Julia
+     em 2026-09-15: os brancos quebrados ainda pareciam brancos demais),
+     com bordas e superfícies em bege, pra combinar com ele. */
+  --bg-main: #F3EBDB;
   --card-bg: #FFFFFF;
   --header-bg: #FFFFFF;
   --header-vidro: rgba(255, 255, 255, 0.62);
@@ -29,12 +31,12 @@
   --text-muted: #52525B;
   --text-faint: #71717A;
 
-  --border-color: #E4E4E7;
-  --border-strong: #D4D4D8;
-  --surface-muted: #F4F4F5;
-  --surface-muted-border: #E4E4E7;
+  --border-color: #E6DDCC;
+  --border-strong: #D5C9B3;
+  --surface-muted: #F7F2E8;
+  --surface-muted-border: #E6DDCC;
   --input-bg: #FFFFFF;
-  --input-border: #D4D4D8;
+  --input-border: #D5C9B3;
 
   /* Semânticas. A cor pura (--success...) é pra preenchimento com texto
      branco em cima; a -texto é pra escrever na cor, e clareia no modo

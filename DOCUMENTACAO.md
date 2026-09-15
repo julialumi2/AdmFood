@@ -3016,7 +3016,8 @@ sistema está pronto, falta o número):
   voltou a aparecer na gaveta do celular.
 - **Paleta grafite + visual de SaaS financeiro (2026-09-15, pedido da
   Julia; tokens no `theme.css`, vale no sistema todo):** neutros grafite
-  (fundo `#FAFAFA`, cartão branco, borda `#E4E4E7`, texto `#18181B`;
+  (fundo creme `#F3EBDB` — a Julia achou os brancos quebrados brancos
+  demais —, cartão branco, borda bege `#E6DDCC`, texto `#18181B`;
   escuro `#09090B`/`#18181B`), menu `#18181B` com a tela aberta em
   `rgba(255,255,255,0.08)` e barra de 3px na cor da marca. O vermelho
   `#D93829` fica só no botão principal, na logo e no item aberto (menu,
