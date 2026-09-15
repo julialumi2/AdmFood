@@ -2615,6 +2615,119 @@ def excluir_insumo(insumo_id):
         conn.execute("DELETE FROM insumo WHERE id = ?", (insumo_id,))
 
 
+# Tabelas de compra e contagem: se o insumo de origem aparece nelas, ele
+# tem história própria e não é apagado depois de juntar.
+_TABELAS_COM_HISTORICO = ("cotacao_item", "cotacao_item_loja", "cotacao_convite_item", "cotacao_preco",
+                          "pedido_compra_item", "contagem_item", "lote_insumo")
+
+
+def mesclar_insumo(origem_id, destino_id, fator, loja):
+    """Junta um insumo cadastrado duas vezes (2026-09-15): a ficha técnica
+    do Artesanos usava o cadastro da planilha de CMV ("Bacon (fatia crua)",
+    em g) e a loja contava o de compra ("Bacon Fatiado Smoke", em kg), então
+    a baixa automática nunca mexia no estoque contado.
+
+    `fator` = quantas unidades da origem cabem em 1 unidade do destino (g ->
+    kg = 1000; lata de 395 g = 395). Na loja pedida (e nas que dividem a
+    ficha com ela): a ficha passa a usar o destino, com a quantidade
+    convertida; o histórico da baixa (baixa_estoque_venda) vai junto e
+    convertido — sem isso, a ressincronização dos últimos dias veria o
+    consumo do destino como novo e descontaria a semana de novo; e o
+    estoque da origem nessa loja (o negativo "fantasma") sai. A receita das
+    misturas é da rede toda, então troca em qualquer loja. O custo do
+    cadastro vai pro destino se ele não tiver um.
+
+    Se a origem não sobrar em nenhuma ficha, receita, compra ou contagem,
+    ela é apagada; senão fica (outra loja ainda usa). Retorna o resumo."""
+    if origem_id == destino_id or not fator or fator <= 0:
+        raise ValueError("Escolha dois insumos diferentes e um fator maior que zero.")
+    lojas = lojas_da_mesma_ficha(loja)
+    marcadores = ",".join("?" * len(lojas))
+    with conexao() as conn:
+        origem = conn.execute("SELECT id, nome, custo_referencia FROM insumo WHERE id = ?", (origem_id,)).fetchone()
+        destino = conn.execute("SELECT id, nome, custo_referencia FROM insumo WHERE id = ?", (destino_id,)).fetchone()
+        if not origem or not destino:
+            raise ValueError("Insumo não encontrado.")
+        if conn.execute("SELECT 1 FROM receita_insumo WHERE insumo_id = ?", (origem_id,)).fetchone():
+            raise ValueError(f"{origem['nome']} é uma mistura feita na casa: não dá pra juntar com um insumo comprado.")
+
+        def mover(tabela, coluna, chave_extra, filtro_sql="", filtro_args=()):
+            """Troca origem por destino em `tabela`, somando quando o destino
+            já está na mesma chave (ex.: mesma ficha já tinha os dois)."""
+            linhas = conn.execute(
+                f"SELECT {', '.join(chave_extra)}, {TABELA_QUANTIDADE[tabela]} AS quantidade_valor "
+                f"FROM {tabela} WHERE {coluna} = ? {filtro_sql}",
+                (origem_id, *filtro_args),
+            ).fetchall()
+            for linha in linhas:
+                chave = {c: linha[c] for c in chave_extra}
+                valor = None if linha["quantidade_valor"] is None else linha["quantidade_valor"] / fator
+                onde = " AND ".join(f"{c} = ?" for c in chave)
+                existente = conn.execute(
+                    f"SELECT {TABELA_QUANTIDADE[tabela]} AS q FROM {tabela} WHERE {coluna} = ? AND {onde}",
+                    (destino_id, *chave.values()),
+                ).fetchone()
+                if existente:
+                    soma = None if existente["q"] is None and valor is None else (existente["q"] or 0) + (valor or 0)
+                    conn.execute(
+                        f"UPDATE {tabela} SET {TABELA_QUANTIDADE[tabela]} = ? WHERE {coluna} = ? AND {onde}",
+                        (soma, destino_id, *chave.values()),
+                    )
+                    conn.execute(f"DELETE FROM {tabela} WHERE {coluna} = ? AND {onde}", (origem_id, *chave.values()))
+                else:
+                    conn.execute(
+                        f"UPDATE {tabela} SET {coluna} = ?, {TABELA_QUANTIDADE[tabela]} = ? WHERE {coluna} = ? AND {onde}",
+                        (destino_id, valor, origem_id, *chave.values()),
+                    )
+            return len(linhas)
+
+        fichas = mover("ficha_tecnica", "insumo_id", ("item_id", "loja"), f"AND loja IN ({marcadores})", lojas)
+        receitas = mover("receita_insumo", "ingrediente_id", ("insumo_id",))
+        baixas = mover("baixa_estoque_venda", "insumo_id", ("unidade", "dia"), f"AND unidade IN ({marcadores})", lojas)
+
+        agora = datetime.now().isoformat()
+        for loja_ficha in lojas:
+            conn.execute(
+                "INSERT OR IGNORE INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+                "VALUES (?, ?, 0, 0, ?)", (destino_id, loja_ficha, agora))
+            conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (destino_id, loja_ficha))
+        conn.execute(f"DELETE FROM estoque_insumo WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
+        conn.execute(f"DELETE FROM insumo_loja WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
+        conn.execute(f"DELETE FROM ajuste_quantidade_ideal WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
+
+        custo_levado = None
+        if destino["custo_referencia"] is None and origem["custo_referencia"] is not None:
+            custo_levado = round(origem["custo_referencia"] * fator, 8)
+            conn.execute("UPDATE insumo SET custo_referencia = ? WHERE id = ?", (custo_levado, destino_id))
+
+        ainda_usada = (
+            conn.execute("SELECT 1 FROM ficha_tecnica WHERE insumo_id = ?", (origem_id,)).fetchone()
+            or conn.execute("SELECT 1 FROM receita_insumo WHERE ingrediente_id = ?", (origem_id,)).fetchone()
+            or any(conn.execute(f"SELECT 1 FROM {t} WHERE insumo_id = ? LIMIT 1", (origem_id,)).fetchone()
+                   for t in _TABELAS_COM_HISTORICO)
+        )
+        if not ainda_usada:
+            conn.execute("DELETE FROM estoque_insumo WHERE insumo_id = ?", (origem_id,))
+            conn.execute("DELETE FROM insumo_loja WHERE insumo_id = ?", (origem_id,))
+            conn.execute("DELETE FROM insumo_fornecedor WHERE insumo_id = ?", (origem_id,))
+            conn.execute("DELETE FROM ajuste_quantidade_ideal WHERE insumo_id = ?", (origem_id,))
+            conn.execute("DELETE FROM baixa_estoque_venda WHERE insumo_id = ?", (origem_id,))
+            conn.execute("DELETE FROM insumo WHERE id = ?", (origem_id,))
+
+    return {
+        "origem": origem["nome"], "destino": destino["nome"], "fichas": fichas, "receitas": receitas,
+        "baixas": baixas, "custoLevado": custo_levado, "origemApagada": not ainda_usada,
+    }
+
+
+# Coluna de quantidade de cada tabela que mesclar_insumo converte.
+TABELA_QUANTIDADE = {
+    "ficha_tecnica": "quantidade",
+    "receita_insumo": "quantidade",
+    "baixa_estoque_venda": "quantidade_baixada",
+}
+
+
 def atualizar_estoque_loja(insumo_id, loja, campos):
     """Edição direta (correção manual/contagem) da quantidade e/ou do
     mínimo de UM insumo em UMA loja — diferente de distribuir_entrada_insumo,

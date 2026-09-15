@@ -482,6 +482,20 @@ na entrega.
   `critico`; até 30% acima do mínimo é `baixo`; daí pra cima é `ok`. Sem
   mínimo cadastrado (`0`), não dá pra avaliar — considera `ok` a não ser
   que a quantidade também esteja zerada.
+- **Juntar insumo repetido** (`POST /api/insumos/<id>/mesclar`, admin,
+  `{destinoId, fator, loja}`; `mesclar_insumo` em
+  `backend/armazenamento.py`, 2026-09-15): pro mesmo produto cadastrado
+  duas vezes (a ficha do Artesanos usava o cadastro da planilha, em g, e a
+  loja contava o de compra, em kg — a baixa nunca mexia no estoque
+  contado). `fator` = quantas unidades da origem cabem em 1 do destino.
+  Na loja (e nas que dividem a ficha com ela), a ficha passa pro destino
+  com a quantidade convertida, o histórico da baixa (`baixa_estoque_venda`)
+  vai junto convertido — senão a ressincronização dos últimos 7 dias
+  descontaria a semana de novo do destino — e o estoque "fantasma" da
+  origem sai; a receita das misturas troca na rede toda; o custo do
+  cadastro vai pro destino se ele não tiver. A origem só é apagada quando
+  não sobra em nenhuma ficha, receita, compra ou contagem. Mistura feita
+  na casa não pode ser origem.
 - **Excluir insumo** (`DELETE /api/insumos/<id>`, admin) remove de
   **todas** as lojas de uma vez (apaga o catálogo, não só uma loja).
 

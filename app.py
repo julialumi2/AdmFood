@@ -53,6 +53,7 @@ from backend.armazenamento import (
     salvar_insumos_da_loja,
     atualizar_insumo,
     excluir_insumo,
+    mesclar_insumo,
     atualizar_estoque_loja,
     distribuir_entrada_insumo,
     criar_item_cardapio,
@@ -1327,6 +1328,30 @@ def api_excluir_insumo(insumo_id):
 
     excluir_insumo(insumo_id)
     return jsonify({"ok": True})
+
+
+@app.route('/api/insumos/<int:insumo_id>/mesclar', methods=['POST'])
+def api_mesclar_insumo(insumo_id):
+    """Junta um insumo cadastrado duas vezes no outro (ver mesclar_insumo):
+    {destinoId, fator (quantas unidades deste cabem em 1 do destino), loja}."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+
+    dados = request.get_json(silent=True) or {}
+    loja = dados.get('loja')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        destino_id = int(dados.get('destinoId'))
+        fator = float(dados.get('fator'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Informe o insumo de destino e o fator."}), 400
+    try:
+        resumo = mesclar_insumo(insumo_id, destino_id, fator, loja)
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
+    return jsonify(resumo)
 
 
 @app.route('/api/insumos/<int:insumo_id>/estoque/<loja>', methods=['PUT'])
