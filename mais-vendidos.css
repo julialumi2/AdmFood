@@ -18,17 +18,17 @@
 .loja-simus { --cor-loja: var(--loja-simus); }
 
 :root {
-  --loja-artesanos: #d93829;
-  --loja-acai: #7b3f6e;
-  --loja-zn: #c97a1f;
-  --loja-simus: #4c7a4a;
+  --loja-artesanos: #2563EB;
+  --loja-acai: #8B5CF6;
+  --loja-zn: #F59E0B;
+  --loja-simus: #14B8A6;
 }
 
 body.dark-mode {
-  --loja-artesanos: #e5584a;
-  --loja-acai: #c083b2;
-  --loja-zn: #e0a052;
-  --loja-simus: #7fae7b;
+  --loja-artesanos: #60A5FA;
+  --loja-acai: #A78BFA;
+  --loja-zn: #FBBF24;
+  --loja-simus: #2DD4BF;
 }
 
 .mv-ponto {
@@ -73,7 +73,7 @@ body.dark-mode {
 
 .dia-seta:first-child { border-right: 1px solid var(--border-color); border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
 .dia-seta:last-child { border-left: 1px solid var(--border-color); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
-.dia-seta:hover:not(:disabled) { background-color: var(--primary-soft); color: var(--primary); }
+.dia-seta:hover:not(:disabled) { background-color: var(--info-soft); color: var(--info); }
 .dia-seta:disabled { color: var(--text-faint); cursor: default; opacity: 0.5; }
 .dia-seta svg { width: 18px; height: 18px; }
 
@@ -100,7 +100,7 @@ body.dark-mode {
 }
 
 .dia-data {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -121,12 +121,12 @@ body.dark-mode {
 
 .dia-seta:focus-visible,
 .dia-rotulo:focus-within {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
 /* Abas de loja: a bolinha é a cor da loja nos gráficos. */
-#mv-lojas-tabs .tab-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+#mv-lojas-tabs .tab-btn:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 /* --- Top produtos (barras deitadas) + categorias (rosca) ---------------- */
 .mv-graficos {
@@ -214,7 +214,7 @@ body.dark-mode {
 }
 
 .mv-barra-valor {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -225,7 +225,7 @@ body.dark-mode {
   position: relative;
   height: 18px;
   margin: 10px calc(var(--valor) + 12px) 0 calc(var(--rotulo) + 12px);
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.66rem;
   color: var(--text-faint);
 }
@@ -272,7 +272,7 @@ body.dark-mode {
 }
 
 .mv-rosca-total {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -310,14 +310,14 @@ body.dark-mode {
 .mv-rosca-legenda .mv-cat-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .mv-rosca-legenda .mv-cat-pct {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
 .mv-rosca-legenda .mv-cat-valor {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: var(--text-dark);
   font-variant-numeric: tabular-nums;
@@ -341,7 +341,7 @@ body.dark-mode {
 .mv-colunas-eixo {
   position: relative;
   height: var(--altura);
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.66rem;
   color: var(--text-faint);
 }
@@ -366,7 +366,7 @@ body.dark-mode {
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 1px dashed var(--surface-muted-border);
+  border-top: 1px solid var(--surface-muted-border);
 }
 
 .mv-coluna {
@@ -380,7 +380,7 @@ body.dark-mode {
 }
 
 .mv-coluna-valor {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.76rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -415,7 +415,7 @@ body.dark-mode {
 }
 
 .mv-coluna-delta {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
   font-weight: 600;
 }
@@ -448,7 +448,7 @@ body.dark-mode {
 
 .mv-select:focus-visible,
 .mv-ranking-controles .search-box:focus-within {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--info);
   outline-offset: 1px;
 }
 
@@ -476,7 +476,7 @@ body.dark-mode {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
   font-weight: 700;
   background-color: var(--surface-muted);
@@ -502,7 +502,7 @@ body.dark-mode {
 .mv-foto-vazia {
   display: grid;
   place-items: center;
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--cor-loja);
@@ -538,7 +538,7 @@ body.dark-mode {
 .mv-volume { display: flex; flex-direction: column; gap: 6px; }
 
 .mv-volume-texto {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.74rem;
   color: var(--text-muted);
   white-space: nowrap;
@@ -562,7 +562,7 @@ body.dark-mode {
 }
 
 .mv-preco {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -584,15 +584,15 @@ body.dark-mode {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .mv-tendencia svg { width: 15px; height: 15px; }
-.mv-tendencia.alta { color: var(--success); }
-.mv-tendencia.queda { color: var(--danger); }
+.mv-tendencia.alta { color: var(--success-texto); }
+.mv-tendencia.queda { color: var(--danger-texto); }
 .mv-tendencia.igual { color: var(--text-faint); }
 
 .mv-tendencia.novo {
@@ -600,8 +600,8 @@ body.dark-mode {
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--primary);
-  background-color: var(--primary-soft);
+  color: var(--info);
+  background-color: var(--info-soft);
   border-radius: 999px;
   padding: 2px 8px;
 }
@@ -619,7 +619,7 @@ body.dark-mode {
   padding: 14px;
   background: none;
   border: none;
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -629,17 +629,17 @@ body.dark-mode {
 }
 
 .mv-ranking-mais[hidden] { display: none; }
-.mv-ranking-mais:hover { color: var(--primary); background-color: var(--surface-muted); }
-.mv-ranking-mais:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.mv-ranking-mais:hover { color: var(--text-dark); background-color: var(--surface-muted); }
+.mv-ranking-mais:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 /* Produto que o estoque não reconhece: não desconta nada até ser vinculado. */
 .tag-pendente {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--warning);
+  color: var(--warning-texto);
   background-color: var(--warning-soft);
   border: none;
   border-radius: 999px;
@@ -693,12 +693,12 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
   min-width: 0;
 }
 
-.combo-linha input { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+.combo-linha input { text-align: right; font-variant-numeric: tabular-nums; }
 
 .combo-linha select:focus,
 .combo-linha input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 /* --- Telas menores ------------------------------------------------------ */

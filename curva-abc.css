@@ -46,7 +46,7 @@
   font-size: 0.82rem;
   color: var(--text-muted);
   background-color: var(--surface-muted);
-  border-left: 3px solid var(--warning, #d9a13a);
+  border-left: 3px solid var(--warning);
   border-radius: var(--radius-sm);
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-4);
@@ -68,8 +68,8 @@
 /* Faixa de cor na borda de cima diz qual lista é qual sem depender de ler
    o título — verde sustenta, vermelho pede decisão. */
 .curva-lista { border-top: 3px solid transparent; }
-.curva-lista-a { border-top-color: var(--success, #3f7d52); }
-.curva-lista-c { border-top-color: var(--danger, #d93829); }
+.curva-lista-a { border-top-color: var(--success); }
+.curva-lista-c { border-top-color: var(--danger); }
 
 .curva-lista .table-subtitle { max-width: 46ch; }
 
@@ -81,12 +81,12 @@
 /* Números de comparação (volume, CMV, margem) alinhados pra leitura em
    coluna. */
 .curva-num {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.curva-cmv-alto { color: var(--danger, #d93829); font-weight: 700; }
+.curva-cmv-alto { color: var(--danger-texto); font-weight: 700; }
 .curva-cmv-ok { color: var(--text-dark); }
 .curva-sem-dado { color: var(--text-faint); }
 
@@ -105,7 +105,7 @@
   width: 16px;
   height: 16px;
   cursor: pointer;
-  accent-color: var(--primary);
+  accent-color: var(--info);
 }
 
 .curva-tag {
@@ -118,15 +118,15 @@
   white-space: nowrap;
 }
 
-.curva-tag-a { background-color: var(--success-soft, #e7f2ea); color: var(--success, #3f7d52); }
-.curva-tag-c { background-color: var(--danger-soft, #fbe4e0); color: var(--danger, #d93829); }
+.curva-tag-a { background-color: var(--success-soft); color: var(--success-texto); }
+.curva-tag-c { background-color: var(--danger-soft); color: var(--danger-texto); }
 .curva-tag-normal { background-color: var(--surface-muted); color: var(--text-muted); }
 .curva-tag-sem-cmv { background-color: var(--surface-muted); color: var(--text-faint); }
 
 /* Curva ABC de insumos (Etapa 8) — a classe é sobre concentração de gasto,
    não sobre bom/ruim, então usa uma escala de peso e não as cores
    semânticas de A/C-fraca do cardápio. */
-.chip-curva-a { background-color: #efe2d6; color: #8a4b1f; }
+.chip-curva-a { background-color: var(--info-soft); color: var(--info); }
 .chip-curva-b { background-color: var(--surface-muted); color: var(--text-muted); }
 .chip-curva-c { background-color: transparent; color: var(--text-faint); border: 1px solid var(--surface-muted-border); }
 
@@ -150,6 +150,6 @@
 .acumulado-barra span {
   display: block;
   height: 100%;
-  background-color: #b98a5e;
+  background-color: var(--info);
   border-radius: 999px;
 }

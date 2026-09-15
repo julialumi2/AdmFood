@@ -1,48 +1,235 @@
 /* Estilos específicos da tela de Resumo (Home) — a base compartilhada
-   (sidebar, cabeçalho, cards, gráfico) está em theme.css. */
+   (sidebar, cabeçalho, cards, gráfico) está em theme.css, com a paleta
+   grafite de 2026-09-15. Aqui ficam só as cores próprias da Home: o texto
+   dos botões de ação rápida, o azul do ranking e o âmbar de loja atrasada. */
+body.pagina-home {
+  --texto-botao: #3F3F46;
+  --borda-forte: var(--border-strong);
+  --home-destaque: var(--info);
+  --home-destaque-suave: var(--info-soft);
+  --home-alerta: #F59E0B;
+}
 
-/* AÇÕES RÁPIDAS */
+body.pagina-home.dark-mode {
+  --texto-botao: #D4D4D8;
+  --home-destaque: #60A5FA;
+}
+
+/* CABEÇALHO DA PÁGINA: título e hora da atualização à esquerda, ações
+   rápidas à direita */
+.home-cabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.home-cabecalho-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-cabecalho-titulo h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-dark);
+  text-wrap: balance;
+}
+
+/* QUADRO "VISÃO GERAL DA REDE" (voltou a pedido da Julia, 2026-09-15): o
+   faturamento de ontem em destaque, na chapa grafite do menu com um brilho
+   do vermelho da marca no canto, e a hora da atualização num selo. */
+.hero-band {
+  background-color: var(--sidebar-bg);
+  background-image: radial-gradient(circle at 88% 0%, rgba(217, 56, 41, 0.2), transparent 55%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-8);
+  color: var(--sidebar-text);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sidebar-text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.hero-eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #34D399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.25);
+  flex-shrink: 0;
+}
+
+.hero-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.hero-value {
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-sub {
+  font-size: 0.8rem;
+  color: var(--sidebar-text-muted);
+  margin-top: var(--space-2);
+}
+
+.hero-badge {
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--sidebar-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-badge.atualizado-em::before { background-color: #34D399; }
+
+/* AÇÕES RÁPIDAS: botões secundários, contorno fino e ícone discreto */
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .quick-action-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
+  height: 36px;
+  padding: 0 14px;
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 10px var(--space-4);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-dark);
-  cursor: pointer;
+  border-radius: 8px;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--texto-botao);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .quick-action-btn:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-  border-color: var(--primary);
+  background-color: var(--bg-main);
+  border-color: var(--borda-forte);
+  color: var(--text-dark);
 }
 
 .quick-action-btn:disabled {
   opacity: 0.6;
   cursor: default;
-  transform: none;
 }
 
-.quick-action-btn i, .quick-action-btn svg { width: 16px; height: 16px; color: var(--primary); flex-shrink: 0; }
+.quick-action-btn i,
+.quick-action-btn svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 
-/* GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA, LADO A LADO */
+/* TÍTULOS DE SEÇÃO, GRÁFICO E PAINEL — um tamanho só */
+.pagina-home .section-header h3,
+.pagina-home .chart-title h3,
+.pagina-home .panel-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-dark);
+}
+
+/* O título "Faturamento por período" é da grade de cards: fica mais perto
+   dela do que do cabeçalho (o espaço entre blocos da página é 24px). */
+.pagina-home .section-header { margin-bottom: calc(-1 * var(--space-3)); }
+
+.pagina-home .chart-title svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+}
+
+.pagina-home .chart-subtitle,
+.pagina-home .panel-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* CARTÕES: planos, sem o picote de comanda e sem pular no hover (não são
+   clicáveis) */
+.pagina-home .store-card,
+.pagina-home .chart-card,
+.pagina-home .panel {
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.pagina-home .store-card::before,
+.pagina-home .store-card::after { content: none; }
+
+.pagina-home .store-card:hover {
+  transform: none;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Faturamento por período: rótulo, valor e o período que ele cobre */
+.pagina-home #container-periodo .store-card { gap: var(--space-2); }
+
+.home-kpi-rotulo {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.home-kpi-valor {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-kpi-periodo {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* GRÁFICOS: FATURAMENTO DA REDE (mais largo) + CANAIS DE VENDA */
 .home-charts-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-6);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
 }
 
 /* min-width: 0 — sem isso, um item de grid não encolhe abaixo do tamanho
@@ -70,7 +257,7 @@
 
 .home-canal-legend {
   flex: 1;
-  min-width: 160px;
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -81,7 +268,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
 }
 
 .home-canal-legend-nome {
@@ -89,37 +276,39 @@
   align-items: center;
   gap: var(--space-2);
   color: var(--text-dark);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .home-canal-legend-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
   flex-shrink: 0;
 }
 
 .home-canal-legend-valor {
-  color: var(--text-muted);
-  font-weight: 600;
+  color: var(--text-dark);
+  font-weight: 500;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-canal-legend-percentual {
   display: inline-block;
   margin-left: 6px;
-  min-width: 42px;
+  min-width: 44px;
   text-align: right;
-  color: var(--text-faint);
-  font-weight: 700;
+  color: var(--text-muted);
+  font-weight: 500;
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* RANKING DE LOJAS + STATUS DE SINCRONIZAÇÃO, LADO A LADO */
 .home-secondary-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .ranking-lista,
@@ -139,19 +328,20 @@
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  border-radius: 50%;
+  border-radius: 6px;
   background-color: var(--surface-muted);
   color: var(--text-muted);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .ranking-item:first-child .ranking-posicao {
-  background-color: var(--warning-soft);
-  color: var(--warning);
+  background-color: var(--home-destaque-suave);
+  color: var(--home-destaque);
 }
 
 .ranking-info {
@@ -159,7 +349,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .ranking-nome-valor {
@@ -167,24 +357,30 @@
   justify-content: space-between;
   align-items: baseline;
   gap: var(--space-2);
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
 }
 
-.ranking-nome-valor .nome { font-weight: 600; color: var(--text-dark); }
-.ranking-nome-valor .valor { font-weight: 700; color: var(--text-dark); white-space: nowrap; }
+.ranking-nome-valor .nome { font-weight: 500; color: var(--text-dark); }
+
+.ranking-nome-valor .valor {
+  font-weight: 600;
+  color: var(--text-dark);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 
 .ranking-barra-bg {
   width: 100%;
-  height: 5px;
-  border-radius: 3px;
-  background-color: var(--surface-muted-border);
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--surface-muted);
   overflow: hidden;
 }
 
 .ranking-barra-fill {
   height: 100%;
-  background-color: var(--primary);
-  border-radius: 3px;
+  background-color: var(--home-destaque);
+  border-radius: 2px;
 }
 
 .sync-status-item {
@@ -192,65 +388,59 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3) 14px;
-  background-color: var(--surface-muted);
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+  padding: 10px var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.8125rem;
 }
 
-.sync-status-nome { font-weight: 600; color: var(--text-dark); }
-.sync-status-data { color: var(--text-muted); font-size: 0.78rem; }
+.sync-status-nome { font-weight: 500; color: var(--text-dark); }
 
-/* INSIGHTS AUTOMÁTICOS (ONTEM VS MÉDIA DOS ÚLTIMOS 7 DIAS) */
-.insights-automaticos-lista {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.insight-automatico-item {
-  display: flex;
+/* Data da última sincronização: texto neutro com um ponto — cinza quando
+   está em dia, âmbar quando a loja está atrasada. */
+.pagina-home .sync-status-data .badge {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 14px;
-  background-color: var(--surface-muted);
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  color: var(--text-dark);
-  line-height: 1.4;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
-.insight-automatico-icone {
-  width: 34px;
-  height: 34px;
+.pagina-home .sync-status-data .badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-color: var(--text-faint);
   flex-shrink: 0;
 }
 
-.insight-automatico-icone i, .insight-automatico-icone svg { width: 17px; height: 17px; }
+.pagina-home .sync-status-data .badge-orange { color: var(--text-dark); }
+.pagina-home .sync-status-data .badge-orange::before { background-color: var(--home-alerta); }
 
-.insight-automatico-item.alta .insight-automatico-icone { background-color: var(--success-soft); color: var(--success); }
-.insight-automatico-item.baixa .insight-automatico-icone { background-color: var(--danger-soft); color: var(--danger); }
-.insight-automatico-item.alta strong { color: var(--success); }
-.insight-automatico-item.baixa strong { color: var(--danger); }
+@media (max-width: 1100px) {
+  .home-charts-row { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 768px) {
-  .quick-actions { gap: var(--space-2); }
+  .hero-band { padding: var(--space-5); }
+  .hero-value { font-size: 2.1rem; }
+
+  .home-cabecalho {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
   .quick-action-btn {
-    flex: 1;
-    min-width: 140px;
-    justify-content: center;
-    min-height: 44px;
+    flex: 1 1 auto;
+    height: 44px;
   }
 
-  .home-charts-row,
-  .home-secondary-row {
-    grid-template-columns: 1fr;
-  }
+  .home-secondary-row { grid-template-columns: minmax(0, 1fr); }
 
   .home-canal-body { justify-content: center; }
 }

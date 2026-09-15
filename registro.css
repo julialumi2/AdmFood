@@ -7,7 +7,7 @@
 }
 
 body {
-  background-color: #f7f5f0; /* Fundo off-white */
+  background-color: #F4F4F5; /* Fundo off-white */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -47,7 +47,7 @@ body {
 }
 
 .brand-dark {
-  color: #1a1a1a;
+  color: #18181B;
 }
 
 .brand-red {
@@ -62,7 +62,7 @@ body {
   padding: 36px 32px;
   position: relative;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eae6df;
+  border: 1px solid #E4E4E7;
   text-align: center;
 }
 
@@ -80,13 +80,13 @@ body {
 .card-title {
   font-size: 22px;
   font-weight: 700;
-  color: #111111;
+  color: #09090B;
   margin-bottom: 10px;
 }
 
 .card-subtitle {
   font-size: 14px;
-  color: #666666;
+  color: #52525B;
   line-height: 1.5;
   margin-bottom: 28px;
 }
@@ -108,28 +108,28 @@ body {
 .form-label {
   font-size: 13px;
   font-weight: 700;
-  color: #222222;
+  color: #18181B;
 }
 
 .form-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #dcd6cd;
+  border: 1px solid #D4D4D8;
   border-radius: 10px;
   font-size: 14px;
-  color: #333333;
+  color: #27272A;
   outline: none;
   background-color: #ffffff;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-input::placeholder {
-  color: #aaaaaa;
+  color: #A1A1AA;
 }
 
 .form-input:focus {
   border-color: #d93829;
-  box-shadow: 0 0 0 3px rgba(214, 73, 40, 0.15);
+  box-shadow: 0 0 0 3px rgba(217, 56, 41, 0.15);
 }
 
 /* --- CARD --- */
@@ -141,7 +141,7 @@ body {
   position: relative;
   overflow: hidden;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eae6df;
+  border: 1px solid #E4E4E7;
   text-align: center;
 }
 
@@ -159,13 +159,13 @@ body {
 .card-title {
   font-size: 22px;
   font-weight: 700;
-  color: #111111;
+  color: #09090B;
   margin-bottom: 10px;
 }
 
 .card-subtitle {
   font-size: 14px;
-  color: #666666;
+  color: #52525B;
   line-height: 1.5;
   margin-bottom: 28px;
 }
@@ -187,28 +187,28 @@ body {
 .form-label {
   font-size: 13px;
   font-weight: 700;
-  color: #222222;
+  color: #18181B;
 }
 
 .form-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #dcd6cd;
+  border: 1px solid #D4D4D8;
   border-radius: 10px;
   font-size: 14px;
-  color: #333333;
+  color: #27272A;
   outline: none;
   background-color: #ffffff;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-input::placeholder {
-  color: #aaaaaa;
+  color: #A1A1AA;
 }
 
 .form-input:focus {
   border-color: #d93829;
-  box-shadow: 0 0 0 3px rgba(214, 73, 40, 0.15);
+  box-shadow: 0 0 0 3px rgba(217, 56, 41, 0.15);
 }
 
 /* --- BOTÃO --- */
@@ -227,7 +227,7 @@ body {
 }
 
 .btn-primary:hover {
-  background-color: #aa2b20;
+  background-color: #B92E21;
 }
 
 /* --- DIVISOR 'OU' --- */
@@ -242,12 +242,12 @@ body {
 .divider::after {
   content: '';
   flex: 1;
-  border-bottom: 1px solid #eae6df;
+  border-bottom: 1px solid #E4E4E7;
 }
 
 .divider span {
   padding: 0 12px;
-  color: #888888;
+  color: #71717A;
   font-size: 12px;
   font-weight: 500;
 }
@@ -259,20 +259,20 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background-color: #fcfbf9;
-  border: 1px solid #dcd6cd;
+  background-color: #FAFAFA;
+  border: 1px solid #D4D4D8;
   border-radius: 10px;
   padding: 11px;
   font-size: 14px;
   font-weight: 600;
-  color: #333333;
+  color: #27272A;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .btn-google:hover {
-  background-color: #f0ece1;
-  border-color: #c7c1b5;
+  background-color: #F4F4F5;
+  border-color: #A1A1AA;
 }
 
 .google-icon {
@@ -285,7 +285,7 @@ body {
   margin-top: 10px;
   text-align: center;
   font-size: 13px;
-  color: #666666;
+  color: #52525B;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -300,7 +300,7 @@ body {
 
 .link-red:hover {
   text-decoration: underline;
-  color: #aa2b20;
+  color: #B92E21;
 }
 
 /* --- FOOTER / LINK VOLTAR --- */
@@ -318,5 +318,5 @@ body {
 
 .link-back:hover {
   text-decoration: underline;
-  color: #aa2b20;
+  color: #B92E21;
 }

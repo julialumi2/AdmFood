@@ -52,8 +52,8 @@
 }
 
 .estoque-entrada-linha input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 .estoque-input-inline {
@@ -70,8 +70,8 @@
 }
 
 .estoque-input-inline:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 /* Nome do insumo na tabela: favorito (estrela) + unidade de medida junto */
@@ -95,7 +95,7 @@
 
 .btn-favorito.ativo,
 .btn-favorito:hover {
-  color: var(--warning);
+  color: var(--warning-texto);
 }
 
 .btn-favorito svg,
@@ -105,7 +105,7 @@
 }
 
 .icone-favorito {
-  color: var(--warning);
+  color: var(--warning-texto);
   flex-shrink: 0;
 }
 
@@ -123,14 +123,14 @@
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--primary);
-  background: var(--primary-soft);
+  color: var(--info);
+  background: var(--info-soft);
   border-radius: var(--radius-pill);
 }
 
 /* Coluna "Atual", destacada como o Saldo nas telas de estoque de referência */
 .col-atual-destaque {
-  background-color: var(--primary-soft);
+  background-color: var(--surface-muted);
 }
 
 /* Menu "Mais ações" — junta 6 ações de admin pouco frequentes (setup de
@@ -218,12 +218,11 @@
   font-weight: 400;
 }
 
-/* Acento lateral nos 4 cards de resumo — cada um "puxa" a cor do que
-   representa, sem brigar com o furo de comanda (que fica no topo). */
-.store-card--total { border-left: 3px solid var(--primary); }
-.store-card--ideal { border-left: 3px solid var(--success); }
-.store-card--baixo { border-left: 3px solid var(--warning); }
-.store-card--critico { border-left: 3px solid var(--danger); }
+/* O card de itens cadastrados é contagem, não status: ícone neutro. */
+.store-card--total .metric-icon { color: var(--text-faint); }
+
+
+
 
 /* Valor em estoque (só admin). Dinheiro não é status, então o acento é o
    marrom do texto, não uma cor semântica. Fica lado a lado com as
@@ -234,7 +233,6 @@
 }
 
 .store-card--valor {
-  border-left: 3px solid var(--text-dark);
   container-type: inline-size;
 }
 
@@ -287,8 +285,8 @@
 }
 
 .estoque-saude-rotulo-pct {
-  color: var(--success);
-  font-family: 'IBM Plex Mono', monospace;
+  color: var(--success-texto);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
 

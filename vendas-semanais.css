@@ -13,19 +13,19 @@
   --veredito-fundo: var(--surface-muted);
 }
 
-.semana-hero.veredito-otimo { --veredito: #2f7d55; --veredito-fundo: #e7f2ea; }
-.semana-hero.veredito-bom { --veredito: #b8862f; --veredito-fundo: #f9efdb; }
-.semana-hero.veredito-ruim { --veredito: #b3261e; --veredito-fundo: #fbe4e0; }
+.semana-hero.veredito-otimo { --veredito: #047857; --veredito-fundo: #ECFDF5; }
+.semana-hero.veredito-bom { --veredito: #B45309; --veredito-fundo: #FFFBEB; }
+.semana-hero.veredito-ruim { --veredito: #B42318; --veredito-fundo: #FEF3F2; }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .semana-hero.veredito-otimo { --veredito: #7bc494; --veredito-fundo: #1f3327; }
-  :root:not([data-theme="light"]) .semana-hero.veredito-bom { --veredito: #e0b166; --veredito-fundo: #3a2f1a; }
-  :root:not([data-theme="light"]) .semana-hero.veredito-ruim { --veredito: #ef7264; --veredito-fundo: #3a2320; }
+  :root:not([data-theme="light"]) .semana-hero.veredito-otimo { --veredito: #34D399; --veredito-fundo: rgba(52, 211, 153, 0.12); }
+  :root:not([data-theme="light"]) .semana-hero.veredito-bom { --veredito: #FBBF24; --veredito-fundo: rgba(251, 191, 36, 0.12); }
+  :root:not([data-theme="light"]) .semana-hero.veredito-ruim { --veredito: #F97066; --veredito-fundo: rgba(249, 112, 102, 0.12); }
 }
 
-:root[data-theme="dark"] .semana-hero.veredito-otimo { --veredito: #7bc494; --veredito-fundo: #1f3327; }
-:root[data-theme="dark"] .semana-hero.veredito-bom { --veredito: #e0b166; --veredito-fundo: #3a2f1a; }
-:root[data-theme="dark"] .semana-hero.veredito-ruim { --veredito: #ef7264; --veredito-fundo: #3a2320; }
+:root[data-theme="dark"] .semana-hero.veredito-otimo { --veredito: #34D399; --veredito-fundo: rgba(52, 211, 153, 0.12); }
+:root[data-theme="dark"] .semana-hero.veredito-bom { --veredito: #FBBF24; --veredito-fundo: rgba(251, 191, 36, 0.12); }
+:root[data-theme="dark"] .semana-hero.veredito-ruim { --veredito: #F97066; --veredito-fundo: rgba(249, 112, 102, 0.12); }
 
 /* --- Semana fechada: o cartão de fechamento --------------------------- */
 .semana-hero {
@@ -39,28 +39,6 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* Borda serrilhada embaixo — a semana fechada é uma comanda destacada da
-   bobina. Um recorte só, sem repetir o motivo no resto da tela. */
-.semana-hero::after {
-  content: '';
-  position: absolute;
-  left: -1px;
-  right: -1px;
-  bottom: -12px;
-  height: 12px;
-  background-color: var(--card-bg);
-  border-left: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0 1px, transparent 1px),
-    radial-gradient(circle at 6px 12px, transparent 5.5px, #000 6px);
-  -webkit-mask-size: 100% 100%, 12px 12px;
-  -webkit-mask-repeat: no-repeat, repeat-x;
-  mask-image: linear-gradient(to bottom, #000 0 1px, transparent 1px),
-    radial-gradient(circle at 6px 12px, transparent 5.5px, #000 6px);
-  mask-size: 100% 100%, 12px 12px;
-  mask-repeat: no-repeat, repeat-x;
-}
-
 .semana-hero-topo {
   display: flex;
   align-items: baseline;
@@ -71,7 +49,7 @@
 }
 
 .semana-hero-periodo {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-dark);
@@ -105,7 +83,7 @@
 }
 
 .veredito-pct {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 3rem;
   font-weight: 700;
   line-height: 1;
@@ -142,7 +120,7 @@
   gap: var(--space-3);
   align-items: baseline;
   padding-bottom: var(--space-3);
-  border-bottom: 1px dashed var(--surface-muted-border);
+  border-bottom: 1px solid var(--surface-muted-border);
 }
 
 .semana-linha:last-child { border-bottom: none; padding-bottom: 0; }
@@ -154,7 +132,7 @@
 }
 
 .semana-linha-valor {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -165,7 +143,7 @@
 .semana-linha-valor.destaque { font-size: 1.25rem; }
 
 .semana-delta {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.76rem;
   font-weight: 600;
   white-space: nowrap;
@@ -175,8 +153,8 @@
 
 /* Subir faturamento é bom; subir CMV é ruim. A cor segue o significado,
    não o sinal do número. */
-.semana-delta.bom { color: #2f7d55; }
-.semana-delta.ruim { color: #b3261e; }
+.semana-delta.bom { color: var(--success-texto); }
+.semana-delta.ruim { color: var(--danger-texto); }
 .semana-delta.neutro { color: var(--text-faint); }
 
 /* --- Mistura de canais ------------------------------------------------ */
@@ -191,10 +169,10 @@
 
 .canais-barra span { display: block; height: 100%; }
 
-.canal-ifood { background-color: #d93829; }
-.canal-catalog { background-color: #e2915b; }
-.canal-food99 { background-color: #7a8f6b; }
-.canal-portal { background-color: #6b5d52; }
+.canal-ifood { background-color: #EC4899; }
+.canal-catalog { background-color: #2563EB; }
+.canal-food99 { background-color: #F59E0B; }
+.canal-portal { background-color: #14B8A6; }
 
 .canais-legenda {
   display: flex;
@@ -220,7 +198,7 @@
 }
 
 .canal-valor {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: var(--text-dark);
   font-variant-numeric: tabular-nums;
@@ -281,7 +259,7 @@
 }
 
 .fita-semana:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
@@ -301,10 +279,10 @@
   box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 3px var(--text-dark);
 }
 
-.fita-barra.cor-otimo { --barra-cor: #2f7d55; }
-.fita-barra.cor-bom { --barra-cor: #b8862f; }
-.fita-barra.cor-ruim { --barra-cor: #b3261e; }
-.fita-barra.cor-sem-cmv { --barra-cor: #cbbfae; }
+.fita-barra.cor-otimo { --barra-cor: #047857; }
+.fita-barra.cor-bom { --barra-cor: #F59E0B; }
+.fita-barra.cor-ruim { --barra-cor: #B42318; }
+.fita-barra.cor-sem-cmv { --barra-cor: #D4D4D8; }
 
 @media (prefers-reduced-motion: no-preference) {
   .fita-barra { animation: fita-sobe 0.4s ease-out both; }
@@ -317,7 +295,7 @@
 .fita-eixo {
   display: flex;
   justify-content: space-between;
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.68rem;
   color: var(--text-faint);
   margin-top: var(--space-2);
@@ -325,7 +303,7 @@
 
 /* --- Marcadores ------------------------------------------------------- */
 .tag-origem {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.64rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -347,23 +325,23 @@
   white-space: nowrap;
 }
 
-.chip-otimo { background-color: #e7f2ea; color: #2f7d55; }
-.chip-bom { background-color: #f9efdb; color: #b8862f; }
-.chip-ruim { background-color: #fbe4e0; color: #b3261e; }
+.chip-otimo { background-color: #ECFDF5; color: #047857; }
+.chip-bom { background-color: #FFFBEB; color: #B45309; }
+.chip-ruim { background-color: #FEF3F2; color: #B42318; }
 .chip-sem-cmv { background-color: var(--surface-muted); color: var(--text-faint); }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .chip-otimo { background-color: #1f3327; color: #7bc494; }
-  :root:not([data-theme="light"]) .chip-bom { background-color: #3a2f1a; color: #e0b166; }
-  :root:not([data-theme="light"]) .chip-ruim { background-color: #3a2320; color: #ef7264; }
+  :root:not([data-theme="light"]) .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: #34D399; }
+  :root:not([data-theme="light"]) .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: #FBBF24; }
+  :root:not([data-theme="light"]) .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: #F97066; }
 }
 
-:root[data-theme="dark"] .chip-otimo { background-color: #1f3327; color: #7bc494; }
-:root[data-theme="dark"] .chip-bom { background-color: #3a2f1a; color: #e0b166; }
-:root[data-theme="dark"] .chip-ruim { background-color: #3a2320; color: #ef7264; }
+:root[data-theme="dark"] .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: #34D399; }
+:root[data-theme="dark"] .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: #FBBF24; }
+:root[data-theme="dark"] .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: #F97066; }
 
 .num-mono {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -385,7 +363,7 @@
 }
 
 .semana-valor-editavel .prefixo-moeda {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--text-muted);
@@ -394,7 +372,7 @@
 .semana-valor-editavel input {
   width: 118px;
   text-align: right;
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 1.05rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -411,8 +389,8 @@
 
 .semana-valor-editavel input:focus {
   background-color: var(--input-bg);
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 .semana-valor-editavel input::placeholder { color: var(--text-faint); font-weight: 400; }

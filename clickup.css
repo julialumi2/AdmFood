@@ -136,7 +136,7 @@
 }
 
 .task-meta { font-weight: 500; }
-.task-date { font-weight: 700; color: var(--primary); }
+.task-date { font-weight: 700; color: var(--text-dark); }
 
 /* Tags de prioridade — visual distinto dos badges genéricos do sistema
    (retângulo pequeno, texto maiúsculo), por isso sobrescreve .badge aqui */
@@ -150,9 +150,9 @@
   white-space: nowrap;
 }
 
-.badge.priority-alta { background-color: var(--danger-soft); color: var(--danger); border: 1px solid rgba(225, 29, 72, 0.25); }
-.badge.priority-media { background-color: var(--warning-soft); color: var(--warning); border: 1px solid rgba(217, 119, 6, 0.25); }
-.badge.priority-baixa { background-color: var(--success-soft); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.25); }
+.badge.priority-alta { background-color: var(--danger-soft); color: var(--danger-texto); border: 1px solid rgba(225, 29, 72, 0.25); }
+.badge.priority-media { background-color: var(--warning-soft); color: var(--warning-texto); border: 1px solid rgba(217, 119, 6, 0.25); }
+.badge.priority-baixa { background-color: var(--success-soft); color: var(--success-texto); border: 1px solid rgba(22, 163, 74, 0.25); }
 
 /* === MODAIS === */
 /* O sistema genérico de modal (overlay, moldura, cabeçalho, botões) está
@@ -252,7 +252,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background-color: var(--primary);
+  background-color: var(--info);
   transition: width 0.3s ease;
 }
 
@@ -273,7 +273,7 @@
 
 .subtask-item input[type="checkbox"] {
   cursor: pointer;
-  accent-color: var(--primary);
+  accent-color: var(--info);
 }
 
 .subtask-item.completed span {

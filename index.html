@@ -16,7 +16,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="script.js"></script>
 </head>
-<body>
+<body class="pagina-home">
 
   <!-- CONTAINER PAI DO GRID -->
   <div class="dashboard-wrapper" id="dashboardWrapper">
@@ -162,9 +162,35 @@
       <!-- CONTEÚDO DA PÁGINA -->
       <div class="page-content">
         
-        <!-- QUADRO DE PEDIDOS DO DIA — hero da Home -->
+        <!-- CABEÇALHO DA PÁGINA: título e ações rápidas -->
+        <div class="home-cabecalho">
+          <div class="home-cabecalho-titulo">
+            <h1>Visão Geral</h1>
+          </div>
+
+          <div class="quick-actions">
+            <a href="insight.html" class="quick-action-btn">
+              <i data-lucide="lightbulb"></i>
+              <span>Ver Insights</span>
+            </a>
+            <a href="insight.html#panel-vendas-presenciais" class="quick-action-btn">
+              <i data-lucide="banknote"></i>
+              <span>Lançar venda presencial</span>
+            </a>
+            <button type="button" class="quick-action-btn" id="btn-sincronizar-agora">
+              <i data-lucide="refresh-cw"></i>
+              <span>Sincronizar</span>
+            </button>
+            <a href="configuracoes.html" class="quick-action-btn">
+              <i data-lucide="settings"></i>
+              <span>Configurações</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- QUADRO DA REDE: faturamento de ontem em destaque -->
         <div class="hero-band">
-          <div class="hero-eyebrow">VISÃO GERAL DA REDE — Ontem, <span id="data-ontem">...</span></div>
+          <div class="hero-eyebrow">Visão geral da rede — Ontem, <span id="data-ontem">...</span></div>
           <div class="hero-main">
             <div>
               <div class="hero-value"><span id="total-rede-valor">R$ 0,00</span></div>
@@ -174,30 +200,9 @@
           </div>
         </div>
 
-        <!-- AÇÕES RÁPIDAS -->
-        <div class="quick-actions">
-          <a href="insight.html" class="quick-action-btn">
-            <i data-lucide="lightbulb"></i>
-            <span>Ver Insights</span>
-          </a>
-          <a href="insight.html#panel-vendas-presenciais" class="quick-action-btn">
-            <i data-lucide="banknote"></i>
-            <span>Lançar venda presencial</span>
-          </a>
-          <button type="button" class="quick-action-btn" id="btn-sincronizar-agora">
-            <i data-lucide="refresh-cw"></i>
-            <span>Sincronizar agora</span>
-          </button>
-          <a href="configuracoes.html" class="quick-action-btn">
-            <i data-lucide="settings"></i>
-            <span>Configurações</span>
-          </a>
-        </div>
-
         <!-- SEÇÃO FATURAMENTO POR PERÍODO -->
         <div class="section-header">
-          <i data-lucide="calendar-range"></i>
-          <h3>Faturamento por Período</h3>
+          <h3>Faturamento por período</h3>
         </div>
 
         <!-- CARDS INJETADOS PELO JS -->
@@ -211,7 +216,7 @@
             <div class="chart-header">
               <div class="chart-title">
                 <i data-lucide="line-chart"></i>
-                <h3>Faturamento da Rede</h3>
+                <h3>Faturamento da rede</h3>
               </div>
               <p class="chart-subtitle">Últimos 7 dias — 4 lojas somadas</p>
             </div>
@@ -225,7 +230,7 @@
             <div class="chart-header">
               <div class="chart-title">
                 <i data-lucide="pie-chart"></i>
-                <h3>Canais de Venda</h3>
+                <h3>Canais de venda</h3>
               </div>
               <p class="chart-subtitle">Últimos 7 dias — 4 lojas somadas</p>
             </div>
@@ -245,7 +250,7 @@
         <div class="home-secondary-row">
           <div class="panel">
             <div class="panel-header">
-              <h3 class="panel-title">Ranking de Lojas</h3>
+              <h3 class="panel-title">Ranking de lojas</h3>
               <span class="panel-subtitle">Faturamento de ontem</span>
             </div>
             <div class="ranking-lista" id="ranking-lojas">
@@ -255,7 +260,7 @@
 
           <div class="panel">
             <div class="panel-header">
-              <h3 class="panel-title">Status de Sincronização</h3>
+              <h3 class="panel-title">Status de sincronização</h3>
             </div>
             <div class="sync-status-lista" id="home-sync-status">
               <!-- Renderizado dinamicamente via JS -->

@@ -2960,6 +2960,35 @@ sistema está pronto, falta o número):
   rótulo "Painel" ficou escondido, a logo usa Plus Jakarta Sans (a
   Montserrat não era carregada nas telas internas) e o nome do usuário
   voltou a aparecer na gaveta do celular.
+- **Paleta grafite + visual de SaaS financeiro (2026-09-15, pedido da
+  Julia; tokens no `theme.css`, vale no sistema todo):** neutros grafite
+  (fundo `#FAFAFA`, cartão branco, borda `#E4E4E7`, texto `#18181B`;
+  escuro `#09090B`/`#18181B`), menu `#18181B` com a tela aberta em
+  `rgba(255,255,255,0.08)` e barra de 3px na cor da marca. O vermelho
+  `#D93829` fica só no botão principal, na logo e no item aberto (menu,
+  aba, categoria); foco de campo e de teclado é azul (`--info`). Alta e
+  queda: `--success`/`--danger` pra preenchimento com texto branco e
+  `--success-texto`/`--danger-texto`/`--warning-texto` pra escrever na
+  cor (clareiam no modo escuro). Cartões planos: raio de 8px, sombra
+  `0 1px 3px rgba(0,0,0,0.05)`, sem a borda tracejada e o furo de comanda
+  (e sem a borda serrilhada do Vendas Semanais). Número em Plus Jakarta
+  Sans com `tabular-nums` (a IBM Plex Mono saiu). Gráficos: cinco cores
+  bem diferentes, sem vermelho nem verde (`CORES_GRAFICO` no script.js =
+  `--grafico-*`), e canal de venda com cor fixa em toda tela
+  (`corDoCanal`: iFood rosa, 99Food âmbar, Cardápio Web azul, Presencial
+  turquesa, Totem violeta); lojas em Mais Vendidos: Artesanos azul, Açaí
+  violeta, Tradiça ZN âmbar, Simus turquesa.
+- **Home**: no topo, o título "Visão Geral" e as ações rápidas como
+  botões secundários; logo abaixo, o quadro "Visão geral da rede" com o
+  faturamento de ontem (chapa grafite com um brilho do vermelho da marca)
+  e a hora da atualização num selo dentro dele. O `style.css` guarda o
+  quadro e as cores próprias da Home (`body.pagina-home`).
+- **Cabeçalho de vidro** (`.top-header`, todas as telas): barra flutuante
+  a 12px das bordas, meio transparente (`--header-vidro`), com
+  `backdrop-filter` desfocando o que passa por baixo, fio de borda e
+  sombra leve (`--header-vidro-borda`/`--header-vidro-sombra`). A Julia
+  achou que a barra cheia de ponta a ponta não parecia vidro com a página
+  parada no topo; flutuando, o efeito aparece sempre.
 - **Dado de negócio é cadastrado na tela, em produção.** O banco de
   produção não vai no push, então script de dado rodado no banco local não
   chega lá — e a Julia quer tudo mantido no sistema, sem planilha (desde

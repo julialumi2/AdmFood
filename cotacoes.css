@@ -121,7 +121,7 @@
 .icone-preco-selecionado {
   width: 16px;
   height: 16px;
-  color: var(--success);
+  color: var(--success-texto);
   flex-shrink: 0;
 }
 

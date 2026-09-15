@@ -110,8 +110,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--primary);
-  background-color: var(--primary-soft);
+  color: var(--info);
+  background-color: var(--info-soft);
   padding: 2px 6px;
   border-radius: var(--radius-pill);
 }
@@ -147,7 +147,7 @@
 #daily-table-body tr { cursor: pointer; }
 
 #daily-table-body tr.linha-selecionada {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--info);
   outline-offset: -2px;
 }
 
@@ -205,7 +205,7 @@
 }
 
 .preparo-metrica-valor {
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 1.35rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -221,7 +221,7 @@
 .link-detalhe {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--primary);
+  color: var(--info);
   text-decoration: none;
   white-space: nowrap;
 }

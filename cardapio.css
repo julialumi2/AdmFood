@@ -197,7 +197,7 @@
   box-shadow: var(--shadow-sm);
 }
 
-.cardapio-categoria-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.cardapio-categoria-item:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 .cardapio-categoria-contagem {
   font-variant-numeric: tabular-nums;
@@ -214,7 +214,7 @@
 
 .cardapio-categoria-item.active .cardapio-categoria-contagem {
   color: var(--primary);
-  background-color: rgba(217, 56, 41, 0.14);
+  background-color: var(--surface-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -250,8 +250,8 @@
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background-color: var(--primary-soft);
-  color: var(--primary);
+  background-color: var(--info-soft);
+  color: var(--info);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,7 +283,7 @@
   gap: var(--space-2);
   font-size: 0.8rem;
   font-weight: 800;
-  color: var(--primary);
+  color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: var(--space-5) var(--space-1) var(--space-2);
@@ -358,8 +358,8 @@
 }
 
 .btn-lapis-nome[hidden] { display: none; }
-.btn-lapis-nome:hover { background-color: var(--surface-muted); color: var(--primary); }
-.btn-lapis-nome:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.btn-lapis-nome:hover { background-color: var(--surface-muted); color: var(--text-dark); }
+.btn-lapis-nome:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
 .btn-lapis-nome svg { width: 15px; height: 15px; pointer-events: none; }
 
 .ficha-tecnica-complemento-linha .ficha-tecnica-produto-nome {
@@ -397,8 +397,8 @@
 
 .nome-editavel:focus {
   background-color: var(--input-bg);
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 .nome-editavel[hidden] { display: none; }
@@ -420,7 +420,7 @@
   color: var(--text-muted);
 }
 
-.nome-inline-ajuda.erro { color: var(--danger); }
+.nome-inline-ajuda.erro { color: var(--danger-texto); }
 .nome-inline-ajuda[hidden] { display: none; }
 
 /* Tirar do cardápio (2026-09-14): à esquerda, longe do Salvar. */
@@ -470,7 +470,7 @@
   height: 32px;
   border-radius: 50%;
   border: none;
-  background-color: var(--primary);
+  background-color: #3F3F46;
   color: #fff;
   display: flex;
   align-items: center;
@@ -479,7 +479,7 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.detalhe-produto-btn-foto:hover { background-color: var(--primary-hover); }
+.detalhe-produto-btn-foto:hover { background-color: #18181B; }
 .detalhe-produto-btn-foto i, .detalhe-produto-btn-foto svg { width: 15px; height: 15px; }
 
 .detalhe-produto-campos {
@@ -528,8 +528,8 @@
 }
 
 .detalhe-produto-campo input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 @media (max-width: 768px) {
@@ -586,7 +586,7 @@
   height: 22px;
   border-radius: 50%;
   border: none;
-  background-color: var(--primary);
+  background-color: #3F3F46;
   color: #fff;
   display: flex;
   align-items: center;
@@ -627,7 +627,7 @@
   cursor: pointer;
 }
 
-.cardapio-btn-editar:hover { color: var(--primary); border-color: var(--primary); }
+.cardapio-btn-editar:hover { color: var(--text-dark); border-color: var(--text-dark); }
 .cardapio-btn-editar i, .cardapio-btn-editar svg { width: 13px; height: 13px; }
 
 .cardapio-linha-preco {
@@ -636,7 +636,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: 5px 0;
-  border-top: 1px dashed var(--surface-muted-border);
+  border-top: 1px solid var(--surface-muted-border);
   font-size: 0.82rem;
 }
 
@@ -662,8 +662,8 @@
 }
 
 .cardapio-input-preco:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 .cardapio-editar-acoes {
@@ -764,7 +764,7 @@
 }
 
 .receita-preco-venda {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--text-dark);
@@ -785,7 +785,7 @@
   border-radius: 6px;
   background-color: var(--input-bg);
   color: var(--text-dark);
-  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
 }
 
@@ -802,14 +802,14 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: var(--primary);
+  color: var(--text-faint);
 }
 
 .receita-eyebrow::before {
   content: '';
   width: 12px;
   height: 2px;
-  background-color: var(--primary);
+  background-color: var(--text-faint);
   border-radius: 1px;
   flex-shrink: 0;
 }
@@ -842,7 +842,7 @@
 }
 
 .receita-insumo-qtd {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 0.78rem;
   color: var(--text-muted);
@@ -878,7 +878,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.mistura-meta .mistura-incompleta { color: var(--warning); font-weight: 600; }
+.mistura-meta .mistura-incompleta { color: var(--warning-texto); font-weight: 600; }
 
 /* Modal de receita da mistura (veio do Estoque em 2026-09-10) */
 .receita-ajuda { margin-bottom: var(--space-3); }
@@ -907,7 +907,7 @@
 }
 
 .receita-rendimento input:focus-visible,
-.receita-qtd-cell input:focus-visible { border-color: var(--primary); }
+.receita-qtd-cell input:focus-visible { border-color: var(--info); }
 
 .receita-rendimento input { width: 120px; }
 

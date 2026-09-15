@@ -1,50 +1,65 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&display=swap');
-
 /* ---------------------------------------------------------------------
    1. TOKENS DE DESIGN
+   Paleta aprovada pela Julia em 2026-09-15: o vermelho da marca só no
+   botão principal, na logo e no item aberto do menu; neutros grafite
+   (cinza neutro, quase sem azul) em volta dele; alta e queda em verde e
+   num vermelho mais escuro que o da marca; gráficos com cinco cores bem
+   diferentes entre si, sem vermelho nem verde.
    --------------------------------------------------------------------- */
 :root {
   /* Cor de marca */
-  --primary: #d93829;
-  --primary-hover: #b92e21;
+  --primary: #D93829;
+  --primary-hover: #B92E21;
   --primary-soft: rgba(217, 56, 41, 0.08);
 
-  /* Acentos complementares (mostarda de grelha e verde-picles) — usados
-     em pontos pontuais de destaque, nunca competindo com o vermelho. */
-  --ember: #c97a1f;
-  --ember-soft: #fbeed9;
-  --pickle: #4c7a4a;
+  /* Neutros grafite (modo claro) */
+  --bg-main: #FAFAFA;
+  --card-bg: #FFFFFF;
+  --header-bg: #FFFFFF;
+  --header-vidro: rgba(255, 255, 255, 0.62);
+  --header-vidro-borda: rgba(24, 24, 27, 0.08);
+  --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --sidebar-bg: #18181B;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-active-text: #FFFFFF;
+  --sidebar-text: #D4D4D8;
+  --sidebar-text-muted: #A1A1AA;
 
-  /* Neutros (modo claro) — tom "papel kraft" bem sutil no lugar do
-     cinza-azulado genérico de dashboard SaaS. */
-  --bg-main: #faf7f2;
-  --card-bg: #ffffff;
-  --header-bg: #ffffff;
-  --sidebar-bg: #1c1310;
-  --sidebar-hover: #362522;
-  --sidebar-active-text: #ffffff;
-  --sidebar-text: #ece7e5;
-  --sidebar-text-muted: #a89490;
+  --text-dark: #18181B;
+  --text-muted: #52525B;
+  --text-faint: #71717A;
 
-  --text-dark: #241a16;
-  --text-muted: #7a6f66;
-  --text-faint: #a89a8e;
+  --border-color: #E4E4E7;
+  --border-strong: #D4D4D8;
+  --surface-muted: #F4F4F5;
+  --surface-muted-border: #E4E4E7;
+  --input-bg: #FFFFFF;
+  --input-border: #D4D4D8;
 
-  --border-color: #ece3d6;
-  --surface-muted: #f7f2ea;
-  --surface-muted-border: #f0e9dc;
-  --input-bg: #ffffff;
-  --input-border: #d8cfc0;
-
-  /* Semânticas */
-  --success: #4c7a4a;
-  --success-soft: #e4efe0;
-  --warning: #c97a1f;
-  --warning-soft: #fbeed9;
-  --danger: #c62b2b;
-  --danger-soft: rgba(198, 43, 43, 0.09);
+  /* Semânticas. A cor pura (--success...) é pra preenchimento com texto
+     branco em cima; a -texto é pra escrever na cor, e clareia no modo
+     escuro pra continuar legível. */
+  --success: #047857;
+  --success-texto: #047857;
+  --success-soft: #ECFDF5;
+  --warning: #B45309;
+  --warning-texto: #B45309;
+  --warning-soft: #FFFBEB;
+  --danger: #B42318;
+  --danger-texto: #B42318;
+  --danger-soft: #FEF3F2;
+  --info: #2563EB;
+  --info-soft: #EFF6FF;
   --whatsapp: #25D366;
   --whatsapp-hover: #20bd5a;
+
+  /* Gráficos, na ordem de uso (mesma lista de CORES_GRAFICO no script.js) */
+  --grafico-1: #2563EB;
+  --grafico-2: #F59E0B;
+  --grafico-3: #8B5CF6;
+  --grafico-4: #14B8A6;
+  --grafico-5: #EC4899;
+  --grafico-outros: #A1A1AA;
 
   /* Escala de espaçamento (múltiplos de 4px) */
   --space-1: 4px;
@@ -55,16 +70,16 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  /* Raio de borda */
+  /* Raio de borda: 8px em todo cartão e contêiner */
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
   --radius-pill: 999px;
 
-  /* Sombras (mais quentes que cinza puro — combinam com o papel kraft) */
-  --shadow-sm: 0 1px 2px rgba(36, 26, 22, 0.05);
-  --shadow-md: 0 2px 8px rgba(36, 26, 22, 0.06), 0 10px 24px rgba(36, 26, 22, 0.05);
-  --shadow-lg: 0 10px 32px rgba(36, 26, 22, 0.16);
+  /* Sombras quase imperceptíveis; a forte fica pra janela e menu flutuante */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.14);
 
   --sidebar-width: 260px;
   /* Desde 2026-09-14 o menu encosta na borda (sem a margem de 16px de cada
@@ -73,34 +88,42 @@
 }
 
 body.dark-mode {
-  --bg-main: #15100e;
-  --card-bg: #201812;
-  --header-bg: #1a130f;
-  --sidebar-bg: #100b09;
-  --sidebar-hover: #2c201d;
+  --bg-main: #09090B;
+  --card-bg: #18181B;
+  --header-bg: #18181B;
+  --header-vidro: rgba(24, 24, 27, 0.55);
+  --header-vidro-borda: rgba(255, 255, 255, 0.08);
+  --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.45);
 
-  --text-dark: #f2e9de;
-  --text-muted: #b3a297;
-  --text-faint: #7d6f65;
+  --text-dark: #FAFAFA;
+  --text-muted: #A1A1AA;
+  --text-faint: #71717A;
 
-  --border-color: #33261e;
-  --surface-muted: #241b16;
-  --surface-muted-border: #33261e;
-  --input-bg: #201812;
-  --input-border: #3d2c22;
+  --border-color: #27272A;
+  --border-strong: #3F3F46;
+  --surface-muted: #27272A;
+  --surface-muted-border: #27272A;
+  --input-bg: #18181B;
+  --input-border: #3F3F46;
 
-  --success-soft: rgba(76, 122, 74, 0.16);
-  --warning-soft: rgba(201, 122, 31, 0.18);
-  --ember-soft: rgba(201, 122, 31, 0.18);
-  --danger-soft: rgba(198, 43, 43, 0.18);
+  --primary-soft: rgba(217, 56, 41, 0.16);
+  --success-texto: #34D399;
+  --success-soft: rgba(52, 211, 153, 0.12);
+  --warning-texto: #FBBF24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --danger-texto: #F97066;
+  --danger-soft: rgba(249, 112, 102, 0.12);
+  --info-soft: rgba(37, 99, 235, 0.16);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
+/* Número com os algarismos da mesma largura, pra coluna de valor alinhar
+   (substituiu a fonte mono em 2026-09-15). */
 .valor-mono {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------------
@@ -136,7 +159,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
@@ -248,24 +271,22 @@ body {
   grid-template-columns: var(--sidebar-width-collapsed) 1fr;
 }
 
-/* Menu lateral (redesenhado em 2026-09-14, pedido da Julia). A "chapa"
-   escura, encostada na borda e sem cantos arredondados (ela preferiu
-   assim ao menu flutuante), com uma ideia só no centro: a tela aberta é
-   a comanda que está na mão — um ticket creme com a borda da direita
-   picotada, destacado do bloco. O resto é quieto: o picote tracejado
-   separa a logo e o rodapé (como o corte de uma comanda) e prende os
-   subitens ao grupo deles. */
+/* Menu lateral: chapa grafite, encostada na borda e sem cantos
+   arredondados (a Julia preferiu assim ao menu flutuante, 2026-09-14).
+   Desde 2026-09-15 no visual de SaaS financeiro, sem a comanda picotada:
+   a tela aberta tem um fundo levemente mais claro e uma barra fina de 3px
+   na cor da marca na borda esquerda; divisórias em linha fina. Vale em
+   todas as telas (o menu é o mesmo em todas). */
 .sidebar {
-  --menu-texto: #d9ccc3;
-  --menu-texto-forte: #fff8ef;
-  --menu-icone: #a38f86;
-  --menu-hover: rgba(255, 244, 232, 0.06);
-  --menu-picote: rgba(236, 225, 214, 0.18);
-  --comanda: #faf7f2;
-  --comanda-tinta: #241a16;
+  --menu-texto: #D4D4D8;
+  --menu-texto-forte: #FFFFFF;
+  --menu-icone: #A1A1AA;
+  --menu-hover: rgba(255, 255, 255, 0.05);
+  --menu-ativo: rgba(255, 255, 255, 0.08);
+  --menu-divisor: rgba(255, 255, 255, 0.08);
 
   background-color: var(--sidebar-bg);
-  background-image: radial-gradient(120% 60% at 0% 0%, rgba(217, 56, 41, 0.1), transparent 60%);
+  border-right: 1px solid var(--menu-divisor);
   color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
@@ -282,27 +303,26 @@ body {
   box-sizing: border-box;
 }
 
-/* Cabeçalho: a logo, e embaixo dela o picote. */
+/* Cabeçalho: a logo, e embaixo dela uma divisória fina. */
 .sidebar-logo {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--space-2) var(--space-5);
   margin-bottom: var(--space-4);
-  border-bottom: 1px dashed var(--menu-picote);
+  border-bottom: 1px solid var(--menu-divisor);
 }
 
 .logo-icon {
   width: 36px;
   height: 36px;
   background-color: var(--primary);
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff8ef;
+  color: #FFFFFF;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(217, 56, 41, 0.35);
 }
 
 .logo-icon svg { width: 19px; height: 19px; }
@@ -314,7 +334,7 @@ body {
   letter-spacing: -0.02em;
 }
 
-.brand-dark { color: #f6efe4; }
+.brand-dark { color: #FAFAFA; }
 .brand-red { color: var(--primary); }
 
 /* "Painel" não dizia nada a quem está dentro do painel. */
@@ -333,8 +353,9 @@ body {
   align-items: center;
   color: var(--menu-texto);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
+  border-radius: 6px;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
@@ -365,33 +386,21 @@ body {
 .menu-item:focus-visible,
 .menu-subitem:focus-visible,
 .sidebar-user-card:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
-/* A comanda aberta: a tela em que você está. */
+/* A tela em que você está: fundo um pouco mais claro e a barra de 3px na
+   cor da marca, na borda esquerda. */
 .menu-item.active,
 .menu-subitem.active {
-  background-color: var(--comanda);
-  color: var(--comanda-tinta);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  background-color: var(--menu-ativo);
+  color: var(--menu-texto-forte);
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .menu-item.active svg,
-.menu-subitem.active svg { color: var(--primary); }
-
-/* O picote na borda da direita: meias-luas da cor do menu mordendo o
-   papel, como o ticket destacado do bloco. */
-.menu-item.active::after,
-.menu-subitem.active::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  right: -3px;
-  width: 6px;
-  background: radial-gradient(circle at 50% 50%, var(--sidebar-bg) 2.4px, transparent 2.9px) 0 0 / 6px 7px repeat-y;
-}
+.menu-subitem.active svg { color: var(--menu-texto-forte); }
 
 /* Grupos recolhíveis (Compras, Insights). */
 .menu-group-toggle {
@@ -415,9 +424,9 @@ body {
 
 /* O grupo da tela aberta fica aceso, mesmo fechado. */
 .menu-group:has(.menu-subitem.active) > .menu-group-toggle { color: var(--menu-texto-forte); }
-.menu-group:has(.menu-subitem.active) > .menu-group-toggle svg:first-child { color: var(--primary); }
+.menu-group:has(.menu-subitem.active) > .menu-group-toggle svg:first-child { color: var(--menu-texto-forte); }
 
-/* Subitens presos ao grupo por uma linha de picote. */
+/* Subitens presos ao grupo por uma linha fina. */
 .menu-subgroup {
   display: flex;
   flex-direction: column;
@@ -426,7 +435,7 @@ body {
   max-height: 0;
   margin-left: 21px;
   padding-left: 9px;
-  border-left: 1px dashed var(--menu-picote);
+  border-left: 1px solid var(--menu-divisor);
   transition: max-height 0.2s ease, margin 0.2s ease;
 }
 
@@ -451,19 +460,19 @@ body {
   transition: color 0.15s ease;
 }
 
-/* Rodapé: quem está usando, depois do picote. */
+/* Rodapé: quem está usando, depois de uma divisória fina. */
 .sidebar-user-card {
   margin-top: auto;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-2) 0;
-  border-top: 1px dashed var(--menu-picote);
+  border-top: 1px solid var(--menu-divisor);
   text-decoration: none;
   flex-shrink: 0;
 }
 
-/* Espaço entre o fim do menu e o picote do rodapé, quando o menu é
+/* Espaço entre o fim do menu e a divisória do rodapé, quando o menu é
    comprido e o rodapé vem logo depois dele. */
 .sidebar-menu { margin-bottom: var(--space-4); }
 
@@ -496,10 +505,9 @@ body {
 }
 
 .sidebar-user-card .user-role {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--menu-icone);
 }
@@ -551,11 +559,11 @@ body {
   display: none;
 }
 
-/* Recolhido, os subitens somem: o grupo da tela aberta vira a comanda. */
+/* Recolhido, os subitens somem: o grupo da tela aberta ganha o destaque. */
 .dashboard-wrapper.collapsed .menu-group:has(.menu-subitem.active) > .menu-group-toggle {
-  background-color: var(--comanda);
-  color: var(--comanda-tinta);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  background-color: var(--menu-ativo);
+  color: var(--menu-texto-forte);
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .dashboard-wrapper.collapsed #toggleMenuBtn i,
@@ -589,16 +597,26 @@ body {
   width: 100%;
 }
 
+/* Cabeçalho de vidro (pedido da Julia, 2026-09-15): uma barra flutuante,
+   meio transparente, com o fundo desfocado, um fio de luz na borda e uma
+   sombra leve — assim o vidro aparece mesmo com a página parada no topo, e
+   ao rolar o conteúdo passa desfocado por baixo. A margem + o padding
+   somam os 32px da borda do conteúdo, pra alinhar com o resto da tela. */
 .top-header {
-  height: 64px;
-  background-color: var(--header-bg);
-  border-bottom: 1px solid var(--border-color);
+  height: 56px;
+  margin: 12px var(--space-4) 0;
+  padding: 0 var(--space-4);
+  background-color: var(--header-vidro);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+  border: 1px solid var(--header-vidro-borda);
+  border-radius: 12px;
+  box-shadow: var(--header-vidro-sombra);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--space-8);
   position: sticky;
-  top: 0;
+  top: 12px;
   z-index: 10;
 }
 
@@ -655,7 +673,7 @@ body {
 .avatar {
   width: 36px;
   height: 36px;
-  background-color: var(--primary);
+  background-color: #3F3F46;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -701,9 +719,9 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--primary);
+  color: var(--text-faint);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
 }
 
@@ -813,109 +831,6 @@ select {
 }
 
 /* ---------------------------------------------------------------------
-   5b. FAIXA "QUADRO DE PEDIDOS" (hero da Home) — anuncia o número do dia
-   antes de qualquer outra coisa, como o quadro de comandas da cozinha.
-   --------------------------------------------------------------------- */
-.hero-band {
-  background-color: var(--sidebar-bg);
-  background-image: radial-gradient(circle at 88% 0%, rgba(217, 56, 41, 0.18), transparent 55%);
-  border-radius: var(--radius-lg);
-  padding: var(--space-6) var(--space-8);
-  color: var(--sidebar-text);
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  overflow: hidden;
-}
-
-.hero-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--sidebar-text-muted);
-  margin-bottom: var(--space-3);
-}
-
-.hero-eyebrow::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--success);
-  box-shadow: 0 0 0 3px rgba(76, 122, 74, 0.3);
-  flex-shrink: 0;
-}
-
-.hero-main {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-}
-
-.hero-value {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
-  font-weight: 700;
-  font-size: 2.75rem;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  color: #ffffff;
-}
-
-.hero-value .destaque { color: var(--primary); }
-
-.hero-sub {
-  font-size: 0.8rem;
-  color: var(--sidebar-text-muted);
-  margin-top: var(--space-2);
-}
-
-.hero-badge {
-  background-color: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 8px var(--space-4);
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  color: var(--sidebar-text);
-  white-space: nowrap;
-}
-
-.hero-strip {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px dashed rgba(255, 255, 255, 0.14);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--space-4);
-}
-
-.hero-store .hero-store-nome {
-  font-size: 0.68rem;
-  color: var(--sidebar-text-muted);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: 4px;
-}
-
-.hero-store .hero-store-valor {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f2e6d8;
-}
-
-@media (max-width: 768px) {
-  .hero-band { padding: var(--space-5); }
-  .hero-value { font-size: 2.1rem; }
-  .hero-strip { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* ---------------------------------------------------------------------
    6. BOTÕES E BADGES
    --------------------------------------------------------------------- */
 .btn-whatsapp {
@@ -1000,11 +915,11 @@ select {
 }
 
 .badge-green,
-.badge-pill.pos { background-color: var(--success-soft); color: var(--success); }
+.badge-pill.pos { background-color: var(--success-soft); color: var(--success-texto); }
 .badge-orange,
-.badge-pill.neu-orange { background-color: var(--warning-soft); color: var(--warning); }
+.badge-pill.neu-orange { background-color: var(--warning-soft); color: var(--warning-texto); }
 .badge-neutral { background-color: var(--surface-muted); color: var(--text-muted); }
-.badge-pill.neg { background-color: var(--danger-soft); color: var(--danger); }
+.badge-pill.neg { background-color: var(--danger-soft); color: var(--danger-texto); }
 
 .badge-pill {
   padding: 4px 10px;
@@ -1026,55 +941,20 @@ select {
   gap: var(--space-4);
 }
 
-/* Cartões "comanda" — a borda tracejada no topo + o furo central imitam o
-   recibo de uma impressora térmica de pedido, o elemento assinatura do
-   redesign (ver DOCUMENTACAO.md). O furo é dois pseudo-elementos: uma
-   linha tracejada e um círculo vazado por cima, cor igual ao fundo da
-   página — como o furo de rasgar de um talão de comanda. */
+/* Cartões planos: borda fina, raio de 8px e sombra quase imperceptível
+   (a borda tracejada e o furo de comanda saíram em 2026-09-15). Não pulam
+   no hover, porque não são clicáveis. */
 .store-card,
 .metric-card {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: var(--space-5);
-  padding-top: 22px;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
   position: relative;
-}
-
-.store-card::before,
-.metric-card::before {
-  content: '';
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  top: 0;
-  border-top: 2px dashed var(--border-color);
-}
-
-.store-card::after,
-.metric-card::after {
-  content: '';
-  position: absolute;
-  top: -7px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: var(--bg-main);
-  border: 1px solid var(--border-color);
-  border-top: none;
-}
-
-.store-card:hover,
-.metric-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
 }
 
 .card-header {
@@ -1102,19 +982,19 @@ select {
   justify-content: center;
 }
 
-.card-icon-amber { background-color: var(--warning-soft); color: var(--warning); }
-.icon-red { color: var(--danger); }
-.icon-green { color: var(--success); }
-.icon-dark { color: var(--warning); }
-.icon-red-alert { color: var(--danger); }
+.card-icon-amber { background-color: var(--warning-soft); color: var(--warning-texto); }
+.icon-red { color: var(--danger-texto); }
+.icon-green { color: var(--success-texto); }
+.icon-dark { color: var(--warning-texto); }
+.icon-red-alert { color: var(--danger-texto); }
 
 .card-value,
 .store-value {
-  font-family: 'IBM Plex Mono', 'Plus Jakarta Sans', monospace;
   font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-dark);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .card-value-sm { font-size: 1rem; }
@@ -1133,8 +1013,8 @@ select {
   font-weight: 700;
 }
 
-.trend-up { color: var(--success); }
-.trend-down { color: var(--danger); }
+.trend-up { color: var(--success-texto); }
+.trend-down { color: var(--danger-texto); }
 
 .trend-sub {
   color: var(--text-faint);
@@ -1180,7 +1060,7 @@ select {
   font-size: 0.95rem;
 }
 
-.chart-title i, .chart-title svg { width: 18px; height: 18px; color: var(--primary); }
+.chart-title i, .chart-title svg { width: 18px; height: 18px; color: var(--text-faint); }
 
 .chart-subtitle {
   font-size: 0.78rem;
@@ -1310,7 +1190,7 @@ select {
   cursor: pointer;
 }
 
-.loja-select-trigger:hover { border-color: var(--primary); }
+.loja-select-trigger:hover { border-color: var(--border-strong); }
 
 .loja-select-chevron {
   width: 16px;
@@ -1357,8 +1237,8 @@ select {
 .loja-select-item:hover { background-color: var(--surface-muted); color: var(--text-dark); }
 
 .loja-select-item.active {
-  color: var(--primary);
-  background-color: var(--primary-soft);
+  color: var(--text-dark);
+  background-color: var(--surface-muted);
 }
 
 .loja-select-item .tab-badge { margin-left: auto; }
@@ -1439,9 +1319,11 @@ tr:hover { background-color: var(--surface-muted); }
 
 .tab-btn:hover { color: var(--text-dark); }
 
+/* Aba aberta sublinhada em grafite: o sublinhado vermelho aparecia como
+   uma linha solta embaixo do cabeçalho ao rolar a tela. */
 .tab-btn.active {
-  border-bottom-color: var(--primary);
-  color: var(--primary);
+  border-bottom-color: var(--text-dark);
+  color: var(--text-dark);
   background-color: var(--card-bg);
   border-top-left-radius: var(--radius-sm);
   border-top-right-radius: var(--radius-sm);
@@ -1594,7 +1476,7 @@ tr:hover { background-color: var(--surface-muted); }
 }
 
 .btn-acao-icone:hover { background-color: var(--surface-muted); color: var(--text-dark); }
-.btn-acao-icone.btn-excluir:hover { color: var(--danger); border-color: var(--danger); }
+.btn-acao-icone.btn-excluir:hover { color: var(--danger-texto); border-color: var(--danger); }
 .btn-acao-icone i, .btn-acao-icone svg { width: 15px; height: 15px; pointer-events: none; }
 
 /* Resultado de uma sincronização manual — usado em Configurações e na Home. */
@@ -1618,7 +1500,7 @@ tr:hover { background-color: var(--surface-muted); }
 
 .sync-resultado-item.erro {
   background-color: var(--danger-soft);
-  color: var(--danger);
+  color: var(--danger-texto);
 }
 
 /* ---------------------------------------------------------------------
@@ -1688,8 +1570,8 @@ tr:hover { background-color: var(--surface-muted); }
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
 }
 
 .checklist-fornecedores {
@@ -1754,7 +1636,7 @@ tr:hover { background-color: var(--surface-muted); }
   transition: background-color 0.15s, color 0.15s;
 }
 
-.btn-icon.danger:hover { background-color: var(--danger-soft); color: var(--danger); }
+.btn-icon.danger:hover { background-color: var(--danger-soft); color: var(--danger-texto); }
 
 .btn-close {
   background: none;
@@ -1801,8 +1683,8 @@ tr:hover { background-color: var(--surface-muted); }
 }
 
 .stepper-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--border-strong);
+  color: var(--text-dark);
 }
 
 .modal-actions {
@@ -1915,8 +1797,10 @@ tr:hover { background-color: var(--surface-muted); }
   .btn-toggle-menu { display: flex; }
 
   .top-header {
-    padding: 0 var(--space-4);
-    height: 60px;
+    margin: 8px 8px 0;
+    padding: 0 var(--space-3);
+    height: 52px;
+    top: 8px;
   }
 
   .user-info { display: none; }

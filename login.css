@@ -5,12 +5,12 @@
 
 :root {
   --flame: #d93829;
-  --flame-deep: #a82a1e;
-  --char: #1c1310;
-  --char-2: #150f0d;
-  --kraft-text: #f0e5d2;
-  --ink-muted: #b3a297;
-  --ink-faint: #7d6f65;
+  --flame-deep: #B92E21;
+  --char: #18181B;
+  --char-2: #09090B;
+  --kraft-text: #FAFAFA;
+  --ink-muted: #A1A1AA;
+  --ink-faint: #71717A;
   --border-claro: rgba(255, 255, 255, 0.12);
 }
 
@@ -57,7 +57,7 @@ body {
   bottom: 90px;
   width: 140px;
   height: 90px;
-  background-image: radial-gradient(rgba(240, 229, 210, 0.18) 1.5px, transparent 1.5px);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 1.5px);
   background-size: 18px 18px;
   pointer-events: none;
 }
@@ -153,9 +153,9 @@ body {
 }
 
 .form-erro {
-  background-color: rgba(198, 43, 43, 0.14);
-  color: #ff8a80;
-  border: 1px solid rgba(198, 43, 43, 0.35);
+  background-color: rgba(180, 35, 24, 0.14);
+  color: #F97066;
+  border: 1px solid rgba(180, 35, 24, 0.35);
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 13px;
@@ -209,7 +209,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
   outline: none;
   padding: 12px 14px;
   font-size: 14px;
-  color: #f5f0ea;
+  color: #F4F4F5;
 }
 
 .input-icon-wrap input::placeholder { color: var(--ink-faint); }

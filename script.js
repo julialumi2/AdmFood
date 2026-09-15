@@ -483,7 +483,21 @@ let canalSelecionado = null;
 
 // Paleta usada tanto no gráfico de rosca quanto na bolinha colorida da tabela,
 // pra ficarem sempre com a mesma cor por posição.
-const CORES_CANAL = ['#3b82f6', '#f59e0b', '#a855f7', '#10b981', '#e11d48', '#06b6d4'];
+// Cores dos gráficos (paleta de 2026-09-15, igual às --grafico-* do theme.css):
+// cinco cores bem diferentes entre si, sem vermelho nem verde (que são de
+// queda e alta). Canal de venda tem cor fixa, a mesma em toda tela.
+const CORES_GRAFICO = ['#2563EB', '#F59E0B', '#8B5CF6', '#14B8A6', '#EC4899'];
+const COR_GRAFICO_OUTROS = '#A1A1AA';
+const CORES_CANAL = CORES_GRAFICO;
+function corDoCanal(canal, i) {
+  const nome = String(canal || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (nome.includes('ifood')) return '#EC4899';
+  if (nome.includes('99')) return '#F59E0B';
+  if (nome.includes('cardapio') || nome.includes('catalog') || nome.includes('web')) return '#2563EB';
+  if (nome.includes('presencial') || nome.includes('portal') || nome.includes('balcao')) return '#14B8A6';
+  if (nome.includes('totem')) return '#8B5CF6';
+  return i === undefined ? COR_GRAFICO_OUTROS : CORES_GRAFICO[i % CORES_GRAFICO.length];
+}
 
 // Lojas que têm vendas presenciais (fora da Cardápio Web) e precisam do
 // formulário de lançamento manual.
@@ -785,7 +799,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
     <tr>
       <td>
         <span class="canal-nome">
-          <span class="canal-dot" style="background-color: ${CORES_CANAL[i % CORES_CANAL.length]};"></span>
+          <span class="canal-dot" style="background-color: ${corDoCanal(c.canal, i)};"></span>
           ${c.canal}
           ${c.ajustado ? '<span class="badge-canal-ajustado" title="Valor ajustado manualmente">ajustado</span>' : ''}
         </span>
@@ -837,7 +851,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
         labels: canais.map(c => c.canal),
         datasets: [{
           data: canais.map(c => c.faturamentoNumero),
-          backgroundColor: canais.map((_, i) => CORES_CANAL[i % CORES_CANAL.length]),
+          backgroundColor: canais.map((c, i) => corDoCanal(c.canal, i)),
           borderWidth: 0,
         }],
       },
@@ -1230,7 +1244,7 @@ async function carregarInsights(inicio, fim, diaSemana) {
   } catch (erro) {
     console.error('Falha ao carregar insights:', erro);
     if (canalTableBody) {
-      canalTableBody.innerHTML = `<tr><td colspan="5" style="color: #ef4444;">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
+      canalTableBody.innerHTML = `<tr><td colspan="5" style="color: var(--danger-texto);">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
     }
   }
 }
@@ -1305,7 +1319,7 @@ function renderPreparoTab(tab) {
         datasets: [{
           label: 'Pedidos',
           data: dados.porHorario.map(h => h.totalPedidos),
-          backgroundColor: 'rgba(220, 38, 38, 0.7)',
+          backgroundColor: CORES_GRAFICO[0],
           borderRadius: 4,
         }],
       },
@@ -1430,7 +1444,7 @@ async function carregarInsumos() {
   } catch (erro) {
     console.error('Falha ao carregar insumos:', erro);
     const tbody = document.getElementById('estoque-tabela-body');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#ef4444;">Não foi possível carregar o estoque. Confira se o Flask está rodando.</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger-texto);">Não foi possível carregar o estoque. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -2244,8 +2258,6 @@ const MV_LOJAS = {
   'Tradiça Simus': { classe: 'loja-simus', curto: 'Tradiça Simus' },
 };
 // Tons da cor da loja, em %, pras fatias da rosca de categorias.
-const MV_TONS_CATEGORIA = [100, 74, 52, 34, 20];
-
 function _formatarQuantidadeVendida(valor) {
   return Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 }
@@ -2494,11 +2506,13 @@ function _renderMvCategorias(lojas) {
     return;
   }
 
-  const fatias = ordenadas.slice(0, MV_TONS_CATEGORIA.length).map(([nome, valor], i) => ({
-    nome, valor, cor: `color-mix(in srgb, var(--cor-loja) ${MV_TONS_CATEGORIA[i]}%, var(--card-bg))`,
+  // Cada categoria numa cor bem diferente (paleta dos gráficos), pra
+  // diferença de porcentagem ficar visível; o resto vira "Outras" em cinza.
+  const fatias = ordenadas.slice(0, CORES_GRAFICO.length).map(([nome, valor], i) => ({
+    nome, valor, cor: CORES_GRAFICO[i],
   }));
-  const resto = ordenadas.slice(MV_TONS_CATEGORIA.length).reduce((total, [, valor]) => total + valor, 0);
-  if (resto > 0) fatias.push({ nome: 'Outras', valor: resto, cor: 'var(--text-faint)' });
+  const resto = ordenadas.slice(CORES_GRAFICO.length).reduce((total, [, valor]) => total + valor, 0);
+  if (resto > 0) fatias.push({ nome: 'Outras', valor: resto, cor: COR_GRAFICO_OUTROS });
   const total = fatias.reduce((soma, f) => soma + f.valor, 0);
 
   // Circunferência 100: cada fatia é a própria porcentagem, com um vão
@@ -2754,7 +2768,7 @@ async function carregarLotesVencendo() {
     renderLotesVencendo();
   } catch (erro) {
     console.error('Falha ao carregar lotes vencendo:', erro);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Não foi possível carregar os lotes vencendo.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar os lotes vencendo.</td></tr>`;
   }
 }
 
@@ -2944,7 +2958,7 @@ async function carregarFornecedores() {
     if (tbody) renderFornecedoresTabela();
   } catch (erro) {
     console.error('Falha ao carregar fornecedores:', erro);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#ef4444;">Não foi possível carregar os fornecedores. Confira se o Flask está rodando.</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger-texto);">Não foi possível carregar os fornecedores. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -3115,7 +3129,7 @@ async function carregarCotacoes() {
     renderCotacoesLista();
   } catch (erro) {
     console.error('Falha ao carregar cotações:', erro);
-    tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444;">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -3265,7 +3279,7 @@ async function carregarHistoricoCompras() {
     renderHistoricoCompras(dados.historico || []);
   } catch (erro) {
     console.error('Falha ao carregar histórico de compras:', erro);
-    container.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar o histórico. Confira se o Flask está rodando.</p>`;
+    container.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar o histórico. Confira se o Flask está rodando.</p>`;
   }
 }
 
@@ -3592,7 +3606,7 @@ function _iniciaisFornecedor(nome) {
 // Paleta fixa pra dar uma cor de avatar diferente por fornecedor (estilo
 // VMarket, print da Julia 2026-09-04) — determinística pelo id, não muda
 // de cor a cada render.
-const PALETA_AVATAR_FORNECEDOR = ['#e74c3c', '#27ae60', '#8e44ad', '#2980b9', '#f39c12', '#16a085', '#c0392b', '#7f8c8d'];
+const PALETA_AVATAR_FORNECEDOR = ['#2563EB', '#B45309', '#7C3AED', '#0F766E', '#BE185D', '#52525B', '#4338CA', '#0369A1'];
 function _corAvatarFornecedor(id) {
   return PALETA_AVATAR_FORNECEDOR[id % PALETA_AVATAR_FORNECEDOR.length];
 }
@@ -3989,7 +4003,7 @@ async function carregarPedidos() {
     renderPedidosTabela();
   } catch (erro) {
     console.error('Falha ao carregar pedidos:', erro);
-    tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444;">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -4214,7 +4228,7 @@ async function carregarContagens() {
     renderContagensTabela();
   } catch (erro) {
     console.error('Falha ao carregar contagens:', erro);
-    tbody.innerHTML = `<tr><td colspan="6" style="color:#ef4444;">Não foi possível carregar as contagens. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar as contagens. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -4464,7 +4478,7 @@ async function carregarRequisicoes() {
     renderRequisicoesTabela();
   } catch (erro) {
     console.error('Falha ao carregar requisições:', erro);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Não foi possível carregar as requisições. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar as requisições. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -5786,7 +5800,7 @@ async function abrirModalInsumosLoja() {
     renderInsumosLojaTabela('');
   } catch (erro) {
     console.error('Falha ao carregar insumos da loja:', erro);
-    document.getElementById('insumos-loja-tabela-body').innerHTML = '<tr><td colspan="3" style="color:#ef4444;">Não foi possível carregar.</td></tr>';
+    document.getElementById('insumos-loja-tabela-body').innerHTML = '<tr><td colspan="3" style="color:var(--danger-texto);">Não foi possível carregar.</td></tr>';
   }
 }
 
@@ -5912,7 +5926,7 @@ async function carregarRecebimentos() {
     renderRecebimentosTabela();
   } catch (erro) {
     console.error('Falha ao carregar recebimentos:', erro);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:#ef4444;">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -6098,7 +6112,7 @@ async function carregarPresencial(unidade) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch (erro) {
     console.error('Falha ao carregar vendas presenciais:', erro);
-    tbody.innerHTML = `<tr><td colspan="${colspan}" style="color:#ef4444;">Não foi possível carregar os lançamentos.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="color:var(--danger-texto);">Não foi possível carregar os lançamentos.</td></tr>`;
   }
 }
 
@@ -6271,8 +6285,20 @@ if (tabButtons.length > 0 && document.getElementById('val-faturamento')) {
 // FUNÇÕES AUXILIARES E INTEGRAÇÃO DE APIs (ESCOPO GLOBAL)
 // ==============================================================================
 
-// Cores por posição, reaproveitadas em outras telas do sistema
-const CORES_GRAFICO_REDE = ['#d93829', '#f59e0b', '#10b981', '#3b82f6'];
+// Home (visual de SaaS financeiro, 2026-09-15): azul, índigo e violeta, e
+// cinza pros canais menores. Vermelho e verde ficam reservados pra alta e
+// queda de dinheiro, então o faturamento da rede é uma linha índigo.
+const COR_LINHA_HOME = CORES_GRAFICO[0];
+
+const FONTE_GRAFICO_HOME = { family: "'Plus Jakarta Sans', sans-serif", size: 12 };
+const TOOLTIP_HOME = {
+  backgroundColor: '#18181B',
+  padding: 10,
+  cornerRadius: 8,
+  displayColors: false,
+  titleFont: { ...FONTE_GRAFICO_HOME, weight: '600' },
+  bodyFont: FONTE_GRAFICO_HOME,
+};
 
 /**
  * Busca o faturamento real da rede dos últimos dias e desenha o gráfico de
@@ -6301,21 +6327,24 @@ async function carregarGraficoRede() {
         datasets: [{
           label: 'Faturamento da rede',
           data: dias.map(d => d.faturamento),
-          borderColor: CORES_GRAFICO_REDE[0],
-          backgroundColor: 'rgba(217, 56, 41, 0.08)',
+          borderColor: COR_LINHA_HOME,
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
           borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 3,
-          pointBackgroundColor: CORES_GRAFICO_REDE[0],
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointBackgroundColor: COR_LINHA_HOME,
           fill: true,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
+            ...TOOLTIP_HOME,
             callbacks: {
               title: (itens) => dias[itens[0].dataIndex]?.dia || '',
               label: (ctx) => `R$ ${ctx.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
@@ -6323,10 +6352,15 @@ async function carregarGraficoRede() {
           },
         },
         scales: {
-          x: { grid: { display: false } },
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: '#A1A1AA', font: FONTE_GRAFICO_HOME },
+          },
           y: {
-            grid: { color: '#f1f5f9' },
-            ticks: { callback: value => 'R$' + value.toLocaleString('pt-BR') },
+            grid: { color: 'rgba(161, 161, 170, 0.18)' },
+            border: { display: false },
+            ticks: { color: '#A1A1AA', font: FONTE_GRAFICO_HOME, callback: value => 'R$ ' + value.toLocaleString('pt-BR') },
           },
         },
       },
@@ -6376,36 +6410,41 @@ async function carregarCanalRedeHome() {
       legenda.innerHTML = canais.map((c, i) => `
         <div class="home-canal-legend-item">
           <span class="home-canal-legend-nome">
-            <span class="home-canal-legend-dot" style="background-color: ${CORES_CANAL[i % CORES_CANAL.length]};"></span>
+            <span class="home-canal-legend-dot" style="background-color: ${corDoCanal(c.canal, i)};"></span>
             ${c.canal}
           </span>
           <span class="home-canal-legend-valor">
             R$ ${c.faturamento}
-            <span class="home-canal-legend-percentual">${c.percentual}%</span>
+            <span class="home-canal-legend-percentual">${c.percentual.toLocaleString('pt-BR')}%</span>
           </span>
         </div>
       `).join('');
     }
 
+    // Um fio da cor do cartão separa as fatias (branco no claro, escuro no
+    // modo escuro).
+    const fundoCartao = getComputedStyle(document.body).getPropertyValue('--card-bg').trim() || '#ffffff';
     homeCanalChartInstance = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: {
         labels: canais.map(c => c.canal),
         datasets: [{
           data: canais.map(c => c.faturamentoNumero),
-          backgroundColor: canais.map((_, i) => CORES_CANAL[i % CORES_CANAL.length]),
-          borderWidth: 0,
+          backgroundColor: canais.map((c, i) => corDoCanal(c.canal, i)),
+          borderColor: fundoCartao,
+          borderWidth: 2,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '65%',
+        cutout: '70%',
         plugins: {
           legend: { display: false },
           tooltip: {
+            ...TOOLTIP_HOME,
             callbacks: {
-              label: (ctx) => `${ctx.label}: R$ ${canais[ctx.dataIndex].faturamento} (${canais[ctx.dataIndex].percentual}%)`,
+              label: (ctx) => `${ctx.label}: R$ ${canais[ctx.dataIndex].faturamento} (${canais[ctx.dataIndex].percentual.toLocaleString('pt-BR')}%)`,
             },
           },
         },
@@ -6413,7 +6452,7 @@ async function carregarCanalRedeHome() {
     });
   } catch (erro) {
     console.error('Falha ao carregar gráfico de canais da rede:', erro);
-    if (legenda) legenda.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar os canais.</p>`;
+    if (legenda) legenda.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar os canais.</p>`;
   }
 }
 
@@ -6479,7 +6518,7 @@ async function carregarStatusSincronizacaoHome() {
       : `<p class="panel-subtitle">Nenhuma loja cadastrada.</p>`;
   } catch (erro) {
     console.error('Falha ao carregar status de sincronização:', erro);
-    lista.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar o status.</p>`;
+    lista.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar o status.</p>`;
   }
 }
 
@@ -6533,7 +6572,7 @@ async function carregarConfigLojas() {
       : `<tr><td colspan="4" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
   } catch (erro) {
     console.error('Falha ao carregar lojas cadastradas:', erro);
-    tbody.innerHTML = `<tr><td colspan="4" style="color:#ef4444;">Não foi possível carregar as lojas. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -6664,19 +6703,19 @@ async function carregarDadosLojas() {
 
     container.innerHTML = `
       <div class="store-card">
-        <span class="card-subtitle">DIÁRIO (ONTEM)</span>
-        <span class="min-label">${fmtCurto(ontemDate)}</span>
-        <div class="store-value">${_formatarMoedaBRL(dadosOntem.total_rede)}</div>
+        <span class="home-kpi-rotulo">Diário</span>
+        <div class="home-kpi-valor">${_formatarMoedaBRL(dadosOntem.total_rede)}</div>
+        <span class="home-kpi-periodo">Ontem, ${fmtCurto(ontemDate)}</span>
       </div>
       <div class="store-card">
-        <span class="card-subtitle">SEMANAL (SEMANA PASSADA)</span>
-        <span class="min-label">${fmtCurto(semanaPassadaInicio)} a ${fmtCurto(semanaPassadaFim)}</span>
-        <div class="store-value">${_formatarMoedaBRL(totalSemanal)}</div>
+        <span class="home-kpi-rotulo">Semanal</span>
+        <div class="home-kpi-valor">${_formatarMoedaBRL(totalSemanal)}</div>
+        <span class="home-kpi-periodo">Semana passada, ${fmtCurto(semanaPassadaInicio)} a ${fmtCurto(semanaPassadaFim)}</span>
       </div>
       <div class="store-card">
-        <span class="card-subtitle">MENSAL (MÊS PASSADO)</span>
-        <span class="min-label">${fmtCurto(mesPassadoInicio)} a ${fmtCurto(mesPassadoFim)}</span>
-        <div class="store-value">${_formatarMoedaBRL(totalMensal)}</div>
+        <span class="home-kpi-rotulo">Mensal</span>
+        <div class="home-kpi-valor">${_formatarMoedaBRL(totalMensal)}</div>
+        <span class="home-kpi-periodo">Mês passado, ${fmtCurto(mesPassadoInicio)} a ${fmtCurto(mesPassadoFim)}</span>
       </div>
     `;
 
@@ -6689,7 +6728,7 @@ async function carregarDadosLojas() {
 
   } catch (error) {
     console.error('Falha ao conectar com o backend Flask:', error);
-    container.innerHTML = `<p style="color: #ef4444; padding: 12px;">Não foi possível carregar o faturamento. Certifique-se de que o Flask está rodando.</p>`;
+    container.innerHTML = `<p style="color: var(--danger-texto); padding: 12px;">Não foi possível carregar o faturamento. Certifique-se de que o Flask está rodando.</p>`;
   }
 }
 
@@ -7180,7 +7219,7 @@ async function carregarTarefas() {
     renderKanban();
   } catch (erro) {
     console.error('Falha ao carregar tarefas:', erro);
-    board.innerHTML = `<p class="panel-subtitle" style="color:#ef4444;">Não foi possível carregar as tarefas. Confira se o Flask está rodando.</p>`;
+    board.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar as tarefas. Confira se o Flask está rodando.</p>`;
   }
 }
 
