@@ -163,6 +163,23 @@ _MONTE_O_SEU = re.compile(r"\+\s*\d+\s*complementos?\b", re.IGNORECASE)
 
 _TAMANHO_EM_QUALQUER_PARTE = re.compile(r"\d+\s*ml\b", re.IGNORECASE)
 
+# Batata do combo (pedido da Julia, 2026-09-15): o combo desconta o lanche e
+# a batata que vem junto — "Tasty + Batata + Bebida" é 1 batata, "Combo
+# Casal (01 Clássico+01 Bacon+02 batatas...)" são 2. Entra como uma linha
+# "Batata Individual" (item do cardápio com ficha por loja). Bebida e
+# maionese continuam de fora: o nome não diz qual é.
+BATATA_DO_COMBO = "Batata Individual"
+_BATATAS_COM_QUANTIDADE = re.compile(r"(\d+)\s*batatas?\b", re.IGNORECASE)
+_BATATA = re.compile(r"\bbatatas?\b", re.IGNORECASE)
+
+
+def _batatas_do_combo(texto):
+    """Quantas batatas o texto do combo menciona: "02 batatas" = 2, "Batata" = 1, nenhuma = 0."""
+    quantidade = _BATATAS_COM_QUANTIDADE.search(texto or "")
+    if quantidade:
+        return int(quantidade.group(1))
+    return 1 if _BATATA.search(texto or "") else 0
+
 
 def _eh_tamanho(opcao):
     """Opção de tamanho nunca é complemento: grupo "Tamanho" (qualquer valor,
@@ -244,9 +261,16 @@ def _itens_vendidos(detalhes):
                     "quantidade": (opcao.get("quantity") or 0) * quantidade,
                     "complementos": [],
                 })
+            # O Combo Casal leva 2 batatas mesmo quando o nome não diz
+            # (composição combinada com a Julia em 2026-09-14).
+            nome_combo = item.get("name") or ""
+            batatas = _batatas_do_combo(nome_combo) or (2 if "casal" in nome_combo.lower() else 0)
+            if batatas:
+                itens.append({"nome": BATATA_DO_COMBO, "quantidade": batatas * quantidade, "complementos": []})
             continue
 
         nome = (item.get("name") or "").strip()
+        batatas = 0
         tamanho = next((t for t in map(_tamanho_da_opcao, opcoes) if t), None)
         no_nome = _TAMANHO_NO_NOME.match(nome)
         if no_nome:
@@ -257,7 +281,8 @@ def _itens_vendidos(detalhes):
             # "330 ml" e "330ml" são o mesmo copo; o cadastro escreve junto.
             nome = f"{nome} {re.sub(r'\s+', '', tamanho)}"
         elif not tamanho and " + " in nome and not _MONTE_O_SEU.search(nome):
-            nome = nome.split(" + ", 1)[0]
+            nome, resto = nome.split(" + ", 1)
+            batatas = _batatas_do_combo(resto)
 
         complementos = [
             {
@@ -274,6 +299,8 @@ def _itens_vendidos(detalhes):
             "quantidade": quantidade,
             "complementos": [c for c in complementos if c["nome"] and c["quantidade"]],
         })
+        if batatas:
+            itens.append({"nome": BATATA_DO_COMBO, "quantidade": batatas * quantidade, "complementos": []})
     return [i for i in itens if i["nome"] and i["quantidade"]]
 
 

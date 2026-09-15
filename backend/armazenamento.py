@@ -1792,6 +1792,55 @@ def _pote_do_separado(nome_complemento):
     return f"Pote {pote} (separado)"
 
 
+# Carne em dobro (promo de terça do Artesanos; regra da Julia em 2026-09-15):
+# vale pra qualquer lanche — o de uma carne vai com duas, o de duas vai com
+# quatro. A venda vem numa linha solta ("terça é Carne em Dobro"), vinculada
+# a um item cuja ficha é UMA carne; na hora de gravar o pedido, o
+# multiplicador dessa linha vira a média de carnes dos lanches do mesmo
+# pedido, pra a baixa descontar a carne certa.
+_CARNE_EM_DOBRO = "carne em dobro"
+
+
+def _carnes_por_lanche(conn, unidade, carne_item_id, itens_casados):
+    """Média de carnes por lanche do pedido, medida pela ficha técnica: o
+    quanto cada lanche leva da carne da ficha do "carne em dobro", dividido
+    pelo quanto essa ficha leva (o tempero não conta: a carne é o insumo de
+    maior peso da ficha). `itens_casados` = [(item_cardapio_id, quantidade)].
+    None quando não dá pra medir — sem ficha, ou nenhum lanche com essa carne
+    no pedido; aí vale o multiplicador do vínculo."""
+    def ficha(item_id):
+        return {
+            linha["insumo_id"]: linha["quantidade"] or 0
+            for linha in conn.execute(
+                "SELECT insumo_id, quantidade FROM ficha_tecnica WHERE item_id = ? AND loja = ?",
+                (item_id, unidade),
+            )
+        }
+
+    ficha_carne = ficha(carne_item_id)
+    if not ficha_carne:
+        return None
+    marcadores = ",".join("?" * len(ficha_carne))
+    unidades = {
+        linha["id"]: (linha["unidade_medida"] or "").lower()
+        for linha in conn.execute(f"SELECT id, unidade_medida FROM insumo WHERE id IN ({marcadores})", list(ficha_carne))
+    }
+    carne_id = max(ficha_carne, key=lambda i: ficha_carne[i] * (1000 if unidades.get(i) in ("kg", "l") else 1))
+    por_carne = ficha_carne[carne_id]
+    if not por_carne:
+        return None
+
+    carnes = lanches = 0.0
+    for item_id, quantidade in itens_casados:
+        if not item_id or item_id == carne_item_id:
+            continue
+        carnes_do_lanche = ficha(item_id).get(carne_id, 0) / por_carne
+        if carnes_do_lanche > 0:
+            carnes += carnes_do_lanche * quantidade
+            lanches += quantidade
+    return round(carnes / lanches, 4) if lanches else None
+
+
 def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
     """Grava quais itens de cardápio foram vendidos em cada pedido do dia,
     casando pelo nome com item_cardapio (ver _casar_item_cardapio — nomes vêm
@@ -1816,7 +1865,9 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
             (unidade, dia_iso),
         )
         for pedido in pedidos_detalhados:
-            for indice, item in enumerate(pedido.get("itens", [])):
+            itens_pedido = pedido.get("itens", [])
+            casados = [_casar_item_cardapio(item["nome"], catalogo, vinculos_manuais) for item in itens_pedido]
+            for indice, item in enumerate(itens_pedido):
                 # Complemento casa pelo mesmo critério do produto (nome
                 # normalizado + vínculo manual pros erros de digitação da
                 # Cardápio Web, tipo "Chocoboll"). Sem casar, fica guardado
@@ -1845,7 +1896,14 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                             complemento["quantidade"], complemento.get("preco") or 0.0, complemento_id,
                         ),
                     )
-                item_cardapio_id, multiplicador = _casar_item_cardapio(item["nome"], catalogo, vinculos_manuais)
+                item_cardapio_id, multiplicador = casados[indice]
+                if item_cardapio_id and _CARNE_EM_DOBRO in _normalizar_nome_insumo(item["nome"]):
+                    carnes = _carnes_por_lanche(
+                        conn, unidade, item_cardapio_id,
+                        [(casado[0], outro["quantidade"]) for casado, outro in zip(casados, itens_pedido)],
+                    )
+                    if carnes:
+                        multiplicador = carnes
                 conn.execute(
                     """
                     INSERT INTO venda_item

@@ -2370,6 +2370,33 @@ decidido, a baixa automática desses 6 produtos simplesmente não desconta
 alface nenhuma (não é um erro silencioso de quantidade errada — é a
 ausência da linha, visível abrindo a Ficha Técnica de qualquer um deles).
 
+**Batata do combo e carne em dobro (2026-09-15, regras da Julia):**
+
+- **Batata do combo** (`_batatas_do_combo` em `backend/cardapio_web.py`):
+  a leitura do pedido cortava "Lanche + Batata + Bebida" no lanche, então
+  nenhum combo nesse formato descontava a batata (nem o "Smplão + Batata +
+  Bebida" das Tradiças). Agora o combo vira o lanche e mais uma linha
+  "Batata Individual" (`BATATA_DO_COMBO`): 1 por "+ Batata", o número
+  quando o nome diz ("02 batatas" = 2), e 2 no Combo Casal mesmo sem estar
+  no nome. Bebida e maionese continuam de fora (o nome não diz qual é).
+  "Batata Individual" é um item com ficha por loja: nas Tradiças ainda não
+  desconta nada até a ficha da batata delas existir.
+- **Carne em dobro** (promo de terça do Artesanos): em qualquer lanche, o
+  de uma carne vai com duas e o de duas vai com quatro. A venda vem numa
+  linha solta ("terça é Carne em Dobro"), vinculada ao item "Carne em
+  dobro (terça)", cuja ficha é UMA carne (smash 110 g + tempero). Ao
+  gravar o pedido (`_carnes_por_lanche` em `salvar_itens_vendidos_do_dia`),
+  o multiplicador dessa linha vira a média de carnes dos lanches do mesmo
+  pedido, medida pela ficha (Big Art = 2, Tradicional = 1; Tradicional +
+  Big Art = 1,5). Sem lanche com essa carne no pedido, vale 1.
+- **Adicionais e potes** (itens criados em produção, não no código): cada
+  "Adc ..." virou um item com a mesma quantidade que vai nos lanches
+  (bacon 70 g, alface 80 g, tomate 40 g, cebola caramelizada 100 g,
+  cebola roxa 30 g, rúcula 20 g, picles 8 g, geleia 25 g, catupiry 70 g,
+  provolone e catupiry empanados 1 un; cheddar cremoso 70 g, igual ao
+  catupiry, porque nenhum lanche usa); Maionese da Casa e Molho Especial à
+  parte = 30 g + o potinho de 30 ml.
+
 ### 6.12 Motor de Compra — Etapas 6, 8 e 10 (embalagem e Curvas ABC)
 
 Concluídas em 2026-09-09, na ordem que a Julia aprovou depois do roadmap
