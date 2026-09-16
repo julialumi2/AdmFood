@@ -917,6 +917,17 @@ def inicializar_banco():
             )
             """
         )
+        # Histórico trazido da VMarket (2026-09-16, a rede está saindo de lá):
+        # o id de origem fica em cada registro importado, pra carga poder
+        # rodar de novo sem duplicar. Ver importar_da_vmarket.
+        for tabela in ("fornecedor", "cotacao", "pedido_compra", "contagem"):
+            colunas = {c["name"] for c in conn.execute(f"PRAGMA table_info({tabela})").fetchall()}
+            if "id_vmarket" not in colunas:
+                conn.execute(f"ALTER TABLE {tabela} ADD COLUMN id_vmarket TEXT")
+            conn.execute(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{tabela}_id_vmarket ON {tabela}(id_vmarket) "
+                "WHERE id_vmarket IS NOT NULL"
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ajuste_quantidade_ideal (
@@ -3506,8 +3517,17 @@ def custo_em_uso_por_insumo():
             "SELECT id, custo_referencia FROM insumo WHERE custo_referencia IS NOT NULL"
         ).fetchall():
             em_uso[linha["id"]] = {"valor": linha["custo_referencia"], "origem": "cadastro"}
+        # Vale a cotação mais recente de cada insumo e, dentro dela, o preço
+        # escolhido (o que foi comprado), não o último fornecedor lançado:
+        # na VMarket o escolhido nem sempre é o mais barato, e fornecedores
+        # diferentes cotam em unidades diferentes (2026-09-16).
         linhas = conn.execute(
-            "SELECT insumo_id, preco, criado_em FROM cotacao_preco ORDER BY criado_em"
+            """
+            SELECT p.insumo_id, p.preco, p.criado_em
+            FROM cotacao_preco p
+            JOIN cotacao c ON c.id = p.cotacao_id
+            ORDER BY c.criado_em, p.selecionado, p.criado_em
+            """
         ).fetchall()
     for linha in linhas:
         em_uso[linha["insumo_id"]] = {"valor": linha["preco"], "origem": "cotacao", "data": linha["criado_em"]}
@@ -4029,6 +4049,9 @@ def criar_cotacao(titulo, requisicao_titulo=None, requisicao_prazo=None):
         return cursor.lastrowid
 
 
+LIMITE_PRECO_COMPARAVEL = 3
+
+
 def listar_cotacoes():
     """Cada cotação com as métricas mostradas na lista (estilo VMarket,
     print da Julia 2026-09-04): insumos/fornecedores distintos, quantos
@@ -4086,7 +4109,12 @@ def listar_cotacoes():
             insumos_comprados += 1
             quantidade = quantidade_por_chave.get((cotacao["id"], insumo_id)) or 0
             valor_pedido += vencedor["preco"] * quantidade
-            maior_preco = max(p["preco"] for p in lista_precos)
+            # Preço mais de 3x o vencedor é de outra unidade de venda (óleo
+            # cotado pela caixa contra o kg, cerveja pelo fardo contra a
+            # garrafa — comum no histórico da VMarket) e inventaria economia.
+            maior_preco = max(
+                p["preco"] for p in lista_precos if p["preco"] <= vencedor["preco"] * LIMITE_PRECO_COMPARAVEL
+            )
             economia += (maior_preco - vencedor["preco"]) * quantidade
 
         convite_info = convites_por_cotacao.get(cotacao["id"])
@@ -4171,7 +4199,9 @@ def buscar_ultima_compra_por_insumo():
     recente de cada insumo (ver Recebimentos, seção 6.9) — "Última Compra"
     na grid do Comparativo de Preços (pedido da Julia, print da VMarket,
     2026-09-04). Usa o preço/quantidade já corrigidos na hora do
-    recebimento (`pedido_compra_item`), não o valor pedido originalmente."""
+    recebimento (`pedido_compra_item`), não o valor pedido originalmente.
+    Item sem preço (a VMarket tem pedido de homologado com preço zero) não
+    conta: custo zero seria pior que custo desconhecido."""
     with conexao() as conn:
         linhas = conn.execute(
             """
@@ -4179,12 +4209,12 @@ def buscar_ultima_compra_por_insumo():
             FROM pedido_compra_item pci
             JOIN pedido_compra pc ON pc.id = pci.pedido_id
             JOIN fornecedor f ON f.id = pc.fornecedor_id
-            WHERE pc.status = 'recebido'
+            WHERE pc.status = 'recebido' AND pci.preco_unitario > 0
             AND pc.recebido_em = (
                 SELECT MAX(pc2.recebido_em)
                 FROM pedido_compra_item pci2
                 JOIN pedido_compra pc2 ON pc2.id = pci2.pedido_id
-                WHERE pci2.insumo_id = pci.insumo_id AND pc2.status = 'recebido'
+                WHERE pci2.insumo_id = pci.insumo_id AND pc2.status = 'recebido' AND pci2.preco_unitario > 0
             )
             GROUP BY pci.insumo_id
             """
@@ -4764,6 +4794,284 @@ def excluir_requisicao(titulo, prazo_validade):
             "DELETE FROM contagem WHERE descricao = ? AND prazo_validade = ?",
             (titulo, prazo_validade),
         )
+
+
+# --- HISTÓRICO DA VMARKET (carga de 2026-09-16) ------------------------------
+#
+# A rede está saindo da VMarket e passando a cotar, pedir e contar só aqui.
+# O último mês de lá entra nas mesmas tabelas do fluxo de Compras, como se
+# tivesse sido feito no AdmFood: fornecedores, cotações (preço de cada
+# fornecedor e o escolhido), pedidos e contagens por loja. Quem monta a carga
+# (lendo a VMarket) já manda tudo com o insumo e a unidade do AdmFood; aqui só
+# se grava. Cada registro guarda o id de lá (`id_vmarket`), então rodar de
+# novo não duplica.
+#
+# Nada disso mexe em estoque_insumo: a contagem entra como histórico já
+# aprovado e o pedido antigo entra como recebido sem somar nada. Pedido ainda
+# não recebido entra como enviado e aparece em Recebimentos — é lá que a loja
+# confirma o que chegou, e só então soma no estoque.
+
+RECEBIDO_POR_VMARKET = "Importado da VMarket"
+
+
+class _ValidaCargaVmarket:
+    """Confere insumo e loja de cada linha da carga antes de gravar."""
+
+    def __init__(self, conn, lojas):
+        self.insumos = {linha["id"] for linha in conn.execute("SELECT id FROM insumo").fetchall()}
+        self.lojas = set(lojas)
+
+    def insumo(self, insumo_id):
+        insumo_id = int(insumo_id)
+        if insumo_id not in self.insumos:
+            raise ValueError(f"Insumo {insumo_id} não existe.")
+        return insumo_id
+
+    def loja(self, loja):
+        if loja not in self.lojas:
+            raise ValueError(f"Loja inválida: {loja}.")
+        return loja
+
+
+def importar_da_vmarket(dados, lojas):
+    """Grava a carga (ou um lote dela): {"fornecedores", "cotacoes",
+    "pedidos", "contagens"}, cada parte opcional, nessa ordem. Tudo numa
+    transação: um item inválido desfaz o lote inteiro. `lojas` = nomes das
+    lojas válidas."""
+    resumo = {
+        "fornecedoresCriados": 0, "fornecedoresVinculados": 0,
+        "cotacoes": 0, "precos": 0,
+        "pedidosCriados": 0, "pedidosJaImportados": 0,
+        "contagensCriadas": 0, "contagensJaImportadas": 0,
+    }
+    with conexao() as conn:
+        valida = _ValidaCargaVmarket(conn, lojas)
+        for fornecedor in dados.get("fornecedores") or []:
+            _importar_fornecedor_vmarket(conn, fornecedor, valida, resumo)
+        for cotacao in dados.get("cotacoes") or []:
+            _importar_cotacao_vmarket(conn, cotacao, valida, resumo)
+        for pedido in dados.get("pedidos") or []:
+            _importar_pedido_vmarket(conn, pedido, valida, resumo)
+        for contagem in dados.get("contagens") or []:
+            _importar_contagem_vmarket(conn, contagem, valida, resumo)
+    return resumo
+
+
+def _fornecedor_da_vmarket(conn, id_vmarket):
+    linha = conn.execute("SELECT id FROM fornecedor WHERE id_vmarket = ?", (str(id_vmarket),)).fetchone()
+    if not linha:
+        raise ValueError(f"Fornecedor {id_vmarket} da VMarket ainda não foi importado.")
+    return linha["id"]
+
+
+def _importar_fornecedor_vmarket(conn, fornecedor, valida, resumo):
+    """Casa com o fornecedor já cadastrado aqui (pelo id de lá, pelo CNPJ ou
+    pelo nome) antes de criar um novo. Do cadastro existente só preenche o
+    que estiver vazio: o que foi digitado no AdmFood manda."""
+    id_vmarket = str(fornecedor["idVmarket"])
+    nome = (fornecedor.get("nome") or "").strip()
+    cnpj = re.sub(r"\D", "", fornecedor.get("cnpj") or "")
+    linha = conn.execute("SELECT id FROM fornecedor WHERE id_vmarket = ?", (id_vmarket,)).fetchone()
+    if linha:
+        fornecedor_id = linha["id"]
+    else:
+        candidatos = conn.execute("SELECT id, nome, cnpj FROM fornecedor WHERE id_vmarket IS NULL").fetchall()
+        igual = next((c for c in candidatos if cnpj and re.sub(r"\D", "", c["cnpj"] or "") == cnpj), None) or next(
+            (c for c in candidatos if _normalizar_nome_insumo(c["nome"]) == _normalizar_nome_insumo(nome)), None
+        )
+        if igual:
+            fornecedor_id = igual["id"]
+            conn.execute("UPDATE fornecedor SET id_vmarket = ? WHERE id = ?", (id_vmarket, fornecedor_id))
+            resumo["fornecedoresVinculados"] += 1
+        else:
+            if not nome:
+                raise ValueError(f"Fornecedor {id_vmarket} sem nome.")
+            fornecedor_id = conn.execute(
+                "INSERT INTO fornecedor (nome, criado_em, id_vmarket) VALUES (?, ?, ?)",
+                (nome, datetime.now().isoformat(), id_vmarket),
+            ).lastrowid
+            resumo["fornecedoresCriados"] += 1
+    conn.execute(
+        """
+        UPDATE fornecedor SET
+            cnpj = CASE WHEN cnpj = '' THEN ? ELSE cnpj END,
+            contato_nome = CASE WHEN contato_nome = '' THEN ? ELSE contato_nome END,
+            contato_telefone = CASE WHEN contato_telefone = '' THEN ? ELSE contato_telefone END,
+            contato_email = CASE WHEN contato_email = '' THEN ? ELSE contato_email END
+        WHERE id = ?
+        """,
+        (cnpj, fornecedor.get("contatoNome") or "", re.sub(r"\D", "", fornecedor.get("telefone") or ""),
+         fornecedor.get("email") or "", fornecedor_id),
+    )
+    for loja in fornecedor.get("lojas") or []:
+        conn.execute(
+            "INSERT OR IGNORE INTO fornecedor_loja (fornecedor_id, loja) VALUES (?, ?)",
+            (fornecedor_id, valida.loja(loja)),
+        )
+
+
+def _importar_cotacao_vmarket(conn, cotacao, valida, resumo):
+    """Cotação fechada com o preço de cada fornecedor por insumo (já na
+    unidade do insumo) e o escolhido marcado. Importar de novo substitui os
+    preços. `requisicaoTitulo`/`requisicaoPrazo` ligam a cotação às
+    contagens da mesma semana, como uma cotação gerada pela Requisição."""
+    id_vmarket = str(cotacao["idVmarket"])
+    campos = (cotacao["titulo"], cotacao["criadoEm"], cotacao.get("requisicaoTitulo"), cotacao.get("requisicaoPrazo"))
+    linha = conn.execute("SELECT id FROM cotacao WHERE id_vmarket = ?", (id_vmarket,)).fetchone()
+    if linha:
+        cotacao_id = linha["id"]
+        conn.execute(
+            "UPDATE cotacao SET titulo = ?, criado_em = ?, requisicao_titulo = ?, requisicao_prazo = ? WHERE id = ?",
+            (*campos, cotacao_id),
+        )
+        conn.execute("DELETE FROM cotacao_preco WHERE cotacao_id = ?", (cotacao_id,))
+        conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,))
+    else:
+        cotacao_id = conn.execute(
+            "INSERT INTO cotacao (titulo, status, criado_em, requisicao_titulo, requisicao_prazo, id_vmarket) "
+            "VALUES (?, 'fechada', ?, ?, ?, ?)",
+            (*campos, id_vmarket),
+        ).lastrowid
+    for item in cotacao.get("itens") or []:
+        conn.execute(
+            """
+            INSERT INTO cotacao_item (cotacao_id, insumo_id, quantidade_total) VALUES (?, ?, ?)
+            ON CONFLICT (cotacao_id, insumo_id) DO UPDATE SET quantidade_total = quantidade_total + excluded.quantidade_total
+            """,
+            (cotacao_id, valida.insumo(item["insumoId"]), float(item["quantidade"])),
+        )
+    for preco in cotacao.get("precos") or []:
+        insumo_id = valida.insumo(preco["insumoId"])
+        fornecedor_id = _fornecedor_da_vmarket(conn, preco["fornecedorVmarket"])
+        conn.execute(
+            """
+            INSERT INTO cotacao_preco (cotacao_id, insumo_id, fornecedor_id, preco, selecionado, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (cotacao_id, insumo_id, fornecedor_id) DO UPDATE SET
+                preco = excluded.preco, selecionado = excluded.selecionado, criado_em = excluded.criado_em
+            """,
+            (cotacao_id, insumo_id, fornecedor_id, float(preco["preco"]), 1 if preco.get("selecionado") else 0,
+             preco.get("criadoEm") or cotacao["criadoEm"]),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
+            (insumo_id, fornecedor_id),
+        )
+        resumo["precos"] += 1
+    resumo["cotacoes"] += 1
+
+
+def _cotacao_dos_pedidos_avulsos(conn):
+    """Pedido de produto homologado na VMarket não passa por cotação, mas
+    todo pedido daqui pertence a uma: ficam todos numa cotação só."""
+    linha = conn.execute("SELECT id FROM cotacao WHERE id_vmarket = 'pedidos-sem-cotacao'").fetchone()
+    if linha:
+        return linha["id"]
+    return conn.execute(
+        "INSERT INTO cotacao (titulo, status, criado_em, id_vmarket) VALUES (?, 'fechada', ?, 'pedidos-sem-cotacao')",
+        ("Pedidos da VMarket sem cotação (produtos homologados)", datetime.now().isoformat()),
+    ).lastrowid
+
+
+def _importar_pedido_vmarket(conn, pedido, valida, resumo):
+    """Pedido já importado não é tocado de novo: a loja pode ter confirmado o
+    recebimento aqui depois da primeira carga."""
+    id_vmarket = str(pedido["idVmarket"])
+    if conn.execute("SELECT 1 FROM pedido_compra WHERE id_vmarket = ?", (id_vmarket,)).fetchone():
+        resumo["pedidosJaImportados"] += 1
+        return
+    cotacao = None
+    if pedido.get("cotacaoVmarket"):
+        cotacao = conn.execute(
+            "SELECT id FROM cotacao WHERE id_vmarket = ?", (str(pedido["cotacaoVmarket"]),)
+        ).fetchone()
+    cotacao_id = cotacao["id"] if cotacao else _cotacao_dos_pedidos_avulsos(conn)
+    recebido = pedido.get("status") == "recebido"
+    criado_em = pedido["criadoEm"]
+    pedido_id = conn.execute(
+        """
+        INSERT INTO pedido_compra
+            (cotacao_id, fornecedor_id, loja, status, criado_em, atualizado_em, whatsapp_enviado_em,
+             recebido_por, recebido_em, id_vmarket)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            cotacao_id, _fornecedor_da_vmarket(conn, pedido["fornecedorVmarket"]), valida.loja(pedido["loja"]),
+            "recebido" if recebido else "enviado", criado_em, criado_em, criado_em,
+            RECEBIDO_POR_VMARKET if recebido else None, (pedido.get("recebidoEm") or criado_em) if recebido else None,
+            id_vmarket,
+        ),
+    ).lastrowid
+    for item in pedido.get("itens") or []:
+        conn.execute(
+            """
+            INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)
+            ON CONFLICT (pedido_id, insumo_id) DO UPDATE SET quantidade = quantidade + excluded.quantidade
+            """,
+            (pedido_id, valida.insumo(item["insumoId"]), float(item["quantidade"]), float(item["precoUnitario"])),
+        )
+    resumo["pedidosCriados"] += 1
+
+
+def _importar_contagem_vmarket(conn, contagem, valida, resumo):
+    """Uma contagem por loja, já aprovada — o estoque não muda. Mesmo título
+    e prazo nas três lojas da semana, que é como a tela agrupa a
+    Requisição."""
+    id_vmarket = str(contagem["idVmarket"])
+    if conn.execute("SELECT 1 FROM contagem WHERE id_vmarket = ?", (id_vmarket,)).fetchone():
+        resumo["contagensJaImportadas"] += 1
+        return
+    criado_em = contagem["criadoEm"]
+    respondida_em = contagem.get("respondidaEm") or criado_em
+    contagem_id = conn.execute(
+        """
+        INSERT INTO contagem
+            (token, loja, descricao, prazo_validade, status, criado_em, respondida_em, aprovada_em, id_vmarket)
+        VALUES (?, ?, ?, ?, 'aprovada', ?, ?, ?, ?)
+        """,
+        (secrets.token_urlsafe(24), valida.loja(contagem["loja"]), contagem["descricao"],
+         contagem["prazoValidade"], criado_em, respondida_em, respondida_em, id_vmarket),
+    ).lastrowid
+    for item in contagem.get("itens") or []:
+        conn.execute(
+            "INSERT OR REPLACE INTO contagem_item (contagem_id, insumo_id, quantidade_preenchida) VALUES (?, ?, ?)",
+            (contagem_id, valida.insumo(item["insumoId"]), float(item["quantidade"])),
+        )
+    resumo["contagensCriadas"] += 1
+
+
+def desfazer_importacao_vmarket():
+    """Tira o que a carga da VMarket criou em cotações, pedidos e contagens,
+    pra corrigir e importar de novo. Pedido que a loja já confirmou como
+    recebido aqui fica — esse já mexeu no estoque. Os fornecedores ficam
+    (muitos já existiam antes e só ganharam o id de lá)."""
+    with conexao() as conn:
+        pedidos = [
+            linha["id"] for linha in conn.execute(
+                "SELECT id FROM pedido_compra WHERE id_vmarket IS NOT NULL "
+                "AND (recebido_por IS NULL OR recebido_por = ?)",
+                (RECEBIDO_POR_VMARKET,),
+            ).fetchall()
+        ]
+        for pedido_id in pedidos:
+            conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
+            conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
+        contagens = [linha["id"] for linha in conn.execute("SELECT id FROM contagem WHERE id_vmarket IS NOT NULL")]
+        for contagem_id in contagens:
+            conn.execute("DELETE FROM contagem_item WHERE contagem_id = ?", (contagem_id,))
+            conn.execute("DELETE FROM contagem WHERE id = ?", (contagem_id,))
+        # Cotação com pedido que ficou (recebido pela loja) não pode sumir.
+        cotacoes = [
+            linha["id"] for linha in conn.execute(
+                "SELECT id FROM cotacao WHERE id_vmarket IS NOT NULL "
+                "AND id NOT IN (SELECT cotacao_id FROM pedido_compra)"
+            ).fetchall()
+        ]
+        for cotacao_id in cotacoes:
+            conn.execute("DELETE FROM cotacao_preco WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,))
+            conn.execute("DELETE FROM cotacao WHERE id = ?", (cotacao_id,))
+    return {"pedidos": len(pedidos), "contagens": len(contagens), "cotacoes": len(cotacoes)}
 
 
 DIAS_COBERTURA_IDEAL = 7  # mesma constante do front (script.js) — cotação é semanal

@@ -143,6 +143,8 @@ from backend.armazenamento import (
     confirmar_pedidos_por_token,
     ESTAGIOS_PEDIDO,
     limpar_requisicoes_e_cotacoes,
+    importar_da_vmarket,
+    desfazer_importacao_vmarket,
     buscar_receita_insumo,
     adicionar_produto_ao_cardapio,
     definir_receita_insumo,
@@ -2751,6 +2753,31 @@ def api_limpar_requisicoes_cotacoes():
         return erro_admin
     limpar_requisicoes_e_cotacoes()
     return jsonify({"ok": True})
+
+
+@app.route('/api/admin/importar-vmarket', methods=['POST'])
+def api_importar_da_vmarket():
+    """Carga do histórico da VMarket (2026-09-16): fornecedores, cotações,
+    pedidos e contagens já no formato do AdmFood — ver `importar_da_vmarket`
+    em armazenamento.py. Aceita um lote por vez; rodar de novo não duplica."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        return jsonify(importar_da_vmarket(dados, LOJAS))
+    except (KeyError, TypeError, ValueError) as falha:
+        return jsonify({"erro": f"Carga recusada, nada foi gravado: {falha}"}), 400
+
+
+@app.route('/api/admin/importar-vmarket', methods=['DELETE'])
+def api_desfazer_importacao_vmarket():
+    """Desfaz a carga da VMarket (menos pedido já recebido pela loja) — ver
+    `desfazer_importacao_vmarket`."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify(desfazer_importacao_vmarket())
 
 
 def _prazo_vencido(prazo_iso):

@@ -2772,6 +2772,51 @@ Com uma ficha só, ou a embalagem saía em todo pedido, ou não saía nunca.
 - **Fora, por enquanto:** o custo do produto (CMV, Curva ABC) continua só
   com a ficha; a embalagem ainda não entra no custo dos canais de delivery.
 
+### 6.19 Histórico da VMarket (carga de 2026-09-16)
+
+A rede está saindo da VMarket: daqui pra frente cota, pede e conta só no
+AdmFood. O último mês de lá entrou nas tabelas do fluxo de Compras, como se
+tivesse sido feito aqui — sem tela nova.
+
+- **O que entra:** fornecedores (casados com os já cadastrados pelo CNPJ ou
+  pelo nome; só o que está vazio no cadastro é preenchido), cotações
+  semanais fechadas com o preço de cada fornecedor e o escolhido, pedidos
+  de compra por loja e contagens por loja. Cada registro guarda o id de lá
+  (`id_vmarket` em fornecedor, cotacao, pedido_compra e contagem, com índice
+  único), então a carga pode rodar de novo sem duplicar.
+- **Estoque não muda na carga.** Contagem entra já aprovada, como histórico.
+  Pedido de antes da contagem que virou o estoque (14/09) entra como
+  recebido ("Importado da VMarket") sem somar nada; os de 14/09 em diante
+  entram como enviados e aparecem em **Recebimentos**: é a loja confirmando
+  o que chegou que soma no estoque, como num pedido feito aqui.
+- **Ligações:** a cotação da semana aponta pras contagens da mesma semana
+  (`requisicao_titulo`/`requisicao_prazo`), como uma cotação gerada pela
+  Requisição. Pedido de produto homologado (sem cotação na VMarket) fica na
+  cotação "Pedidos da VMarket sem cotação". Cada preço cotado também cria o
+  vínculo insumo × fornecedor.
+- **Unidades:** quem monta a carga lendo a VMarket já manda na unidade do
+  insumo daqui. Lá o preço é por unidade de venda e mistura unidades entre
+  fornecedores: bebida pedida em fardo com preço por lata (fardo de 6, 12 ou
+  24), salsicha cotada por kg ou pelo pacote de 5 kg, guardanapo em sachê ou
+  em caixa de 1.000, chá preto em galão (aqui é litro), hambúrguer
+  vegetariano por unidade (aqui é kg, 10 por kg). A regra por insumo olha o
+  tamanho do preço pra saber qual é.
+- **Custo:** `custo_em_uso_por_insumo` passou a pegar, da cotação mais
+  recente de cada insumo, o preço **escolhido** (o que foi comprado) — antes
+  valia o último fornecedor lançado, e na VMarket o escolhido nem sempre é
+  o mais barato. A última compra recebida continua ganhando da cotação, mas
+  item de pedido com preço zero não conta mais como compra.
+- **Economia da cotação** (lista de Cotações): o "maior preço" comparado ao
+  vencedor ignora preço mais de 3x o do vencedor (`LIMITE_PRECO_COMPARAVEL`)
+  — é de outra unidade de venda (óleo pela caixa contra o kg) e inventava
+  uma economia dezenas de vezes maior que a real.
+- **Rotas (admin):** `POST /api/admin/importar-vmarket` recebe um lote
+  (`fornecedores`, `cotacoes`, `pedidos`, `contagens`, cada parte opcional)
+  numa transação só — item com insumo ou loja inválidos desfaz o lote.
+  `DELETE /api/admin/importar-vmarket` desfaz a carga (cotações, pedidos e
+  contagens importados), menos pedido que a loja já confirmou aqui e a
+  cotação dele; os fornecedores ficam.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
