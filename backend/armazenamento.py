@@ -4076,6 +4076,10 @@ def listar_cotacoes():
         convites = conn.execute(
             "SELECT cotacao_id, status FROM cotacao_convite"
         ).fetchall()
+        pedidos_por_cotacao = {
+            linha["cotacao_id"]: linha["total"]
+            for linha in conn.execute("SELECT cotacao_id, COUNT(*) AS total FROM pedido_compra GROUP BY cotacao_id")
+        }
 
     quantidade_por_chave = {(q["cotacao_id"], q["insumo_id"]): q["quantidade_total"] for q in quantidades}
 
@@ -4135,6 +4139,7 @@ def listar_cotacoes():
             "percentual_respostas": percentual_respostas,
             "valor_pedido": round(valor_pedido, 2),
             "economia": round(economia, 2),
+            "total_pedidos": pedidos_por_cotacao.get(cotacao["id"], 0),
         })
     return resultado
 
@@ -4155,7 +4160,25 @@ def atualizar_cotacao(cotacao_id, campos):
 
 
 def excluir_cotacao(cotacao_id):
+    """Apaga a cotação com os preços, itens e convites dela. Cotação que já
+    tem pedido não sai (2026-09-16): o pedido ficava apontando pra uma
+    cotação apagada e sumia da tela de Pedidos, e o Recebimentos não abria
+    mais — as duas telas buscam o pedido junto com a cotação. Levanta
+    ValueError com a mensagem pra tela."""
     with conexao() as conn:
+        pedidos = conn.execute("SELECT COUNT(*) FROM pedido_compra WHERE cotacao_id = ?", (cotacao_id,)).fetchone()[0]
+        if pedidos:
+            raise ValueError(
+                f"Essa cotação tem {pedidos} pedido{'s' if pedidos > 1 else ''}. "
+                "Pra excluir, cancele os pedidos antes na tela de Pedidos."
+            )
+        conn.execute(
+            "DELETE FROM cotacao_convite_item WHERE convite_id IN (SELECT id FROM cotacao_convite WHERE cotacao_id = ?)",
+            (cotacao_id,),
+        )
+        conn.execute("DELETE FROM cotacao_convite WHERE cotacao_id = ?", (cotacao_id,))
+        conn.execute("DELETE FROM cotacao_item_loja WHERE cotacao_id = ?", (cotacao_id,))
+        conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,))
         conn.execute("DELETE FROM cotacao_preco WHERE cotacao_id = ?", (cotacao_id,))
         conn.execute("DELETE FROM cotacao WHERE id = ?", (cotacao_id,))
 
@@ -4501,7 +4524,7 @@ def listar_pedidos():
         linhas = conn.execute(
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
-                   pc.whatsapp_enviado_em,
+                   pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo,
                    COUNT(pi.insumo_id) AS total_itens,
@@ -4522,7 +4545,7 @@ def buscar_pedido(pedido_id):
         linha = conn.execute(
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em, pc.token,
-                   pc.whatsapp_enviado_em,
+                   pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo
             FROM pedido_compra pc
@@ -4672,7 +4695,7 @@ def listar_pedidos_pendentes_recebimento():
         return [dict(linha) for linha in linhas]
 
 
-def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens):
+def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento=None):
     """Confirma que um pedido chegou — pedido real da Julia: é a única ação
     que efetivamente soma no estoque a partir de um pedido de compra (hoje
     "Avançar etapa" só rastreia estágio, e a entrada de verdade é manual,
@@ -4686,12 +4709,18 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens):
     Se o valor informado da Nota Fiscal não bater com o total calculado dos
     itens (final, já corrigido), cria uma tarefa no ClickUp pra alguém
     ligar pro fornecedor e entender a diferença — sem isso, uma divergência
-    de NF passaria batido sem ninguém saber."""
+    de NF passaria batido sem ninguém saber.
+
+    `data_recebimento` ('AAAA-MM-DD'): o dia em que a mercadoria chegou,
+    escolhido na tela (2026-09-16 — a loja confirma dias depois e o
+    registro tem de ficar com o dia da entrega). A hora gravada é a da
+    confirmação; sem data, vale agora."""
     pedido = buscar_pedido(pedido_id)
     if not pedido:
         return None
 
     agora = datetime.now().isoformat()
+    recebido_em = f"{data_recebimento}{agora[10:]}" if data_recebimento else agora
     valor_calculado = 0.0
     with conexao() as conn:
         for item in itens:
@@ -4717,7 +4746,7 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens):
             SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, divergencia_nf = ?, atualizado_em = ?
             WHERE id = ?
             """,
-            (ESTAGIOS_PEDIDO[-1], recebido_por, agora, valor_nf, 1 if divergencia else 0, agora, pedido_id),
+            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf, 1 if divergencia else 0, agora, pedido_id),
         )
 
     if divergencia:
@@ -4726,7 +4755,7 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens):
             descricao=(
                 f"Valor da Nota Fiscal informado (R$ {valor_nf:.2f}) não bate com o valor "
                 f"calculado dos itens recebidos (R$ {valor_calculado:.2f}). Recebido por "
-                f"{recebido_por} em {agora[:16].replace('T', ' ')}. Ligar pro fornecedor "
+                f"{recebido_por} em {recebido_em[:16].replace('T', ' ')}. Ligar pro fornecedor "
                 f"({pedido['fornecedor_nome']}) pra entender a diferença."
             ),
             categoria="Estoque",

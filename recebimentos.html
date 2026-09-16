@@ -193,6 +193,7 @@
               <tr>
                 <th>Fornecedor</th>
                 <th>Loja</th>
+                <th>Pedido em</th>
                 <th>Itens</th>
                 <th>Valor</th>
                 <th>Ação</th>
@@ -217,9 +218,16 @@
         <button type="button" class="btn-close" id="btn-recebimento-fechar" aria-label="Fechar">&times;</button>
       </div>
       <form id="form-confirmar-recebimento">
-        <div class="form-group">
-          <label for="recebimento-nome">Nome de quem recebeu</label>
-          <input type="text" id="recebimento-nome" required>
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="recebimento-nome">Nome de quem recebeu</label>
+            <input type="text" id="recebimento-nome" required>
+          </div>
+          <div class="form-group">
+            <label for="recebimento-data">Data do recebimento</label>
+            <input type="date" id="recebimento-data" required>
+            <small class="text-muted" id="recebimento-data-pedido"></small>
+          </div>
         </div>
 
         <p class="panel-subtitle" style="margin: var(--space-3) 0 var(--space-2);">

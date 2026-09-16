@@ -1479,6 +1479,10 @@ tr:hover { background-color: var(--surface-muted); }
 
 .btn-acao-icone:hover { background-color: var(--surface-muted); color: var(--text-dark); }
 .btn-acao-icone.btn-excluir:hover { color: var(--danger-texto); border-color: var(--danger); }
+/* Ação que não pode rodar agora (ex.: excluir cotação com pedido): apagada,
+   mas clicável pra explicar o motivo. */
+.btn-acao-icone.btn-acao-bloqueado { opacity: 0.4; cursor: not-allowed; }
+.btn-acao-icone.btn-acao-bloqueado:hover { background-color: transparent; color: var(--text-muted); border-color: var(--surface-muted-border); }
 .btn-acao-icone i, .btn-acao-icone svg { width: 15px; height: 15px; pointer-events: none; }
 
 /* Resultado de uma sincronização manual — usado em Configurações e na Home. */

@@ -2055,6 +2055,8 @@ def _formatar_cotacao(linha):
         "percentualRespostas": linha["percentual_respostas"],
         "valorPedido": linha["valor_pedido"],
         "economia": linha["economia"],
+        # Com pedido, a lixeira fica travada (ver excluir_cotacao).
+        "totalPedidos": linha["total_pedidos"],
         # Sem Requisição por trás — cotação manual, catálogo completo (ver
         # seção 6.8 da documentação).
         "manual": linha["requisicao_titulo"] is None,
@@ -2171,7 +2173,10 @@ def api_excluir_cotacao(cotacao_id):
     if erro_admin:
         return erro_admin
 
-    excluir_cotacao(cotacao_id)
+    try:
+        excluir_cotacao(cotacao_id)
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
     return jsonify({"ok": True})
 
 
@@ -2506,6 +2511,8 @@ def _formatar_pedido_resumo(pedido):
         "pedidoMinimo": pedido["pedido_minimo"],
         "abaixoDoMinimo": pedido["pedido_minimo"] > 0 and pedido["valor_total"] < pedido["pedido_minimo"],
         "whatsappEnviadoEm": pedido.get("whatsapp_enviado_em"),
+        "recebidoPor": pedido.get("recebido_por"),
+        "recebidoEm": pedido.get("recebido_em"),
     }
 
 
@@ -2718,6 +2725,15 @@ def api_confirmar_recebimento(pedido_id):
     except (TypeError, ValueError):
         return jsonify({"erro": "Informe o valor da Nota Fiscal."}), 400
 
+    # Dia em que a mercadoria chegou (a loja pode confirmar dias depois).
+    texto_data = (dados.get('recebidoEm') or '').strip()
+    try:
+        data_recebimento = date.fromisoformat(texto_data) if texto_data else date.today()
+    except ValueError:
+        return jsonify({"erro": "Data do recebimento inválida."}), 400
+    if data_recebimento > date.today():
+        return jsonify({"erro": "A data do recebimento não pode ser depois de hoje."}), 400
+
     itens_brutos = dados.get('itens') or []
     if not itens_brutos:
         return jsonify({"erro": "Informe ao menos um item recebido."}), 400
@@ -2738,8 +2754,11 @@ def api_confirmar_recebimento(pedido_id):
         return jsonify({"erro": "Pedido não encontrado."}), 404
     if pedido['status'] == 'recebido':
         return jsonify({"erro": "Esse pedido já foi confirmado como recebido."}), 400
+    data_pedido = date.fromisoformat(pedido['criado_em'][:10])
+    if data_recebimento < data_pedido:
+        return jsonify({"erro": f"A data do recebimento não pode ser antes do pedido ({data_pedido.strftime('%d/%m/%Y')})."}), 400
 
-    resultado = confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens)
+    resultado = confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento.isoformat())
     return jsonify({"ok": True, **resultado})
 
 

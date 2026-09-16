@@ -1553,11 +1553,19 @@ qualquer pessoa logada, não só admin** — pensada pra ser a primeira função
 de verdade que a equipe (papel "equipe") vai ter acesso, sem precisar de
 conta admin só pra confirmar que uma entrega chegou.
 
+A tabela mostra a data em que o pedido foi feito (coluna "Pedido em",
+também entra na busca). Depois de recebido, o registro aparece em Pedidos:
+"em DD/MM/AAAA" embaixo do status e "Recebido em ... por ..." no detalhe
+(`recebidoEm`/`recebidoPor` em `GET /api/pedidos` e `/api/pedidos/<id>`).
+
 Busca (por fornecedor, valor ou produto — via `itens_nomes`, concatenado
 com `GROUP_CONCAT` em `listar_pedidos_pendentes_recebimento`, pra não
 precisar de endpoint de busca à parte) entre pedidos ainda não
 `recebido`. Ao confirmar: o colaborador digita o **nome de quem recebeu**
-(data/hora grava sozinha) e pode **corrigir quantidade e preço por item**
+e a **data do recebimento** (2026-09-16: a loja confirma dias depois da
+entrega; vem hoje preenchido, não aceita antes do dia do pedido nem depois
+de hoje; grava `recebido_em` com o dia escolhido e a hora da confirmação)
+e pode **corrigir quantidade e preço por item**
 se a entrega vier diferente do pedido — a correção sobrescreve
 `pedido_compra_item` (mesmo espírito de sobrescrita usado em ajustes por
 todo o sistema) e é o valor que soma em `estoque_insumo.quantidade_atual`
@@ -2873,7 +2881,7 @@ Todos em `app.py`, prefixo `/api`.
 - `POST /api/cotacoes` — criar cotação (só `titulo`) — só admin
 - `GET /api/cotacoes/<id>` — detalhe: preços agrupados por insumo, ordenados por preço
 - `PUT /api/cotacoes/<id>` — editar título e/ou status (`aberta`/`fechada`) — só admin
-- `DELETE /api/cotacoes/<id>` — excluir cotação e seus preços — só admin
+- `DELETE /api/cotacoes/<id>` — excluir cotação com preços, itens e convites — só admin. Cotação que já tem pedido dá 400 (cancelar os pedidos antes): o pedido sumiria da tela de Pedidos e o Recebimentos não abriria mais. Na lista, a lixeira dessas cotações fica apagada e o clique explica o motivo (`totalPedidos` no `GET`)
 - `POST /api/cotacoes/<id>/precos` — lançar/corrigir preço (upsert por insumo+fornecedor) — só admin
 - `DELETE /api/cotacoes/<id>/precos/<preco_id>` — remover um preço lançado — só admin
 - `PUT /api/cotacoes/<id>/precos/<preco_id>/selecionar` — marcar vencedor do insumo (desmarca os demais) — só admin

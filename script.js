@@ -3202,9 +3202,13 @@ function renderCotacoesLista() {
           <button type="button" class="btn-acao-icone" data-acao="abrir-cotacao" data-id="${c.id}" title="Ver/editar preços">
             <i data-lucide="arrow-right"></i>
           </button>
-          <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-cotacao" data-id="${c.id}" data-titulo="${escaparHtml(c.titulo)}" title="Excluir cotação">
-            <i data-lucide="trash-2"></i>
-          </button>
+          ${c.totalPedidos
+            ? `<button type="button" class="btn-acao-icone btn-acao-bloqueado" data-acao="cotacao-com-pedidos" aria-disabled="true" title="Essa cotação tem ${c.totalPedidos} pedido${c.totalPedidos > 1 ? 's' : ''}. Pra excluir, cancele os pedidos antes na tela de Pedidos.">
+                <i data-lucide="trash-2"></i>
+              </button>`
+            : `<button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-cotacao" data-id="${c.id}" data-titulo="${escaparHtml(c.titulo)}" title="Excluir cotação">
+                <i data-lucide="trash-2"></i>
+              </button>`}
         </td>
       ` : ''}
     </tr>
@@ -3214,16 +3218,21 @@ function renderCotacoesLista() {
   document.querySelectorAll('[data-acao="abrir-cotacao"]').forEach(btn => {
     btn.addEventListener('click', () => abrirCotacaoDetalhe(parseInt(btn.dataset.id, 10)));
   });
+  // Lixeira travada (a cotação tem pedido): o clique só explica o porquê.
+  document.querySelectorAll('[data-acao="cotacao-com-pedidos"]').forEach(btn => {
+    btn.addEventListener('click', () => alert(btn.title));
+  });
   document.querySelectorAll('[data-acao="excluir-cotacao"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(`Excluir a cotação "${btn.dataset.titulo}"? Essa ação não pode ser desfeita.`)) return;
       try {
         const resposta = await fetch(`/api/cotacoes/${btn.dataset.id}`, { method: 'DELETE' });
-        if (!resposta.ok) throw new Error('falha ao excluir');
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível excluir a cotação.');
         await carregarCotacoes();
       } catch (erro) {
         console.error('Falha ao excluir cotação:', erro);
-        alert('Não foi possível excluir a cotação.');
+        alert(erro.message);
       }
     });
   });
@@ -4029,7 +4038,10 @@ function renderPedidosTabela() {
       <td class="text-muted">${escaparHtml(p.cotacaoTitulo)}</td>
       <td>${p.totalItens}</td>
       <td>R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${p.abaixoDoMinimo ? ' <span class="badge-pill neu-orange" title="Abaixo do pedido mínimo do fornecedor">abaixo do mínimo</span>' : ''}</td>
-      <td><span class="badge-pill ${_pedidoPendenteDeEnvio(p) ? 'neg' : STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${_rotuloEstagioPedido(p, p.status)}</span></td>
+      <td>
+        <span class="badge-pill ${_pedidoPendenteDeEnvio(p) ? 'neg' : STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${_rotuloEstagioPedido(p, p.status)}</span>
+        ${p.status === 'recebido' && p.recebidoEm ? `<div class="text-muted" style="font-size:0.8em; margin-top:4px;">em ${_dataBR(p.recebidoEm)}</div>` : ''}
+      </td>
       <td class="acoes-linha">
         ${pedidosWhatsAppLinks[p.id] ? `
           <a class="btn-acao-icone" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp" data-acao="enviar-pedido-whatsapp" data-id="${p.id}">
@@ -4092,7 +4104,10 @@ function renderPedidoDetalhe() {
   if (!p) return;
 
   document.getElementById('pedido-detalhe-titulo').textContent = `${p.fornecedorNome} — ${p.loja}`;
-  document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}`;
+  const recebimento = p.status === 'recebido' && p.recebidoEm
+    ? ` · Recebido em ${_dataBR(p.recebidoEm)}${p.recebidoPor ? ` por ${p.recebidoPor}` : ''}`
+    : '';
+  document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}${recebimento}`;
 
   const linkWhats = document.getElementById('link-pedido-whatsapp');
   if (linkWhats) {
@@ -5921,6 +5936,19 @@ document.getElementById('btn-insumos-loja-salvar')?.addEventListener('click', as
 let recebimentosLista = [];
 let recebimentoAtual = null; // detalhe completo (com itens) do pedido aberto no modal
 
+// "2026-09-14T15:01:07" → "14/09/2026", direto do texto: new Date() num
+// "AAAA-MM-DD" sem hora lê como UTC e mostraria o dia anterior.
+function _dataBR(iso) {
+  return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—';
+}
+
+// Hoje no fuso de quem usa — toISOString() dá o dia em UTC, que depois das
+// 21h já é amanhã.
+function _hojeLocalISO() {
+  const agora = new Date();
+  return new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 async function carregarRecebimentos() {
   const tbody = document.getElementById('recebimentos-tabela-body');
   if (!tbody) return;
@@ -5932,7 +5960,7 @@ async function carregarRecebimentos() {
     renderRecebimentosTabela();
   } catch (erro) {
     console.error('Falha ao carregar recebimentos:', erro);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -5946,6 +5974,7 @@ function renderRecebimentosTabela() {
     return (
       p.fornecedorNome.toLowerCase().includes(termo) ||
       p.loja.toLowerCase().includes(termo) ||
+      _dataBR(p.criadoEm).includes(termo) ||
       (p.itensNomes || '').toLowerCase().includes(termo) ||
       String(p.valorTotal).includes(termo) ||
       _formatarMoedaBR(p.valorTotal).includes(termo)
@@ -5953,7 +5982,7 @@ function renderRecebimentosTabela() {
   });
 
   if (!linhas.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">${recebimentosLista.length ? 'Nenhum pedido bate com essa busca.' : 'Nenhum pedido aguardando recebimento.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">${recebimentosLista.length ? 'Nenhum pedido bate com essa busca.' : 'Nenhum pedido aguardando recebimento.'}</td></tr>`;
     return;
   }
 
@@ -5961,6 +5990,7 @@ function renderRecebimentosTabela() {
     <tr>
       <td class="font-bold">${escaparHtml(p.fornecedorNome)}</td>
       <td>${escaparHtml(p.loja)}</td>
+      <td class="text-muted">${_dataBR(p.criadoEm)}</td>
       <td class="text-muted">${escaparHtml(p.itensNomes || '—')}</td>
       <td class="font-bold">R$ ${_formatarMoedaBR(p.valorTotal)}</td>
       <td>
@@ -6007,6 +6037,12 @@ async function abrirModalRecebimento(pedidoId) {
 
     document.getElementById('recebimento-titulo').textContent = `Confirmar recebimento — ${dados.fornecedorNome} (${dados.loja})`;
     document.getElementById('recebimento-nome').value = window.usuarioLogado?.nome || '';
+    // Entre o dia do pedido e hoje — a mesma regra que o servidor confere.
+    const campoData = document.getElementById('recebimento-data');
+    campoData.min = dados.criadoEm.slice(0, 10);
+    campoData.max = _hojeLocalISO();
+    campoData.value = campoData.max;
+    document.getElementById('recebimento-data-pedido').textContent = `Pedido feito em ${_dataBR(dados.criadoEm)}`;
     document.getElementById('recebimento-valor-nf').value = dados.valorTotal;
     document.getElementById('recebimento-erro').style.display = 'none';
     document.getElementById('recebimento-itens-body').innerHTML = dados.itens.map(_linhaRecebimentoItemHTML).join('');
@@ -6049,6 +6085,7 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recebidoPor: document.getElementById('recebimento-nome').value,
+        recebidoEm: document.getElementById('recebimento-data').value,
         valorNf: parseFloat(document.getElementById('recebimento-valor-nf').value),
         itens,
       }),
