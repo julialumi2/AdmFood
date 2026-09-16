@@ -8252,6 +8252,20 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         </button>
       ` : ''}
     </div>
+    <div class="detalhe-produto-secao">
+      <div class="receita-eyebrow">Embalagem pra viagem</div>
+      <div class="ficha-tecnica-ingredientes">
+        ${(dadosInsumos.embalagemViagem || []).length ? dadosInsumos.embalagemViagem.map(ins => `
+          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidadeFicha(ins)})</span>` : ''}</span>
+        `).join('') : `<span class="ficha-tecnica-vazio">Nenhuma. Ela sai do estoque só nos pedidos de delivery e retirada.</span>`}
+      </div>
+      ${isAdmin ? `
+        <button type="button" class="btn-secondary-sm" data-acao="detalhe-editar-embalagem" style="align-self: flex-start;">
+          <i data-lucide="pencil"></i>
+          Editar embalagem
+        </button>
+      ` : ''}
+    </div>
   ` : (isAdmin ? `
     <div class="detalhe-produto-secao">
       <span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>
@@ -8367,9 +8381,12 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     }
   });
 
-  document.getElementById('btn-detalhe-produto-editar-insumos')?.addEventListener('click', () => {
-    fecharModalDetalheProduto();
-    abrirModalFichaTecnicaItem(produto.itemCardapioId);
+  // Insumos e embalagem são editados no mesmo modal da ficha técnica.
+  corpo.querySelectorAll('#btn-detalhe-produto-editar-insumos, [data-acao="detalhe-editar-embalagem"]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      fecharModalDetalheProduto();
+      abrirModalFichaTecnicaItem(produto.itemCardapioId);
+    });
   });
 
   // Nome editável direto no título (pedido da Julia, 2026-09-14): pra
@@ -8682,8 +8699,9 @@ function _quantidadeBaseDaLinhaFicha(linha) {
     linha.querySelector('.ficha-tecnica-input-quantidade'), _insumoDaLinhaFicha(linha));
 }
 
+// Liga as linhas novas das duas listas do modal: insumos e embalagem pra viagem.
 function _wireLinhasFichaTecnica() {
-  document.querySelectorAll('#ficha-tecnica-item-linhas .ficha-tecnica-linha:not([data-ligada])').forEach(linha => {
+  document.querySelectorAll('#form-ficha-tecnica-item .ficha-tecnica-linha:not([data-ligada])').forEach(linha => {
     linha.dataset.ligada = '1';
     const base = linha.dataset.quantidadeBase;
     _prepararUnidadeLinhaFicha(linha, base === '' ? null : parseFloat(base));
@@ -8729,6 +8747,13 @@ async function abrirModalFichaTecnicaItem(itemId) {
     ? dados.insumos
     : [{ insumoId: fichaTecnicaInsumosDisponiveis[0].id, quantidade: null }];
   container.innerHTML = linhasIniciais.map(ins => _linhaFichaTecnicaHTML(ins.insumoId, ins.quantidade)).join('');
+
+  // Embalagem pra viagem: só em produto — complemento vai dentro do produto,
+  // que já leva a embalagem dele.
+  const secaoEmbalagem = document.getElementById('ficha-tecnica-embalagem-secao');
+  secaoEmbalagem.style.display = fichaTecnicaTipoAtual === 'complemento' ? 'none' : '';
+  document.getElementById('ficha-tecnica-embalagem-linhas').innerHTML = (dados.embalagemViagem || [])
+    .map(ins => _linhaFichaTecnicaHTML(ins.insumoId, ins.quantidade)).join('');
   _wireLinhasFichaTecnica();
 
   document.getElementById('modal-ficha-tecnica-item').style.display = 'flex';
@@ -8790,28 +8815,40 @@ function fecharModalFichaTecnicaItem() {
 document.getElementById('btn-ficha-tecnica-item-fechar')?.addEventListener('click', fecharModalFichaTecnicaItem);
 document.getElementById('btn-ficha-tecnica-item-cancelar')?.addEventListener('click', fecharModalFichaTecnicaItem);
 
-document.getElementById('btn-ficha-tecnica-add-linha')?.addEventListener('click', () => {
+function _adicionarLinhaFichaTecnica(idContainer) {
   if (!fichaTecnicaInsumosDisponiveis.length) return;
-  const container = document.getElementById('ficha-tecnica-item-linhas');
+  const container = document.getElementById(idContainer);
   container.insertAdjacentHTML('beforeend', _linhaFichaTecnicaHTML(fichaTecnicaInsumosDisponiveis[0].id, null));
   _wireLinhasFichaTecnica();
   if (typeof lucide !== 'undefined') lucide.createIcons();
-});
+}
+
+document.getElementById('btn-ficha-tecnica-add-linha')?.addEventListener('click', () => _adicionarLinhaFichaTecnica('ficha-tecnica-item-linhas'));
+document.getElementById('btn-ficha-tecnica-add-embalagem')?.addEventListener('click', () => _adicionarLinhaFichaTecnica('ficha-tecnica-embalagem-linhas'));
+
+function _linhasDaListaFichaTecnica(idContainer) {
+  return [...document.querySelectorAll(`#${idContainer} .ficha-tecnica-linha`)].map(linha => ({
+    insumoId: parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10),
+    quantidade: _quantidadeBaseDaLinhaFicha(linha),
+  }));
+}
 
 document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
   if (!fichaTecnicaEditandoItemId) return;
 
-  const insumos = [...document.querySelectorAll('#ficha-tecnica-item-linhas .ficha-tecnica-linha')].map(linha => ({
-    insumoId: parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10),
-    quantidade: _quantidadeBaseDaLinhaFicha(linha),
-  }));
+  const insumos = _linhasDaListaFichaTecnica('ficha-tecnica-item-linhas');
+  const corpo = { loja: fichaTecnicaLojaAtual, insumos };
+  // Seção escondida (complemento) não manda a lista: a embalagem gravada fica.
+  if (document.getElementById('ficha-tecnica-embalagem-secao').style.display !== 'none') {
+    corpo.embalagemViagem = _linhasDaListaFichaTecnica('ficha-tecnica-embalagem-linhas');
+  }
 
   try {
     const resposta = await fetch(`/api/itens-cardapio/${fichaTecnicaEditandoItemId}/ficha-tecnica`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loja: fichaTecnicaLojaAtual, insumos }),
+      body: JSON.stringify(corpo),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');

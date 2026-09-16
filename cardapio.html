@@ -343,6 +343,19 @@
             <i data-lucide="plus"></i>
             Adicionar insumo
           </button>
+          <!-- Só sai nos pedidos de delivery e retirada (SQL_INSUMOS_CONSUMIDOS
+               no backend). Escondida nos complementos. -->
+          <div class="ficha-tecnica-embalagem" id="ficha-tecnica-embalagem-secao">
+            <div class="receita-eyebrow">Embalagem pra viagem</div>
+            <p class="panel-subtitle">Sai do estoque só nos pedidos de delivery e retirada, junto com os insumos acima. No consumo no local, não sai. Coloque o que vai em cada unidade do produto: copo, tampa, canudo, caixa, saco.</p>
+            <div id="ficha-tecnica-embalagem-linhas" class="ficha-tecnica-linhas">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+            <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-add-embalagem">
+              <i data-lucide="plus"></i>
+              Adicionar embalagem
+            </button>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-item-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm">Salvar</button>

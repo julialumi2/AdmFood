@@ -65,6 +65,8 @@ from backend.armazenamento import (
     listar_complementos_por_loja,
     definir_ficha_tecnica,
     buscar_ficha_tecnica_item,
+    definir_embalagem_viagem,
+    buscar_embalagem_viagem_item,
     salvar_custo_item_cardapio,
     remover_custo_item_cardapio,
     listar_produtos_por_loja,
@@ -1696,23 +1698,30 @@ def api_buscar_ficha_tecnica_item(item_id):
     loja = request.args.get('loja')
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
-    insumos = [
-        {
-            "insumoId": i['insumo_id'],
-            "nome": i['insumo_nome'],
-            "unidadeMedida": i['unidade_medida'],
-            "quantidade": i['quantidade'],
-            "conteudoPorUnidade": i['conteudo_por_unidade'],
-            "unidadeConteudo": i['unidade_conteudo'],
-        }
-        for i in buscar_ficha_tecnica_item(item_id, loja)
-    ]
+
+    def formatar(linhas):
+        return [
+            {
+                "insumoId": i['insumo_id'],
+                "nome": i['insumo_nome'],
+                "unidadeMedida": i['unidade_medida'],
+                "quantidade": i['quantidade'],
+                "conteudoPorUnidade": i['conteudo_por_unidade'],
+                "unidadeConteudo": i['unidade_conteudo'],
+            }
+            for i in linhas
+        ]
+
     insumos_disponiveis = [
         {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida'],
          "conteudoPorUnidade": i['conteudo_por_unidade'], "unidadeConteudo": i['unidade_conteudo']}
         for i in _insumos_unicos(listar_insumos())
     ]
-    return jsonify({"insumos": insumos, "insumosDisponiveis": insumos_disponiveis})
+    return jsonify({
+        "insumos": formatar(buscar_ficha_tecnica_item(item_id, loja)),
+        "embalagemViagem": formatar(buscar_embalagem_viagem_item(item_id, loja)),
+        "insumosDisponiveis": insumos_disponiveis,
+    })
 
 
 def _insumos_unicos(linhas_estoque):
@@ -1804,6 +1813,9 @@ def api_criar_complementos_em_lote():
 
 @app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['PUT'])
 def api_definir_ficha_tecnica(item_id):
+    """Grava a ficha (`insumos`) e/ou a embalagem pra viagem
+    (`embalagemViagem`) do item na loja. Só troca a lista que vier no corpo:
+    quem manda só a ficha não apaga a embalagem."""
     erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
@@ -1813,25 +1825,43 @@ def api_definir_ficha_tecnica(item_id):
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
-    links_brutos = dados.get('insumos') or []
+    gravacoes = []
+    for chave, gravar in (('insumos', definir_ficha_tecnica), ('embalagemViagem', definir_embalagem_viagem)):
+        if chave not in dados:
+            continue
+        links, erro = _links_de_insumo(dados.get(chave))
+        if erro:
+            return jsonify({"erro": erro}), 400
+        gravacoes.append((gravar, links))
+
+    for gravar, links in gravacoes:
+        gravar(item_id, loja, links)
+    return jsonify({"ok": True})
+
+
+def _links_de_insumo(brutos):
+    """Lista de insumos da tela ([{"insumoId", "quantidade"}]) validada.
+    Devolve (links, mensagem de erro)."""
     links = []
-    for link in links_brutos:
+    vistos = set()
+    for link in brutos or []:
         try:
             insumo_id = int(link['insumoId'])
         except (KeyError, TypeError, ValueError):
-            return jsonify({"erro": "Insumo inválido na lista."}), 400
+            return None, "Insumo inválido na lista."
+        if insumo_id in vistos:
+            return None, "O mesmo insumo está duas vezes na lista."
+        vistos.add(insumo_id)
         quantidade = link.get('quantidade')
         if quantidade not in (None, ''):
             try:
                 quantidade = float(quantidade)
             except (TypeError, ValueError):
-                return jsonify({"erro": "Quantidade inválida."}), 400
+                return None, "Quantidade inválida."
         else:
             quantidade = None
         links.append({"insumoId": insumo_id, "quantidade": quantidade})
-
-    definir_ficha_tecnica(item_id, loja, links)
-    return jsonify({"ok": True})
+    return links, None
 
 
 @app.route('/api/itens-cardapio/<int:item_id>/porcoes-complemento', methods=['GET'])

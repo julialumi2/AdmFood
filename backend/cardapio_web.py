@@ -338,8 +338,11 @@ def buscar_resumo_do_dia(token, dia):
     """
     Retorna {"faturamento_dia": float, "quantidade_pedidos": int,
     "canais": [{"canal": str, "quantidade_pedidos": int, "faturamento": float}],
-    "pedidos_detalhados": [{"id", "canal", "criado_em", "atualizado_em",
+    "pedidos_detalhados": [{"id", "canal", "tipo", "criado_em", "atualizado_em",
     "duracao_minutos", "itens": [{"nome", "quantidade"}]}]}
+
+    "tipo" é o order_type da Cardápio Web (delivery, takeout, onsite,
+    closed_table): a embalagem pra viagem só desconta em delivery e retirada.
     """
     todos_pedidos = buscar_pedidos_do_dia(token, dia)
     pedidos = [p for p in todos_pedidos if p["status"] in STATUS_CONCLUIDOS]
@@ -363,6 +366,7 @@ def buscar_resumo_do_dia(token, dia):
         pedidos_detalhados.append({
             "id": pedido["id"],
             "canal": pedido["sales_channel"],
+            "tipo": detalhes.get("order_type"),
             "criado_em": pedido["created_at"],
             "atualizado_em": pedido["updated_at"],
             "duracao_minutos": _duracao_minutos(pedido["created_at"], pedido["updated_at"]),

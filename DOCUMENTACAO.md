@@ -2735,6 +2735,43 @@ no cardápio da loja (antes era criado mas nunca aparecia, porque a tela
 lista o cardápio de preços) e é marcado `preco_cardapio.manual`, pra
 reimportação da planilha não apagá-lo.
 
+### 6.18 Embalagem pra viagem (só sai em delivery e retirada)
+
+Pedido da Julia (2026-09-16): o milkshake do Artesanos vai no copo de
+vidro no salão e no copo descartável com tampa, canudo e saco no delivery.
+Com uma ficha só, ou a embalagem saía em todo pedido, ou não saía nunca.
+
+- **Tabela `embalagem_viagem`** — mesmo formato da `ficha_tecnica`
+  (`item_id`, `insumo_id`, `loja`, `quantidade` na unidade do insumo), à
+  parte: a ficha continua sendo o que vai em todo pedido. Vale o grupo de
+  ficha compartilhada (as duas Tradiças gravam juntas), `mesclar_insumo`
+  leva as linhas junto e `excluir_item_cardapio` apaga. É por unidade do
+  produto: a Julia confirmou que saco e guardanapo vão um por lanche.
+- **Como o sistema sabe que o pedido saiu da loja:** o detalhe do pedido
+  da Cardápio Web traz `order_type` (`delivery`, `takeout`, `onsite`,
+  `closed_table`). `buscar_resumo_do_dia` passa como `tipo` e
+  `salvar_itens_vendidos_do_dia` grava em `venda_item.tipo_pedido`.
+  Delivery e retirada levam a embalagem; consumo no local e mesa não.
+  Venda gravada antes da coluna (tipo nulo) cai no canal: iFood, 99Food e
+  cardápio digital (`catalog`) levam; balcão (`portal`) e totem não
+  (`_SQL_PRA_VIAGEM`). A ressincronização da madrugada preenche o tipo dos
+  últimos 7 dias.
+- **Conta:** `SQL_ITENS_CONSUMIDOS` ganhou a coluna `pra_viagem` nos três
+  caminhos (produto, combo com composição e complemento, que herda o
+  pedido do produto). `SQL_INSUMOS_CONSUMIDOS` junta a ficha (todo pedido)
+  com a embalagem (só `pra_viagem = 1`) e é o que a baixa automática
+  (seção 6.11) e o consumo médio (seção 6.6) leem — uma definição só de
+  "quanto saiu". Com a lista vazia, os números são os mesmos de antes
+  (conferido contra uma cópia do banco).
+- **Tela:** no modal da ficha técnica, embaixo dos insumos, a seção
+  "Embalagem pra viagem" com as mesmas linhas (insumo, quantidade, g/un).
+  Escondida nos complementos. O modal de detalhe do produto mostra as
+  embalagens e o botão "Editar embalagem". O `PUT` da ficha só troca a
+  lista que vier no corpo (`insumos` e/ou `embalagemViagem`) e recusa o
+  mesmo insumo duas vezes na lista.
+- **Fora, por enquanto:** o custo do produto (CMV, Curva ABC) continua só
+  com a ficha; a embalagem ainda não entra no custo dos canais de delivery.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -2779,7 +2816,7 @@ Todos em `app.py`, prefixo `/api`.
 - `GET /api/ficha-tecnica` — todos os itens do cardápio com seus insumos vinculados
 - `POST /api/itens-cardapio` — cadastrar item (prato) novo — só admin
 - `DELETE /api/itens-cardapio/<id>` — excluir item — só admin
-- `PUT /api/itens-cardapio/<id>/ficha-tecnica` — substitui a lista inteira de insumos do item — só admin
+- `PUT /api/itens-cardapio/<id>/ficha-tecnica` — substitui a lista inteira de insumos (`insumos`) e/ou da embalagem pra viagem (`embalagemViagem`) do item na loja; só troca a lista que vier no corpo (seção 6.18) — só admin
 
 **Fornecedores**
 - `GET /api/fornecedores` — diretório completo (ativos e inativos)

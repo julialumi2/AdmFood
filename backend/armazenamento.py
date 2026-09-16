@@ -414,6 +414,24 @@ def inicializar_banco():
         for grupo in GRUPOS_FICHA_COMPARTILHADA:
             _igualar_fichas_do_grupo(conn, grupo)
 
+        # Embalagem pra viagem (2026-09-16): o que só sai quando o pedido
+        # deixa a loja — no Artesanos o milkshake do salão vai no copo de
+        # vidro, o do delivery vai no copo descartável com tampa, canudo e
+        # saco. Mesmo formato da ficha_tecnica (por loja, na unidade do
+        # insumo), mas à parte: a ficha continua sendo o que vai em todo
+        # pedido. Ver SQL_INSUMOS_CONSUMIDOS.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS embalagem_viagem (
+                item_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                quantidade REAL,
+                PRIMARY KEY (item_id, insumo_id, loja)
+            )
+            """
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS receita_insumo (
@@ -485,6 +503,12 @@ def inicializar_banco():
             # ser resolvida dentro do SQL da baixa de estoque, sem trazer
             # todas as vendas pro Python só pra normalizar string.
             conn.execute("ALTER TABLE venda_item ADD COLUMN nome_normalizado TEXT")
+        if "tipo_pedido" not in colunas_venda_item:
+            # Como o pedido saiu (order_type da Cardápio Web: delivery,
+            # takeout, onsite, closed_table) — decide se a embalagem pra
+            # viagem desconta. Venda gravada antes da coluna fica nula e cai
+            # no canal (ver _SQL_PRA_VIAGEM).
+            conn.execute("ALTER TABLE venda_item ADD COLUMN tipo_pedido TEXT")
 
         # Combo/kit vendido como um nome só ("Clássico + Batata + Bebida")
         # não é um produto de Ficha Técnica: é a soma de vários. Aqui cada
@@ -1907,8 +1931,9 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                 conn.execute(
                     """
                     INSERT INTO venda_item
-                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id, multiplicador, nome_normalizado)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id,
+                         multiplicador, nome_normalizado, tipo_pedido)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         unidade,
@@ -1921,6 +1946,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                         item_cardapio_id,
                         multiplicador,
                         _normalizar_nome_insumo(item["nome"]),
+                        pedido.get("tipo"),
                     ),
                 )
 
@@ -1958,21 +1984,36 @@ SQL_GRAMAS_DA_FICHA = """
     GROUP BY f.item_id, f.loja
 """
 
+# Pedido que sai da loja leva a embalagem pra viagem: delivery e retirada
+# (order_type da Cardápio Web). Venda gravada antes de o tipo ser guardado
+# (2026-09-16) cai no canal: iFood, 99Food e o cardápio digital são sempre
+# delivery ou retirada; balcão (portal) e totem ficam sem. {v} = alias da
+# venda_item com ponto, ou vazio.
+_SQL_PRA_VIAGEM = (
+    "COALESCE({v}tipo_pedido IN ('delivery', 'takeout'), "
+    "{v}canal IN ('ifood', 'food99', 'catalog'))"
+)
+_PRA_VIAGEM_VENDA = _SQL_PRA_VIAGEM.format(v="")
+_PRA_VIAGEM_V = _SQL_PRA_VIAGEM.format(v="v.")
+
 SQL_ITENS_CONSUMIDOS = f"""
     SELECT unidade, dia, item_cardapio_id AS item_id,
-           quantidade * multiplicador AS quantidade
+           quantidade * multiplicador AS quantidade,
+           {_PRA_VIAGEM_VENDA} AS pra_viagem
     FROM venda_item
     WHERE item_cardapio_id IS NOT NULL
     UNION ALL
     SELECT v.unidade, v.dia, c.item_cardapio_id AS item_id,
-           v.quantidade * v.multiplicador * c.quantidade AS quantidade
+           v.quantidade * v.multiplicador * c.quantidade AS quantidade,
+           {_PRA_VIAGEM_V} AS pra_viagem
     FROM venda_item v
     JOIN composicao_produto_venda c
       ON c.nome_produto_normalizado = v.nome_normalizado
     WHERE v.item_cardapio_id IS NULL
     UNION ALL
     SELECT c.unidade, c.dia, c.item_cardapio_id AS item_id,
-           c.quantidade * COALESCE(COALESCE(s.gramas, p.gramas) / NULLIF(g.gramas, 0), 1) AS quantidade
+           c.quantidade * COALESCE(COALESCE(s.gramas, p.gramas) / NULLIF(g.gramas, 0), 1) AS quantidade,
+           COALESCE({_PRA_VIAGEM_V}, 0) AS pra_viagem
     FROM venda_complemento c
     -- Pedido separado da lata (Banana separada = 60 g): porção própria,
     -- guardada com produto 0; sem ela, vale a porção do produto.
@@ -1992,6 +2033,20 @@ SQL_ITENS_CONSUMIDOS = f"""
     LEFT JOIN ({SQL_GRAMAS_DA_FICHA}) g
       ON g.item_id = c.item_cardapio_id AND g.loja = c.unidade
     WHERE c.item_cardapio_id IS NOT NULL
+"""
+
+# Insumo gasto nas vendas, por loja e dia: a Ficha Técnica em todo pedido e a
+# embalagem pra viagem só no que sai da loja. Base da baixa de estoque e do
+# consumo médio.
+SQL_INSUMOS_CONSUMIDOS = f"""
+    SELECT v.unidade, v.dia, r.insumo_id, v.quantidade * r.quantidade AS quantidade
+    FROM ({SQL_ITENS_CONSUMIDOS}) v
+    JOIN (
+        SELECT item_id, loja, insumo_id, quantidade, 0 AS so_pra_viagem FROM ficha_tecnica
+        UNION ALL
+        SELECT item_id, loja, insumo_id, quantidade, 1 AS so_pra_viagem FROM embalagem_viagem
+    ) r ON r.item_id = v.item_id AND r.loja = v.unidade
+    WHERE r.quantidade IS NOT NULL AND (r.so_pra_viagem = 0 OR v.pra_viagem = 1)
 """
 
 
@@ -2037,8 +2092,9 @@ def definir_inicio_baixa_automatica(loja, inicio, alterado_por):
 def aplicar_baixa_estoque_dia(unidade, dia_iso):
     """Etapa 0 do motor de compra (2026-09-08): desconta de
     estoque_insumo.quantidade_atual o consumo teórico do dia (venda ×
-    Ficha Técnica — mesmo JOIN de consumo_medio_insumo, só que pra um dia
-    só). Idempotente: guarda o total já descontado em baixa_estoque_venda
+    Ficha Técnica, mais a embalagem pra viagem — SQL_INSUMOS_CONSUMIDOS, o
+    mesmo de consumo_medio_insumo, só que pra um dia só). Idempotente:
+    guarda o total já descontado em baixa_estoque_venda
     e só aplica a DIFERENÇA em relação à última vez — resincronizar o
     mesmo dia (acontece a cada 15 min pra hoje, toda madrugada pra ontem)
     não desconta em dobro, e uma venda cancelada/corrigida entre
@@ -2056,11 +2112,10 @@ def aplicar_baixa_estoque_dia(unidade, dia_iso):
             linha["insumo_id"]: linha["total"]
             for linha in conn.execute(
                 f"""
-                SELECT f.insumo_id AS insumo_id, SUM(v.quantidade * f.quantidade) AS total
-                FROM ({SQL_ITENS_CONSUMIDOS}) v
-                JOIN ficha_tecnica f ON f.item_id = v.item_id AND f.loja = v.unidade
-                WHERE v.unidade = ? AND v.dia = ? AND f.quantidade IS NOT NULL
-                GROUP BY f.insumo_id
+                SELECT insumo_id, SUM(quantidade) AS total
+                FROM ({SQL_INSUMOS_CONSUMIDOS})
+                WHERE unidade = ? AND dia = ?
+                GROUP BY insumo_id
                 """,
                 (unidade, dia_iso),
             ).fetchall()
@@ -2682,6 +2737,7 @@ def mesclar_insumo(origem_id, destino_id, fator, loja):
             return len(linhas)
 
         fichas = mover("ficha_tecnica", "insumo_id", ("item_id", "loja"), f"AND loja IN ({marcadores})", lojas)
+        embalagens = mover("embalagem_viagem", "insumo_id", ("item_id", "loja"), f"AND loja IN ({marcadores})", lojas)
         receitas = mover("receita_insumo", "ingrediente_id", ("insumo_id",))
         baixas = mover("baixa_estoque_venda", "insumo_id", ("unidade", "dia"), f"AND unidade IN ({marcadores})", lojas)
 
@@ -2702,6 +2758,7 @@ def mesclar_insumo(origem_id, destino_id, fator, loja):
 
         ainda_usada = (
             conn.execute("SELECT 1 FROM ficha_tecnica WHERE insumo_id = ?", (origem_id,)).fetchone()
+            or conn.execute("SELECT 1 FROM embalagem_viagem WHERE insumo_id = ?", (origem_id,)).fetchone()
             or conn.execute("SELECT 1 FROM receita_insumo WHERE ingrediente_id = ?", (origem_id,)).fetchone()
             or any(conn.execute(f"SELECT 1 FROM {t} WHERE insumo_id = ? LIMIT 1", (origem_id,)).fetchone()
                    for t in _TABELAS_COM_HISTORICO)
@@ -2715,7 +2772,7 @@ def mesclar_insumo(origem_id, destino_id, fator, loja):
             conn.execute("DELETE FROM insumo WHERE id = ?", (origem_id,))
 
     return {
-        "origem": origem["nome"], "destino": destino["nome"], "fichas": fichas, "receitas": receitas,
+        "origem": origem["nome"], "destino": destino["nome"], "fichas": fichas, "embalagens": embalagens, "receitas": receitas,
         "baixas": baixas, "custoLevado": custo_levado, "origemApagada": not ainda_usada,
     }
 
@@ -2723,6 +2780,7 @@ def mesclar_insumo(origem_id, destino_id, fator, loja):
 # Coluna de quantidade de cada tabela que mesclar_insumo converte.
 TABELA_QUANTIDADE = {
     "ficha_tecnica": "quantidade",
+    "embalagem_viagem": "quantidade",
     "receita_insumo": "quantidade",
     "baixa_estoque_venda": "quantidade_baixada",
 }
@@ -2890,6 +2948,7 @@ def listar_complementos_por_loja(loja):
 def excluir_item_cardapio(item_id):
     with conexao() as conn:
         conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ?", (item_id,))
+        conn.execute("DELETE FROM embalagem_viagem WHERE item_id = ?", (item_id,))
         conn.execute("DELETE FROM item_cardapio_custo WHERE item_id = ?", (item_id,))
         conn.execute("DELETE FROM item_cardapio WHERE id = ?", (item_id,))
 
@@ -3050,23 +3109,41 @@ def definir_ficha_tecnica(item_id, loja, links):
     Não mexe na receita das outras lojas (ficha técnica é por loja desde
     2026-09-01, ver seção 6.5), a não ser as do mesmo grupo de ficha
     compartilhada (as duas Tradiças), que recebem a mesma lista."""
+    _substituir_insumos_do_item("ficha_tecnica", item_id, loja, links)
+
+
+def definir_embalagem_viagem(item_id, loja, links):
+    """Mesma coisa que definir_ficha_tecnica, pra embalagem pra viagem do
+    item — o que só sai nos pedidos de delivery e retirada."""
+    _substituir_insumos_do_item("embalagem_viagem", item_id, loja, links)
+
+
+def _substituir_insumos_do_item(tabela, item_id, loja, links):
     with conexao() as conn:
         for loja_do_grupo in lojas_da_mesma_ficha(loja):
-            conn.execute("DELETE FROM ficha_tecnica WHERE item_id = ? AND loja = ?", (item_id, loja_do_grupo))
+            conn.execute(f"DELETE FROM {tabela} WHERE item_id = ? AND loja = ?", (item_id, loja_do_grupo))
             for link in links:
                 conn.execute(
-                    "INSERT INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                    f"INSERT INTO {tabela} (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
                     (item_id, link["insumoId"], loja_do_grupo, link.get("quantidade")),
                 )
 
 
 def buscar_ficha_tecnica_item(item_id, loja):
+    return _buscar_insumos_do_item("ficha_tecnica", item_id, loja)
+
+
+def buscar_embalagem_viagem_item(item_id, loja):
+    return _buscar_insumos_do_item("embalagem_viagem", item_id, loja)
+
+
+def _buscar_insumos_do_item(tabela, item_id, loja):
     with conexao() as conn:
         linhas = conn.execute(
-            """
+            f"""
             SELECT f.insumo_id, f.quantidade, i.nome AS insumo_nome, i.unidade_medida,
                    i.conteudo_por_unidade, i.unidade_conteudo
-            FROM ficha_tecnica f
+            FROM {tabela} f
             JOIN insumo i ON i.id = f.insumo_id
             WHERE f.item_id = ? AND f.loja = ?
             ORDER BY i.nome
@@ -3753,26 +3830,26 @@ def listar_produtos_por_loja(loja):
 def consumo_medio_insumo(inicio_iso, fim_iso, unidade=None):
     """Consumo médio DIÁRIO de cada insumo no período, por loja: soma
     (quantidade vendida do prato × quantidade da receita) de venda_item
-    cruzado com ficha_tecnica, dividido pelos dias do período. Só entra
+    cruzado com ficha_tecnica — mais a embalagem pra viagem nos pedidos que
+    saíram da loja —, dividido pelos dias do período. Só entra
     insumo com quantidade definida na ficha técnica (receita sem gramatura
     ainda, NULL, não dá pra estimar) e prato já casado com item_cardapio
     (item_cardapio_id IS NOT NULL em venda_item — ver salvar_itens_vendidos_do_dia).
     Base pra sugerir quantidade ideal/estoque mínimo (seção 6.6)."""
     dias = (datetime.fromisoformat(fim_iso) - datetime.fromisoformat(inicio_iso)).days + 1
-    condicoes = ["v.dia >= ?", "v.dia <= ?", "f.quantidade IS NOT NULL"]
+    condicoes = ["dia >= ?", "dia <= ?"]
     parametros = [inicio_iso, fim_iso]
     if unidade:
-        condicoes.append("v.unidade = ?")
+        condicoes.append("unidade = ?")
         parametros.append(unidade)
 
     with conexao() as conn:
         linhas = conn.execute(
             f"""
-            SELECT v.unidade, f.insumo_id, SUM(v.quantidade * f.quantidade) AS total_consumido
-            FROM ({SQL_ITENS_CONSUMIDOS}) v
-            JOIN ficha_tecnica f ON f.item_id = v.item_id AND f.loja = v.unidade
+            SELECT unidade, insumo_id, SUM(quantidade) AS total_consumido
+            FROM ({SQL_INSUMOS_CONSUMIDOS})
             WHERE {' AND '.join(condicoes)}
-            GROUP BY v.unidade, f.insumo_id
+            GROUP BY unidade, insumo_id
             """,
             parametros,
         ).fetchall()
