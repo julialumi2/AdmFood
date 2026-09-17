@@ -205,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
+    document.getElementById('estoque-filtro-categoria')?.addEventListener('change', () => renderEstoqueTab());
 
     // Cartões de nível viram filtro da tabela: clicar de novo, ou em Itens
     // cadastrados, mostra todos. Filtrar rola até a tabela, que fica abaixo
@@ -1680,6 +1681,25 @@ function _renderValorEmEstoque(linhas, isAdmin) {
   nota.style.display = semCusto ? '' : 'none';
 }
 
+// Filtro por categoria (card #31 do ClickUp, 2026-09-17): as opções são as
+// categorias da aba aberta, com quantos insumos cada uma tem. Trocar de aba
+// mantém a categoria se ela existir lá. Devolve a categoria escolhida.
+function _atualizarOpcoesCategoriaEstoque(linhas) {
+  const select = document.getElementById('estoque-filtro-categoria');
+  if (!select) return '';
+  const escolhida = select.value;
+  const contagem = new Map();
+  linhas.forEach((l) => {
+    const categoria = l.insumo.categoria || 'Geral';
+    contagem.set(categoria, (contagem.get(categoria) || 0) + 1);
+  });
+  const categorias = [...contagem.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  select.innerHTML = '<option value="">Todas as categorias</option>'
+    + categorias.map((c) => `<option value="${escaparHtml(c)}">${escaparHtml(c)} (${contagem.get(c)})</option>`).join('');
+  select.value = contagem.has(escolhida) ? escolhida : '';
+  return select.value;
+}
+
 function renderEstoqueTab() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const tbody = document.getElementById('estoque-tabela-body');
@@ -1707,6 +1727,12 @@ function renderEstoqueTab() {
   if (btnInsumosLoja) btnInsumosLoja.style.display = (isAdmin && !ehGeral) ? '' : 'none';
 
   let linhas = _linhasEstoqueParaTab(estoqueTabAtual);
+
+  // Categoria e busca valem pros cards e pra tabela; o filtro de nível, só pra tabela.
+  const categoria = _atualizarOpcoesCategoriaEstoque(linhas);
+  if (categoria) {
+    linhas = linhas.filter((l) => (l.insumo.categoria || 'Geral') === categoria);
+  }
 
   const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
   if (termoBusca) {

@@ -537,6 +537,13 @@ teclado (Enter/Espaço). O hover dos cards (sobe 2px, borda e sombra) vale
 pra todo `.store-card`/`.metric-card` do sistema, em `theme.css`, só em
 aparelho com mouse.
 
+**Filtro por categoria** (2026-09-17, card #31 do ClickUp): um seletor do lado
+da busca, em "Itens em estoque", com as categorias da aba aberta e quantos
+insumos cada uma tem ("Hortfruti (7)"). Como a busca, vale pros cards e pra
+tabela; o filtro de nível dos cards continua valendo só pra tabela, dentro
+da categoria escolhida. Trocar de loja mantém a categoria se ela existir na
+outra aba. Opções montadas a cada render (`_atualizarOpcoesCategoriaEstoque`).
+
 **Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
 de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
 topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via

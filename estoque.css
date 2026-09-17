@@ -228,6 +228,27 @@
 /* Ao filtrar, a tela rola até a tabela; a margem desconta o cabeçalho fixo. */
 #estoque-tabela-card { scroll-margin-top: 84px; }
 
+/* Filtro por categoria do lado da busca (2026-09-17) */
+.estoque-filtros-tabela {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.estoque-filtros-tabela .search-box { min-width: 180px; }
+
+#estoque-filtro-categoria {
+  min-width: 200px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .estoque-filtros-tabela { flex-direction: column; align-items: stretch; }
+  #estoque-filtro-categoria { width: 100%; }
+}
+
 #estoque-cards [data-filtro-status]:focus-visible {
   outline: 2px solid var(--info);
   outline-offset: 2px;

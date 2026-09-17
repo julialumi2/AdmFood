@@ -390,9 +390,17 @@
               <p class="table-subtitle" id="estoque-tabela-subtitulo">Consolidado de todas as unidades</p>
             </div>
 
-            <div class="search-box">
-              <i data-lucide="search"></i>
-              <input type="text" placeholder="Buscar insumo..." id="estoque-busca">
+            <div class="estoque-filtros-tabela">
+              <div class="select-wrapper">
+                <select id="estoque-filtro-categoria" aria-label="Filtrar por categoria">
+                  <option value="">Todas as categorias</option>
+                </select>
+                <i data-lucide="chevron-down" class="select-icon"></i>
+              </div>
+              <div class="search-box">
+                <i data-lucide="search"></i>
+                <input type="text" placeholder="Buscar insumo..." id="estoque-busca">
+              </div>
             </div>
           </div>
 
