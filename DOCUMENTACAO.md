@@ -2618,6 +2618,18 @@ combos pela fila de pendências do Estoque). As porções
 de creme como topping e do Chocoball não estão na planilha do chefe — são
 valores de partida (60 g e 30 g) pra loja conferir.
 
+**Complemento pedido separado da lata** (2026-09-11, card #17 do ClickUp):
+vem no grupo "Extras separados do NaLata" e desconta a porção própria
+(`porcao_complemento_item` com produto 0: cremes, frutas e leite
+condensado 60 g, granulados e granola 30 g, ovomaltine 25 g; sem ela, vale a
+porção de dentro da lata) mais um pote, que entra como outra linha de
+complemento: "Pote 30ml (separado)" pra granola e ovomaltine, "Pote 60ml
+(separado)" pro resto (`_pote_do_separado`), cada um com a ficha do pote e do
+adesivo pequeno. Em 17/09 o cardápio já chamava o extra de "Ovomaltine
+separado", "Creme de avelã separado": o nome passou a casar pelo vínculo
+manual e o "separado" do fim deixou de contar na escolha do pote (antes, a
+granola e o ovomaltine com esse nome iam pro de 60 ml).
+
 ### 6.16 Receita de mistura (insumo feito na casa)
 
 Concluída em 2026-09-10. Tempero, molho e maionese não são comprados

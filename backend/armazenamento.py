@@ -1868,7 +1868,11 @@ def _eh_separado(grupo):
 
 
 def _pote_do_separado(nome_complemento):
-    pote = "30ml" if _normalizar_nome_insumo(nome_complemento) in COMPLEMENTOS_POTE_30ML else "60ml"
+    # O cardápio passou a chamar o extra de "Ovomaltine separado" (visto em
+    # 17/09): o "separado" do nome não conta pra escolher o pote, senão
+    # granola e ovomaltine iam pro de 60 ml.
+    nome = re.sub(r"\s+separad[oa]s?$", "", _normalizar_nome_insumo(nome_complemento))
+    pote = "30ml" if nome in COMPLEMENTOS_POTE_30ML else "60ml"
     return f"Pote {pote} (separado)"
 
 
