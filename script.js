@@ -205,6 +205,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
+
+    // Cartões de nível viram filtro da tabela: clicar de novo, ou em Itens
+    // cadastrados, mostra todos. Filtrar rola até a tabela, que fica abaixo
+    // dos lotes e das datas especiais.
+    document.querySelectorAll('#estoque-cards [data-filtro-status]').forEach((card) => {
+      const alternarFiltro = () => {
+        const status = card.dataset.filtroStatus || null;
+        estoqueFiltroStatus = status && estoqueFiltroStatus !== status ? status : null;
+        renderEstoqueTab();
+        if (estoqueFiltroStatus) {
+          const semAnimacao = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          document.getElementById('estoque-tabela-card')?.scrollIntoView({ behavior: semAnimacao ? 'auto' : 'smooth', block: 'start' });
+        }
+      };
+      card.addEventListener('click', alternarFiltro);
+      card.addEventListener('keydown', (evento) => {
+        if (evento.key === 'Enter' || evento.key === ' ') {
+          evento.preventDefault();
+          alternarFiltro();
+        }
+      });
+    });
+    document.getElementById('estoque-tabela-subtitulo')?.addEventListener('click', (evento) => {
+      if (!evento.target.closest('[data-acao="limpar-filtro-status"]')) return;
+      estoqueFiltroStatus = null;
+      renderEstoqueTab();
+    });
+
     carregarInsumos();
     carregarLotesVencendo();
     carregarDatasEspeciais();
@@ -1376,6 +1404,9 @@ const STATUS_ICONE_ESTOQUE = { ok: 'check', baixo: 'trending-down', critico: 'al
 
 let estoqueInsumos = [];
 let estoqueTabAtual = 'geral';
+// Filtro da tabela pelos cartões de nível (2026-09-17): null mostra todos.
+let estoqueFiltroStatus = null;
+const ROTULO_FILTRO_ESTOQUE = { ok: 'em nível ideal', baixo: 'com estoque baixo', critico: 'em nível crítico' };
 // Loja escolhida no painel de Integrações do Estoque (Configurações).
 let integracoesLojaAtual = 'Hamburgueria Artesanos';
 let itensCardapioTodosCache = null;
@@ -1697,9 +1728,23 @@ function renderEstoqueTab() {
   document.getElementById('estoque-saude-seg-critico').style.width = `${(contagem.critico / totalSaude) * 100}%`;
   document.getElementById('estoque-saude-pct-ideal').textContent = `${pctOk}% em nível ideal`;
 
+  // Os cartões contam tudo; o filtro de nível só vale pra tabela.
+  const rotuloFiltro = ROTULO_FILTRO_ESTOQUE[estoqueFiltroStatus];
+  document.querySelectorAll('#estoque-cards [data-filtro-status]').forEach((card) => {
+    const ativo = !!rotuloFiltro && card.dataset.filtroStatus === estoqueFiltroStatus;
+    card.classList.toggle('filtro-ativo', ativo);
+    if (card.dataset.filtroStatus) card.setAttribute('aria-pressed', String(ativo));
+  });
+  if (rotuloFiltro) {
+    linhas = linhas.filter((l) => l.dados.status === estoqueFiltroStatus);
+    if (subtitulo) {
+      subtitulo.insertAdjacentHTML('beforeend', ` · só ${rotuloFiltro} <button type="button" class="btn-limpar-filtro" data-acao="limpar-filtro-status">mostrar todos</button>`);
+    }
+  }
+
   if (!linhas.length) {
     const colspan = 6 + (isAdmin ? 1 : 0);
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum insumo encontrado.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">${rotuloFiltro ? `Nenhum insumo ${rotuloFiltro} aqui.` : 'Nenhum insumo encontrado.'}</td></tr>`;
     return;
   }
 

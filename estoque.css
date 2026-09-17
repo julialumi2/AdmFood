@@ -221,6 +221,22 @@
 /* O card de itens cadastrados é contagem, não status: ícone neutro. */
 .store-card--total .metric-icon { color: var(--text-faint); }
 
+/* Cartões de nível filtram a tabela (2026-09-17): o que está filtrando fica
+   com a borda na cor do nível; Itens cadastrados só limpa o filtro. */
+#estoque-cards [data-filtro-status] { cursor: pointer; }
+
+/* Ao filtrar, a tela rola até a tabela; a margem desconta o cabeçalho fixo. */
+#estoque-tabela-card { scroll-margin-top: 84px; }
+
+#estoque-cards [data-filtro-status]:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+#estoque-cards .store-card--ideal.filtro-ativo { border-color: var(--success); box-shadow: inset 0 0 0 1px var(--success), var(--shadow-md); }
+#estoque-cards .store-card--baixo.filtro-ativo { border-color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning), var(--shadow-md); }
+#estoque-cards .store-card--critico.filtro-ativo { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger), var(--shadow-md); }
+
 
 
 

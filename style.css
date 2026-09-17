@@ -184,8 +184,7 @@ body.pagina-home.dark-mode {
   color: var(--text-muted);
 }
 
-/* CARTÕES: planos, sem o picote de comanda e sem pular no hover (não são
-   clicáveis) */
+/* CARTÕES: planos, sem o picote de comanda (o hover vem de theme.css) */
 .pagina-home .store-card,
 .pagina-home .chart-card,
 .pagina-home .panel {
@@ -195,11 +194,6 @@ body.pagina-home.dark-mode {
 
 .pagina-home .store-card::before,
 .pagina-home .store-card::after { content: none; }
-
-.pagina-home .store-card:hover {
-  transform: none;
-  box-shadow: var(--shadow-sm);
-}
 
 /* Faturamento por período: rótulo, valor e o período que ele cobre */
 .pagina-home #container-periodo .store-card { gap: var(--space-2); }

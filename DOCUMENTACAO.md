@@ -525,6 +525,18 @@ rota nova. Layout: lado a lado com as 4 contagens (pedido da Julia), numa
 alinhados no pé mesmo quando "ITENS CADASTRADOS" quebra em duas linhas.
 No celular (2x2), o valor ocupa a linha de baixo inteira.
 
+**Cards de nível viram filtro** (2026-09-17, pedido da Julia): clicar em
+"Em nível ideal", "Estoque baixo" ou "Nível crítico" deixa na tabela só os
+insumos daquele status, marca o card com a borda na cor do nível, põe "só
+em nível ideal · mostrar todos" no subtítulo da tabela e rola até ela.
+Clicar de novo no card, em "Itens cadastrados" ou em "mostrar todos" limpa
+o filtro. Os números dos cards e o valor em estoque continuam contando
+tudo (acompanham a busca e a loja, não o filtro). Estado em
+`estoqueFiltroStatus` no `script.js`; os cards são `role="button"` com
+teclado (Enter/Espaço). O hover dos cards (sobe 2px, borda e sombra) vale
+pra todo `.store-card`/`.metric-card` do sistema, em `theme.css`, só em
+aparelho com mouse.
+
 **Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
 de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
 topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via

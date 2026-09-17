@@ -970,8 +970,7 @@ select {
 }
 
 /* Cartões planos: borda fina, raio de 8px e sombra quase imperceptível
-   (a borda tracejada e o furo de comanda saíram em 2026-09-15). Não pulam
-   no hover, porque não são clicáveis. */
+   (a borda tracejada e o furo de comanda saíram em 2026-09-15). */
 .store-card,
 .metric-card {
   background-color: var(--card-bg);
@@ -983,6 +982,25 @@ select {
   gap: var(--space-2);
   box-shadow: var(--shadow-sm);
   position: relative;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Hover (pedido da Julia, 2026-09-17): a borda escurece, a sombra cresce e
+   o cartão sobe 2px. Só em aparelho com mouse — no toque o hover gruda. */
+@media (hover: hover) {
+  .store-card:hover,
+  .metric-card:hover {
+    border-color: var(--surface-muted-border);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-card,
+  .metric-card { transition: none; }
+  .store-card:hover,
+  .metric-card:hover { transform: none; }
 }
 
 .card-header {

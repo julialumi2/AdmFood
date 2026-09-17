@@ -264,8 +264,9 @@
         </div>
 
         <!-- CARDS DE RESUMO DO ESTOQUE -->
+        <!-- Os cartões de nível filtram a tabela "Itens em estoque"; clicar de novo (ou em Itens cadastrados) mostra todos -->
         <div class="cards-grid cards-grid-2x2-mobile" id="estoque-cards">
-          <div class="store-card store-card--total">
+          <div class="store-card store-card--total" data-filtro-status="" role="button" tabindex="0" title="Mostrar todos os insumos">
             <span class="card-subtitle">ITENS CADASTRADOS</span>
             <div class="metric-card-content">
               <i data-lucide="box" class="metric-icon icon-red"></i>
@@ -273,7 +274,7 @@
             </div>
           </div>
 
-          <div class="store-card store-card--ideal">
+          <div class="store-card store-card--ideal" data-filtro-status="ok" role="button" tabindex="0" aria-pressed="false" title="Mostrar só os insumos em nível ideal">
             <span class="card-subtitle">EM NÍVEL IDEAL</span>
             <div class="metric-card-content">
               <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
@@ -281,7 +282,7 @@
             </div>
           </div>
 
-          <div class="store-card store-card--baixo">
+          <div class="store-card store-card--baixo" data-filtro-status="baixo" role="button" tabindex="0" aria-pressed="false" title="Mostrar só os insumos com estoque baixo">
             <span class="card-subtitle">ESTOQUE BAIXO</span>
             <div class="metric-card-content">
               <i data-lucide="trending-down" class="metric-icon icon-dark"></i>
@@ -289,7 +290,7 @@
             </div>
           </div>
 
-          <div class="store-card store-card--critico">
+          <div class="store-card store-card--critico" data-filtro-status="critico" role="button" tabindex="0" aria-pressed="false" title="Mostrar só os insumos em nível crítico">
             <span class="card-subtitle">NÍVEL CRÍTICO</span>
             <div class="metric-card-content">
               <i data-lucide="alert-triangle" class="metric-icon icon-red-alert"></i>
@@ -382,7 +383,7 @@
              foi pra Configurações em 2026-09-11 -->
 
         <!-- CONTAINER DA TABELA DE ITENS -->
-        <div class="chart-card">
+        <div class="chart-card" id="estoque-tabela-card">
           <div class="table-header-row">
             <div>
               <h3 class="table-title">Itens em estoque</h3>
