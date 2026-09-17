@@ -559,7 +559,10 @@ aparecem no histórico — quem cotou (`cotacao_preco`) ou quem vendeu
 o cadastro (`insumo_fornecedor`) só ganha linha automática quando vem preço de
 cotação, então quem só vendeu ficava de fora (`mapa_fornecedores_do_historico`
 → campo `fornecedoresDoHistorico`, separado de `fornecedorIds` pra não sujar o
-que a tela de editar insumo grava). Os nomes vêm de uma chamada só a `/api/fornecedores` na
+que a tela de editar insumo grava). Insumo muito cotado chega a 22
+fornecedores (Ketchup Cepera Galão), o que esticava a linha da tabela pra 273
+px: a célula mostra as 12 primeiras bolinhas e junta o resto num "+N" que lista
+os nomes no hover. Os nomes vêm de uma chamada só a `/api/fornecedores` na
 primeira montagem da tabela; quem não é admin nem gerente não recebe a lista
 (403) e a coluna simplesmente não aparece. As iniciais ignoram o CNPJ que veio
 grudado no nome na carga da VMarket ("43.118.957 GUILHERME NUNES" vira GN) e
