@@ -711,6 +711,14 @@ body {
   font-size: 0.85rem;
 }
 
+/* Bolinha pequena de fornecedor — grid de Cotações e coluna de Insumos. */
+.avatar-sm {
+  width: 26px;
+  height: 26px;
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
+
 .user-info {
   display: flex;
   flex-direction: column;

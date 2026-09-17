@@ -545,6 +545,20 @@ tabela; o filtro de nível dos cards continua valendo só pra tabela, dentro
 da categoria escolhida. Trocar de loja mantém a categoria se ela existir na
 outra aba. Opções montadas a cada render (`_atualizarOpcoesCategoriaEstoque`).
 
+**Coluna Fornecedores** (2026-09-17, pedido dela com print da VMarket): em
+"Itens em estoque", uma bolinha colorida por fornecedor ligado ao insumo, com
+as iniciais dentro e o nome inteiro no hover — as MESMAS de
+`_iniciaisFornecedor` / `_corAvatarFornecedor` usadas na grid de Cotações
+(`.avatar.avatar-sm`, que por isso saiu de `cotacoes.css` pro `theme.css`). O
+fornecedor homologado vem primeiro e ganha um anel na cor da marca; o "+" do
+fim abre o cadastro do insumo, que é onde os fornecedores são marcados. A
+busca da tela passou a achar pelo nome do fornecedor também ("sorocaba" lista
+os insumos dele). Os nomes vêm de uma chamada só a `/api/fornecedores` na
+primeira montagem da tabela; quem não é admin nem gerente não recebe a lista
+(403) e a coluna simplesmente não aparece. As iniciais ignoram o CNPJ que veio
+grudado no nome na carga da VMarket ("43.118.957 GUILHERME NUNES" vira GN) e
+ligamentos de razão social.
+
 **Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
 de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
 topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via

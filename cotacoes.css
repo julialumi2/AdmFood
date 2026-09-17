@@ -90,13 +90,6 @@
   white-space: normal;
 }
 
-.avatar-sm {
-  width: 26px;
-  height: 26px;
-  font-size: 0.68rem;
-  flex-shrink: 0;
-}
-
 .td-comparacao-preco {
   position: relative;
   padding-right: 36px !important;

@@ -414,3 +414,37 @@
 }
 
 
+
+/* Coluna de fornecedores na tabela de Insumos — as mesmas bolinhas da grid
+   de Cotações (pedido dela com print da VMarket, 17/09). */
+.col-fornecedores {
+  max-width: 200px;
+}
+
+.fornecedor-avatar {
+  display: inline-flex;
+  margin: 2px 3px 2px 0;
+  vertical-align: middle;
+  border: none;
+}
+
+/* O homologado é o que vai direto em pedido: ganha um anel em vez de outra cor. */
+.fornecedor-avatar.homologado {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+  margin-right: 7px;
+}
+
+.fornecedor-avatar.adicionar {
+  background-color: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--surface-muted-border);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fornecedor-avatar.adicionar:hover {
+  color: var(--text-dark);
+  border-color: var(--text-muted);
+}

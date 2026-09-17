@@ -1561,6 +1561,63 @@ function _statusEstoqueClient(quantidadeAtual, estoqueMinimo) {
 // ingredientes dela, então o saldo da mistura não diz nada: fica fora da
 // tabela, dos cards e do valor em estoque. A receita continua em
 // Cardápio → Misturas.
+// --- COLUNA DE FORNECEDORES NA TABELA DE INSUMOS ---
+// Quem vende cada insumo estava só dentro do cadastro, um por um: pra decidir
+// compra e cotação, a Julia precisa ver isso na lista (pedido dela, 17/09).
+// null = ainda não buscou; false = não dá pra buscar (operação não vê
+// fornecedor), e aí a coluna não aparece.
+let fornecedoresPorId = null;
+let carregandoFornecedores = false;
+
+async function _carregarNomesDeFornecedor() {
+  try {
+    const resposta = await fetch('/api/fornecedores');
+    if (!resposta.ok) {
+      fornecedoresPorId = false;
+      return false;
+    }
+    const lista = (await resposta.json()).fornecedores || [];
+    fornecedoresPorId = new Map(lista.map((f) => [f.id, f]));
+  } catch (erro) {
+    console.error('Falha ao carregar fornecedores pra tabela de Insumos:', erro);
+    fornecedoresPorId = false;
+  }
+  return fornecedoresPorId;
+}
+
+// Homologado primeiro (com estrela), depois os outros em ordem alfabética.
+function _fornecedoresDoInsumo(insumo) {
+  if (!fornecedoresPorId) return [];
+  const nomes = (insumo.fornecedorIds || [])
+    .map((id) => ({ id, nome: fornecedoresPorId.get(id)?.nome }))
+    .filter((f) => f.nome);
+  const homologadoId = insumo.fornecedorHomologadoId || null;
+  const homologado = nomes.filter((f) => f.id === homologadoId);
+  const resto = nomes.filter((f) => f.id !== homologadoId)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  return [...homologado, ...resto].map((f) => ({ ...f, homologado: f.id === homologadoId }));
+}
+
+// Bolinha com as iniciais e cor do fornecedor, igual à da grid de Cotações
+// (print da VMarket que a Julia mandou em 04/09) — mesmos _iniciaisFornecedor
+// e _corAvatarFornecedor, pra não existirem duas bolinhas diferentes no
+// sistema.
+function _celulaFornecedoresHTML(insumo) {
+  const lista = _fornecedoresDoInsumo(insumo);
+  const bolinhas = lista.map((f) => `
+    <span class="avatar avatar-sm fornecedor-avatar${f.homologado ? ' homologado' : ''}"
+          style="background-color: ${_corAvatarFornecedor(f.id)};"
+          title="${escaparHtml(f.nome)}${f.homologado ? ' — homologado, vai direto em pedido' : ''}">
+      ${escaparHtml(_iniciaisFornecedor(f.nome))}
+    </span>
+  `).join('');
+  // O "+" abre o cadastro do insumo, que é onde os fornecedores são marcados.
+  const adicionar = `<button type="button" class="avatar avatar-sm fornecedor-avatar adicionar"
+    data-acao="editar-insumo" data-insumo-id="${insumo.id}"
+    title="Ligar outro fornecedor a esse insumo">+</button>`;
+  return `<td class="col-fornecedores">${bolinhas}${adicionar}</td>`;
+}
+
 function _linhasEstoqueParaTab(tab) {
   const insumosContados = estoqueInsumos.filter((insumo) => !insumo.ehMistura);
   if (tab === 'geral') {
@@ -1711,6 +1768,18 @@ function renderEstoqueTab() {
   const ehGeral = estoqueTabAtual === 'geral';
 
   if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
+  // A lista de fornecedores vem numa chamada só, na primeira vez que a tabela
+  // monta; quando chega, a tabela redesenha com a coluna.
+  if (isAdmin && fornecedoresPorId === null && !carregandoFornecedores) {
+    carregandoFornecedores = true;
+    _carregarNomesDeFornecedor().then((mapa) => {
+      carregandoFornecedores = false;
+      if (mapa) renderEstoqueTab();
+    });
+  }
+  const mostrarFornecedores = isAdmin && !!fornecedoresPorId;
+  const thFornecedores = document.getElementById('estoque-th-fornecedores');
+  if (thFornecedores) thFornecedores.style.display = mostrarFornecedores ? '' : 'none';
   if (subtitulo) subtitulo.textContent = ehGeral ? 'Consolidado de todas as unidades' : estoqueTabAtual;
   if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
 
@@ -1736,7 +1805,8 @@ function renderEstoqueTab() {
 
   const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
   if (termoBusca) {
-    linhas = linhas.filter(l => l.insumo.nome.toLowerCase().includes(termoBusca));
+    linhas = linhas.filter((l) => l.insumo.nome.toLowerCase().includes(termoBusca)
+      || _fornecedoresDoInsumo(l.insumo).some((f) => f.nome.toLowerCase().includes(termoBusca)));
   }
 
   const contagem = { ok: 0, baixo: 0, critico: 0 };
@@ -1824,6 +1894,7 @@ function renderEstoqueTab() {
             </div>
           `}
         </td>
+        ${mostrarFornecedores ? _celulaFornecedoresHTML(insumo) : ''}
         <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"><i data-lucide="${STATUS_ICONE_ESTOQUE[dados.status]}"></i>${STATUS_LABEL_ESTOQUE[dados.status]}</span></td>
         ${isAdmin ? `
           <td class="col-acoes"><div class="acoes-linha">
@@ -3695,8 +3766,17 @@ function renderCotacaoComparacao(grupos, isAdmin, itens, catalogoCompleto) {
   _renderTabelaComparacaoCotacao();
 }
 
+// Ignora o CNPJ que veio grudado no nome na carga da VMarket ("43.118.957
+// GUILHERME NUNES" vira GN) e os ligamentos e sufixos de razão social.
+const PALAVRAS_IGNORADAS_FORNECEDOR = new Set(['da', 'de', 'do', 'das', 'dos', 'e', 'em', 'ltda', 'me', 'epp', 'eireli', 'sa']);
+
 function _iniciaisFornecedor(nome) {
-  return nome.trim().split(/\s+/).slice(0, 2).map(parte => parte[0]).join('').toUpperCase();
+  const palavras = String(nome).replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(Boolean);
+  const uteis = palavras.filter((p) => /^\p{L}/u.test(p) && !PALAVRAS_IGNORADAS_FORNECEDOR.has(p.toLowerCase()));
+  const escolhidas = uteis.length ? uteis : palavras;
+  if (!escolhidas.length) return '?';
+  if (escolhidas.length === 1) return escolhidas[0].slice(0, 2).toUpperCase();
+  return (escolhidas[0][0] + escolhidas[1][0]).toUpperCase();
 }
 
 // Paleta fixa pra dar uma cor de avatar diferente por fornecedor (estilo
