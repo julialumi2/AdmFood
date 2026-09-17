@@ -1628,7 +1628,8 @@ function _celulaFornecedoresHTML(insumo) {
   `;
   }).join('');
   const resto = escondidos.length
-    ? `<span class="avatar avatar-sm fornecedor-avatar resto" title="${escaparHtml(escondidos.map((f) => f.nome).join(', '))}">+${escondidos.length}</span>`
+    ? `<button type="button" class="avatar avatar-sm fornecedor-avatar resto" data-acao="ver-fornecedores"
+        data-insumo-id="${insumo.id}" title="Ver os ${lista.length} fornecedores">+${escondidos.length}</button>`
     : '';
   // O "+" abre o cadastro do insumo, que é onde os fornecedores são marcados.
   const adicionar = `<button type="button" class="avatar avatar-sm fornecedor-avatar adicionar"
@@ -1636,6 +1637,49 @@ function _celulaFornecedoresHTML(insumo) {
     title="Ligar outro fornecedor a esse insumo">+</button>`;
   return `<td class="col-fornecedores">${bolinhas}${resto}${adicionar}</td>`;
 }
+
+// Lista inteira de quem fornece o insumo — o "+N" da coluna abre isso, que é
+// o que não cabe em bolinha (pedido dela, 17/09).
+let fornecedoresInsumoAtual = null;
+
+function abrirModalFornecedoresInsumo(insumoId) {
+  const insumo = estoqueInsumos.find((i) => i.id === insumoId);
+  if (!insumo) return;
+  fornecedoresInsumoAtual = insumo;
+  const lista = _fornecedoresDoInsumo(insumo);
+
+  document.getElementById('fornecedores-insumo-subtitulo').textContent =
+    `${insumo.nome} — ${lista.length} ${lista.length === 1 ? 'fornecedor' : 'fornecedores'}`;
+  document.getElementById('fornecedores-insumo-lista').innerHTML = lista.map((f) => {
+    const marca = f.homologado
+      ? '<span class="badge-pill pos">homologado</span>'
+      : (f.soHistorico ? '<span class="badge-pill">já cotou ou vendeu</span>' : '');
+    const telefone = fornecedoresPorId.get(f.id)?.contatoTelefone;
+    return `
+      <li>
+        <span class="avatar avatar-sm fornecedor-avatar${f.homologado ? ' homologado' : ''}"
+              style="background-color: ${_corAvatarFornecedor(f.id)};">${escaparHtml(_iniciaisFornecedor(f.nome))}</span>
+        <span class="lista-fornecedores-nome">${escaparHtml(f.nome)}</span>
+        ${telefone ? `<span class="text-muted">${escaparHtml(telefone)}</span>` : ''}
+        ${marca}
+      </li>
+    `;
+  }).join('');
+  document.getElementById('modal-fornecedores-insumo').style.display = 'flex';
+}
+
+function fecharModalFornecedoresInsumo() {
+  document.getElementById('modal-fornecedores-insumo').style.display = 'none';
+  fornecedoresInsumoAtual = null;
+}
+
+document.getElementById('btn-fornecedores-insumo-fechar')?.addEventListener('click', fecharModalFornecedoresInsumo);
+document.getElementById('btn-fornecedores-insumo-ok')?.addEventListener('click', fecharModalFornecedoresInsumo);
+document.getElementById('btn-fornecedores-insumo-cadastro')?.addEventListener('click', () => {
+  const insumo = fornecedoresInsumoAtual;
+  fecharModalFornecedoresInsumo();
+  if (insumo) abrirModalNovoInsumo(insumo);
+});
 
 function _linhasEstoqueParaTab(tab) {
   const insumosContados = estoqueInsumos.filter((insumo) => !insumo.ehMistura);
@@ -2874,6 +2918,10 @@ function wireEstoqueTableEvents() {
       if (!insumo || !dadosLoja) return;
       abrirModalEditarEstoque(insumoId, loja, insumo.nome, dadosLoja);
     });
+  });
+
+  document.querySelectorAll('[data-acao="ver-fornecedores"]').forEach(btn => {
+    btn.addEventListener('click', () => abrirModalFornecedoresInsumo(parseInt(btn.dataset.insumoId, 10)));
   });
 
   document.querySelectorAll('[data-acao="editar-insumo"]').forEach(btn => {

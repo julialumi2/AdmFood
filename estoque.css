@@ -20,6 +20,59 @@
   text-align: left;
 }
 
+/* Com a coluna de Fornecedores a tabela passou a pedir rolagem lateral quando
+   o menu está aberto (1.104 px numa área de 982). O espaçamento padrão de
+   24 px de cada lado gastava 384 px só em respiro: 12 px aqui devolvem a
+   largura sem apertar a leitura (pedido dela, 17/09). */
+#estoque-tabela-scroll th,
+#estoque-tabela-scroll td {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+#estoque-tabela-scroll th:first-child,
+#estoque-tabela-scroll td:first-child {
+  padding-left: var(--space-6);
+}
+
+#estoque-tabela-scroll th:last-child,
+#estoque-tabela-scroll td:last-child {
+  padding-right: var(--space-6);
+}
+
+/* Em tela de notebook (<= 1400 px) com o menu aberto sobram ~900 px pra oito
+   colunas: a tabela encolhe um ponto de fonte e as bolinhas ficam menores, o
+   que tira a rolagem lateral sem esconder coluna nenhuma. */
+@media (max-width: 1400px) {
+  #estoque-tabela-scroll th,
+  #estoque-tabela-scroll td {
+    font-size: 0.8rem;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  #estoque-tabela-scroll .fornecedor-avatar {
+    width: 22px;
+    height: 22px;
+    font-size: 0.56rem;
+  }
+
+  #estoque-tabela-scroll .btn-acao-icone {
+    width: 26px;
+    height: 26px;
+  }
+
+  #estoque-tabela-scroll .col-nivel { min-width: 120px; }
+  #estoque-tabela-scroll .col-fornecedores { min-width: 98px; }
+}
+
+/* Cabeçalho pode quebrar em duas linhas: com ele numa linha só, "Consumo/dia"
+   e "Fornecedores" seguravam a coluna mais larga do que o conteúdo precisa. */
+#estoque-tabela-scroll thead th {
+  white-space: normal;
+  line-height: 1.25;
+}
+
 .estoque-entrada-lojas {
   display: flex;
   flex-direction: column;
@@ -348,14 +401,17 @@
 /* Tag de categoria — reaproveita .badge/.badge-neutral (mesma cor neutra
    de sempre), só um respiro de padding a mais pra não colidir com o
    nome do insumo do lado. */
+/* Deixa a categoria quebrar ("Estoque Seco" em duas linhas): com nowrap ela
+   segurava ~30 px de largura que faltavam pra tabela caber sem rolagem. */
 .tag-categoria {
-  white-space: nowrap;
+  white-space: normal;
+  text-align: left;
 }
 
 /* Coluna "Qtd. mínima" — absorveu o antigo "Nível" (barra de progresso)
    junto, então empilha valor ideal, gauge e legenda do mínimo num só
    lugar em vez de duas colunas fazendo a mesma leitura. */
-.col-nivel { min-width: 180px; }
+.col-nivel { min-width: 136px; }
 
 .nivel-cell {
   display: flex;
@@ -418,7 +474,7 @@
 /* Coluna de fornecedores na tabela de Insumos — as mesmas bolinhas da grid
    de Cotações (pedido dela com print da VMarket, 17/09). */
 .col-fornecedores {
-  min-width: 150px;
+  min-width: 118px;
   max-width: 230px;
 }
 
@@ -456,3 +512,31 @@
   color: var(--text-dark);
   border-color: var(--text-muted);
 }
+
+/* Lista do modal aberto pelo "+N" da coluna de fornecedores */
+.lista-fornecedores-insumo {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.lista-fornecedores-insumo li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--surface-muted-border);
+  font-size: 0.85rem;
+}
+
+.lista-fornecedores-insumo li:last-child { border-bottom: none; }
+
+.lista-fornecedores-nome {
+  flex: 1;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.lista-fornecedores-insumo .badge-pill { flex-shrink: 0; }

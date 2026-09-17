@@ -561,8 +561,14 @@ cotação, então quem só vendeu ficava de fora (`mapa_fornecedores_do_historic
 → campo `fornecedoresDoHistorico`, separado de `fornecedorIds` pra não sujar o
 que a tela de editar insumo grava). Insumo muito cotado chega a 22
 fornecedores (Ketchup Cepera Galão), o que esticava a linha da tabela pra 273
-px: a célula mostra as 12 primeiras bolinhas e junta o resto num "+N" que lista
-os nomes no hover. Os nomes vêm de uma chamada só a `/api/fornecedores` na
+px: a célula mostra as 12 primeiras bolinhas e junta o resto num "+N", que ao
+ser clicado abre a lista inteira (nome, telefone e a marcação de homologado ou
+"já cotou ou vendeu"), com um atalho pro cadastro do insumo. **A tabela não tem
+mais rolagem lateral** na tela dela (1366 px com o menu aberto): o espaçamento
+das células caiu de 24 px pra 12 px de cada lado, o cabeçalho e a categoria
+podem quebrar em duas linhas, e abaixo de 1400 px a tabela usa fonte e bolinha
+um ponto menores (tudo em `#estoque-tabela-scroll`, estoque.css) — nenhuma
+coluna foi escondida. Os nomes vêm de uma chamada só a `/api/fornecedores` na
 primeira montagem da tabela; quem não é admin nem gerente não recebe a lista
 (403) e a coluna simplesmente não aparece. As iniciais ignoram o CNPJ que veio
 grudado no nome na carga da VMarket ("43.118.957 GUILHERME NUNES" vira GN) e

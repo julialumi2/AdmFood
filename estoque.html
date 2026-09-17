@@ -412,7 +412,7 @@
                 <th>Insumo</th>
                 <th>Categoria</th>
                 <th class="col-atual-destaque">Atual</th>
-                <th title="Média diária estimada nos últimos 30 dias, a partir da Ficha Técnica × vendas">Consumo médio/dia</th>
+                <th title="Média diária estimada nos últimos 30 dias, a partir da Ficha Técnica × vendas">Consumo/dia</th>
                 <th title="Estoque mínimo cadastrado (ou ajuste manual), com o nível atual em relação a ele">Qtd. mínima</th>
                 <th id="estoque-th-fornecedores" style="display:none;" title="Quem vende esse insumo. A estrela é o fornecedor homologado, que vai direto em pedido">Fornecedores</th>
                 <th>Status</th>
@@ -784,6 +784,22 @@
     </div>
 
     <!-- MODAL: EDITAR ESTOQUE (correção manual de quantidade/mínimo numa loja) -->
+    <!-- MODAL: TODOS OS FORNECEDORES DO INSUMO (clique no "+N" da coluna) -->
+    <div class="modal-overlay" id="modal-fornecedores-insumo" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title">Fornecedores do insumo</h3>
+          <button type="button" class="btn-close" id="btn-fornecedores-insumo-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" id="fornecedores-insumo-subtitulo" style="margin-bottom: var(--space-3);">—</p>
+        <ul class="lista-fornecedores-insumo" id="fornecedores-insumo-lista"></ul>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-fornecedores-insumo-cadastro">Editar no cadastro</button>
+          <button type="button" class="btn-primary-sm" id="btn-fornecedores-insumo-ok">Fechar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="modal-editar-estoque" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">
