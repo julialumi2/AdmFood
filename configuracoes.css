@@ -238,3 +238,19 @@
   gap: 8px;
   text-decoration: none;
 }
+
+/* Registro de atividade (quem fez o quê) */
+.registro-loja {
+  display: block;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.registro-detalhe {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}

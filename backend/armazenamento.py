@@ -198,6 +198,25 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS registro_acao (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                criado_em TEXT NOT NULL,
+                usuario_id INTEGER,
+                usuario_nome TEXT NOT NULL,
+                papel TEXT,
+                loja TEXT,
+                metodo TEXT NOT NULL,
+                rota TEXT NOT NULL,
+                caminho TEXT NOT NULL,
+                status INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                detalhes TEXT
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_registro_acao_data ON registro_acao(criado_em DESC)")
         colunas_usuario = {c["name"] for c in conn.execute("PRAGMA table_info(usuario)").fetchall()}
         if "loja" not in colunas_usuario:
             # Loja do funcionário: gerente e operação só enxergam a dela.
@@ -6375,6 +6394,69 @@ def reabrir_contagem(contagem_id):
             "UPDATE contagem SET status = 'aberta', respondida_em = NULL, aprovada_em = NULL WHERE id = ?",
             (contagem_id,),
         )
+
+
+# --- REGISTRO DE AÇÕES (quem fez o quê) -------------------------------------
+#
+# Só recebimento e algumas telas guardavam o nome de quem fez. Com mais gente
+# usando — e com quatro admins mexendo em estoque, pedido e cadastro — "quem
+# mudou isso?" não tinha resposta (pedido dela, 2026-09-17). O registro é
+# automático: todo pedido de mudança que passa pela API entra aqui, então rota
+# nova já nasce registrada.
+
+DIAS_DE_REGISTRO_ACAO = 365
+
+
+def registrar_acao(usuario, metodo, rota, caminho, status, descricao, detalhes=None):
+    """Grava uma linha do registro. `usuario` é o dict do usuário logado (ou
+    None, no caso dos links públicos de contagem e cotação). O nome fica
+    copiado aqui de propósito: excluir a pessoa não apaga o rastro do que ela
+    fez."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO registro_acao
+                (criado_em, usuario_id, usuario_nome, papel, loja, metodo, rota, caminho, status, descricao, detalhes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                datetime.now().isoformat(),
+                usuario["id"] if usuario else None,
+                (usuario["nome"] if usuario else "Link público"),
+                (usuario["papel"] if usuario else None),
+                (usuario["loja"] if usuario else None),
+                metodo, rota, caminho, int(status), descricao, detalhes,
+            ),
+        )
+
+
+def listar_registro_acoes(dias=7, usuario_id=None, limite=300):
+    """Do mais novo pro mais velho, dos últimos N dias."""
+    desde = (datetime.now() - timedelta(days=int(dias))).isoformat()
+    filtros = ["criado_em >= ?"]
+    valores = [desde]
+    if usuario_id:
+        filtros.append("usuario_id = ?")
+        valores.append(int(usuario_id))
+    with conexao() as conn:
+        linhas = conn.execute(
+            f"""
+            SELECT * FROM registro_acao
+            WHERE {' AND '.join(filtros)}
+            ORDER BY criado_em DESC
+            LIMIT ?
+            """,
+            [*valores, int(limite)],
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
+def limpar_registro_acoes_antigos(dias=DIAS_DE_REGISTRO_ACAO):
+    """Um ano de registro basta; o resto sai junto com o backup da madrugada."""
+    corte = (datetime.now() - timedelta(days=int(dias))).isoformat()
+    with conexao() as conn:
+        cursor = conn.execute("DELETE FROM registro_acao WHERE criado_em < ?", (corte,))
+        return cursor.rowcount
 
 
 # --- CÓPIAS DE SEGURANÇA DO BANCO -------------------------------------------

@@ -154,6 +154,9 @@ from backend.armazenamento import (
     gerar_backup,
     listar_backups,
     rodar_backup_diario,
+    registrar_acao,
+    listar_registro_acoes,
+    limpar_registro_acoes_antigos,
     pendencias_compras,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
@@ -198,6 +201,9 @@ app.secret_key = SECRET_KEY or "chave-insegura-so-para-dev-local"
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+# O padrão do Flask é 31 dias, que é muito pra celular perdido ou emprestado
+# no salão. Uma semana evita login todo dia sem deixar sessão viva um mês.
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 inicializar_banco()
 
@@ -420,6 +426,120 @@ def _exigir_login():
         if paginas is not None and nome_pagina not in paginas:
             return redirect(PAGINA_INICIAL_POR_PAPEL.get(usuario['papel'], '/index.html'))
 
+# --- REGISTRO DE AÇÕES (quem fez o quê) -------------------------------------
+#
+# Um gancho só, em vez de espalhar chamada por 80 rotas: toda requisição que
+# muda alguma coisa (POST, PUT, DELETE) vira uma linha do registro, com quem
+# fez, quando, o quê e se deu certo. Rota nova já nasce registrada.
+
+CHAVES_SENSIVEIS_NO_REGISTRO = {'senha', 'senhaNova', 'senhaAtual', 'senha_hash', 'token'}
+ROTAS_SEM_REGISTRO = {'/api/logout', '/api/sincronizar-agora'}
+
+DESCRICAO_DA_ACAO = {
+    ('POST', '/api/login'): 'Entrou no sistema',
+    ('PUT', '/api/me/senha'): 'Trocou a própria senha',
+    ('POST', '/api/usuarios'): 'Cadastrou funcionário',
+    ('PUT', '/api/usuarios/<int:usuario_id>'): 'Alterou funcionário',
+    ('DELETE', '/api/usuarios/<int:usuario_id>'): 'Excluiu funcionário',
+    ('POST', '/api/insumos'): 'Criou insumo',
+    ('POST', '/api/insumos/lote'): 'Importou insumos em lote',
+    ('PUT', '/api/insumos/<int:insumo_id>'): 'Editou o cadastro do insumo',
+    ('DELETE', '/api/insumos/<int:insumo_id>'): 'Excluiu insumo',
+    ('POST', '/api/insumos/<int:insumo_id>/mesclar'): 'Juntou dois insumos',
+    ('PUT', '/api/insumos/<int:insumo_id>/estoque/<loja>'): 'Alterou o estoque na mão',
+    ('POST', '/api/insumos/<int:insumo_id>/entrada'): 'Registrou entrada de estoque',
+    ('POST', '/api/insumos/quantidades-atuais/lote'): 'Atualizou o estoque em lote',
+    ('POST', '/api/insumos/ajustes-quantidade-ideal/lote'): 'Ajustou a quantidade ideal em lote',
+    ('PUT', '/api/insumos/<int:insumo_id>/quantidade-ideal'): 'Ajustou a quantidade ideal',
+    ('DELETE', '/api/insumos/<int:insumo_id>/quantidade-ideal'): 'Removeu o ajuste de quantidade ideal',
+    ('POST', '/api/insumos/por-loja'): 'Mudou os insumos que a loja usa',
+    ('PUT', '/api/insumos/<int:insumo_id>/receita'): 'Alterou a receita da mistura',
+    ('POST', '/api/contagens'): 'Abriu requisição de contagem',
+    ('POST', '/api/contagens/<int:contagem_id>/aprovar'): 'Aprovou a contagem (mexe no estoque)',
+    ('POST', '/api/contagens/<int:contagem_id>/reabrir'): 'Reabriu a contagem',
+    ('POST', '/api/contagens/token/<token>/responder'): 'A loja preencheu a contagem pelo link',
+    ('DELETE', '/api/requisicoes'): 'Excluiu uma requisição',
+    ('POST', '/api/requisicoes/conferencia/aprovar'): 'Aprovou a conferência da requisição',
+    ('POST', '/api/requisicoes/conferencia/gerar-cotacao'): 'Gerou a cotação a partir da requisição',
+    ('POST', '/api/cotacoes'): 'Criou cotação',
+    ('PUT', '/api/cotacoes/<int:cotacao_id>'): 'Editou a cotação',
+    ('DELETE', '/api/cotacoes/<int:cotacao_id>'): 'Excluiu cotação',
+    ('POST', '/api/cotacoes/<int:cotacao_id>/precos'): 'Lançou preço na cotação',
+    ('PUT', '/api/cotacoes/<int:cotacao_id>/precos/<int:preco_id>/selecionar'): 'Escolheu o preço vencedor',
+    ('POST', '/api/cotacoes/<int:cotacao_id>/selecionar-melhores-precos'): 'Selecionou os melhores preços',
+    ('POST', '/api/cotacoes/<int:cotacao_id>/convites'): 'Gerou os convites da cotação',
+    ('POST', '/api/cotacoes/convites/<int:convite_id>/reabrir'): 'Reabriu o convite de um fornecedor',
+    ('POST', '/api/cotacoes/convite/<token>/responder'): 'O fornecedor respondeu a cotação pelo link',
+    ('POST', '/api/cotacoes/<int:cotacao_id>/gerar-pedidos'): 'Gerou os pedidos da cotação',
+    ('POST', '/api/pedidos/direto'): 'Criou pedido direto',
+    ('POST', '/api/pedidos/compra-fora'): 'Lançou compra feita por fora',
+    ('POST', '/api/pedidos/<int:pedido_id>/avancar'): 'Avançou a etapa do pedido',
+    ('POST', '/api/pedidos/<int:pedido_id>/voltar'): 'Voltou a etapa do pedido',
+    ('DELETE', '/api/pedidos/<int:pedido_id>'): 'Excluiu pedido',
+    ('POST', '/api/pedidos/<int:pedido_id>/whatsapp-enviado'): 'Marcou o pedido como enviado no WhatsApp',
+    ('POST', '/api/recebimentos/<int:pedido_id>/confirmar'): 'Confirmou recebimento (soma no estoque)',
+    ('PUT', '/api/itens-cardapio/<int:item_id>/ficha-tecnica'): 'Alterou a ficha técnica',
+    ('POST', '/api/itens-cardapio'): 'Criou item de cardápio',
+    ('DELETE', '/api/itens-cardapio/<int:item_id>'): 'Excluiu item de cardápio',
+    ('PUT', '/api/itens-cardapio/<int:item_id>/custo'): 'Alterou o custo do item',
+    ('POST', '/api/fornecedores'): 'Cadastrou fornecedor',
+    ('PUT', '/api/fornecedores/<int:fornecedor_id>'): 'Editou fornecedor',
+    ('POST', '/api/produtos-pendentes/vincular'): 'Vinculou produto vendido a um item',
+    ('PUT', '/api/estoque/baixa-automatica'): 'Ligou ou desligou a baixa automática',
+    ('POST', '/api/admin/limpar-requisicoes-cotacoes'): 'Limpou requisições e cotações (zona de perigo)',
+    ('POST', '/api/admin/importar-vmarket'): 'Importou carga da VMarket',
+    ('DELETE', '/api/admin/importar-vmarket'): 'Desfez a carga da VMarket',
+    ('POST', '/api/admin/backups'): 'Gerou cópia de segurança',
+    ('POST', '/api/venda-presencial'): 'Lançou venda presencial',
+    ('DELETE', '/api/venda-presencial'): 'Excluiu venda presencial',
+    ('PUT', '/api/ajuste-canal'): 'Ajustou o faturamento de um canal',
+    ('DELETE', '/api/ajuste-canal'): 'Removeu o ajuste de um canal',
+}
+
+
+def _detalhes_da_requisicao():
+    """Resumo do que foi mandado, sem senha nem token e sem crescer demais."""
+    try:
+        if request.mimetype == 'application/json':
+            dados = request.get_json(silent=True) or {}
+        else:
+            dados = dict(request.form)
+        if not isinstance(dados, dict):
+            return None
+        limpo = {c: v for c, v in dados.items() if c not in CHAVES_SENSIVEIS_NO_REGISTRO}
+        if request.files:
+            limpo['arquivos'] = list(request.files.keys())
+        if not limpo:
+            return None
+        return json.dumps(limpo, ensure_ascii=False, default=str)[:800]
+    except Exception:
+        return None
+
+
+@app.after_request
+def _registrar_acao_da_requisicao(resposta):
+    """Nunca derruba a resposta: se o registro falhar, o que a pessoa pediu
+    seguiu do mesmo jeito e o erro fica só no log do servidor."""
+    try:
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return resposta
+        if not request.path.startswith('/api/') or request.path in ROTAS_SEM_REGISTRO:
+            return resposta
+        regra = request.url_rule.rule if request.url_rule else request.path
+        descricao = DESCRICAO_DA_ACAO.get((request.method, regra)) or f"{request.method} {regra}"
+        if request.path == '/api/login' and resposta.status_code != 200:
+            descricao = 'Tentativa de login que não entrou'
+        registrar_acao(
+            _usuario_logado(), request.method, regra, request.path,
+            resposta.status_code, descricao, _detalhes_da_requisicao(),
+        )
+    except Exception:
+        import traceback
+        print("❌ Falha ao registrar a ação:")
+        traceback.print_exc()
+    return resposta
+
+
 def _sou_o_unico_worker_a_agendar():
     """Em produção o Gunicorn roda vários workers (processos separados), e
     cada um carrega esse arquivo do zero — sem essa trava, cada worker criaria
@@ -506,6 +626,8 @@ if os.environ.get("BACKUP_AUTOMATICO", "true").lower() == "true" and _ESTE_WORKE
     _scheduler_backup.add_job(
         rodar_backup_diario, "cron", hour=HORA_DO_BACKUP[0], minute=HORA_DO_BACKUP[1]
     )
+    # O registro de ações guarda um ano; a faxina vai junto da madrugada.
+    _scheduler_backup.add_job(limpar_registro_acoes_antigos, "cron", hour=3, minute=45)
     _scheduler_backup.start()
 
 # Lojas que registram vendas presenciais (não passam pela Cardápio Web e
@@ -1025,6 +1147,34 @@ def api_excluir_usuario(usuario_id):
 # servidor, só a cópia que a pessoa baixa e guarda fora daqui.
 
 NOME_DE_BACKUP = re.compile(r"^admfood-\d{4}-\d{2}-\d{2}\.db$")
+
+
+@app.route('/api/admin/registro', methods=['GET'])
+def api_listar_registro():
+    """Quem fez o quê, do mais novo pro mais velho (ver registrar_acao)."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    dias = request.args.get('dias', 7, type=int)
+    usuario_id = request.args.get('usuarioId', type=int)
+    limite = min(request.args.get('limite', 300, type=int), 1000)
+    acoes = listar_registro_acoes(dias=max(1, dias), usuario_id=usuario_id, limite=limite)
+    return jsonify({"acoes": [
+        {
+            "id": a["id"],
+            "quando": a["criado_em"],
+            "usuarioId": a["usuario_id"],
+            "quem": a["usuario_nome"],
+            "papel": a["papel"],
+            "loja": a["loja"],
+            "acao": a["descricao"],
+            "caminho": a["caminho"],
+            "metodo": a["metodo"],
+            "status": a["status"],
+            "detalhes": a["detalhes"],
+        }
+        for a in acoes
+    ]})
 
 
 @app.route('/api/admin/backups', methods=['GET'])

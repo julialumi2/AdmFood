@@ -7888,6 +7888,10 @@ async function carregarUsuarioLogado() {
     if (painelBackup && usuario.papel === 'admin') {
       painelBackup.style.display = '';
       carregarBackups();
+    }    const painelRegistro = document.getElementById('painel-registro');
+    if (painelRegistro && usuario.papel === 'admin') {
+      painelRegistro.style.display = '';
+      carregarRegistroAtividade();
     }
     const painelBaixa = document.getElementById('painel-baixa-automatica');
     if (painelBaixa && usuario.papel === 'admin') {
@@ -7967,6 +7971,51 @@ async function carregarUsuarioLogado() {
     console.error('Falha ao carregar usuário logado:', erro);
   }
 }
+
+// --- REGISTRO DE ATIVIDADE (Configurações, só admin) ---
+// Quem mexeu em quê. Vem do gancho do servidor, que anota toda requisição
+// que muda alguma coisa (pedido dela, 17/09).
+
+function _quandoLegivel(iso) {
+  if (!iso) return '—';
+  const data = new Date(iso);
+  const hoje = new Date();
+  const mesmoDia = data.toDateString() === hoje.toDateString();
+  const hora = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return mesmoDia ? `hoje ${hora}` : `${_dataBR(iso.slice(0, 10))} ${hora}`;
+}
+
+async function carregarRegistroAtividade() {
+  const tbody = document.getElementById('registro-tbody');
+  if (!tbody) return;
+  const dias = document.getElementById('registro-filtro-dias')?.value || 7;
+  try {
+    const resposta = await fetch(`/api/admin/registro?dias=${encodeURIComponent(dias)}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const acoes = (await resposta.json()).acoes || [];
+    if (!acoes.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="panel-subtitle">Nada registrado nesse período.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = acoes.map((a) => {
+      const deuErro = a.status >= 400;
+      const detalhe = a.detalhes ? a.detalhes.slice(0, 120) : '';
+      return `
+        <tr>
+          <td class="text-muted">${escaparHtml(_quandoLegivel(a.quando))}</td>
+          <td class="font-bold">${escaparHtml(a.quem)}${a.loja ? `<span class="registro-loja">${escaparHtml(a.loja)}</span>` : ''}</td>
+          <td>${escaparHtml(a.acao)}${deuErro ? ` <span class="badge-pill neg">barrado (${a.status})</span>` : ''}</td>
+          <td class="text-muted registro-detalhe" title="${escaparHtml(a.detalhes || '')}">${escaparHtml(detalhe)}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (erro) {
+    console.error('Falha ao carregar o registro de atividade:', erro);
+    tbody.innerHTML = '<tr><td colspan="4" class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar o registro.</td></tr>';
+  }
+}
+
+document.getElementById('registro-filtro-dias')?.addEventListener('change', carregarRegistroAtividade);
 
 // --- CÓPIA DE SEGURANÇA DO BANCO (Configurações, só admin) ---
 

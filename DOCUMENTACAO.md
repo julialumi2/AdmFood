@@ -227,6 +227,7 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `tarefa_subtarefa` | Itens de checklist de cada tarefa |
 | `tarefa_comentario` | Comentários de cada tarefa |
 | `usuario` | Login da equipe — `senha_hash` (nunca texto puro), `papel` (`admin`/`gerente`/`operacao`), `loja` (NULL = a rede toda), `ativo` |
+| `registro_acao` | Quem fez o quê (ver 8.4) — `criado_em`, `usuario_id`/`usuario_nome`, `papel`, `loja`, `metodo`, `rota`, `caminho`, `status`, `descricao`, `detalhes` |
 | `preco_cardapio` | Comparativo de preços do cardápio, só leitura (ver 6.1) |
 | `pedido_preparo` | Tempo de cada pedido concluído (ver 6.2) |
 | `ajuste_faturamento_canal` | Correção manual de faturamento/pedidos por canal (ver 6.3) |
@@ -3253,6 +3254,39 @@ desativar e redefinir senha. O campo Loja some quando o perfil é Admin.
 
 Teste: `teste_acessos.py` no scratchpad — 30 checagens cobrindo as três
 contas (o que cada uma vê, o que recebe 403 e pra onde é redirecionada).
+
+### 8.4 Registro de ações — quem fez o quê (2026-09-17)
+
+Só o recebimento e umas poucas telas guardavam o nome de quem fez; "quem mudou
+esse estoque?" não tinha resposta, com quatro admins mexendo em pedido,
+cadastro e contagem. Pedido dela ao planejar a entrada de funcionários.
+
+**Um gancho só, não 80 chamadas espalhadas:** `@app.after_request`
+(`_registrar_acao_da_requisicao` em `app.py`) grava uma linha da tabela
+`registro_acao` pra toda requisição `/api/*` que NÃO é GET — com quem fez
+(nome copiado na linha, pra excluir a pessoa não apagar o rastro), papel,
+loja, método, rota, caminho, status e um resumo do corpo. Rota nova já nasce
+registrada, e leitura (GET) não polui.
+
+- `DESCRICAO_DA_ACAO` traduz (método, rota) pra frase ("Aprovou a contagem
+  (mexe no estoque)"); sem tradução, fica o método e a rota mesmo.
+- `CHAVES_SENSIVEIS_NO_REGISTRO` tira senha e token do resumo — o login entra
+  no registro com o e-mail, nunca com a senha. Login que não passou vira
+  "Tentativa de login que não entrou".
+- **Tentativa barrada também é registrada** (status 403), que é justamente o
+  que interessa quando alguém tenta o que não pode.
+- O gancho nunca derruba a resposta: falha no registro só aparece no log.
+- `GET /api/admin/registro?dias=&usuarioId=&limite=` (só admin) alimenta o
+  painel **Registro de atividade** em Configurações, com filtro de período.
+- Guarda um ano (`limpar_registro_acoes_antigos`, agendada às 3h45 junto do
+  backup).
+
+**Sessão mais curta junto:** `PERMANENT_SESSION_LIFETIME` passou a 7 dias — o
+padrão do Flask é 31, tempo demais pra celular perdido ou emprestado no salão.
+
+Teste: `teste_registro_acao.py` no scratchpad, 20 checagens (login sem senha,
+ação real, tentativa barrada, GET que não registra, permissão da rota, faxina
+do que passou de um ano e a sessão de 7 dias).
 
 ### 8.1 Bootstrap do admin inicial
 

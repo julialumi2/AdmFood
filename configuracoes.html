@@ -324,6 +324,40 @@
           </div>
         </div>
 
+        <!-- REGISTRO DE ATIVIDADE (só admin) -->
+        <div class="panel panel-table" id="painel-registro" style="display:none;">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Registro de atividade</h3>
+              <span class="panel-subtitle">Quem mexeu em quê, com data e hora</span>
+            </div>
+            <div class="select-wrapper">
+              <select id="registro-filtro-dias">
+                <option value="1">Hoje</option>
+                <option value="7" selected>Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+              </select>
+              <i data-lucide="chevron-down"></i>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Quem</th>
+                  <th>Ação</th>
+                  <th>Detalhe</th>
+                </tr>
+              </thead>
+              <tbody id="registro-tbody">
+                <tr><td colspan="4" class="panel-subtitle">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- CÓPIA DE SEGURANÇA (só admin) -->
         <div class="panel" id="painel-backup" style="display:none;">
           <div class="panel-header">
