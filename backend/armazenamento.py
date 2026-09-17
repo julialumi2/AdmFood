@@ -4424,9 +4424,15 @@ def selecionar_melhores_precos_cotacao(cotacao_id):
 
 
 def _insumos_da_cotacao_por_fornecedor(cotacao_id):
-    """Pra cada insumo da cotação, quem fornece ele — cadastro do insumo
-    (`insumo_fornecedor`) mais o histórico de quem já cotou ou já vendeu. É a
-    mesma lista que a coluna Fornecedores mostra na tela de Insumos."""
+    """Pra cada insumo da cotação, quem é convidado a cotar ele.
+
+    **O cadastro manda** (escolha dela em 2026-09-17): se o insumo tem
+    fornecedor marcado no cadastro (`insumo_fornecedor`, o que ela edita pelo
+    "+" da coluna Fornecedores), o convite vai só pra eles — senão tirar
+    alguém da lista não adiantaria nada, porque ele continuaria sendo
+    convidado pelo histórico. O histórico (quem já cotou ou já vendeu) só
+    entra nos insumos que ninguém marcou ainda. Sem os dois, o insumo é órfão
+    e vai pra todo mundo."""
     cadastro = mapa_insumo_fornecedores()
     historico = mapa_fornecedores_do_historico()
     with conexao() as conn:
@@ -4437,7 +4443,7 @@ def _insumos_da_cotacao_por_fornecedor(cotacao_id):
             ).fetchall()
         ]
     return {
-        insumo_id: set(cadastro.get(insumo_id, [])) | set(historico.get(insumo_id, []))
+        insumo_id: set(cadastro.get(insumo_id) or historico.get(insumo_id) or [])
         for insumo_id in insumo_ids
     }
 

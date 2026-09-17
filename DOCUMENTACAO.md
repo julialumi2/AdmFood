@@ -1061,9 +1061,12 @@ quantidade calculada) — cotação lançada na mão continua só manual.
 
 **Quem recebe o quê (regra atual, 2026-09-17 — "pode fazer igual a
 VMarket"):** cada fornecedor marcado recebe **os insumos que ele fornece**
-— os que aparecem com a bolinha dele na coluna Fornecedores da tela de
-Insumos, ou seja, o cadastro (`insumo_fornecedor`) mais o histórico de quem
-já cotou ou já vendeu — **mais os insumos que não têm fornecedor nenhum**,
+— **o cadastro manda**: se o insumo tem fornecedor marcado em
+`insumo_fornecedor` (o que ela edita pelo "+" da coluna Fornecedores), vai só
+pra eles; o histórico de quem já cotou ou já vendeu só vale nos insumos que
+ninguém marcou. Sem isso, tirar um fornecedor da lista não adiantaria nada,
+porque o histórico o convidaria do mesmo jeito. Somam-se a isso **os insumos
+que não têm fornecedor nenhum**,
 que vão pra todo mundo pra não ficarem sem preço. Fornecedor que não
 fornece nada da cotação e não tem órfão pra cotar não recebe convite, e a
 tela diz o nome dele. A resposta traz `totalInsumos` por convite, que o
