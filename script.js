@@ -838,7 +838,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
       <td>${c.pedidos}</td>
       <td>${c.percentual}%</td>
       ${podeEditar ? `
-        <td class="acoes-linha">
+        <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="editar-ajuste-canal"
             data-canal-bruto="${c.canalBruto}" data-canal-label="${escaparHtml(c.canal)}"
             data-faturamento="${c.faturamentoNumero}" data-pedidos="${c.pedidosNumero}"
@@ -852,7 +852,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
               <i data-lucide="rotate-ccw"></i>
             </button>
           ` : ''}
-        </td>
+        </div></td>
       ` : ''}
     </tr>
   `).join('');
@@ -1826,7 +1826,7 @@ function renderEstoqueTab() {
         </td>
         <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"><i data-lucide="${STATUS_ICONE_ESTOQUE[dados.status]}"></i>${STATUS_LABEL_ESTOQUE[dados.status]}</span></td>
         ${isAdmin ? `
-          <td class="acoes-linha">
+          <td class="col-acoes"><div class="acoes-linha">
             ${loja ? `
               <button type="button" class="btn-acao-icone" data-acao="editar-estoque" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" title="Editar estoque">
                 <i data-lucide="pencil"></i>
@@ -1838,7 +1838,7 @@ function renderEstoqueTab() {
             <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)">
               <i data-lucide="trash-2"></i>
             </button>
-          </td>
+          </div></td>
         ` : ''}
       </tr>
     `;
@@ -2149,9 +2149,9 @@ function renderProdutosPendentesTabela(pendentes) {
       <td>${p.vendas}</td>
       <td>${p.quantidade_total}</td>
       <td class="text-muted">${p.primeira_vez.split('-').reverse().join('/')}</td>
-      <td class="acoes-linha">
+      <td class="col-acoes"><div class="acoes-linha">
         <button type="button" class="btn-secondary-sm" data-acao="vincular-produto" data-nome="${escaparHtml(p.nome_produto)}">Vincular</button>
-      </td>
+      </div></td>
     </tr>
   `).join('');
 
@@ -2884,11 +2884,11 @@ function renderLotesVencendo() {
           <span class="badge-pill ${classeBadge}">${rotuloDias}</span>
         </td>
         ${isAdmin ? `
-          <td class="acoes-linha">
+          <td class="col-acoes"><div class="acoes-linha">
             <button type="button" class="btn-acao-icone" data-acao="resolver-lote" data-lote-id="${lote.id}" title="Marcar como resolvido">
               <i data-lucide="check"></i>
             </button>
-          </td>
+          </div></td>
         ` : ''}
       </tr>
     `;
@@ -2951,11 +2951,11 @@ function renderDatasEspeciais() {
         <td class="text-muted">${periodo}</td>
         <td>${d.multiplicador}×</td>
         <td class="text-muted">${d.loja ? escaparHtml(d.loja) : 'Todas'}</td>
-        <td class="acoes-linha">
+        <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-data-especial" data-id="${d.id}" title="Excluir">
             <i data-lucide="trash-2"></i>
           </button>
-        </td>
+        </div></td>
       </tr>
     `;
   }).join('');
@@ -3082,14 +3082,14 @@ function renderFornecedoresTabela() {
       <td>${f.pedidoMinimo ? `R$ ${f.pedidoMinimo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</td>
       <td><span class="badge-pill ${f.ativo ? 'pos' : 'neg'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
       ${isAdmin ? `
-        <td class="acoes-linha">
+        <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="editar-fornecedor" data-id="${f.id}" title="Editar fornecedor">
             <i data-lucide="pencil"></i>
           </button>
           <button type="button" class="btn-acao-icone" data-acao="alternar-ativo-fornecedor" data-id="${f.id}" data-ativo="${f.ativo ? '1' : '0'}" title="${f.ativo ? 'Desativar' : 'Ativar'}">
             <i data-lucide="${f.ativo ? 'ban' : 'check-circle-2'}"></i>
           </button>
-        </td>
+        </div></td>
       ` : ''}
     </tr>
   `).join('');
@@ -3269,7 +3269,7 @@ function renderCotacoesLista() {
       <td>R$ ${_formatarMoedaCompacta(c.economia)}</td>
       <td>R$ ${_formatarMoedaCompacta(c.valorPedido)}</td>
       ${isAdmin ? `
-        <td class="acoes-linha">
+        <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="abrir-cotacao" data-id="${c.id}" title="Ver/editar preços">
             <i data-lucide="arrow-right"></i>
           </button>
@@ -3280,7 +3280,7 @@ function renderCotacoesLista() {
             : `<button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-cotacao" data-id="${c.id}" data-titulo="${escaparHtml(c.titulo)}" title="Excluir cotação">
                 <i data-lucide="trash-2"></i>
               </button>`}
-        </td>
+        </div></td>
       ` : ''}
     </tr>
   `;
@@ -3586,7 +3586,7 @@ function renderConvitesCotacao(convites) {
         <td class="font-bold">${escaparHtml(c.fornecedorNome)}</td>
         <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-        <td class="acoes-linha">
+        <td class="col-acoes"><div class="acoes-linha">
           ${linkWhatsApp ? `
             <a class="btn-secondary-sm" href="${escaparHtml(linkWhatsApp)}" target="_blank" rel="noopener">
               <i data-lucide="send"></i>
@@ -3604,7 +3604,7 @@ function renderConvitesCotacao(convites) {
               Reabrir
             </button>
           ` : ''}
-        </td>
+        </div></td>
       </tr>
     `;
   }).join('');
@@ -4133,7 +4133,7 @@ function renderPedidosTabela() {
         <span class="badge-pill ${_pedidoPendenteDeEnvio(p) ? 'neg' : STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${_rotuloEstagioPedido(p, p.status)}</span>
         ${p.status === 'recebido' && p.recebidoEm ? `<div class="text-muted" style="font-size:0.8em; margin-top:4px;">em ${_dataBR(p.recebidoEm)}</div>` : ''}
       </td>
-      <td class="acoes-linha">
+      <td class="col-acoes"><div class="acoes-linha">
         ${pedidosWhatsAppLinks[p.id] ? `
           <a class="btn-acao-icone" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp" data-acao="enviar-pedido-whatsapp" data-id="${p.id}">
             <i data-lucide="send"></i>
@@ -4142,7 +4142,7 @@ function renderPedidosTabela() {
         <button type="button" class="btn-acao-icone" data-acao="abrir-pedido" data-id="${p.id}" title="Ver itens e acompanhar entrega">
           <i data-lucide="arrow-right"></i>
         </button>
-      </td>
+      </div></td>
     </tr>
   `).join('');
 
@@ -4407,11 +4407,11 @@ function renderContagensTabela() {
         <td class="text-muted">${prazo}</td>
         <td><span class="badge-pill ${STATUS_CLASSE_CONTAGEM[c.status]}">${STATUS_LABEL_CONTAGEM[c.status]}</span></td>
         ${isAdmin ? `
-          <td class="acoes-linha">
+          <td class="col-acoes"><div class="acoes-linha">
             <button type="button" class="btn-acao-icone" data-acao="abrir-contagem" data-id="${c.id}" title="Ver/conferir requisição">
               <i data-lucide="arrow-right"></i>
             </button>
-          </td>
+          </div></td>
         ` : ''}
       </tr>
     `;
@@ -4472,11 +4472,11 @@ function renderContagemDetalhe() {
         <td>${ideal === null ? '<span class="text-muted">—</span>' : `${_formatarQuantidade(ideal, item.unidadeMedida)}`}${item.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}</td>
         <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${_formatarQuantidade(deficit, item.unidadeMedida)}</span>` : '—')}</td>
         ${isAdmin ? `
-          <td class="acoes-linha">
+          <td class="col-acoes"><div class="acoes-linha">
             <button type="button" class="btn-acao-icone" data-acao="ajustar-ideal" data-insumo-id="${item.insumoId}" title="Ajustar quantidade ideal">
               <i data-lucide="pencil"></i>
             </button>
-          </td>
+          </div></td>
         ` : ''}
       </tr>
     `;
@@ -4666,14 +4666,14 @@ function renderRequisicoesTabela() {
         <td class="text-muted">${prazo}</td>
         <td><span class="badge-pill ${status.classe}">${status.texto}</span></td>
         ${isAdmin ? `
-          <td class="acoes-linha">
+          <td class="col-acoes"><div class="acoes-linha">
             <button type="button" class="btn-acao-icone" data-acao="abrir-requisicao" data-indice="${indice}" title="Ver conferência somada">
               <i data-lucide="arrow-right"></i>
             </button>
             <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-requisicao" data-indice="${indice}" title="Excluir só essa requisição">
               <i data-lucide="trash-2"></i>
             </button>
-          </td>
+          </div></td>
         ` : ''}
       </tr>
     `;
@@ -4760,11 +4760,11 @@ function renderConferenciaRequisicao() {
         <td class="font-bold">${escaparHtml(c.loja)}</td>
         <td>${c.itensPreenchidos} de ${c.totalItens}</td>
         <td><span class="badge-pill ${classe}">${status}</span></td>
-        <td class="acoes-linha">
+        <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="abrir-contagem-da-requisicao" data-id="${c.id}" title="Ver/conferir essa loja">
             <i data-lucide="arrow-right"></i>
           </button>
-        </td>
+        </div></td>
       </tr>
     `;
   }).join('');

@@ -1505,6 +1505,10 @@ tr:hover { background-color: var(--surface-muted); }
 
 .btn-limpar-filtro:hover { color: var(--text-dark); }
 
+/* Coluna de ações das tabelas. O flex mora no div de dentro, nunca no próprio
+   td: td com display:flex deixa de ser célula, sobe pro topo e a borda de baixo
+   não acompanha o resto da linha (print da Julia, 2026-09-17). */
+.col-acoes { vertical-align: middle; white-space: nowrap; }
 .acoes-linha { display: flex; gap: 6px; }
 
 .btn-acao-icone {
