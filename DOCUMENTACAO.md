@@ -1554,7 +1554,9 @@ na mesma cotação — não precisa de nenhuma lógica extra de "desfazer".
 Rotas: `POST /api/cotacoes/<id>/gerar-pedidos` (admin), `GET /api/pedidos`
 (lista, admin), `GET /api/pedidos/<id>` (detalhe com itens, admin), `POST
 /api/pedidos/<id>/avancar` (admin), `POST /api/pedidos/<id>/voltar`
-(admin), `DELETE /api/pedidos/<id>` (admin, cancela).
+(admin), `DELETE /api/pedidos/<id>` (admin, cancela). Compra feita por
+fora (6.22) não avança nem volta etapa, e excluir ela desfaz o que somou no
+estoque.
 
 **Recebimentos** (concluída em 2026-09-01, pedido da Julia/Guilherme —
 fecha de vez o ciclo Requisição → Contagem → Cotação → Pedido →
@@ -2529,8 +2531,8 @@ as planilhas, deixar tudo centralizado no sistema"). Não há carga de
 custo por planilha em produção (6.17): o `custo_referencia` é mantido em
 Estoque → editar insumo, campo "Custo".
 Em grama e ml ela digita por kg e por litro, e a tela converte pra unidade
-do insumo (`_escalaDeCusto` em `script.js`). É o custo de menor prioridade
-no CMV — cotação, compra recebida e receita de mistura passam na frente —,
+do insumo (`_escalaDeCusto` em `script.js`). Perde no CMV pra cotação e
+compra recebida dos últimos 90 dias e pra receita de mistura (6.23),
 então o formulário mostra embaixo qual está valendo e de onde veio
 (`custo_em_uso_por_insumo`, que agora é a fonte única de
 `_mapa_preco_insumo`). Custo só vai no `/api/insumos` pra admin. As rotas
@@ -2831,11 +2833,12 @@ tivesse sido feito aqui — sem tela nova.
   — é de outra unidade de venda (óleo pela caixa contra o kg) e inventava
   uma economia dezenas de vezes maior que a real.
 - **Rotas (admin):** `POST /api/admin/importar-vmarket` recebe um lote
-  (`fornecedores`, `cotacoes`, `pedidos`, `contagens`, cada parte opcional)
-  numa transação só — item com insumo ou loja inválidos desfaz o lote.
+  (`fornecedores`, `insumosNovos`, `cotacoes`, `pedidos`, `contagens`, cada
+  parte opcional; `insumosNovos` na 6.23) numa transação só — item com
+  insumo ou loja inválidos desfaz o lote.
   `DELETE /api/admin/importar-vmarket` desfaz a carga (cotações, pedidos e
   contagens importados), menos pedido que a loja já confirmou aqui e a
-  cotação dele; os fornecedores ficam. A carga também aceita
+  cotação dele; os fornecedores e os insumos fora de linha ficam. A carga também aceita
   `precosHomologados` (`fornecedorVmarket`, `insumoId`, `preco`, `validade`)
   — vira o fornecedor homologado do insumo (ver 6.20); desfazer não apaga.
 
@@ -2912,6 +2915,84 @@ mouse no número mostra o que ele soma. Os números carregam com a tela e
 recarregam depois de mexer em Pedidos e Recebimentos. Rota:
 `GET /api/compras/pendencias` (admin, `pendencias_compras`).
 
+### 6.22 Compra feita por fora (2026-09-17)
+
+Card #36 do ClickUp da Julia: o que se compra sem passar por cotação nem
+pedido daqui (mercado, padaria, entrega combinada no WhatsApp) também entra
+no sistema, com quem comprou, a data e a nota fiscal.
+
+- **Tela:** Pedidos → "Lançar compra por fora". Campos: onde comprou
+  (fornecedor cadastrado ou nome novo, que vira fornecedor só com o nome),
+  loja, quem comprou (abre com o nome de quem está logado), data da compra
+  (até hoje), itens, número e valor da nota, foto ou PDF da nota (até 15 MB)
+  e "Somar as quantidades no estoque da loja" (marcado). Cada item é um
+  insumo do cadastro (mistura feita na casa fica de fora), com quantidade e
+  preço na unidade do insumo — kg/L no lugar de g/ml, como o custo — ou na
+  unidade de compra do cadastro (ex.: "Pacote (7 un)"), convertida antes de
+  gravar. A tela avisa quando o valor da nota não bate com o total.
+- **Como grava** (`lancar_compra_fora`): um `pedido_compra` já `recebido`,
+  com `compra_fora = 1`; quem comprou em `recebido_por`, o dia da compra em
+  `recebido_em` e `criado_em`, `numero_nf`, `valor_nf`, `divergencia_nf`
+  (só marca, sem tarefa no ClickUp: quem lança digitou os dois),
+  `nota_fiscal_arquivo` e `somou_estoque`. Fica na cotação oculta "Compras
+  feitas por fora" (`pedido_direto = 1`, igual à dos pedidos diretos; a
+  busca da cotação oculta agora é pelo título). O insumo passa a valer pra
+  loja e o fornecedor ganha a loja. Por estar recebido, o preço vira a
+  "última compra" e o custo em uso do insumo quando é a compra mais recente
+  (`buscar_ultima_compra_por_insumo` usa `recebido_em`).
+- **Nota fiscal:** o arquivo fica em `notas_fiscais/`, ao lado do banco (no
+  volume persistente, como as fotos do cardápio; fora do git). Abre por
+  `GET /api/pedidos/<id>/nota-fiscal`, só admin.
+- **Detalhe do pedido:** sem etapas de entrega; o subtítulo mostra data,
+  quem comprou, número e valor da nota e se não somou no estoque, e o botão
+  "Ver nota fiscal" aparece quando tem arquivo. Avançar/voltar etapa dá 400
+  (voltar faria a compra cair em Recebimentos e somar de novo). "Excluir
+  compra" tira as quantidades do estoque quando elas tinham somado e apaga a
+  nota. O preço unitário dos itens, em todo pedido, passou a aparecer por
+  kg/L nos insumos em grama/ml.
+- **Não muda:** Recebimentos e os números do menu (a compra já nasce
+  recebida) e a lista de Cotações.
+
+### 6.23 Histórico inteiro da VMarket e filtro de período (2026-09-17)
+
+O card #36 pediu também o histórico desde que a rede começou na VMarket
+(dez/2024): 2.634 pedidos, 114 cotações e 125 contagens, dos quais o último
+mês já tinha vindo na carga de 16/09 (6.19). A carga do resto usa a mesma
+rota (`POST /api/admin/importar-vmarket`, em lotes), com duas partes novas:
+
+- **Produto que saiu de linha:** a VMarket tem 152 produtos inativos. Versão
+  antiga de um produto de hoje (mesmo item e mesma unidade: "Coca lata fd
+  12 tradiça", "Bacon Fatiado Sadia", "Nutella 3Kg"...) entra no insumo de
+  hoje. O resto vai em `insumosNovos` (`{idVmarket, nome, unidadeMedida}`):
+  vira insumo da categoria "Fora de linha", com a unidade de lá, estoque
+  zerado nas lojas e sem valer pra nenhuma (não entra em contagem nem nas
+  tabelas do Estoque, mas aparece em "Insumos da loja" pra ligar ou mesclar
+  depois). Nome igual a um insumo de hoje ganha " (antigo)". O item da carga
+  aponta pra ele como `"vm:<id do produto na VMarket>"` (coluna
+  `insumo.id_vmarket`), então lote seguinte e carga repetida acham o mesmo
+  insumo.
+- **Preço velho não passa na frente:** `custo_em_uso_por_insumo` passou a
+  olhar a data. Compra e cotação com mais de `DIAS_PRECO_RECENTE` (90) dias
+  só valem quando o insumo não tem nada mais novo, nem custo no cadastro.
+  Ordem de quem ganha: compra recente, cotação recente, cadastro, compra
+  antiga, cotação antiga (receita de mistura continua ganhando de tudo).
+  Sem isso, a carga trocaria o custo do cadastro do Oreo por uma compra de
+  dez/2024 e a cotação de 14/09 do creme de cebola por uma compra de março.
+  Na simulação em produção antes da carga, sobraram só trocas por compra
+  recente (entre elas um custo de cadastro que estava errado) e custo novo
+  pra insumo que não tinha nenhum.
+- **Desempenho:** com ~26 mil itens de pedido, a "última compra" de cada
+  insumo (`buscar_ultima_compra_por_insumo`, base do custo em uso) levava
+  40 s com a subconsulta por linha; agora é uma janela por insumo (0,1 s).
+  Índices novos: `pedido_compra_item(insumo_id)` e
+  `pedido_compra(cotacao_id)`.
+- **Filtro de período** (abre em 30 dias, com 90 dias, 12 meses e tudo):
+  Pedidos (pelo dia do pedido; pedido ainda não recebido aparece sempre, é
+  ele que conta no menu), Cotações (o filtro "Dias" já existia e passou a
+  abrir em 30, com 90 e 365) e a aba Compras dela, e Requisições (as duas
+  tabelas, pelo dia em que foi aberta). Tudo no navegador, sobre a lista que
+  já vem inteira.
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -2973,8 +3054,10 @@ Todos em `app.py`, prefixo `/api`.
 - `DELETE /api/cotacoes/<id>/precos/<preco_id>` — remover um preço lançado — só admin
 - `PUT /api/cotacoes/<id>/precos/<preco_id>/selecionar` — marcar vencedor do insumo (desmarca os demais) — só admin
 
-**Pedido direto e pendências** (seções 6.20 e 6.21; o fornecedor homologado vai no `PUT /api/insumos/<id>`)
+**Pedido direto, compra por fora e pendências** (seções 6.20 a 6.22; o fornecedor homologado vai no `PUT /api/insumos/<id>`)
 - `POST /api/pedidos/direto` — pedido pelo preço homologado, sem cotação, um por loja — só admin
+- `POST /api/pedidos/compra-fora` — lança compra feita por fora já recebida (multipart: `fornecedorId` ou `fornecedorNome`, `loja`, `compradoPor`, `dataCompra`, `numeroNf`, `valorNf`, `somarEstoque`, `itens` em JSON e o arquivo `notaFiscal`) — só admin
+- `GET /api/pedidos/<id>/nota-fiscal` — foto/PDF da nota da compra por fora — só admin
 - `GET /api/compras/pendencias` — quanto está parado em cada etapa, pros números do menu — só admin
 
 **Tarefas (Kanban / ClickUp)**

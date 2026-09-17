@@ -19,6 +19,9 @@ flask_dev.log
 # não código (em produção fica no volume persistente, não aqui)
 cardapio_fotos/
 
+# Foto/PDF das notas fiscais de compra feita por fora — mesmo caso das fotos
+notas_fiscais/
+
 # Arquivos do VS Code
 .vscode/
 # Backups que o botão "Atualizar dados pelas planilhas" grava ao lado do banco

@@ -229,10 +229,12 @@
               <div class="form-group">
                 <label for="cotacoes-filtro-dias">Dias</label>
                 <select id="cotacoes-filtro-dias">
-                  <option value="">Todos</option>
                   <option value="7">Últimos 7</option>
                   <option value="15">Últimos 15</option>
-                  <option value="30">Últimos 30</option>
+                  <option value="30" selected>Últimos 30</option>
+                  <option value="90">Últimos 90</option>
+                  <option value="365">Últimos 365</option>
+                  <option value="">Todos</option>
                 </select>
               </div>
             </div>
@@ -364,6 +366,18 @@
           <p class="panel-subtitle" style="margin-top: -8px;">
             O preço vencedor de cada insumo em cada rodada de cotação já fechada — um registro do que foi decidido, sem depender do acompanhamento de entrega dos Pedidos.
           </p>
+
+          <div class="cotacoes-filtros-row">
+            <div class="form-group" style="max-width: 240px;">
+              <label for="compras-filtro-dias">Dias</label>
+              <select id="compras-filtro-dias">
+                <option value="30" selected>Últimos 30</option>
+                <option value="90">Últimos 90</option>
+                <option value="365">Últimos 365</option>
+                <option value="">Todos</option>
+              </select>
+            </div>
+          </div>
 
           <div id="cotacoes-compras-lista">
             <!-- Renderizado dinamicamente via JS: um card por cotação fechada -->

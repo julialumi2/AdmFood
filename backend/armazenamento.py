@@ -23,6 +23,11 @@ CAMINHO_BANCO = os.environ.get("DATABASE_PATH", "admfood.db")
 PASTA_FOTOS_CARDAPIO = os.path.join(os.path.dirname(os.path.abspath(CAMINHO_BANCO)), "cardapio_fotos")
 os.makedirs(PASTA_FOTOS_CARDAPIO, exist_ok=True)
 
+# Foto/PDF da nota fiscal de compra feita por fora (ver lancar_compra_fora),
+# no mesmo volume pelo mesmo motivo.
+PASTA_NOTAS_FISCAIS = os.path.join(os.path.dirname(os.path.abspath(CAMINHO_BANCO)), "notas_fiscais")
+os.makedirs(PASTA_NOTAS_FISCAIS, exist_ok=True)
+
 
 @contextmanager
 def conexao():
@@ -920,7 +925,7 @@ def inicializar_banco():
         # Histórico trazido da VMarket (2026-09-16, a rede está saindo de lá):
         # o id de origem fica em cada registro importado, pra carga poder
         # rodar de novo sem duplicar. Ver importar_da_vmarket.
-        for tabela in ("fornecedor", "cotacao", "pedido_compra", "contagem"):
+        for tabela in ("fornecedor", "cotacao", "pedido_compra", "contagem", "insumo"):
             colunas = {c["name"] for c in conn.execute(f"PRAGMA table_info({tabela})").fetchall()}
             if "id_vmarket" not in colunas:
                 conn.execute(f"ALTER TABLE {tabela} ADD COLUMN id_vmarket TEXT")
@@ -947,6 +952,21 @@ def inicializar_banco():
         for coluna in ("requisicao_titulo", "requisicao_prazo"):
             if coluna not in colunas_pedido_compra:
                 conn.execute(f"ALTER TABLE pedido_compra ADD COLUMN {coluna} TEXT")
+        # Compra feita por fora do sistema (card #36 do ClickUp, 2026-09-17):
+        # entra já recebida, com o número e o arquivo da nota. `somou_estoque`
+        # guarda se as quantidades entraram no estoque, pra excluir desfazer.
+        for coluna, tipo in (
+            ("compra_fora", "INTEGER NOT NULL DEFAULT 0"),
+            ("numero_nf", "TEXT"),
+            ("nota_fiscal_arquivo", "TEXT"),
+            ("somou_estoque", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if coluna not in colunas_pedido_compra:
+                conn.execute(f"ALTER TABLE pedido_compra ADD COLUMN {coluna} {tipo}")
+        # Com o histórico inteiro da VMarket (2026-09-17) são milhares de
+        # pedidos: busca de item por insumo e de pedido por cotação.
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pedido_compra_item_insumo ON pedido_compra_item(insumo_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pedido_compra_cotacao ON pedido_compra(cotacao_id)")
         # Cotação que só guarda pedido direto (sem preço cotado): não aparece
         # na lista de Cotações nem no histórico de compras.
         colunas_cotacao = {c["name"] for c in conn.execute("PRAGMA table_info(cotacao)").fetchall()}
@@ -3523,26 +3543,35 @@ def explodir_receitas_em_ingredientes(consumo, receitas):
     return final
 
 
+DIAS_PRECO_RECENTE = 90  # compra/cotação mais velha que isso não passa na frente de custo mais novo
+
+
 def custo_em_uso_por_insumo():
     """O custo que o CMV usa pra cada insumo e de onde ele veio:
     {insumo_id: {"valor", "origem", "data", "fornecedor"}}, com origem
     "cadastro" (custo_referencia: digitado no cadastro do insumo, ou vindo
-    da planilha na carga inicial), "cotacao", "compra" ou "receita". Ordem de
-    confiança, do menos pro mais confiável (o de baixo sobrescreve): o custo
-    do cadastro, o preço cotado por algum fornecedor, e o preço da última
-    compra efetivamente recebida — esse é o que saiu do caixa, então ganha
-    de todos. Insumo sem nenhum dos três fica de fora: quem consome trata
+    da planilha na carga inicial), "cotacao", "compra" ou "receita". Do mais
+    pro menos confiável: o preço da última compra efetivamente recebida (o
+    que saiu do caixa), o preço cotado por algum fornecedor e o custo do
+    cadastro. Insumo sem nenhum dos três fica de fora: quem consome trata
     como custo desconhecido em vez de assumir zero.
 
-    A origem vai junto porque o custo do cadastro é o de menor prioridade: a
+    Compra e cotação com mais de DIAS_PRECO_RECENTE dias só valem quando o
+    insumo não tem nada mais novo, nem o custo do cadastro (2026-09-17: com o
+    histórico inteiro da VMarket, uma compra de dez/2024 passava na frente do
+    custo digitado agora). Ordem de quem ganha: compra recente, cotação
+    recente, cadastro, compra antiga, cotação antiga.
+
+    A origem vai junto porque o custo do cadastro perde pro preço recente: a
     tela mostra do lado dele qual custo está valendo, senão ela digitaria
     um valor e acharia que não funcionou."""
-    em_uso = {}
+    cadastro = {}
+    cotacao = {}
     with conexao() as conn:
         for linha in conn.execute(
             "SELECT id, custo_referencia FROM insumo WHERE custo_referencia IS NOT NULL"
         ).fetchall():
-            em_uso[linha["id"]] = {"valor": linha["custo_referencia"], "origem": "cadastro"}
+            cadastro[linha["id"]] = {"valor": linha["custo_referencia"], "origem": "cadastro"}
         # Vale a cotação mais recente de cada insumo e, dentro dela, o preço
         # escolhido (o que foi comprado), não o último fornecedor lançado:
         # na VMarket o escolhido nem sempre é o mais barato, e fornecedores
@@ -3556,10 +3585,26 @@ def custo_em_uso_por_insumo():
             """
         ).fetchall()
     for linha in linhas:
-        em_uso[linha["insumo_id"]] = {"valor": linha["preco"], "origem": "cotacao", "data": linha["criado_em"]}
-    for insumo_id, info in buscar_ultima_compra_por_insumo().items():
-        em_uso[insumo_id] = {"valor": info["preco"], "origem": "compra", "data": info["dataIso"],
-                             "fornecedor": info["fornecedorNome"]}
+        cotacao[linha["insumo_id"]] = {"valor": linha["preco"], "origem": "cotacao", "data": linha["criado_em"]}
+    compra = {
+        insumo_id: {"valor": info["preco"], "origem": "compra", "data": info["dataIso"], "fornecedor": info["fornecedorNome"]}
+        for insumo_id, info in buscar_ultima_compra_por_insumo().items()
+    }
+    corte = (datetime.now() - timedelta(days=DIAS_PRECO_RECENTE)).isoformat()
+
+    def recente(info):
+        return info if info and (info.get("data") or "") >= corte else None
+
+    em_uso = {}
+    for insumo_id in set(cadastro) | set(cotacao) | set(compra):
+        opcoes = (
+            recente(compra.get(insumo_id)),
+            recente(cotacao.get(insumo_id)),
+            cadastro.get(insumo_id),
+            compra.get(insumo_id),
+            cotacao.get(insumo_id),
+        )
+        em_uso[insumo_id] = next(info for info in opcoes if info)
     # Mistura feita na casa custa o que foi dentro dela, então o custo da
     # receita ganha de tudo acima — uma "compra" de Tempero Batata seria erro
     # de cadastro. Receita incompleta não entra aqui: fica o que já valia.
@@ -4251,22 +4296,23 @@ def buscar_ultima_compra_por_insumo():
     2026-09-04). Usa o preço/quantidade já corrigidos na hora do
     recebimento (`pedido_compra_item`), não o valor pedido originalmente.
     Item sem preço (a VMarket tem pedido de homologado com preço zero) não
-    conta: custo zero seria pior que custo desconhecido."""
+    conta: custo zero seria pior que custo desconhecido.
+
+    Janela por insumo em vez de subconsulta por linha: com o histórico inteiro
+    da VMarket (~26 mil itens) a subconsulta levava 40 s (2026-09-17)."""
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT pci.insumo_id, pci.preco_unitario, pc.recebido_em, pc.fornecedor_id, f.nome AS fornecedor_nome
-            FROM pedido_compra_item pci
-            JOIN pedido_compra pc ON pc.id = pci.pedido_id
-            JOIN fornecedor f ON f.id = pc.fornecedor_id
-            WHERE pc.status = 'recebido' AND pci.preco_unitario > 0
-            AND pc.recebido_em = (
-                SELECT MAX(pc2.recebido_em)
-                FROM pedido_compra_item pci2
-                JOIN pedido_compra pc2 ON pc2.id = pci2.pedido_id
-                WHERE pci2.insumo_id = pci.insumo_id AND pc2.status = 'recebido' AND pci2.preco_unitario > 0
+            SELECT insumo_id, preco_unitario, recebido_em, fornecedor_id, fornecedor_nome
+            FROM (
+                SELECT pci.insumo_id, pci.preco_unitario, pc.recebido_em, pc.fornecedor_id, f.nome AS fornecedor_nome,
+                       ROW_NUMBER() OVER (PARTITION BY pci.insumo_id ORDER BY pc.recebido_em DESC, pc.id DESC) AS ordem
+                FROM pedido_compra_item pci
+                JOIN pedido_compra pc ON pc.id = pci.pedido_id
+                JOIN fornecedor f ON f.id = pc.fornecedor_id
+                WHERE pc.status = 'recebido' AND pci.preco_unitario > 0 AND pc.recebido_em IS NOT NULL
             )
-            GROUP BY pci.insumo_id
+            WHERE ordem = 1
             """
         ).fetchall()
         return {
@@ -4552,6 +4598,7 @@ def listar_pedidos():
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
                    pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
+                   pc.valor_nf, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo, pc.somou_estoque,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo,
                    COUNT(pi.insumo_id) AS total_itens,
@@ -4573,6 +4620,7 @@ def buscar_pedido(pedido_id):
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em, pc.token,
                    pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
+                   pc.valor_nf, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo, pc.somou_estoque,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo
             FROM pedido_compra pc
@@ -4646,8 +4694,25 @@ def excluir_pedido(pedido_id):
     pedido pra aparecer de novo da próxima vez que "Gerar pedidos" rodar
     nessa cotação — `gerar_pedidos_de_cotacao` só pula insumo que já tem
     pedido_compra_item existente, então cancelar é o mesmo que "ainda não
-    foi pedido"."""
+    foi pedido".
+
+    Compra feita por fora que somou no estoque é a exceção: excluir tira as
+    quantidades de volta da loja (é o jeito de corrigir um lançamento
+    errado). O arquivo da nota fica com quem chama (app.py)."""
     with conexao() as conn:
+        pedido = conn.execute(
+            "SELECT loja, compra_fora, somou_estoque FROM pedido_compra WHERE id = ?", (pedido_id,)
+        ).fetchone()
+        if pedido and pedido["compra_fora"] and pedido["somou_estoque"]:
+            agora = datetime.now().isoformat()
+            for item in conn.execute(
+                "SELECT insumo_id, quantidade FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,)
+            ).fetchall():
+                conn.execute(
+                    "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual - ?, atualizado_em = ? "
+                    "WHERE insumo_id = ? AND loja = ?",
+                    (item["quantidade"], agora, item["insumo_id"], pedido["loja"]),
+                )
         conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
         conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
 
@@ -4838,19 +4903,25 @@ def vincular_insumo_fornecedor(insumo_id, fornecedor_id):
         )
 
 
-def _cotacao_dos_pedidos_diretos(conn):
+def _cotacao_oculta(conn, titulo):
     """Todo pedido pertence a uma cotação (Pedidos e Recebimentos buscam os
-    dois juntos), então os pedidos diretos ficam numa cotação só, marcada
-    `pedido_direto`, que não aparece na lista de Cotações."""
+    dois juntos), então pedido que não saiu de cotação fica numa cotação
+    marcada `pedido_direto`, que não aparece na lista de Cotações — uma por
+    `titulo`: os pedidos diretos e as compras feitas por fora."""
     linha = conn.execute(
-        "SELECT id FROM cotacao WHERE pedido_direto = 1 AND id_vmarket IS NULL ORDER BY id LIMIT 1"
+        "SELECT id FROM cotacao WHERE pedido_direto = 1 AND id_vmarket IS NULL AND titulo = ? ORDER BY id LIMIT 1",
+        (titulo,),
     ).fetchone()
     if linha:
         return linha["id"]
     return conn.execute(
         "INSERT INTO cotacao (titulo, status, criado_em, pedido_direto) VALUES (?, 'fechada', ?, 1)",
-        (TITULO_COTACAO_PEDIDOS_DIRETOS, datetime.now().isoformat()),
+        (titulo, datetime.now().isoformat()),
     ).lastrowid
+
+
+def _cotacao_dos_pedidos_diretos(conn):
+    return _cotacao_oculta(conn, TITULO_COTACAO_PEDIDOS_DIRETOS)
 
 
 def _gravar_pedidos_diretos(conn, quantidades, precos, requisicao=None):
@@ -4920,6 +4991,101 @@ def criar_pedidos_diretos(fornecedor_id, itens):
                 nome = linha["nome"] if linha else "Um dos insumos"
                 raise ValueError(f"{nome} não tem preço homologado valendo com esse fornecedor.")
         return _gravar_pedidos_diretos(conn, quantidades, {insumo_id: v["preco"] for insumo_id, v in validos.items()})
+
+
+# --- COMPRA FEITA POR FORA (2026-09-17) ---------------------------------------
+# Card #36 do ClickUp: o que se compra sem passar por cotação nem pedido daqui
+# (mercado, padaria, entrega combinada no WhatsApp) também é lançado, com quem
+# comprou, a data e a nota fiscal.
+
+TITULO_COTACAO_COMPRAS_FORA = "Compras feitas por fora"
+
+
+def _fornecedor_da_compra_fora(conn, fornecedor):
+    """{"id"} de um fornecedor cadastrado, ou {"nome"}: casa pelo nome
+    normalizado e, se não achar, cadastra um fornecedor novo só com o nome."""
+    if fornecedor.get("id"):
+        linha = conn.execute("SELECT id FROM fornecedor WHERE id = ?", (fornecedor["id"],)).fetchone()
+        if not linha:
+            raise ValueError("Fornecedor não encontrado.")
+        return linha["id"]
+    nome = (fornecedor.get("nome") or "").strip()
+    if not nome:
+        raise ValueError("Informe onde foi comprado.")
+    alvo = _normalizar_nome_insumo(nome)
+    for linha in conn.execute("SELECT id, nome FROM fornecedor ORDER BY ativo DESC, id").fetchall():
+        if _normalizar_nome_insumo(linha["nome"]) == alvo:
+            return linha["id"]
+    return conn.execute(
+        "INSERT INTO fornecedor (nome, criado_em) VALUES (?, ?)", (nome, datetime.now().isoformat())
+    ).lastrowid
+
+
+def lancar_compra_fora(fornecedor, loja, comprado_por, data_compra, itens, numero_nf=None, valor_nf=None,
+                       somar_estoque=True, nota_fiscal_arquivo=None):
+    """Grava a compra como pedido já recebido, numa cotação oculta própria:
+    quem comprou fica em recebido_por e o dia da compra ('AAAA-MM-DD') em
+    recebido_em, então o preço vira a última compra e o custo do insumo,
+    igual a um recebimento. `itens`: [{insumoId, quantidade, precoUnitario}]
+    na unidade do insumo. Com `somar_estoque`, as quantidades entram no
+    estoque da loja (compra antiga que a contagem já pegou vai sem somar).
+    O insumo passa a valer pra loja e o fornecedor ganha a loja. Levanta
+    ValueError com a mensagem pra tela. Devolve o id do pedido."""
+    if not itens:
+        raise ValueError("Adicione pelo menos um item da compra.")
+    agora = datetime.now().isoformat()
+    quando = f"{data_compra}{agora[10:]}"
+    with conexao() as conn:
+        vistos = set()
+        for item in itens:
+            linha = conn.execute("SELECT nome FROM insumo WHERE id = ?", (item["insumoId"],)).fetchone()
+            if not linha:
+                raise ValueError("Um dos insumos não existe mais. Abra a compra de novo.")
+            if item["insumoId"] in vistos:
+                raise ValueError(f"{linha['nome']} aparece duas vezes. Junte numa linha só.")
+            vistos.add(item["insumoId"])
+            if not item["quantidade"] > 0:
+                raise ValueError(f"Informe a quantidade de {linha['nome']}.")
+            if not item["precoUnitario"] >= 0:
+                raise ValueError(f"O preço de {linha['nome']} não pode ser negativo.")
+        fornecedor_id = _fornecedor_da_compra_fora(conn, fornecedor)
+        total = round(sum(item["quantidade"] * item["precoUnitario"] for item in itens), 2)
+        pedido_id = conn.execute(
+            """
+            INSERT INTO pedido_compra
+                (cotacao_id, fornecedor_id, loja, status, criado_em, atualizado_em, whatsapp_enviado_em,
+                 recebido_por, recebido_em, valor_nf, divergencia_nf, compra_fora, numero_nf,
+                 nota_fiscal_arquivo, somou_estoque)
+            VALUES (?, ?, ?, 'recebido', ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+            """,
+            (
+                _cotacao_oculta(conn, TITULO_COTACAO_COMPRAS_FORA), fornecedor_id, loja, quando, agora, quando,
+                comprado_por, quando, valor_nf,
+                1 if valor_nf is not None and abs(valor_nf - total) > 0.05 else 0,
+                numero_nf or None, nota_fiscal_arquivo, 1 if somar_estoque else 0,
+            ),
+        ).lastrowid
+        for item in itens:
+            conn.execute(
+                "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
+                (pedido_id, item["insumoId"], item["quantidade"], item["precoUnitario"]),
+            )
+            conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (item["insumoId"], loja))
+            conn.execute(
+                "INSERT OR IGNORE INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+                "VALUES (?, ?, 0, 0, ?)",
+                (item["insumoId"], loja, agora),
+            )
+            if somar_estoque:
+                conn.execute(
+                    "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual + ?, atualizado_em = ? "
+                    "WHERE insumo_id = ? AND loja = ?",
+                    (item["quantidade"], agora, item["insumoId"], loja),
+                )
+        conn.execute(
+            "INSERT OR IGNORE INTO fornecedor_loja (fornecedor_id, loja) VALUES (?, ?)", (fornecedor_id, loja)
+        )
+    return pedido_id
 
 
 # --- PENDÊNCIAS DE COMPRAS NO MENU (2026-09-16) ------------------------------
@@ -5113,13 +5279,21 @@ RECEBIDO_POR_VMARKET = "Importado da VMarket"
 
 
 class _ValidaCargaVmarket:
-    """Confere insumo e loja de cada linha da carga antes de gravar."""
+    """Confere insumo e loja de cada linha da carga antes de gravar. O insumo
+    vem pelo id daqui ou, se saiu de linha e foi criado pela carga, como
+    "vm:<id do produto na VMarket>"."""
 
     def __init__(self, conn, lojas):
+        self.conn = conn
         self.insumos = {linha["id"] for linha in conn.execute("SELECT id FROM insumo").fetchall()}
         self.lojas = set(lojas)
 
     def insumo(self, insumo_id):
+        if isinstance(insumo_id, str) and insumo_id.startswith("vm:"):
+            linha = self.conn.execute("SELECT id FROM insumo WHERE id_vmarket = ?", (insumo_id[3:],)).fetchone()
+            if not linha:
+                raise ValueError(f"Produto {insumo_id[3:]} da VMarket ainda não virou insumo.")
+            return linha["id"]
         insumo_id = int(insumo_id)
         if insumo_id not in self.insumos:
             raise ValueError(f"Insumo {insumo_id} não existe.")
@@ -5132,12 +5306,13 @@ class _ValidaCargaVmarket:
 
 
 def importar_da_vmarket(dados, lojas):
-    """Grava a carga (ou um lote dela): {"fornecedores", "cotacoes",
-    "pedidos", "contagens"}, cada parte opcional, nessa ordem. Tudo numa
-    transação: um item inválido desfaz o lote inteiro. `lojas` = nomes das
-    lojas válidas."""
+    """Grava a carga (ou um lote dela): {"fornecedores", "insumosNovos",
+    "precosHomologados", "cotacoes", "pedidos", "contagens"}, cada parte
+    opcional, nessa ordem. Tudo numa transação: um item inválido desfaz o
+    lote inteiro. `lojas` = nomes das lojas válidas."""
     resumo = {
         "fornecedoresCriados": 0, "fornecedoresVinculados": 0,
+        "insumosCriados": 0, "insumosJaImportados": 0,
         "cotacoes": 0, "precos": 0,
         "pedidosCriados": 0, "pedidosJaImportados": 0,
         "contagensCriadas": 0, "contagensJaImportadas": 0,
@@ -5147,6 +5322,8 @@ def importar_da_vmarket(dados, lojas):
         valida = _ValidaCargaVmarket(conn, lojas)
         for fornecedor in dados.get("fornecedores") or []:
             _importar_fornecedor_vmarket(conn, fornecedor, valida, resumo)
+        for insumo in dados.get("insumosNovos") or []:
+            _importar_insumo_vmarket(conn, insumo, valida, resumo)
         for preco in dados.get("precosHomologados") or []:
             _importar_preco_homologado_vmarket(conn, preco, valida, resumo)
         for cotacao in dados.get("cotacoes") or []:
@@ -5176,6 +5353,37 @@ def _importar_preco_homologado_vmarket(conn, preco, valida, resumo):
         (insumo_id, fornecedor_id),
     )
     resumo["precosHomologados"] += 1
+
+
+CATEGORIA_FORA_DE_LINHA = "Fora de linha"
+
+
+def _importar_insumo_vmarket(conn, insumo, valida, resumo):
+    """Produto que a rede comprou na VMarket e que não existe aqui (saiu de
+    linha, 2026-09-17): vira insumo "Fora de linha", com a unidade de lá e o
+    estoque zerado nas lojas, mas sem valer pra nenhuma — não entra em
+    contagem nem nas tabelas do Estoque. Guarda o id de lá, então importar de
+    novo não duplica. Desfazer a carga não apaga (igual aos fornecedores)."""
+    id_vmarket = str(insumo["idVmarket"])
+    if conn.execute("SELECT 1 FROM insumo WHERE id_vmarket = ?", (id_vmarket,)).fetchone():
+        resumo["insumosJaImportados"] += 1
+        return
+    nome = (insumo.get("nome") or "").strip()
+    if not nome:
+        raise ValueError(f"Produto {id_vmarket} da VMarket sem nome.")
+    insumo_id = conn.execute(
+        "INSERT INTO insumo (nome, categoria, unidade_medida, id_vmarket) VALUES (?, ?, ?, ?)",
+        (nome, CATEGORIA_FORA_DE_LINHA, (insumo.get("unidadeMedida") or "").strip() or "un", id_vmarket),
+    ).lastrowid
+    agora = datetime.now().isoformat()
+    for loja in sorted(valida.lojas):
+        conn.execute(
+            "INSERT INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+            "VALUES (?, ?, 0, 0, ?)",
+            (insumo_id, loja, agora),
+        )
+    valida.insumos.add(insumo_id)
+    resumo["insumosCriados"] += 1
 
 
 def _fornecedor_da_vmarket(conn, id_vmarket):

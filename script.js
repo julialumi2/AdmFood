@@ -3289,6 +3289,7 @@ document.getElementById('cotacoes-filtro-mostrar')?.addEventListener('change', r
 document.getElementById('cotacoes-filtro-tipo')?.addEventListener('change', renderCotacoesLista);
 document.getElementById('cotacoes-filtro-busca')?.addEventListener('input', renderCotacoesLista);
 document.getElementById('cotacoes-filtro-dias')?.addEventListener('change', renderCotacoesLista);
+document.getElementById('compras-filtro-dias')?.addEventListener('change', renderHistoricoCompras);
 
 document.getElementById('btn-nova-cotacao')?.addEventListener('click', () => {
   document.getElementById('form-nova-cotacao').reset();
@@ -3328,6 +3329,8 @@ document.getElementById('btn-cotacao-voltar')?.addEventListener('click', async (
   await carregarCotacoes();
 });
 
+let historicoComprasLista = [];
+
 async function carregarHistoricoCompras() {
   const container = document.getElementById('cotacoes-compras-lista');
   if (!container) return;
@@ -3336,19 +3339,26 @@ async function carregarHistoricoCompras() {
     const resposta = await fetch('/api/cotacoes/historico');
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
-    renderHistoricoCompras(dados.historico || []);
+    historicoComprasLista = dados.historico || [];
+    renderHistoricoCompras();
   } catch (erro) {
     console.error('Falha ao carregar histórico de compras:', erro);
     container.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar o histórico. Confira se o Flask está rodando.</p>`;
   }
 }
 
-function renderHistoricoCompras(historico) {
+function renderHistoricoCompras() {
   const container = document.getElementById('cotacoes-compras-lista');
   if (!container) return;
 
-  if (!historico.length) {
+  if (!historicoComprasLista.length) {
     container.innerHTML = `<p class="panel-subtitle">Nenhuma cotação fechada ainda — feche uma cotação na aba "Cotações" pra ela aparecer aqui.</p>`;
+    return;
+  }
+  const inicio = _inicioDoPeriodo(document.getElementById('compras-filtro-dias')?.value);
+  const historico = historicoComprasLista.filter((cotacao) => !inicio || cotacao.criadoEm.slice(0, 10) >= inicio);
+  if (!historico.length) {
+    container.innerHTML = `<p class="panel-subtitle">Nenhuma cotação fechada nesse período. Escolha mais dias pra ver as mais antigas.</p>`;
     return;
   }
 
@@ -4077,7 +4087,16 @@ function renderPedidosTabela() {
     return;
   }
 
-  tbody.innerHTML = pedidosLista.map((p) => `
+  // Filtro de período (2026-09-17, com o histórico inteiro da VMarket): pedido
+  // ainda não recebido fica sempre, é ele que conta nos números do menu.
+  const inicio = _inicioDoPeriodo(document.getElementById('pedidos-filtro-periodo')?.value);
+  const lista = pedidosLista.filter((p) => p.status !== 'recebido' || !inicio || p.criadoEm.slice(0, 10) >= inicio);
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="panel-subtitle">Nenhum pedido nesse período. Escolha um período maior pra ver os mais antigos.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = lista.map((p) => `
     <tr>
       <td class="font-bold">${escaparHtml(p.fornecedorNome)}</td>
       <td>${escaparHtml(p.loja)}</td>
@@ -4150,10 +4169,26 @@ function renderPedidoDetalhe() {
   if (!p) return;
 
   document.getElementById('pedido-detalhe-titulo').textContent = `${p.fornecedorNome} — ${p.loja}`;
-  const recebimento = p.status === 'recebido' && p.recebidoEm
-    ? ` · Recebido em ${_dataBR(p.recebidoEm)}${p.recebidoPor ? ` por ${p.recebidoPor}` : ''}`
-    : '';
-  document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}${recebimento}`;
+  if (p.compraFora) {
+    const partes = [`Compra feita por fora em ${_dataBR(p.recebidoEm)}${p.recebidoPor ? ` por ${p.recebidoPor}` : ''}`];
+    if (p.numeroNf) partes.push(`Nota fiscal ${p.numeroNf}`);
+    if (p.valorNf != null) partes.push(`valor da nota R$ ${_formatarMoedaBR(p.valorNf)}`);
+    if (!p.somouEstoque) partes.push('não somou no estoque');
+    document.getElementById('pedido-detalhe-subtitulo').textContent = partes.join(' · ');
+  } else {
+    const recebimento = p.status === 'recebido' && p.recebidoEm
+      ? ` · Recebido em ${_dataBR(p.recebidoEm)}${p.recebidoPor ? ` por ${p.recebidoPor}` : ''}`
+      : '';
+    document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}${recebimento}`;
+  }
+
+  const linkNota = document.getElementById('link-pedido-nota-fiscal');
+  if (linkNota) {
+    linkNota.href = p.notaFiscalUrl || '#';
+    linkNota.style.display = p.notaFiscalUrl ? '' : 'none';
+  }
+  // Compra por fora já nasce recebida: sem etapas de entrega pra acompanhar.
+  document.getElementById('pedido-estagios-card').style.display = p.compraFora ? 'none' : '';
 
   const linkWhats = document.getElementById('link-pedido-whatsapp');
   if (linkWhats) {
@@ -4166,7 +4201,7 @@ function renderPedidoDetalhe() {
   }
 
   const aviso = document.getElementById('pedido-aviso-minimo');
-  if (p.abaixoDoMinimo) {
+  if (p.abaixoDoMinimo && !p.compraFora) {
     aviso.style.display = '';
     aviso.textContent = `Esse pedido está abaixo do pedido mínimo do fornecedor (R$ ${p.pedidoMinimo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) — decida se vale somar mais itens ou seguir assim mesmo.`;
   } else {
@@ -4193,25 +4228,31 @@ function renderPedidoDetalhe() {
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const btnCancelar = document.getElementById('btn-pedido-cancelar');
   btnCancelar.style.display = isAdmin ? '' : 'none';
+  btnCancelar.textContent = p.compraFora ? 'Excluir compra' : 'Cancelar pedido';
 
   const btnAvancar = document.getElementById('btn-pedido-avancar');
   const ultimoEstagio = indiceAtual >= pedidoEstagios.length - 1;
-  btnAvancar.style.display = isAdmin ? '' : 'none';
+  btnAvancar.style.display = isAdmin && !p.compraFora ? '' : 'none';
   btnAvancar.disabled = ultimoEstagio;
   btnAvancar.textContent = ultimoEstagio ? 'Entrega concluída' : `Avançar pra "${ESTAGIO_LABEL_PEDIDO[pedidoEstagios[indiceAtual + 1]]}"`;
 
   const btnVoltarEtapa = document.getElementById('btn-pedido-voltar-etapa');
   const primeiroEstagio = indiceAtual <= 0;
-  btnVoltarEtapa.style.display = isAdmin ? '' : 'none';
+  btnVoltarEtapa.style.display = isAdmin && !p.compraFora ? '' : 'none';
   btnVoltarEtapa.disabled = primeiroEstagio;
   btnVoltarEtapa.textContent = primeiroEstagio ? 'Voltar etapa' : `Voltar pra "${ESTAGIO_LABEL_PEDIDO[pedidoEstagios[indiceAtual - 1]]}"`;
 
   const itensBody = document.getElementById('pedido-itens-body');
+  // Preço por kg/L nos insumos em grama/ml; até 4 casas (item barato por unidade).
+  const precoPorUnidade = (item) => {
+    const { rotulo, fator } = _escalaDeCusto(item.unidadeMedida);
+    return `R$ ${_formatarPrecoUnitario(item.precoUnitario * fator)}/${escaparHtml(rotulo)}`;
+  };
   itensBody.innerHTML = p.itens.map((item) => `
     <tr>
       <td class="font-bold">${escaparHtml(item.nome)}</td>
       <td>${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
-      <td>R$ ${item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      <td>${precoPorUnidade(item)}</td>
       <td>R$ ${item.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
     </tr>
   `).join('');
@@ -4219,6 +4260,8 @@ function renderPedidoDetalhe() {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+document.getElementById('pedidos-filtro-periodo')?.addEventListener('change', renderPedidosTabela);
 
 document.getElementById('btn-pedido-voltar')?.addEventListener('click', () => {
   document.getElementById('pedido-detalhe-view').style.display = 'none';
@@ -4252,7 +4295,10 @@ document.getElementById('btn-pedido-avancar')?.addEventListener('click', async (
 document.getElementById('btn-pedido-cancelar')?.addEventListener('click', async () => {
   if (!pedidoDetalheAtual) return;
   const p = pedidoDetalheAtual;
-  if (!confirm(`Cancelar o pedido de "${p.fornecedorNome}" pra "${p.loja}"? Essa ação não pode ser desfeita — os insumos dele voltam a ficar disponíveis pra gerar um pedido novo a partir da mesma cotação.`)) return;
+  const pergunta = p.compraFora
+    ? `Excluir a compra de "${p.fornecedorNome}" pra "${p.loja}"?${p.somouEstoque ? ' As quantidades saem do estoque da loja.' : ''}${p.notaFiscalUrl ? ' A nota anexada também é apagada.' : ''} Essa ação não pode ser desfeita.`
+    : `Cancelar o pedido de "${p.fornecedorNome}" pra "${p.loja}"? Essa ação não pode ser desfeita — os insumos dele voltam a ficar disponíveis pra gerar um pedido novo a partir da mesma cotação.`;
+  if (!confirm(pergunta)) return;
   try {
     const resposta = await fetch(`/api/pedidos/${p.id}`, { method: 'DELETE' });
     const dados = await resposta.json();
@@ -4312,13 +4358,20 @@ function renderContagensTabela() {
   const acoesTopo = document.getElementById('contagens-acoes-admin');
   if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
 
+  const colspan = 5 + (isAdmin ? 1 : 0);
   if (!contagensLista.length) {
-    const colspan = 5 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição criada ainda.</td></tr>`;
     return;
   }
+  // Mesmo período da tabela de Requisições, logo acima.
+  const inicio = _inicioDoPeriodo(document.getElementById('requisicoes-filtro-periodo')?.value);
+  const lista = contagensLista.filter((c) => !inicio || c.criadoEm.slice(0, 10) >= inicio);
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição nesse período.</td></tr>`;
+    return;
+  }
 
-  tbody.innerHTML = contagensLista.map((c) => {
+  tbody.innerHTML = lista.map((c) => {
     const prazo = new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     return `
       <tr>
@@ -4563,13 +4616,21 @@ function renderRequisicoesTabela() {
   const thAcoes = document.getElementById('requisicoes-th-acoes');
   if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
 
+  const colspan = 4 + (isAdmin ? 1 : 0);
   if (!requisicoesLista.length) {
-    const colspan = 4 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição criada ainda.</td></tr>`;
     return;
   }
+  // Filtro de período (2026-09-17, com o histórico inteiro da VMarket).
+  const inicio = _inicioDoPeriodo(document.getElementById('requisicoes-filtro-periodo')?.value);
+  if (inicio && !requisicoesLista.some((r) => r.criadoEm.slice(0, 10) >= inicio)) {
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição nesse período. Escolha um período maior pra ver as mais antigas.</td></tr>`;
+    return;
+  }
 
+  // O índice continua sendo o da lista inteira: os botões buscam por ele.
   tbody.innerHTML = requisicoesLista.map((r, indice) => {
+    if (inicio && r.criadoEm.slice(0, 10) < inicio) return '';
     const prazo = new Date(r.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     const status = _statusRequisicao(r);
     return `
@@ -4617,6 +4678,11 @@ function renderRequisicoesTabela() {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+document.getElementById('requisicoes-filtro-periodo')?.addEventListener('change', () => {
+  renderRequisicoesTabela();
+  renderContagensTabela();
+});
 
 async function abrirConferenciaRequisicao(titulo, prazoValidade) {
   try {
@@ -5338,22 +5404,22 @@ function _atualizarRotuloCustoInsumo() {
   document.getElementById('novo-insumo-custo-rotulo').textContent = `Custo (R$ por ${rotulo})`;
 }
 
-// O custo digitado é o de menor prioridade no CMV (custo_em_uso_por_insumo
-// em armazenamento.py): cotação, compra recebida e receita de mistura passam
-// na frente. Por isso a tela diz qual está valendo — senão ela digitaria um
-// custo e acharia que não funcionou.
+// O custo digitado perde no CMV (custo_em_uso_por_insumo em armazenamento.py)
+// pra cotação e compra recebida dos últimos 90 dias e pra receita de mistura.
+// Por isso a tela diz qual está valendo — senão ela digitaria um custo e
+// acharia que não funcionou.
 function _textoCustoEmUso(insumo) {
   const emUso = insumo.custoEmUso;
   if (!emUso) return 'Sem custo no CMV ainda: os produtos que usam este insumo ficam sem CMV até ele ter um.';
   const valor = _formatarCustoPorUnidade(emUso.valor, insumo.unidadeMedida);
-  // "2026-09-03T10:15" -> "03/09", sem passar por Date (data sem hora viraria o dia anterior no fuso daqui).
-  const data = emUso.data ? emUso.data.slice(0, 10).split('-').reverse().slice(0, 2).join('/') : '';
+  // Com ano: o histórico da VMarket traz preço de 2025.
+  const data = emUso.data ? _dataBR(emUso.data) : '';
   if (emUso.origem === 'cotacao') {
-    return `Valendo no CMV: ${valor}, da cotação de ${data}. Cotação e compra recebida passam na frente do custo digitado.`;
+    return `Valendo no CMV: ${valor}, da cotação de ${data}. Cotação e compra recebida dos últimos 90 dias passam na frente do custo digitado.`;
   }
   if (emUso.origem === 'compra') {
     const quem = emUso.fornecedor ? `${emUso.fornecedor}, ${data}` : data;
-    return `Valendo no CMV: ${valor}, da última compra recebida (${quem}). Compra recebida passa na frente do custo digitado.`;
+    return `Valendo no CMV: ${valor}, da última compra recebida (${quem}). Compra recebida dos últimos 90 dias passa na frente do custo digitado.`;
   }
   if (emUso.origem === 'receita') {
     return `Valendo no CMV: ${valor}, calculado pela receita da mistura. O custo digitado só vale se a receita ficar incompleta.`;
@@ -6017,6 +6083,15 @@ function _hojeLocalISO() {
   return new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+// Primeiro dia ('AAAA-MM-DD', no fuso de quem usa) dos últimos `dias` dias,
+// hoje incluso; vazio = sem corte. Filtro de período de Pedidos e Requisições.
+function _inicioDoPeriodo(dias) {
+  const n = parseInt(dias, 10);
+  if (!n) return '';
+  const inicio = new Date(Date.now() - (n - 1) * 86400000);
+  return new Date(inicio.getTime() - inicio.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 async function carregarRecebimentos() {
   const tbody = document.getElementById('recebimentos-tabela-body');
   if (!tbody) return;
@@ -6406,6 +6481,270 @@ document.getElementById('form-pedido-direto')?.addEventListener('submit', async 
     console.error('Falha ao gerar pedido direto:', erroCatch);
     erro.textContent = erroCatch.message;
     erro.style.display = '';
+    botao.disabled = false;
+  }
+});
+
+// --- COMPRA FEITA POR FORA (2026-09-17) ---
+// Card #36 do ClickUp: o que se compra sem cotação nem pedido daqui (mercado,
+// padaria, entrega combinada no WhatsApp) entra em Pedidos já recebido, com
+// quem comprou, a data e a nota fiscal. O preço vira o custo do insumo e a
+// quantidade soma no estoque da loja (menos em compra antiga).
+const TAMANHO_MAXIMO_NOTA_FISCAL = 15 * 1024 * 1024;
+let compraForaFornecedores = [];
+
+function _insumoDaCompraFora(nome) {
+  const alvo = _normalizarNomeInsumo(nome || '');
+  if (!alvo) return null;
+  return (insumosParaPreco || []).find((i) => !i.ehMistura && _normalizarNomeInsumo(i.nome) === alvo) || null;
+}
+
+function _fornecedorDaCompraFora(nome) {
+  const alvo = _normalizarNomeInsumo(nome || '');
+  if (!alvo) return null;
+  return compraForaFornecedores.find((f) => _normalizarNomeInsumo(f.nome) === alvo) || null;
+}
+
+// Unidades da linha: a do insumo (kg e L no lugar de g e ml, como o custo) e a
+// de compra do cadastro (pacote, caixa), quando ela tem quantas vêm dentro.
+function _unidadesCompraFora(insumo) {
+  const { rotulo, fator } = _escalaDeCusto(insumo.unidadeMedida);
+  const unidades = [{ rotulo, fator, texto: escaparHtml(rotulo) }];
+  const fatorCompra = Number(insumo.fatorConversaoCompra);
+  if (insumo.unidadeCompra && fatorCompra > 0 && _normalizarNomeInsumo(insumo.unidadeCompra) !== _normalizarNomeInsumo(rotulo)) {
+    unidades.push({
+      rotulo: insumo.unidadeCompra,
+      fator: fatorCompra,
+      texto: `${escaparHtml(insumo.unidadeCompra)} (${_formatarQuantidade(fatorCompra, insumo.unidadeMedida)})`,
+    });
+  }
+  return unidades;
+}
+
+function _adicionarLinhaCompraFora() {
+  const tbody = document.getElementById('compra-fora-itens');
+  tbody.insertAdjacentHTML('beforeend', `
+    <tr>
+      <td>
+        <input type="text" class="compra-fora-insumo" list="compra-fora-lista-insumos" autocomplete="off" placeholder="Digite pra buscar" aria-label="Insumo">
+        <span class="compra-fora-dica compra-fora-custo"></span>
+      </td>
+      <td>
+        <div class="compra-fora-qtd">
+          <input type="number" class="compra-fora-quantidade" min="0" step="any" aria-label="Quantidade">
+          <select class="compra-fora-unidade" aria-label="Unidade" disabled><option>—</option></select>
+        </div>
+      </td>
+      <td>
+        <input type="number" class="compra-fora-preco" min="0" step="any" aria-label="Preço unitário">
+        <span class="compra-fora-dica compra-fora-por"></span>
+      </td>
+      <td class="compra-fora-subtotal">—</td>
+      <td>
+        <button type="button" class="btn-acao-icone btn-excluir" data-acao="remover-item-compra-fora" title="Remover item" aria-label="Remover item">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </td>
+    </tr>`);
+  const linha = tbody.lastElementChild;
+  const campoInsumo = linha.querySelector('.compra-fora-insumo');
+  campoInsumo.addEventListener('input', () => _escolherInsumoCompraFora(linha));
+  // Ao sair do campo, o nome fica escrito como no cadastro.
+  campoInsumo.addEventListener('change', () => {
+    const insumo = _insumoDaCompraFora(campoInsumo.value);
+    if (insumo) campoInsumo.value = insumo.nome;
+  });
+  linha.querySelector('.compra-fora-unidade').addEventListener('change', () => _atualizarLinhaCompraFora(linha));
+  linha.querySelectorAll('.compra-fora-quantidade, .compra-fora-preco').forEach((campo) => {
+    campo.addEventListener('input', _atualizarTotalCompraFora);
+  });
+  linha.querySelector('[data-acao="remover-item-compra-fora"]').addEventListener('click', () => {
+    linha.remove();
+    if (!tbody.children.length) _adicionarLinhaCompraFora();
+    _atualizarTotalCompraFora();
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  return linha;
+}
+
+function _escolherInsumoCompraFora(linha) {
+  const campo = linha.querySelector('.compra-fora-insumo');
+  const insumo = _insumoDaCompraFora(campo.value);
+  const seletor = linha.querySelector('.compra-fora-unidade');
+  const dica = linha.querySelector('.compra-fora-custo');
+  campo.classList.remove('invalido');
+  if (!insumo) {
+    linha.dataset.insumoId = '';
+    seletor.innerHTML = '<option>—</option>';
+    seletor.disabled = true;
+    dica.textContent = '';
+  } else if (linha.dataset.insumoId !== String(insumo.id)) {
+    linha.dataset.insumoId = insumo.id;
+    const unidades = _unidadesCompraFora(insumo);
+    seletor.innerHTML = unidades.map((u) => (
+      `<option data-fator="${u.fator}" data-rotulo="${escaparHtml(u.rotulo)}">${u.texto}</option>`
+    )).join('');
+    seletor.disabled = unidades.length < 2;
+    const custo = insumo.custoEmUso?.valor;
+    const escala = _escalaDeCusto(insumo.unidadeMedida);
+    dica.textContent = custo != null ? `custo hoje R$ ${_formatarPrecoUnitario(custo * escala.fator)}/${escala.rotulo}` : 'sem custo cadastrado';
+  }
+  _atualizarLinhaCompraFora(linha);
+}
+
+function _atualizarLinhaCompraFora(linha) {
+  const opcao = linha.querySelector('.compra-fora-unidade').selectedOptions[0];
+  linha.querySelector('.compra-fora-por').textContent = linha.dataset.insumoId && opcao ? `por ${opcao.dataset.rotulo}` : '';
+  _atualizarTotalCompraFora();
+}
+
+function _atualizarTotalCompraFora() {
+  let total = 0;
+  document.querySelectorAll('#compra-fora-itens tr').forEach((linha) => {
+    const quantidade = parseFloat(linha.querySelector('.compra-fora-quantidade').value);
+    const preco = parseFloat(linha.querySelector('.compra-fora-preco').value);
+    const subtotal = quantidade > 0 && preco >= 0 ? quantidade * preco : null;
+    linha.querySelector('.compra-fora-subtotal').textContent = subtotal === null ? '—' : `R$ ${_formatarMoedaBR(Math.round(subtotal * 100) / 100)}`;
+    if (subtotal) total += subtotal;
+  });
+  total = Math.round(total * 100) / 100;
+  document.getElementById('compra-fora-total').textContent = `R$ ${_formatarMoedaBR(total)}`;
+  const valorNf = parseFloat(document.getElementById('compra-fora-valor-nf').value);
+  document.getElementById('compra-fora-valor-aviso').textContent = valorNf >= 0 && Math.abs(valorNf - total) > 0.05
+    ? `Não bate com o total dos itens (R$ ${_formatarMoedaBR(total)}).`
+    : '';
+}
+
+function _atualizarFornecedorCompraFora() {
+  const nome = document.getElementById('compra-fora-fornecedor').value.trim();
+  document.getElementById('compra-fora-fornecedor-ajuda').textContent = nome && !_fornecedorDaCompraFora(nome)
+    ? 'Não está cadastrado: vira um fornecedor novo com esse nome.'
+    : '';
+}
+
+async function abrirCompraFora() {
+  document.getElementById('form-compra-fora').reset();
+  const erro = document.getElementById('compra-fora-erro');
+  erro.style.display = 'none';
+  document.getElementById('compra-fora-fornecedor-ajuda').textContent = '';
+  document.getElementById('compra-fora-loja').innerHTML = '<option value="">Escolha a loja</option>'
+    + LOJAS_ESTOQUE.map((loja) => `<option value="${escaparHtml(loja)}">${escaparHtml(loja)}</option>`).join('');
+  document.getElementById('compra-fora-comprador').value = window.usuarioLogado?.nome || '';
+  const campoData = document.getElementById('compra-fora-data');
+  campoData.max = _hojeLocalISO();
+  campoData.value = campoData.max;
+  document.getElementById('compra-fora-itens').innerHTML = '';
+  _atualizarTotalCompraFora();
+  const botao = document.getElementById('btn-compra-fora-salvar');
+  botao.disabled = true;
+  document.getElementById('modal-compra-fora').style.display = 'flex';
+  try {
+    const [respostaFornecedores] = await Promise.all([fetch('/api/fornecedores'), _carregarInsumosParaPreco(true)]);
+    if (!respostaFornecedores.ok) throw new Error(`Erro no servidor Flask: ${respostaFornecedores.status}`);
+    compraForaFornecedores = (await respostaFornecedores.json()).fornecedores || [];
+    document.getElementById('compra-fora-lista-fornecedores').innerHTML = compraForaFornecedores
+      .filter((f) => f.ativo)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      .map((f) => `<option value="${escaparHtml(f.nome)}"></option>`)
+      .join('');
+    document.getElementById('compra-fora-lista-insumos').innerHTML = insumosParaPreco
+      .filter((i) => !i.ehMistura)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      .map((i) => `<option value="${escaparHtml(i.nome)}"></option>`)
+      .join('');
+    _adicionarLinhaCompraFora();
+    botao.disabled = false;
+  } catch (erroCatch) {
+    console.error('Falha ao abrir compra por fora:', erroCatch);
+    erro.textContent = 'Não foi possível carregar fornecedores e insumos. Feche e abra de novo.';
+    erro.style.display = '';
+  }
+}
+
+function fecharCompraFora() {
+  document.getElementById('modal-compra-fora').style.display = 'none';
+}
+
+document.getElementById('btn-compra-fora')?.addEventListener('click', abrirCompraFora);
+document.getElementById('btn-compra-fora-fechar')?.addEventListener('click', fecharCompraFora);
+document.getElementById('btn-compra-fora-cancelar')?.addEventListener('click', fecharCompraFora);
+document.getElementById('btn-compra-fora-adicionar')?.addEventListener('click', () => {
+  _adicionarLinhaCompraFora().querySelector('.compra-fora-insumo').focus();
+});
+document.getElementById('compra-fora-fornecedor')?.addEventListener('input', _atualizarFornecedorCompraFora);
+document.getElementById('compra-fora-fornecedor')?.addEventListener('change', (evento) => {
+  const fornecedor = _fornecedorDaCompraFora(evento.target.value);
+  if (fornecedor) evento.target.value = fornecedor.nome;
+});
+document.getElementById('compra-fora-valor-nf')?.addEventListener('input', _atualizarTotalCompraFora);
+
+document.getElementById('form-compra-fora')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const erro = document.getElementById('compra-fora-erro');
+  erro.style.display = 'none';
+  const falhar = (mensagem, campo) => {
+    erro.textContent = mensagem;
+    erro.style.display = '';
+    campo?.focus();
+  };
+
+  const itens = [];
+  const vistos = new Set();
+  for (const linha of document.querySelectorAll('#compra-fora-itens tr')) {
+    const campoInsumo = linha.querySelector('.compra-fora-insumo');
+    const campoQuantidade = linha.querySelector('.compra-fora-quantidade');
+    const campoPreco = linha.querySelector('.compra-fora-preco');
+    const nome = campoInsumo.value.trim();
+    // Linha deixada em branco não conta.
+    if (!nome && !campoQuantidade.value && !campoPreco.value) continue;
+    if (!linha.dataset.insumoId) {
+      campoInsumo.classList.add('invalido');
+      return falhar(nome
+        ? `"${nome}" não está no cadastro. Escolha um insumo da lista ou cadastre em Insumos antes.`
+        : 'Escolha o insumo de cada linha.', campoInsumo);
+    }
+    if (vistos.has(linha.dataset.insumoId)) return falhar(`${nome} aparece duas vezes. Junte numa linha só.`, campoInsumo);
+    vistos.add(linha.dataset.insumoId);
+    const quantidade = parseFloat(campoQuantidade.value);
+    const preco = parseFloat(campoPreco.value);
+    if (!(quantidade > 0)) return falhar(`Informe a quantidade de ${nome}.`, campoQuantidade);
+    if (!(preco >= 0)) return falhar(`Informe o preço de ${nome}.`, campoPreco);
+    const fator = parseFloat(linha.querySelector('.compra-fora-unidade').selectedOptions[0]?.dataset.fator) || 1;
+    itens.push({ insumoId: parseInt(linha.dataset.insumoId, 10), quantidade: quantidade * fator, precoUnitario: preco / fator });
+  }
+  if (!itens.length) return falhar('Adicione pelo menos um item da compra.', document.querySelector('#compra-fora-itens .compra-fora-insumo'));
+  const arquivo = document.getElementById('compra-fora-arquivo').files[0];
+  if (arquivo && arquivo.size > TAMANHO_MAXIMO_NOTA_FISCAL) {
+    return falhar('O arquivo da nota passa de 15 MB. Mande uma foto menor.', document.getElementById('compra-fora-arquivo'));
+  }
+
+  const nomeFornecedor = document.getElementById('compra-fora-fornecedor').value.trim();
+  const fornecedor = _fornecedorDaCompraFora(nomeFornecedor);
+  const dados = new FormData();
+  if (fornecedor) dados.append('fornecedorId', fornecedor.id);
+  else dados.append('fornecedorNome', nomeFornecedor);
+  dados.append('loja', document.getElementById('compra-fora-loja').value);
+  dados.append('compradoPor', document.getElementById('compra-fora-comprador').value);
+  dados.append('dataCompra', document.getElementById('compra-fora-data').value);
+  dados.append('numeroNf', document.getElementById('compra-fora-numero-nf').value);
+  dados.append('valorNf', document.getElementById('compra-fora-valor-nf').value);
+  dados.append('somarEstoque', document.getElementById('compra-fora-somar-estoque').checked ? '1' : '0');
+  dados.append('itens', JSON.stringify(itens));
+  if (arquivo) dados.append('notaFiscal', arquivo);
+
+  const botao = document.getElementById('btn-compra-fora-salvar');
+  botao.disabled = true;
+  try {
+    const resposta = await fetch('/api/pedidos/compra-fora', { method: 'POST', body: dados });
+    const resultado = await resposta.json();
+    if (!resposta.ok) throw new Error(resultado.erro || 'Não foi possível lançar a compra.');
+    fecharCompraFora();
+    await carregarPedidos();
+    abrirPedidoDetalhe(resultado.pedidoId);
+  } catch (erroCatch) {
+    console.error('Falha ao lançar compra por fora:', erroCatch);
+    falhar(erroCatch.message);
+  } finally {
     botao.disabled = false;
   }
 });

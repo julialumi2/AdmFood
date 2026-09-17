@@ -170,6 +170,10 @@
             <div class="title-row">
               <h1>Pedidos</h1>
               <div class="page-acoes-topo">
+                <button type="button" class="btn-secondary" id="btn-compra-fora">
+                  <i data-lucide="receipt"></i>
+                  Lançar compra por fora
+                </button>
                 <button type="button" class="btn-primary" id="btn-novo-pedido-direto">
                   <i data-lucide="plus"></i>
                   Novo pedido
@@ -179,15 +183,21 @@
           </div>
 
           <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
-            Nascem de uma cotação fechada com vencedor escolhido, ou direto pelo preço combinado com o fornecedor em "Novo pedido" — um pedido por fornecedor e por loja. Acompanhe aqui até a entrega chegar.
+            Nascem de uma cotação fechada com vencedor escolhido, ou direto pelo preço combinado com o fornecedor em "Novo pedido" — um pedido por fornecedor e por loja. Acompanhe aqui até a entrega chegar. O que foi comprado por fora (mercado, padaria, entrega combinada no WhatsApp) entra em "Lançar compra por fora", já como recebido.
           </p>
 
           <div class="chart-card">
             <div class="table-header-row">
               <div>
                 <h3 class="table-title">Pedidos gerados</h3>
-                <p class="table-subtitle">Clique num pedido pra ver os itens e avançar a etapa de entrega</p>
+                <p class="table-subtitle">Clique num pedido pra ver os itens e avançar a etapa de entrega. Pedido que ainda não foi recebido aparece em qualquer período.</p>
               </div>
+              <select id="pedidos-filtro-periodo" aria-label="Período">
+                <option value="30" selected>Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="365">Últimos 12 meses</option>
+                <option value="">Tudo</option>
+              </select>
             </div>
 
             <div class="table-responsive">
@@ -225,6 +235,10 @@
                 <a class="btn-secondary" id="link-pedido-whatsapp" href="#" target="_blank" rel="noopener" style="display:none;">
                   <i data-lucide="send"></i>
                   Enviar por WhatsApp
+                </a>
+                <a class="btn-secondary" id="link-pedido-nota-fiscal" href="#" target="_blank" rel="noopener" style="display:none;">
+                  <i data-lucide="file-text"></i>
+                  Ver nota fiscal
                 </a>
                 <button type="button" class="btn-secondary" id="btn-pedido-cancelar" style="border-color: var(--danger); color: var(--danger);">Cancelar pedido</button>
                 <button type="button" class="btn-secondary" id="btn-pedido-voltar-etapa">Voltar etapa</button>
@@ -302,6 +316,93 @@
         <div class="modal-actions">
           <button type="button" class="btn-secondary-sm" id="btn-pedido-direto-cancelar">Cancelar</button>
           <button type="submit" class="btn-primary-sm" id="btn-pedido-direto-gerar" disabled>Gerar pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: LANÇAR COMPRA FEITA POR FORA (JÁ RECEBIDA) -->
+  <div class="modal-overlay" id="modal-compra-fora" style="display:none;">
+    <div class="modal-content modal-large modal-compra-fora">
+      <div class="modal-header">
+        <h3 class="panel-title">Lançar compra por fora</h3>
+        <button type="button" class="btn-close" id="btn-compra-fora-fechar" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-compra-fora">
+        <p class="panel-subtitle compra-fora-intro">Compra que não saiu de cotação nem de pedido daqui. Ela entra como recebida, e o preço de cada item vira o custo do insumo.</p>
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="compra-fora-fornecedor">Onde comprou</label>
+            <input type="text" id="compra-fora-fornecedor" list="compra-fora-lista-fornecedores" autocomplete="off" placeholder="Fornecedor, mercado, padaria..." required>
+            <datalist id="compra-fora-lista-fornecedores"></datalist>
+            <small class="text-muted" id="compra-fora-fornecedor-ajuda"></small>
+          </div>
+          <div class="form-group">
+            <label for="compra-fora-loja">Loja</label>
+            <select id="compra-fora-loja" required></select>
+          </div>
+        </div>
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="compra-fora-comprador">Quem comprou</label>
+            <input type="text" id="compra-fora-comprador" required>
+          </div>
+          <div class="form-group">
+            <label for="compra-fora-data">Data da compra</label>
+            <input type="date" id="compra-fora-data" required>
+          </div>
+        </div>
+
+        <div class="table-responsive compra-fora-tabela-wrap">
+          <table class="inventory-table compra-fora-tabela">
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Quantidade</th>
+                <th>Preço unitário (R$)</th>
+                <th>Subtotal</th>
+                <th><span class="compra-fora-oculto">Remover</span></th>
+              </tr>
+            </thead>
+            <tbody id="compra-fora-itens"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" class="font-bold">Total dos itens</td>
+                <td class="font-bold" id="compra-fora-total">R$ 0,00</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <datalist id="compra-fora-lista-insumos"></datalist>
+        <button type="button" class="btn-limpar-filtro" id="btn-compra-fora-adicionar">+ Adicionar item</button>
+
+        <div class="form-group-row compra-fora-nota">
+          <div class="form-group">
+            <label for="compra-fora-numero-nf">Número da nota fiscal</label>
+            <input type="text" id="compra-fora-numero-nf" inputmode="numeric" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="compra-fora-valor-nf">Valor da nota (R$)</label>
+            <input type="number" step="0.01" min="0" id="compra-fora-valor-nf">
+            <small class="text-muted" id="compra-fora-valor-aviso"></small>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="compra-fora-arquivo">Foto ou PDF da nota</label>
+          <input type="file" id="compra-fora-arquivo" accept="image/jpeg,image/png,image/webp,application/pdf">
+        </div>
+
+        <label class="compra-fora-estoque">
+          <input type="checkbox" id="compra-fora-somar-estoque" checked>
+          Somar as quantidades no estoque da loja
+        </label>
+        <small class="text-muted compra-fora-estoque-ajuda">Desmarque se é uma compra antiga que a contagem já pegou.</small>
+
+        <p id="compra-fora-erro" style="color:var(--danger-texto); display:none;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-compra-fora-cancelar">Cancelar</button>
+          <button type="submit" class="btn-primary-sm" id="btn-compra-fora-salvar">Lançar compra</button>
         </div>
       </form>
     </div>

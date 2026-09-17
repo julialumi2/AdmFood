@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import threading
@@ -139,6 +140,8 @@ from backend.armazenamento import (
     confirmar_recebimento_pedido,
     vincular_insumo_fornecedor,
     criar_pedidos_diretos,
+    lancar_compra_fora,
+    PASTA_NOTAS_FISCAIS,
     pendencias_compras,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
@@ -2559,6 +2562,11 @@ def _formatar_pedido_resumo(pedido):
         "whatsappEnviadoEm": pedido.get("whatsapp_enviado_em"),
         "recebidoPor": pedido.get("recebido_por"),
         "recebidoEm": pedido.get("recebido_em"),
+        "compraFora": bool(pedido.get("compra_fora")),
+        "somouEstoque": bool(pedido.get("somou_estoque")),
+        "numeroNf": pedido.get("numero_nf"),
+        "valorNf": pedido.get("valor_nf"),
+        "notaFiscalUrl": f"/api/pedidos/{pedido['id']}/nota-fiscal" if pedido.get("nota_fiscal_arquivo") else None,
     }
 
 
@@ -2633,11 +2641,23 @@ def api_marcar_pedido_enviado_whatsapp(pedido_id):
     return jsonify({"ok": True})
 
 
+def _etapa_de_compra_fora(pedido_id):
+    """Compra feita por fora já nasce recebida: não tem etapa de entrega pra
+    andar (voltar faria ela cair em Recebimentos e somar no estoque de novo)."""
+    pedido = buscar_pedido(pedido_id)
+    if pedido and pedido["compra_fora"]:
+        return jsonify({"erro": "Compra feita por fora não tem etapa de entrega. Se lançou errado, exclua e lance de novo."}), 400
+    return None
+
+
 @app.route('/api/pedidos/<int:pedido_id>/avancar', methods=['POST'])
 def api_avancar_pedido(pedido_id):
     erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
+    erro_etapa = _etapa_de_compra_fora(pedido_id)
+    if erro_etapa:
+        return erro_etapa
 
     novo_status = avancar_status_pedido(pedido_id)
     if novo_status is None:
@@ -2650,6 +2670,9 @@ def api_voltar_pedido(pedido_id):
     erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
+    erro_etapa = _etapa_de_compra_fora(pedido_id)
+    if erro_etapa:
+        return erro_etapa
 
     novo_status = voltar_status_pedido(pedido_id)
     if novo_status is None:
@@ -2669,6 +2692,7 @@ def api_excluir_pedido(pedido_id):
     if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
     excluir_pedido(pedido_id)
+    _apagar_nota_fiscal(pedido["nota_fiscal_arquivo"])
     return jsonify({"ok": True})
 
 
@@ -2837,6 +2861,99 @@ def api_criar_pedidos_diretos():
     except ValueError as falha:
         return jsonify({"erro": str(falha)}), 400
     return jsonify({"ok": True, "pedidos": pedidos})
+
+
+# --- COMPRA FEITA POR FORA (2026-09-17) ---------------------------------------
+# Card #36 do ClickUp: mercado, padaria, entrega combinada no WhatsApp entram
+# em Pedidos já recebidas, com quem comprou, a data e a nota fiscal (número,
+# valor e foto/PDF). Ver lancar_compra_fora e a seção 6.22 da documentação.
+
+EXTENSOES_NOTA_FISCAL = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
+TAMANHO_MAXIMO_NOTA_FISCAL = 15 * 1024 * 1024
+
+
+def _apagar_nota_fiscal(nome_arquivo):
+    if not nome_arquivo:
+        return
+    try:
+        os.remove(os.path.join(PASTA_NOTAS_FISCAIS, nome_arquivo))
+    except OSError:
+        pass
+
+
+@app.route('/api/pedidos/compra-fora', methods=['POST'])
+def api_lancar_compra_fora():
+    """Formulário multipart: fornecedorId (cadastrado) ou fornecedorNome
+    (novo), loja, compradoPor, dataCompra, numeroNf, valorNf, somarEstoque
+    ('1'/'0'), itens (JSON [{insumoId, quantidade, precoUnitario}] na
+    unidade do insumo) e o arquivo opcional notaFiscal."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    if (request.content_length or 0) > TAMANHO_MAXIMO_NOTA_FISCAL:
+        return jsonify({"erro": "O arquivo da nota passa de 15 MB. Mande uma foto menor."}), 400
+
+    dados = request.form
+    loja = dados.get('loja') or ''
+    if loja not in LOJAS:
+        return jsonify({"erro": "Escolha a loja da compra."}), 400
+    comprado_por = (dados.get('compradoPor') or '').strip()
+    if not comprado_por:
+        return jsonify({"erro": "Informe quem comprou."}), 400
+    try:
+        data_compra = date.fromisoformat((dados.get('dataCompra') or '').strip())
+    except ValueError:
+        return jsonify({"erro": "Informe a data da compra."}), 400
+    if data_compra > date.today():
+        return jsonify({"erro": "A data da compra não pode ser depois de hoje."}), 400
+    texto_valor = (dados.get('valorNf') or '').strip()
+    try:
+        valor_nf = float(texto_valor) if texto_valor else None
+    except ValueError:
+        return jsonify({"erro": "Valor da nota inválido."}), 400
+    if valor_nf is not None and not valor_nf >= 0:
+        return jsonify({"erro": "Valor da nota inválido."}), 400
+    try:
+        itens = [
+            {"insumoId": int(item['insumoId']), "quantidade": float(item['quantidade']),
+             "precoUnitario": float(item['precoUnitario'])}
+            for item in json.loads(dados.get('itens') or '[]')
+        ]
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"erro": "Item inválido na lista."}), 400
+    texto_fornecedor = (dados.get('fornecedorId') or '').strip()
+    fornecedor = {"id": int(texto_fornecedor)} if texto_fornecedor.isdigit() else {"nome": dados.get('fornecedorNome') or ''}
+
+    nome_arquivo = None
+    arquivo = request.files.get('notaFiscal')
+    if arquivo and arquivo.filename:
+        extensao = os.path.splitext(arquivo.filename)[1].lower()
+        if extensao not in EXTENSOES_NOTA_FISCAL:
+            return jsonify({"erro": "A nota tem de ser foto (JPG, PNG ou WEBP) ou PDF."}), 400
+        nome_arquivo = f"nf_{uuid.uuid4().hex}{extensao}"
+        arquivo.save(os.path.join(PASTA_NOTAS_FISCAIS, nome_arquivo))
+
+    try:
+        pedido_id = lancar_compra_fora(
+            fornecedor, loja, comprado_por, data_compra.isoformat(), itens,
+            numero_nf=(dados.get('numeroNf') or '').strip(), valor_nf=valor_nf,
+            somar_estoque=dados.get('somarEstoque') != '0', nota_fiscal_arquivo=nome_arquivo,
+        )
+    except ValueError as falha:
+        _apagar_nota_fiscal(nome_arquivo)
+        return jsonify({"erro": str(falha)}), 400
+    return jsonify({"ok": True, "pedidoId": pedido_id})
+
+
+@app.route('/api/pedidos/<int:pedido_id>/nota-fiscal', methods=['GET'])
+def api_nota_fiscal_pedido(pedido_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    pedido = buscar_pedido(pedido_id)
+    if not pedido or not pedido["nota_fiscal_arquivo"]:
+        return jsonify({"erro": "Esse pedido não tem nota fiscal anexada."}), 404
+    return send_from_directory(PASTA_NOTAS_FISCAIS, pedido["nota_fiscal_arquivo"])
 
 
 @app.route('/api/compras/pendencias', methods=['GET'])
