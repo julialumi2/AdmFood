@@ -1606,9 +1606,16 @@ function _fornecedoresDoInsumo(insumo) {
 // (print da VMarket que a Julia mandou em 04/09) — mesmos _iniciaisFornecedor
 // e _corAvatarFornecedor, pra não existirem duas bolinhas diferentes no
 // sistema.
+// Insumo muito cotado chega a 22 fornecedores (Ketchup Cepera), e a linha da
+// tabela esticava pra 8 fileiras de bolinha. Mostra as 12 primeiras e junta o
+// resto num "+N" que lista os nomes no hover.
+const MAXIMO_BOLINHAS_FORNECEDOR = 12;
+
 function _celulaFornecedoresHTML(insumo) {
   const lista = _fornecedoresDoInsumo(insumo);
-  const bolinhas = lista.map((f) => {
+  const visiveis = lista.slice(0, MAXIMO_BOLINHAS_FORNECEDOR);
+  const escondidos = lista.slice(MAXIMO_BOLINHAS_FORNECEDOR);
+  const bolinhas = visiveis.map((f) => {
     const detalhe = f.homologado
       ? ' — homologado, vai direto em pedido'
       : (f.soHistorico ? ' — já cotou ou vendeu esse insumo' : '');
@@ -1620,11 +1627,14 @@ function _celulaFornecedoresHTML(insumo) {
     </span>
   `;
   }).join('');
+  const resto = escondidos.length
+    ? `<span class="avatar avatar-sm fornecedor-avatar resto" title="${escaparHtml(escondidos.map((f) => f.nome).join(', '))}">+${escondidos.length}</span>`
+    : '';
   // O "+" abre o cadastro do insumo, que é onde os fornecedores são marcados.
   const adicionar = `<button type="button" class="avatar avatar-sm fornecedor-avatar adicionar"
     data-acao="editar-insumo" data-insumo-id="${insumo.id}"
     title="Ligar outro fornecedor a esse insumo">+</button>`;
-  return `<td class="col-fornecedores">${bolinhas}${adicionar}</td>`;
+  return `<td class="col-fornecedores">${bolinhas}${resto}${adicionar}</td>`;
 }
 
 function _linhasEstoqueParaTab(tab) {
