@@ -3873,15 +3873,10 @@ def listar_produtos_por_loja(loja):
             "SELECT id, categoria, produto, ifood, food99, beefood, cardapio_web, foto_arquivo FROM preco_cardapio WHERE loja = ? ORDER BY ordem",
             (loja,),
         ).fetchall()
-        # Bebida não tem "ficha técnica" (não é receita, é produto pronto
-        # comprado assim) — fora dessa tela a pedido da Julia, só lanches e
-        # comida. Continuam normalmente em Preços (só essa lista muda).
-        # Match exato (não substring): um combo tipo "Lanche + Batata +
-        # Bebida + Maionese" menciona "bebida" na descrição da categoria,
-        # mas é um combo de comida, não bebida pura — não pode ser pego
-        # junto.
-        produtos = [p for p in produtos if _normalizar_nome_insumo(p["categoria"]) != "bebidas"]
-        # Combo do Açaí também sai (pedido da Julia em 10/09/2026): não tem
+        # Bebida voltou pra essa tela em 17/09/2026 (card #34 do ClickUp):
+        # tinha saído em 02/09 por não ser receita, mas a ficha dela é o que
+        # desconta a lata/garrafa do estoque, e ela quer ver e editar.
+        # Combo do Açaí sai (pedido da Julia em 10/09/2026): não tem
         # receita própria — a venda desconta os copos de dentro pela
         # composição (composicao_produto_venda) e os complementos escolhidos
         # no pedido. Na lista, era produto sem ficha sem nada pra preencher.
@@ -3896,11 +3891,23 @@ def listar_produtos_por_loja(loja):
             r["item_id"]
             for r in conn.execute("SELECT DISTINCT item_id FROM ficha_tecnica WHERE loja = ?", (loja,)).fetchall()
         }
+        # Nome da lista de preços que não bate com item nenhum (a Tradiça vende
+        # "Coca-Cola 350ml", o item é "Coca-Cola Original 350ml") ainda acha o
+        # item pelo vínculo manual da fila de pendências — só vínculo de 1 pra
+        # 1: "2 smash's" não é o mesmo produto na lista de preços.
+        vinculos = {
+            r["nome_produto_normalizado"]: r["item_cardapio_id"]
+            for r in conn.execute(
+                "SELECT nome_produto_normalizado, item_cardapio_id FROM vinculo_produto_venda WHERE quantidade_por_unidade = 1"
+            ).fetchall()
+        }
     custos = mapa_custos_item_cardapio()
 
     resultado = []
     for p in produtos:
         item_id, _ = _casar_item_cardapio(p["produto"], catalogo, ignorar_parenteses=True)
+        if item_id is None:
+            item_id = vinculos.get(_normalizar_nome_insumo(p["produto"]))
         resultado.append({
             "itemCardapioId": item_id,
             "precoCardapioId": p["id"],

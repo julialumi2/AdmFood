@@ -736,6 +736,12 @@ de propósito: um combo como "Lanche + Batata + Bebida + Maionese" cita
 "bebida" no nome da categoria mas é comida, não pode ser pego junto.
 Só essa lista muda — "Preços" continua mostrando bebida normalmente,
 já que lá o que importa é preço de venda, não receita.
+**Voltou em 2026-09-17** (card #34 do ClickUp): a ficha da bebida é o que
+desconta a lata ou a garrafa do estoque, e a Julia quer ver e editar. O
+filtro saiu. Pra bebida com nome diferente na lista de preços ("Coca-Cola
+350ml" na Tradiça, item "Coca-Cola Original 350ml"), `listar_produtos_por_loja`
+usa o vínculo manual da fila de pendências (só os de 1 pra 1) quando o nome
+não casa com item nenhum.
 
 **ClickUp: card particular e checklist na criação** (2026-09-11). A Julia
 cadastra as pendências dela no ClickUp pelo "+ Nova Tarefa", que ganhou:
