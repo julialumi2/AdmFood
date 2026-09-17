@@ -735,6 +735,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  /* Telas que limitam a largura (Configurações, Mais Vendidos) ficavam
+     grudadas na esquerda com a barra lateral retraída, sobrando um vazio
+     na direita (print da Julia, 2026-09-17). */
+  margin-inline: auto;
+  width: 100%;
 }
 
 .dashboard-title-area {
