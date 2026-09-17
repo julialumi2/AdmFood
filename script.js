@@ -4205,13 +4205,23 @@ function renderPedidoDetalhe() {
     const recebimento = p.status === 'recebido' && p.recebidoEm
       ? ` · Recebido em ${_dataBR(p.recebidoEm)}${p.recebidoPor ? ` por ${p.recebidoPor}` : ''}`
       : '';
-    document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}${recebimento}`;
+    const nota = p.numeroNf ? ` · Nota fiscal ${p.numeroNf}` : '';
+    document.getElementById('pedido-detalhe-subtitulo').textContent = `Cotação: ${p.cotacaoTitulo}${recebimento}${nota}`;
   }
 
   const linkNota = document.getElementById('link-pedido-nota-fiscal');
   if (linkNota) {
     linkNota.href = p.notaFiscalUrl || '#';
     linkNota.style.display = p.notaFiscalUrl ? '' : 'none';
+  }
+  // A nota costuma chegar depois da entrega: pedido já recebido aceita anexo
+  // (ou troca do que está lá) a qualquer momento.
+  const btnAnexarNota = document.getElementById('btn-pedido-anexar-nota');
+  if (btnAnexarNota) {
+    const podeAnexar = _possoGerir() && p.status === 'recebido';
+    btnAnexarNota.style.display = podeAnexar ? '' : 'none';
+    document.getElementById('btn-pedido-anexar-nota-texto').textContent =
+      p.notaFiscalUrl ? 'Trocar nota fiscal' : 'Anexar nota fiscal';
   }
   // Compra por fora já nasce recebida: sem etapas de entrega pra acompanhar.
   document.getElementById('pedido-estagios-card').style.display = p.compraFora ? 'none' : '';
@@ -6198,6 +6208,42 @@ function _atualizarValorCalculadoRecebimento() {
   document.getElementById('recebimento-valor-calculado').textContent = `R$ ${_formatarMoedaBR(Math.round(total * 100) / 100)}`;
 }
 
+document.getElementById('btn-pedido-anexar-nota')?.addEventListener('click', () => {
+  document.getElementById('input-pedido-nota').click();
+});
+
+document.getElementById('input-pedido-nota')?.addEventListener('change', async (evento) => {
+  const arquivo = evento.target.files[0];
+  evento.target.value = '';  // deixa escolher o mesmo arquivo de novo depois de um erro
+  if (!arquivo || !pedidoDetalheAtual) return;
+  if (await _anexarNotaFiscal(pedidoDetalheAtual.id, arquivo)) {
+    await abrirPedidoDetalhe(pedidoDetalheAtual.id);
+  }
+});
+
+async function _anexarNotaFiscal(pedidoId, arquivo, numeroNf) {
+  const TAMANHO_MAXIMO = 15 * 1024 * 1024;
+  if (arquivo && arquivo.size > TAMANHO_MAXIMO) {
+    alert('A nota fiscal passa de 15 MB.');
+    return false;
+  }
+  const corpo = new FormData();
+  if (arquivo) corpo.append('notaFiscal', arquivo);
+  if (numeroNf != null) corpo.append('numeroNf', numeroNf);
+  try {
+    const resposta = await fetch(`/api/pedidos/${pedidoId}/nota-fiscal`, { method: 'POST', body: corpo });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      alert(dados.erro || 'Não foi possível anexar a nota fiscal.');
+      return false;
+    }
+    return true;
+  } catch (erro) {
+    console.error('Falha ao anexar nota fiscal:', erro);
+    return false;
+  }
+}
+
 async function abrirModalRecebimento(pedidoId) {
   try {
     const resposta = await fetch(`/api/recebimentos/${pedidoId}`);
@@ -6214,6 +6260,8 @@ async function abrirModalRecebimento(pedidoId) {
     campoData.value = campoData.max;
     document.getElementById('recebimento-data-pedido').textContent = `Pedido feito em ${_dataBR(dados.criadoEm)}`;
     document.getElementById('recebimento-valor-nf').value = dados.valorTotal;
+    document.getElementById('recebimento-numero-nf').value = '';
+    document.getElementById('recebimento-nota-arquivo').value = '';
     document.getElementById('recebimento-erro').style.display = 'none';
     document.getElementById('recebimento-itens-body').innerHTML = dados.itens.map(_linhaRecebimentoItemHTML).join('');
 
@@ -6257,16 +6305,26 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
         recebidoPor: document.getElementById('recebimento-nome').value,
         recebidoEm: document.getElementById('recebimento-data').value,
         valorNf: parseFloat(document.getElementById('recebimento-valor-nf').value),
+        numeroNf: document.getElementById('recebimento-numero-nf').value.trim(),
         itens,
       }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao confirmar recebimento');
+
+    // O estoque já entrou; se o anexo falhar, o recebimento continua valendo e
+    // a nota pode ser anexada depois pela tela do pedido.
+    const arquivo = document.getElementById('recebimento-nota-arquivo').files[0];
+    const anexoFalhou = arquivo ? !(await _anexarNotaFiscal(recebimentoAtual.id, arquivo)) : false;
+
     fecharModalRecebimento();
     await carregarRecebimentos();
-    alert(dados.divergencia
-      ? 'Recebimento confirmado, estoque atualizado. O valor da Nota Fiscal não bateu com o calculado — uma tarefa foi criada no ClickUp pra acompanhar.'
-      : 'Recebimento confirmado — estoque atualizado.');
+    alert([
+      dados.divergencia
+        ? 'Recebimento confirmado, estoque atualizado. O valor da Nota Fiscal não bateu com o calculado — uma tarefa foi criada no ClickUp pra acompanhar.'
+        : 'Recebimento confirmado — estoque atualizado.',
+      anexoFalhou ? 'A nota fiscal não subiu; dá pra anexar depois abrindo o pedido.' : '',
+    ].filter(Boolean).join('\n\n'));
   } catch (erroCatch) {
     console.error('Falha ao confirmar recebimento:', erroCatch);
     erro.textContent = erroCatch.message || 'Não foi possível confirmar o recebimento.';

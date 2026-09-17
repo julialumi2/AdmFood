@@ -3019,6 +3019,35 @@ rota (`POST /api/admin/importar-vmarket`, em lotes), com duas partes novas:
   tabelas, pelo dia em que foi aberta). Tudo no navegador, sobre a lista que
   já vem inteira.
 
+### 6.24 Nota fiscal no pedido normal (2026-09-17)
+
+A compra por fora (6.22) já guardava número, valor e foto/PDF da nota, mas o
+pedido que vem de cotação só tinha o valor — a nota em si ficava na VMarket ou
+no papel. Saindo da VMarket, isso vira buraco: a NF é o documento que prova o
+que foi comprado e por quanto.
+
+- **No recebimento** (`recebimentos.html`): dois campos novos, opcionais —
+  "Número da nota fiscal" e "Foto ou PDF da nota". O número vai junto na
+  confirmação (`numeroNf` em `POST /api/recebimentos/<id>/confirmar`), e o
+  arquivo sobe logo depois, numa chamada separada. Se o anexo falhar, o
+  recebimento continua valendo (o estoque já entrou) e o aviso diz pra anexar
+  depois — em vez de perder a confirmação inteira por causa do arquivo.
+- **Depois** (tela do pedido): botão "Anexar nota fiscal" em qualquer pedido já
+  recebido, que vira "Trocar nota fiscal" quando já existe uma. A nota quase
+  nunca chega junto com a mercadoria: vem por e-mail no dia seguinte.
+- `POST /api/pedidos/<id>/nota-fiscal` (multipart: `notaFiscal` e/ou
+  `numeroNf`) aceita os dois juntos ou só um. O arquivo vira `nf_<uuid>.<ext>`
+  em `notas_fiscais/` (mesmas extensões e limite de 15 MB da compra por fora), e
+  o antigo só é apagado depois que o banco já aponta pro novo
+  (`definir_nota_fiscal_pedido` devolve o nome anterior pra isso).
+- Gerente pode; operação não (é rota de gestão) e só na loja dele.
+- O subtítulo do pedido passou a mostrar o número da nota também no pedido
+  normal, não só na compra por fora.
+
+Teste: `teste_nota_fiscal_pedido.py` no scratchpad — 18 checagens (número no
+recebimento, anexo depois, troca apagando o arquivo antigo, só o número sem
+arquivo, extensão recusada, 403 da operação e 404 de pedido inexistente).
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -3083,7 +3112,8 @@ Todos em `app.py`, prefixo `/api`.
 **Pedido direto, compra por fora e pendências** (seções 6.20 a 6.22; o fornecedor homologado vai no `PUT /api/insumos/<id>`)
 - `POST /api/pedidos/direto` — pedido pelo preço homologado, sem cotação, um por loja — só admin
 - `POST /api/pedidos/compra-fora` — lança compra feita por fora já recebida (multipart: `fornecedorId` ou `fornecedorNome`, `loja`, `compradoPor`, `dataCompra`, `numeroNf`, `valorNf`, `somarEstoque`, `itens` em JSON e o arquivo `notaFiscal`) — só admin
-- `GET /api/pedidos/<id>/nota-fiscal` — foto/PDF da nota da compra por fora — só admin
+- `GET /api/pedidos/<id>/nota-fiscal` — foto/PDF da nota do pedido — admin e gerente
+- `POST /api/pedidos/<id>/nota-fiscal` — anexa ou troca a nota de um pedido já recebido (multipart: `notaFiscal` e/ou `numeroNf`, ver 6.24) — admin e gerente
 - `GET /api/compras/pendencias` — quanto está parado em cada etapa, pros números do menu — só admin
 
 **Tarefas (Kanban / ClickUp)**

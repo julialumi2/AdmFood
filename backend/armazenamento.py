@@ -4815,7 +4815,7 @@ def listar_pedidos_pendentes_recebimento():
         return [dict(linha) for linha in linhas]
 
 
-def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento=None):
+def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento=None, numero_nf=None):
     """Confirma que um pedido chegou — pedido real da Julia: é a única ação
     que efetivamente soma no estoque a partir de um pedido de compra (hoje
     "Avançar etapa" só rastreia estágio, e a entrada de verdade é manual,
@@ -4863,10 +4863,12 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
         conn.execute(
             """
             UPDATE pedido_compra
-            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, divergencia_nf = ?, atualizado_em = ?
+            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, numero_nf = ?,
+                divergencia_nf = ?, atualizado_em = ?
             WHERE id = ?
             """,
-            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf, 1 if divergencia else 0, agora, pedido_id),
+            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf,
+             (numero_nf or '').strip() or pedido["numero_nf"], 1 if divergencia else 0, agora, pedido_id),
         )
 
     if divergencia:
@@ -6250,6 +6252,34 @@ def reabrir_contagem(contagem_id):
             "UPDATE contagem SET status = 'aberta', respondida_em = NULL, aprovada_em = NULL WHERE id = ?",
             (contagem_id,),
         )
+
+
+def definir_nota_fiscal_pedido(pedido_id, nome_arquivo=None, numero_nf=None):
+    """Anexa (ou troca) a nota fiscal de um pedido que já existe — ela costuma
+    chegar depois da entrega. Devolve o nome do arquivo antigo, pra quem chamou
+    apagar do disco só depois que o banco já aponta pro novo."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT nota_fiscal_arquivo FROM pedido_compra WHERE id = ?", (pedido_id,)
+        ).fetchone()
+        if not linha:
+            return None
+        campos, valores = [], []
+        if nome_arquivo is not None:
+            campos.append("nota_fiscal_arquivo = ?")
+            valores.append(nome_arquivo)
+        if numero_nf is not None:
+            campos.append("numero_nf = ?")
+            valores.append(numero_nf)
+        if not campos:
+            return None
+        campos.append("atualizado_em = ?")
+        valores.append(datetime.now().isoformat())
+        conn.execute(
+            f"UPDATE pedido_compra SET {', '.join(campos)} WHERE id = ?", [*valores, pedido_id]
+        )
+        anterior = linha["nota_fiscal_arquivo"]
+        return anterior if nome_arquivo is not None and anterior != nome_arquivo else None
 
 
 # --- CÓPIAS DE SEGURANÇA DO BANCO -------------------------------------------
