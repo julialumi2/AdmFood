@@ -4081,6 +4081,33 @@ def definir_fornecedores_insumo(insumo_id, fornecedor_ids):
             )
 
 
+def mapa_fornecedores_do_historico():
+    """{insumo_id: [fornecedor_id, ...]} de quem já cotou OU já vendeu o
+    insumo, tirado do histórico (cotação e pedido).
+
+    A lista do cadastro (`insumo_fornecedor`) é marcada na mão e só ganha
+    linha automática quando vem preço de cotação; quem só vendeu — pedido
+    direto, compra por fora, os 2.635 pedidos importados da VMarket — ficava
+    de fora. Na coluna de Fornecedores da tela de Insumos a Julia quer os
+    dois, que é o que a VMarket mostrava."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT DISTINCT insumo_id, fornecedor_id FROM cotacao_preco
+            WHERE fornecedor_id IS NOT NULL
+            UNION
+            SELECT DISTINCT pci.insumo_id, pc.fornecedor_id
+            FROM pedido_compra_item pci
+            JOIN pedido_compra pc ON pc.id = pci.pedido_id
+            WHERE pc.fornecedor_id IS NOT NULL
+            """
+        ).fetchall()
+    mapa = {}
+    for linha in linhas:
+        mapa.setdefault(linha["insumo_id"], []).append(linha["fornecedor_id"])
+    return mapa
+
+
 def mapa_insumo_fornecedores():
     """{insumo_id: [fornecedor_id, ...]} pra todo mundo de uma vez — evita
     N+1 ao formatar a lista inteira de insumos."""

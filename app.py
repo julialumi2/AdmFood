@@ -100,6 +100,7 @@ from backend.armazenamento import (
     lojas_da_cotacao,
     definir_fornecedores_insumo,
     mapa_insumo_fornecedores,
+    mapa_fornecedores_do_historico,
     criar_cotacao,
     listar_cotacoes,
     buscar_cotacao,
@@ -1290,6 +1291,9 @@ def _status_estoque(quantidade_atual, estoque_minimo):
 
 def _formatar_insumos(linhas, com_custo=False):
     mapa_fornecedores = mapa_insumo_fornecedores()
+    # Quem já cotou ou já vendeu, do histórico — separado do cadastro, que é
+    # o que a tela de editar insumo grava (ver mapa_fornecedores_do_historico).
+    mapa_historico = mapa_fornecedores_do_historico()
     custos_em_uso = custo_em_uso_por_insumo() if com_custo else {}
     por_insumo = {}
     for linha in linhas:
@@ -1306,6 +1310,10 @@ def _formatar_insumos(linhas, com_custo=False):
             "conteudoPorUnidade": linha['conteudo_por_unidade'],
             "unidadeConteudo": linha['unidade_conteudo'],
             "fornecedorIds": mapa_fornecedores.get(linha['insumo_id'], []),
+            "fornecedoresDoHistorico": sorted(
+                set(mapa_historico.get(linha['insumo_id'], []))
+                - set(mapa_fornecedores.get(linha['insumo_id'], []))
+            ),
             "porLoja": {},
         })
         if com_custo:

@@ -1585,11 +1585,15 @@ async function _carregarNomesDeFornecedor() {
   return fornecedoresPorId;
 }
 
-// Homologado primeiro (com estrela), depois os outros em ordem alfabética.
+// Homologado primeiro, depois o resto em ordem alfabética. Entram os do
+// cadastro do insumo e também quem só aparece no histórico (cotou ou vendeu),
+// que é o que a VMarket mostrava.
 function _fornecedoresDoInsumo(insumo) {
   if (!fornecedoresPorId) return [];
-  const nomes = (insumo.fornecedorIds || [])
-    .map((id) => ({ id, nome: fornecedoresPorId.get(id)?.nome }))
+  const doCadastro = new Set(insumo.fornecedorIds || []);
+  const todos = [...doCadastro, ...(insumo.fornecedoresDoHistorico || [])];
+  const nomes = todos
+    .map((id) => ({ id, nome: fornecedoresPorId.get(id)?.nome, soHistorico: !doCadastro.has(id) }))
     .filter((f) => f.nome);
   const homologadoId = insumo.fornecedorHomologadoId || null;
   const homologado = nomes.filter((f) => f.id === homologadoId);
@@ -1604,13 +1608,18 @@ function _fornecedoresDoInsumo(insumo) {
 // sistema.
 function _celulaFornecedoresHTML(insumo) {
   const lista = _fornecedoresDoInsumo(insumo);
-  const bolinhas = lista.map((f) => `
+  const bolinhas = lista.map((f) => {
+    const detalhe = f.homologado
+      ? ' — homologado, vai direto em pedido'
+      : (f.soHistorico ? ' — já cotou ou vendeu esse insumo' : '');
+    return `
     <span class="avatar avatar-sm fornecedor-avatar${f.homologado ? ' homologado' : ''}"
           style="background-color: ${_corAvatarFornecedor(f.id)};"
-          title="${escaparHtml(f.nome)}${f.homologado ? ' — homologado, vai direto em pedido' : ''}">
+          title="${escaparHtml(f.nome)}${detalhe}">
       ${escaparHtml(_iniciaisFornecedor(f.nome))}
     </span>
-  `).join('');
+  `;
+  }).join('');
   // O "+" abre o cadastro do insumo, que é onde os fornecedores são marcados.
   const adicionar = `<button type="button" class="avatar avatar-sm fornecedor-avatar adicionar"
     data-acao="editar-insumo" data-insumo-id="${insumo.id}"

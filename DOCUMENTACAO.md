@@ -553,7 +553,13 @@ as iniciais dentro e o nome inteiro no hover — as MESMAS de
 fornecedor homologado vem primeiro e ganha um anel na cor da marca; o "+" do
 fim abre o cadastro do insumo, que é onde os fornecedores são marcados. A
 busca da tela passou a achar pelo nome do fornecedor também ("sorocaba" lista
-os insumos dele). Os nomes vêm de uma chamada só a `/api/fornecedores` na
+os insumos dele). Entram os fornecedores do cadastro do insumo E os que só
+aparecem no histórico — quem cotou (`cotacao_preco`) ou quem vendeu
+(`pedido_compra_item`), que é o caso dos 2.635 pedidos importados da VMarket:
+o cadastro (`insumo_fornecedor`) só ganha linha automática quando vem preço de
+cotação, então quem só vendeu ficava de fora (`mapa_fornecedores_do_historico`
+→ campo `fornecedoresDoHistorico`, separado de `fornecedorIds` pra não sujar o
+que a tela de editar insumo grava). Os nomes vêm de uma chamada só a `/api/fornecedores` na
 primeira montagem da tabela; quem não é admin nem gerente não recebe a lista
 (403) e a coluna simplesmente não aparece. As iniciais ignoram o CNPJ que veio
 grudado no nome na carga da VMarket ("43.118.957 GUILHERME NUNES" vira GN) e
