@@ -2582,8 +2582,8 @@ def api_listar_convites_cotacao(cotacao_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/convites', methods=['POST'])
 def api_criar_convites_cotacao(cotacao_id):
-    """Manda o link de preenchimento pra todo fornecedor ativo, pros
-    insumos dessa cotação que ainda não têm fornecedor vinculado (ver
+    """Manda o link de preenchimento pros fornecedores marcados, cada um com
+    os insumos que ele fornece + os que não têm fornecedor nenhum (ver
     `criar_convites_cotacao` em armazenamento.py pra regra completa)."""
     erro_admin = _exigir_gestao()
     if erro_admin:
@@ -2608,8 +2608,11 @@ def api_criar_convites_cotacao(cotacao_id):
             return jsonify({"erro": "Marque pelo menos um fornecedor."}), 400
 
     resultado = criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids)
-    if resultado["insumosSemFornecedor"] == 0:
-        return jsonify({"erro": "Todos os insumos dessa cotação já têm fornecedor vinculado — não há nada pra cotar em aberto."}), 400
+    if not resultado["convites"]:
+        if resultado["fornecedoresSemItens"]:
+            nomes = ", ".join(resultado["fornecedoresSemItens"])
+            return jsonify({"erro": f"Nenhum insumo dessa cotação é fornecido por: {nomes}. Marque o fornecedor no cadastro do insumo (coluna Fornecedores, em Insumos) ou escolha outro."}), 400
+        return jsonify({"erro": "Todos os fornecedores marcados já têm convite nessa cotação."}), 400
     return jsonify({"ok": True, **resultado})
 
 

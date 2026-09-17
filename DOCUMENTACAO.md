@@ -1059,14 +1059,26 @@ preencher o próprio preço em vez do admin lançar na mão. Só existe pra
 cotação que veio de uma Requisição (tem `cotacao_item`, ou seja, tem
 quantidade calculada) — cotação lançada na mão continua só manual.
 
-Decisão de escopo do Guilherme em 2026-08-27, depois de ver o link real
-que a VMarket manda pro fornecedor (link de exemplo trazido por ele,
-`cotacao.vmarket.com.br/preencher/...`): **o sistema não tenta adivinhar
-quem cota o quê por vínculo** — o botão "Convidar fornecedores" manda o
-link pra **todo fornecedor ativo**, só dos insumos da cotação que ainda
-**não têm nenhum fornecedor vinculado** (`insumo_fornecedor` vazio pra
-aquele insumo — "sem fornecedor homologado"); insumo que já tem
-fornecedor vinculado continua sendo cotado na mão como sempre. Dentro do
+**Quem recebe o quê (regra atual, 2026-09-17 — "pode fazer igual a
+VMarket"):** cada fornecedor marcado recebe **os insumos que ele fornece**
+— os que aparecem com a bolinha dele na coluna Fornecedores da tela de
+Insumos, ou seja, o cadastro (`insumo_fornecedor`) mais o histórico de quem
+já cotou ou já vendeu — **mais os insumos que não têm fornecedor nenhum**,
+que vão pra todo mundo pra não ficarem sem preço. Fornecedor que não
+fornece nada da cotação e não tem órfão pra cotar não recebe convite, e a
+tela diz o nome dele. A resposta traz `totalInsumos` por convite, que o
+aviso da tela mostra ("Forn A (7), Forn B (3)").
+`_insumos_da_cotacao_por_fornecedor` monta esse mapa; teste em
+`teste_convite_por_fornecedor.py` (scratchpad), 13 checagens.
+
+*Regra anterior, substituída:* de 2026-08-27 até 2026-09-17, decisão de
+escopo do Guilherme depois de ver o link real da VMarket
+(`cotacao.vmarket.com.br/preencher/...`), o sistema **não** tentava
+adivinhar quem cota o quê: mandava pra todo fornecedor ativo a mesma lista,
+só com os insumos sem nenhum fornecedor vinculado, e o resto era cotado na
+mão. Com o histórico da VMarket importado, 182 dos 287 insumos passaram a
+ter fornecedor vinculado e sobrava quase nada pro link — daí a volta pro
+formato da VMarket. Dentro do
 link, é o **próprio fornecedor** quem decide, insumo por insumo, se vende
 ou não — preenche o preço de quem vende e marca "não vendo esse item" pra
 quem não faz parte do catálogo dele (não bloqueia o resto da cotação).

@@ -3818,6 +3818,16 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
     const pendentes = convitesCotacaoAtuais.filter((c) => c.status === 'aberta');
     const semTelefone = pendentes.filter((c) => !c.fornecedorTelefone).map((c) => c.fornecedorNome);
     let mensagem = `${pendentes.length} convite(s) pendente(s) — clique em "Enviar por WhatsApp" na tabela abaixo, um por fornecedor.`;
+    // Cada fornecedor recebe só o que ele fornece: vale dizer quantos itens.
+    const criados = dados.convites || [];
+    if (criados.length) {
+      mensagem += '\n\nItens no link de cada um: '
+        + criados.map((c) => `${c.fornecedorNome} (${c.totalInsumos})`).join(', ') + '.';
+    }
+    if ((dados.fornecedoresSemItens || []).length) {
+      mensagem += '\n\nSem convite, porque nenhum insumo dessa cotação é fornecido por eles: '
+        + dados.fornecedoresSemItens.join(', ') + '.';
+    }
     if (semTelefone.length) mensagem += ` Sem telefone cadastrado (copie o link na tabela): ${semTelefone.join(', ')}.`;
     alert(mensagem);
   } catch (erro) {

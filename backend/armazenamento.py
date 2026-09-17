@@ -4423,29 +4423,42 @@ def selecionar_melhores_precos_cotacao(cotacao_id):
     return len(melhores)
 
 
-def _insumos_sem_fornecedor_vinculado(cotacao_id):
-    """Insumos dessa cotação que ainda não têm nenhum fornecedor vinculado
-    — só esses entram no convite aberto pra todo mundo cotar."""
-    mapa = mapa_insumo_fornecedores()
+def _insumos_da_cotacao_por_fornecedor(cotacao_id):
+    """Pra cada insumo da cotação, quem fornece ele — cadastro do insumo
+    (`insumo_fornecedor`) mais o histórico de quem já cotou ou já vendeu. É a
+    mesma lista que a coluna Fornecedores mostra na tela de Insumos."""
+    cadastro = mapa_insumo_fornecedores()
+    historico = mapa_fornecedores_do_historico()
     with conexao() as conn:
-        linhas = conn.execute(
-            "SELECT insumo_id FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,)
-        ).fetchall()
-    return [linha["insumo_id"] for linha in linhas if not mapa.get(linha["insumo_id"])]
+        insumo_ids = [
+            linha["insumo_id"]
+            for linha in conn.execute(
+                "SELECT insumo_id FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,)
+            ).fetchall()
+        ]
+    return {
+        insumo_id: set(cadastro.get(insumo_id, [])) | set(historico.get(insumo_id, []))
+        for insumo_id in insumo_ids
+    }
 
 
 def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
     """Manda o link de preenchimento pros fornecedores ativos escolhidos na
-    tela (`fornecedor_ids`; None = todo fornecedor ativo, como era antes de
-    2026-09-11). Não filtra por vínculo — decisão do Guilherme em
-    2026-08-27: o próprio fornecedor decide por insumo se vende ou não
-    dentro do link, em vez do sistema tentar adivinhar. Só considera insumo
-    sem fornecedor vinculado ainda; quem já tem, continua sendo cotado na
-    mão. Fornecedor que já tem convite pra essa cotação não recebe outro
-    (evita resetar o token de quem já está respondendo ou já respondeu)."""
-    insumo_ids = _insumos_sem_fornecedor_vinculado(cotacao_id)
-    if not insumo_ids:
-        return {"convites": [], "insumosSemFornecedor": 0}
+    tela (`fornecedor_ids`; None = todo fornecedor ativo).
+
+    Cada um recebe **os insumos que ele fornece** — os ligados a ele no
+    cadastro do insumo ou no histórico (já cotou ou já vendeu) — mais os
+    insumos que não têm fornecedor nenhum, que vão pra todo mundo pra não
+    ficarem sem preço. É como era na VMarket (pedido dela em 2026-09-17, no
+    lugar da regra de 2026-08-27, que mandava a mesma lista de órfãos pra
+    todos). Fornecedor sem nenhum item não recebe convite — link vazio não
+    serve pra nada. Quem já tem convite nessa cotação não recebe outro (evita
+    resetar o token de quem está respondendo).
+    """
+    por_insumo = _insumos_da_cotacao_por_fornecedor(cotacao_id)
+    if not por_insumo:
+        return {"convites": [], "insumosSemFornecedor": 0, "fornecedoresSemItens": []}
+    orfaos = [insumo_id for insumo_id, forns in por_insumo.items() if not forns]
 
     fornecedores = [f for f in listar_fornecedores() if f["ativo"]]
     if fornecedor_ids is not None:
@@ -4453,6 +4466,7 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
         fornecedores = [f for f in fornecedores if f["id"] in escolhidos]
     agora = datetime.now().isoformat()
     convites = []
+    sem_itens = []
     with conexao() as conn:
         existentes = {
             linha["fornecedor_id"]
@@ -4462,6 +4476,11 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
         }
         for fornecedor in fornecedores:
             if fornecedor["id"] in existentes:
+                continue
+            dele = [i for i, forns in por_insumo.items() if fornecedor["id"] in forns]
+            insumo_ids = dele + [i for i in orfaos if i not in dele]
+            if not insumo_ids:
+                sem_itens.append(fornecedor["nome"])
                 continue
             token = secrets.token_urlsafe(24)
             cursor = conn.execute(
@@ -4477,9 +4496,19 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
                     "INSERT INTO cotacao_convite_item (convite_id, insumo_id) VALUES (?, ?)",
                     (convite_id, insumo_id),
                 )
-            convites.append({"id": convite_id, "fornecedorId": fornecedor["id"], "fornecedorNome": fornecedor["nome"], "token": token})
+            convites.append({
+                "id": convite_id,
+                "fornecedorId": fornecedor["id"],
+                "fornecedorNome": fornecedor["nome"],
+                "token": token,
+                "totalInsumos": len(insumo_ids),
+            })
 
-    return {"convites": convites, "insumosSemFornecedor": len(insumo_ids)}
+    return {
+        "convites": convites,
+        "insumosSemFornecedor": len(orfaos),
+        "fornecedoresSemItens": sem_itens,
+    }
 
 
 def listar_convites_cotacao(cotacao_id):
