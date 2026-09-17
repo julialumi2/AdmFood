@@ -4436,10 +4436,19 @@ def _insumos_da_cotacao_por_fornecedor(cotacao_id):
     cadastro = mapa_insumo_fornecedores()
     historico = mapa_fornecedores_do_historico()
     with conexao() as conn:
+        # JOIN com insumo de propósito: insumo excluído depois da cotação deixa
+        # a linha em cotacao_item pra trás (achado em produção, 17/09 — a
+        # cotação 20 tinha o insumo 201, que não existe mais). Sem isso o item
+        # fantasma ia parar no link do fornecedor.
         insumo_ids = [
             linha["insumo_id"]
             for linha in conn.execute(
-                "SELECT insumo_id FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,)
+                """
+                SELECT ci.insumo_id FROM cotacao_item ci
+                JOIN insumo i ON i.id = ci.insumo_id
+                WHERE ci.cotacao_id = ?
+                """,
+                (cotacao_id,),
             ).fetchall()
         ]
     return {
