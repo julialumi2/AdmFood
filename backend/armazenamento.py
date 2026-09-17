@@ -4448,6 +4448,65 @@ def _insumos_da_cotacao_por_fornecedor(cotacao_id):
     }
 
 
+def _quem_cota_o_que(cotacao_id, fornecedor_ids=None):
+    """Base do convite e da prévia: (mapa insumo→fornecedores, insumos órfãos,
+    fornecedores ativos escolhidos). Ficar num lugar só evita a prévia mostrar
+    uma coisa e o convite mandar outra."""
+    por_insumo = _insumos_da_cotacao_por_fornecedor(cotacao_id)
+    orfaos = [insumo_id for insumo_id, forns in por_insumo.items() if not forns]
+    fornecedores = [f for f in listar_fornecedores() if f["ativo"]]
+    if fornecedor_ids is not None:
+        escolhidos = set(fornecedor_ids)
+        fornecedores = [f for f in fornecedores if f["id"] in escolhidos]
+    return por_insumo, orfaos, fornecedores
+
+
+def _itens_do_fornecedor(fornecedor_id, por_insumo, orfaos):
+    dele = [i for i, forns in por_insumo.items() if fornecedor_id in forns]
+    return dele + [i for i in orfaos if i not in dele]
+
+
+def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
+    """O que cada fornecedor receberia se o convite fosse gerado agora — sem
+    gerar nada. A tela mostra isso antes de mandar (pedido dela, 2026-09-17),
+    porque link de cotação errado só se descobre depois que o fornecedor
+    responde."""
+    por_insumo, orfaos, fornecedores = _quem_cota_o_que(cotacao_id, fornecedor_ids)
+    if not por_insumo:
+        return {"fornecedores": [], "orfaos": [], "insumosDaCotacao": 0}
+
+    with conexao() as conn:
+        nomes = {
+            linha["id"]: linha["nome"]
+            for linha in conn.execute(
+                f"SELECT id, nome FROM insumo WHERE id IN ({', '.join('?' for _ in por_insumo)})",
+                list(por_insumo),
+            ).fetchall()
+        }
+        com_convite = {
+            linha["fornecedor_id"]
+            for linha in conn.execute(
+                "SELECT fornecedor_id FROM cotacao_convite WHERE cotacao_id = ?", (cotacao_id,)
+            ).fetchall()
+        }
+
+    saida = []
+    for fornecedor in fornecedores:
+        itens = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos)
+        saida.append({
+            "fornecedorId": fornecedor["id"],
+            "fornecedorNome": fornecedor["nome"],
+            "jaTemConvite": fornecedor["id"] in com_convite,
+            "insumos": sorted(nomes.get(i, f"#{i}") for i in itens),
+        })
+    saida.sort(key=lambda f: (-len(f["insumos"]), f["fornecedorNome"]))
+    return {
+        "fornecedores": saida,
+        "orfaos": sorted(nomes.get(i, f"#{i}") for i in orfaos),
+        "insumosDaCotacao": len(por_insumo),
+    }
+
+
 def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
     """Manda o link de preenchimento pros fornecedores ativos escolhidos na
     tela (`fornecedor_ids`; None = todo fornecedor ativo).
@@ -4461,15 +4520,9 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
     serve pra nada. Quem já tem convite nessa cotação não recebe outro (evita
     resetar o token de quem está respondendo).
     """
-    por_insumo = _insumos_da_cotacao_por_fornecedor(cotacao_id)
+    por_insumo, orfaos, fornecedores = _quem_cota_o_que(cotacao_id, fornecedor_ids)
     if not por_insumo:
         return {"convites": [], "insumosSemFornecedor": 0, "fornecedoresSemItens": []}
-    orfaos = [insumo_id for insumo_id, forns in por_insumo.items() if not forns]
-
-    fornecedores = [f for f in listar_fornecedores() if f["ativo"]]
-    if fornecedor_ids is not None:
-        escolhidos = set(fornecedor_ids)
-        fornecedores = [f for f in fornecedores if f["id"] in escolhidos]
     agora = datetime.now().isoformat()
     convites = []
     sem_itens = []
@@ -4483,8 +4536,7 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
         for fornecedor in fornecedores:
             if fornecedor["id"] in existentes:
                 continue
-            dele = [i for i, forns in por_insumo.items() if fornecedor["id"] in forns]
-            insumo_ids = dele + [i for i in orfaos if i not in dele]
+            insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos)
             if not insumo_ids:
                 sem_itens.append(fornecedor["nome"])
                 continue

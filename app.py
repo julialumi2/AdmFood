@@ -176,6 +176,7 @@ from backend.armazenamento import (
     excluir_requisicao,
     listar_historico_compras,
     criar_convites_cotacao,
+    previa_convites_cotacao,
     listar_convites_cotacao,
     buscar_convite_por_token,
     responder_convite_cotacao,
@@ -2578,6 +2579,18 @@ def api_listar_convites_cotacao(cotacao_id):
         # Pro "Convidar fornecedores" já marcar quem fornece pra essas lojas.
         "lojas": lojas_da_cotacao(cotacao_id),
     })
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/convites/previa', methods=['GET'])
+def api_previa_convites_cotacao(cotacao_id):
+    """O que cada fornecedor receberia se o convite fosse gerado agora. Só
+    leitura — não cria convite nem token."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    if not buscar_cotacao(cotacao_id):
+        return jsonify({"erro": "Cotação não encontrada."}), 404
+    return jsonify(previa_convites_cotacao(cotacao_id))
 
 
 @app.route('/api/cotacoes/<int:cotacao_id>/convites', methods=['POST'])

@@ -1071,8 +1071,21 @@ que vão pra todo mundo pra não ficarem sem preço. Fornecedor que não
 fornece nada da cotação e não tem órfão pra cotar não recebe convite, e a
 tela diz o nome dele. A resposta traz `totalInsumos` por convite, que o
 aviso da tela mostra ("Forn A (7), Forn B (3)").
-`_insumos_da_cotacao_por_fornecedor` monta esse mapa; teste em
-`teste_convite_por_fornecedor.py` (scratchpad), 13 checagens.
+`_insumos_da_cotacao_por_fornecedor` monta esse mapa e `_quem_cota_o_que` é
+a base compartilhada com a prévia.
+
+**Prévia do convite** (2026-09-17): antes de gerar, o modal "Convidar
+fornecedores" mostra quem recebe link e o que vai dentro — cada fornecedor com
+a contagem de itens e a lista aberta num `<details>`, quem já tem convite e
+quem fica de fora por não fornecer nada, mais quantos insumos órfãos vão pra
+todos. Atualiza quando as caixas mudam (vem numa chamada só e é filtrada no
+navegador). `GET /api/cotacoes/<id>/convites/previa` (`previa_convites_cotacao`,
+admin e gerente) é **só leitura**, não cria convite nem token, e sai da mesma
+função que o convite de verdade pra não divergir. Motivo: link de cotação
+errado só se descobre depois que o fornecedor responde.
+
+Teste em `teste_convite_por_fornecedor.py` (scratchpad), 24 checagens,
+incluindo "o que a prévia prometeu é o que o convite mandou".
 
 *Regra anterior, substituída:* de 2026-08-27 até 2026-09-17, decisão de
 escopo do Guilherme depois de ver o link real da VMarket

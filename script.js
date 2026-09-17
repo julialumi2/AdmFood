@@ -3685,10 +3685,73 @@ async function renderListaConvidarFornecedores() {
     lista.innerHTML = semSugestao
       ? `<p class="panel-subtitle">Nenhum fornecedor marcado pra ${lojasCotacaoAtual.length ? escaparHtml(lojasCotacaoAtual.join(', ')) : 'essa cotação'} em Fornecedores — marquei todos.</p>` + ativos.map((f) => linha(f, true, '')).join('')
       : sugeridos.map((f) => linha(f, true, `compramos pra ${escaparHtml(f.lojas.filter((l) => !lojasCotacaoAtual.length || lojasCotacaoAtual.includes(l)).join(', '))}`)).join('') + outros.map((f) => linha(f, false, '')).join('');
+    lista.querySelectorAll('input[type="checkbox"]').forEach((caixa) => {
+      caixa.addEventListener('change', renderPreviaConvite);
+    });
+    await carregarPreviaConvite();
   } catch (erro) {
     console.error('Falha ao carregar fornecedores:', erro);
     lista.innerHTML = '<p class="form-erro">Não foi possível carregar os fornecedores.</p>';
   }
+}
+
+// --- PRÉVIA DO CONVITE ---
+// Link de cotação errado só se descobre depois que o fornecedor responde, e
+// aí já foi. A prévia mostra, antes de gerar, quem recebe o link e o que vai
+// dentro dele (pedido dela, 17/09). Vem do servidor pela mesma regra que
+// gera o convite de verdade, pra não divergir.
+let previaConviteDados = null;
+
+async function carregarPreviaConvite() {
+  const alvo = document.getElementById('convite-previa');
+  if (!alvo || !cotacaoAtualId) return;
+  alvo.innerHTML = '<p class="panel-subtitle">Carregando...</p>';
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites/previa`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    previaConviteDados = await resposta.json();
+    renderPreviaConvite();
+  } catch (erro) {
+    console.error('Falha ao carregar a prévia do convite:', erro);
+    alvo.innerHTML = '<p class="form-erro">Não foi possível montar a prévia.</p>';
+  }
+}
+
+function renderPreviaConvite() {
+  const alvo = document.getElementById('convite-previa');
+  if (!alvo || !previaConviteDados) return;
+  const marcados = new Set(Array.from(
+    document.querySelectorAll('#convidar-fornecedores-lista input:checked')
+  ).map((caixa) => parseInt(caixa.value, 10)));
+  const escolhidos = previaConviteDados.fornecedores.filter((f) => marcados.has(f.fornecedorId));
+  const receberao = escolhidos.filter((f) => f.insumos.length && !f.jaTemConvite);
+  const semItens = escolhidos.filter((f) => !f.insumos.length);
+  const jaTem = escolhidos.filter((f) => f.jaTemConvite);
+
+  if (!escolhidos.length) {
+    alvo.innerHTML = '<p class="panel-subtitle">Marque um fornecedor pra ver o que vai no link dele.</p>';
+    return;
+  }
+
+  const orfaos = previaConviteDados.orfaos || [];
+  alvo.innerHTML = `
+    <p class="panel-subtitle">
+      ${receberao.length} de ${escolhidos.length} marcados recebem link, de ${previaConviteDados.insumosDaCotacao} insumos na cotação.
+      ${orfaos.length ? `${orfaos.length} sem fornecedor definido ${orfaos.length === 1 ? 'vai' : 'vão'} pra todos.` : ''}
+    </p>
+    <ul class="convite-previa-lista">
+      ${receberao.map((f) => `
+        <li>
+          <details>
+            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — ${f.insumos.length} ${f.insumos.length === 1 ? 'item' : 'itens'}</summary>
+            <span class="text-muted">${escaparHtml(f.insumos.join(', '))}</span>
+          </details>
+        </li>
+      `).join('')}
+      ${jaTem.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — já tem convite nessa cotação</li>`).join('')}
+      ${semItens.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — não fornece nada dessa cotação, fica de fora</li>`).join('')}
+    </ul>
+  `;
 }
 
 // Sem API oficial do WhatsApp Business ainda (pendência separada, travada
