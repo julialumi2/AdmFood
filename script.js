@@ -805,7 +805,7 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
   const thAcoes = document.getElementById('canal-th-acoes');
   if (!canalTableBody || !canvas) return;
 
-  const podeEditar = !!(contextoEdicao && window.usuarioLogado?.papel === 'admin');
+  const podeEditar = !!(contextoEdicao && _possoGerir());
   if (thAcoes) thAcoes.style.display = podeEditar ? '' : 'none';
   // A 6ª coluna (Ações) não cabe espremida do lado do gráfico — ver
   // .tabela-com-acoes em insight.css. Sem isso o botão de editar existe
@@ -1701,7 +1701,7 @@ function _atualizarOpcoesCategoriaEstoque(linhas) {
 }
 
 function renderEstoqueTab() {
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   const tbody = document.getElementById('estoque-tabela-body');
   if (!tbody) return;
 
@@ -2857,7 +2857,7 @@ function _diasAteValidade(validade) {
 }
 
 function renderLotesVencendo() {
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   const tbody = document.getElementById('lotes-vencendo-tabela-body');
   if (!tbody) return;
 
@@ -3040,7 +3040,7 @@ async function carregarFornecedores() {
 }
 
 function renderFornecedoresTabela() {
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   const tbody = document.getElementById('fornecedores-tabela-body');
   if (!tbody) return;
 
@@ -3215,7 +3215,7 @@ function _formatarMoedaCompacta(valor) {
 }
 
 function renderCotacoesLista() {
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   const tbody = document.getElementById('cotacoes-tabela-body');
   if (!tbody) return;
 
@@ -3451,7 +3451,7 @@ async function abrirCotacaoDetalhe(cotacaoId) {
 }
 
 async function recarregarCotacaoDetalhe() {
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}`);
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
@@ -4251,7 +4251,7 @@ function renderPedidoDetalhe() {
     `;
   }).join('');
 
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   const btnCancelar = document.getElementById('btn-pedido-cancelar');
   btnCancelar.style.display = isAdmin ? '' : 'none';
   btnCancelar.textContent = p.compraFora ? 'Excluir compra' : 'Cancelar pedido';
@@ -4375,7 +4375,7 @@ const STATUS_LABEL_CONTAGEM = { aberta: 'Aberta', respondida: 'Aguardando confer
 const STATUS_CLASSE_CONTAGEM = { aberta: 'neu-orange', respondida: 'pos', aprovada: 'pos' };
 
 function renderContagensTabela() {
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   const tbody = document.getElementById('contagens-tabela-body');
   if (!tbody) return;
 
@@ -4442,7 +4442,7 @@ async function abrirContagemDetalhe(contagemId) {
 function renderContagemDetalhe() {
   const c = contagemDetalheAtual;
   if (!c) return;
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
 
   document.getElementById('contagem-detalhe-titulo').textContent = `${c.loja} — ${c.descricao || 'Requisição'}`;
 
@@ -6780,7 +6780,7 @@ document.getElementById('form-compra-fora')?.addEventListener('submit', async (e
 // Requisições, Cotações, Pedidos e Recebimentos (e o total em Compras). Só pra
 // admin; vermelho quando tem prazo vencido ou entrega atrasada.
 async function carregarContadoresMenuCompras() {
-  if (window.usuarioLogado?.papel !== 'admin') return;
+  if (!_possoGerir()) return;
   const links = document.querySelectorAll('.menu-subgroup a[href]');
   if (!links.length) return;
   try {
@@ -7637,10 +7637,12 @@ async function carregarUsuarioLogado() {
       .join('');
 
     elNome.forEach(el => { el.textContent = usuario.nome; });
-    elPapel.forEach(el => { el.textContent = usuario.papel === 'admin' ? 'Admin' : 'Equipe'; });
+    elPapel.forEach(el => { el.textContent = PAPEL_LABEL_USUARIO[usuario.papel] || usuario.papel; });
     elAvatar.forEach(el => { el.textContent = iniciais; });
 
     window.usuarioLogado = usuario;
+    _ajustarMenuAoPerfil();
+    _travarNaLojaDoFuncionario();
     carregarContadoresMenuCompras();
 
     // Tela de Configurações: painel "Sua Conta" + seção "Equipe" (só admin)
@@ -7648,7 +7650,7 @@ async function carregarUsuarioLogado() {
     if (contaNome) {
       contaNome.textContent = usuario.nome;
       document.getElementById('conta-email-label').textContent = usuario.email;
-      document.getElementById('conta-papel-label').textContent = usuario.papel === 'admin' ? 'Administrador' : 'Equipe';
+      document.getElementById('conta-papel-label').textContent = (PAPEL_LABEL_USUARIO[usuario.papel] || usuario.papel) + (usuario.loja ? ` · ${usuario.loja}` : '');
     }
     const painelEquipe = document.getElementById('painel-equipe');
     if (painelEquipe && usuario.papel === 'admin') {
@@ -7699,20 +7701,20 @@ async function carregarUsuarioLogado() {
     // Tela de Insights: botão de ajustar canal (só admin) — se a tabela de
     // canal de um dia específico já tiver renderizado como só-leitura antes
     // de saber que é admin, re-renderiza agora com os controles de edição.
-    if (usuario.papel === 'admin' && canalSelecionado) {
+    if (_possoGerir() && canalSelecionado) {
       exibirCanalDoDia(canalSelecionado.unidade, canalSelecionado.diaIso);
     }
 
     // Tela de Estoque: botões "Novo insumo"/"Registrar entrada" e coluna de
     // Ações (só admin) — mesma correção de corrida entre os dois fetches.
-    if (usuario.papel === 'admin' && document.getElementById('estoque-loja-select') && estoqueInsumos.length) {
+    if (_possoGerir() && document.getElementById('estoque-loja-select') && estoqueInsumos.length) {
       renderEstoqueTab();
     }
 
     // Tela de Cardápio → sub-aba Ficha Técnica: botão "Novo item", custo
     // editável e ações de editar/excluir (só admin) — mesma correção de
     // corrida entre os dois fetches.
-    if (usuario.papel === 'admin' && (fichaTecnicaProdutos.length || fichaTecnicaComplementos.length)) {
+    if (_possoGerir() && (fichaTecnicaProdutos.length || fichaTecnicaComplementos.length)) {
       renderFichaTecnicaConteudo();
     }
 
@@ -7720,7 +7722,7 @@ async function carregarUsuarioLogado() {
     // admin) — mesma correção de corrida entre os dois fetches. Reage mesmo
     // com a lista vazia, senão o botão nunca apareceria se a Contagens
     // carregar antes de saber o papel do usuário.
-    if (usuario.papel === 'admin' && document.getElementById('contagens-tabela-body')) {
+    if (_possoGerir() && document.getElementById('contagens-tabela-body')) {
       renderContagensTabela();
     }
     if (usuario.papel === 'admin' && document.getElementById('requisicoes-tabela-body')) {
@@ -7738,9 +7740,68 @@ async function carregarUsuarioLogado() {
   }
 }
 
-// --- GESTÃO DE EQUIPE (tela de Configurações, só admin) ---
+// --- PERFIS DE ACESSO (card #35) ---
+// admin: a rede inteira. gerente: uma loja, com compras e cadastro dela.
+// operação: uma loja, só o dia a dia (contagem, recebimento, consulta).
 
-const PAPEL_LABEL_USUARIO = { admin: 'Admin', equipe: 'Equipe' };
+function _souAdmin() {
+  return window.usuarioLogado?.papel === 'admin';
+}
+
+function _possoGerir() {
+  const papel = window.usuarioLogado?.papel;
+  return papel === 'admin' || papel === 'gerente';
+}
+
+// Telas de cada perfil — o mesmo mapa do backend (PAGINAS_POR_PAPEL em app.py).
+const PAGINAS_POR_PAPEL = {
+  gerente: ['index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html', 'contagens.html',
+    'pedidos.html', 'recebimentos.html', 'guia-compras.html', 'cardapio.html', 'preparo.html',
+    'curva-abc.html', 'insight.html', 'mais-vendidos.html', 'vendas-semanais.html', 'configuracoes.html'],
+  operacao: ['estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html', 'cardapio.html',
+    'guia-compras.html', 'configuracoes.html'],
+};
+
+function _ajustarMenuAoPerfil() {
+  const paginas = PAGINAS_POR_PAPEL[window.usuarioLogado?.papel];
+  if (!paginas) return; // admin vê tudo
+  document.querySelectorAll('.sidebar-menu a[href]').forEach((link) => {
+    const pagina = link.getAttribute('href').split('/').pop().split('?')[0];
+    if (!paginas.includes(pagina)) link.remove();
+  });
+  // Grupo que ficou sem nenhum item dentro some junto com o título.
+  document.querySelectorAll('.sidebar-menu .menu-group').forEach((grupo) => {
+    if (!grupo.querySelector('.menu-subitem')) grupo.remove();
+  });
+}
+
+function _travarNaLojaDoFuncionario() {
+  const minha = window.usuarioLogado?.loja;
+  if (!minha) return; // admin escolhe a loja que quiser
+  const outras = LOJAS_ESTOQUE.filter((loja) => loja !== minha);
+  // Toda tela monta o seletor de loja a partir dessa lista.
+  LOJAS_ESTOQUE.splice(0, LOJAS_ESTOQUE.length, minha);
+  document.querySelectorAll('[data-loja], [data-tab]').forEach((el) => {
+    const loja = el.dataset.loja || el.dataset.tab;
+    if (outras.includes(loja)) el.remove();
+  });
+  document.querySelectorAll('option').forEach((opcao) => {
+    if (outras.includes(opcao.value)) opcao.remove();
+  });
+  document.querySelectorAll('input[type="checkbox"]').forEach((caixa) => {
+    if (outras.includes(caixa.value)) (caixa.closest('label') || caixa).remove();
+  });
+  // "Visão Geral (Todas)" não quer dizer nada pra quem enxerga uma loja só:
+  // sai da lista e a loja da pessoa entra no lugar como escolhida.
+  document.querySelectorAll('[data-tab="geral"], [data-tab="todas"], [data-loja="geral"], [data-loja="todas"]')
+    .forEach((el) => el.remove());
+  const escolha = document.querySelector(`[data-tab="${CSS.escape(minha)}"], [data-loja="${CSS.escape(minha)}"]`);
+  if (escolha) escolha.click();
+}
+
+// --- GESTÃO DE FUNCIONÁRIOS (tela de Configurações, só admin) ---
+
+const PAPEL_LABEL_USUARIO = { admin: 'Admin', gerente: 'Gerente', operacao: 'Operação', equipe: 'Operação' };
 let equipeData = [];
 
 async function carregarEquipe() {
@@ -7754,7 +7815,7 @@ async function carregarEquipe() {
     equipeData = dados.usuarios;
 
     if (!equipeData.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhum membro cadastrado ainda.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">Nenhum funcionário cadastrado ainda.</td></tr>`;
       return;
     }
 
@@ -7766,6 +7827,7 @@ async function carregarEquipe() {
         <td class="font-bold">${escaparHtml(u.nome)}</td>
         <td class="text-muted">${escaparHtml(u.email)}</td>
         <td>${PAPEL_LABEL_USUARIO[u.papel] || u.papel}</td>
+        <td class="text-muted">${u.loja ? escaparHtml(u.loja) : 'Todas as lojas'}</td>
         <td><span class="badge-pill ${u.ativo ? 'pos' : 'neg'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
         <td>
           <div class="acoes-linha" style="justify-content:flex-end;">
@@ -7787,7 +7849,7 @@ async function carregarEquipe() {
     wireEquipeRowEvents();
   } catch (erro) {
     console.error('Falha ao carregar equipe:', erro);
-    tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar a equipe.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle" style="color:var(--danger);">Não foi possível carregar os funcionários.</td></tr>`;
   }
 }
 
@@ -7802,9 +7864,12 @@ function wireEquipeRowEvents() {
 }
 
 function abrirModalNovoUsuario() {
-  document.getElementById('modalUsuarioTitulo').textContent = 'Novo Membro';
+  document.getElementById('modalUsuarioTitulo').textContent = 'Novo funcionário';
   document.getElementById('formUsuario').reset();
   document.getElementById('usuarioId').value = '';
+  _preencherLojasUsuario();
+  document.getElementById('usuarioPapel').value = 'operacao';
+  atualizarCampoLojaUsuario();
   document.getElementById('usuarioSenha').required = true;
   document.getElementById('usuarioSenhaOpcional').style.display = 'none';
   document.getElementById('usuarioErro').style.display = 'none';
@@ -7812,17 +7877,32 @@ function abrirModalNovoUsuario() {
 }
 
 function abrirModalEditarUsuario(usuario) {
-  document.getElementById('modalUsuarioTitulo').textContent = 'Editar Membro';
+  document.getElementById('modalUsuarioTitulo').textContent = 'Editar funcionário';
   document.getElementById('formUsuario').reset();
   document.getElementById('usuarioId').value = usuario.id;
   document.getElementById('usuarioNome').value = usuario.nome;
   document.getElementById('usuarioEmail').value = usuario.email;
   document.getElementById('usuarioEmail').disabled = true;
-  document.getElementById('usuarioPapel').value = usuario.papel;
+  _preencherLojasUsuario();
+  document.getElementById('usuarioPapel').value = usuario.papel === 'equipe' ? 'operacao' : usuario.papel;
+  if (usuario.loja) document.getElementById('usuarioLoja').value = usuario.loja;
+  atualizarCampoLojaUsuario();
   document.getElementById('usuarioSenha').required = false;
   document.getElementById('usuarioSenhaOpcional').style.display = 'inline';
   document.getElementById('usuarioErro').style.display = 'none';
   document.getElementById('modalUsuario').style.display = 'flex';
+}
+
+function _preencherLojasUsuario() {
+  const select = document.getElementById('usuarioLoja');
+  if (!select || select.options.length) return;
+  select.innerHTML = LOJAS_ESTOQUE.map((loja) => `<option value="${escaparHtml(loja)}">${escaparHtml(loja)}</option>`).join('');
+}
+
+function atualizarCampoLojaUsuario() {
+  const grupo = document.getElementById('grupo-usuario-loja');
+  if (!grupo) return;
+  grupo.style.display = document.getElementById('usuarioPapel').value === 'admin' ? 'none' : '';
 }
 
 function fecharModalUsuario() {
@@ -7924,9 +8004,12 @@ async function salvarUsuario(event) {
   const elErro = document.getElementById('usuarioErro');
   elErro.style.display = 'none';
 
+  const papel = document.getElementById('usuarioPapel').value;
   const corpo = {
     nome: document.getElementById('usuarioNome').value.trim(),
-    papel: document.getElementById('usuarioPapel').value,
+    papel,
+    // Admin enxerga a rede inteira, então não fica preso a loja nenhuma.
+    loja: papel === 'admin' ? null : document.getElementById('usuarioLoja').value,
   };
   const senha = document.getElementById('usuarioSenha').value;
   if (senha) corpo.senha = senha;
@@ -8551,7 +8634,7 @@ function renderFichaTecnicaConteudo() {
   const btnNovoTexto = document.getElementById('btn-novo-item-cardapio-texto');
   const btnColarComplementos = document.getElementById('btn-colar-lista-complementos');
   if (!conteudoEl) return;
-  const isAdmin = window.usuarioLogado?.papel === 'admin';
+  const isAdmin = _possoGerir();
   if (acoesAdmin) acoesAdmin.style.display = isAdmin ? '' : 'none';
 
   if (!fichaTecnicaProdutos.length) {
@@ -8859,7 +8942,7 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
 
   try {
     const dados = await _buscarFichaTecnicaItem(itemId);
-    const isAdmin = window.usuarioLogado?.papel === 'admin';
+    const isAdmin = _possoGerir();
     const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
 
     painel.innerHTML = `

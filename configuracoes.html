@@ -291,14 +291,19 @@
           </div>
         </div>
 
-        <!-- EQUIPE (só visível/habilitado pra quem é admin) -->
+        <!-- FUNCIONÁRIOS (só visível/habilitado pra quem é admin) -->
         <div class="panel panel-table" id="painel-equipe" style="display:none;">
           <div class="panel-header">
             <div>
-              <h3 class="panel-title">Equipe</h3>
-              <span class="panel-subtitle">Quem tem acesso ao sistema</span>
+              <h3 class="panel-title">Funcionários</h3>
+              <span class="panel-subtitle">Quem entra no sistema, com qual perfil e em qual loja</span>
             </div>
-            <button type="button" class="btn-primary" onclick="abrirModalNovoUsuario()">+ Adicionar Membro</button>
+            <button type="button" class="btn-primary" onclick="abrirModalNovoUsuario()">+ Adicionar funcionário</button>
+          </div>
+          <div class="perfis-legenda">
+            <div><strong>Admin</strong><span>A rede inteira: tudo o que existe no sistema, inclusive esta tela.</span></div>
+            <div><strong>Gerente</strong><span>Uma loja: compras, estoque, ficha técnica e as vendas dela.</span></div>
+            <div><strong>Operação</strong><span>Uma loja, o dia a dia: contagem, recebimento e consulta de ficha.</span></div>
           </div>
           <div class="table-responsive">
             <table>
@@ -306,13 +311,14 @@
                 <tr>
                   <th>Nome</th>
                   <th>E-mail</th>
-                  <th>Papel</th>
+                  <th>Perfil</th>
+                  <th>Loja</th>
                   <th>Status</th>
                   <th style="text-align:right;">Ações</th>
                 </tr>
               </thead>
               <tbody id="equipe-tbody">
-                <tr><td colspan="5" class="panel-subtitle">Carregando...</td></tr>
+                <tr><td colspan="6" class="panel-subtitle">Carregando...</td></tr>
               </tbody>
             </table>
           </div>
@@ -362,11 +368,17 @@
             <input type="password" id="usuarioSenha" placeholder="Mínimo 6 caracteres">
           </div>
           <div class="form-group">
-            <label for="usuarioPapel">Papel</label>
-            <select id="usuarioPapel">
-              <option value="equipe">Equipe</option>
-              <option value="admin">Admin</option>
+            <label for="usuarioPapel">Perfil</label>
+            <select id="usuarioPapel" onchange="atualizarCampoLojaUsuario()">
+              <option value="operacao">Operação — dia a dia de uma loja</option>
+              <option value="gerente">Gerente — toca uma loja inteira</option>
+              <option value="admin">Admin — a rede inteira</option>
             </select>
+          </div>
+          <div class="form-group" id="grupo-usuario-loja">
+            <label for="usuarioLoja">Loja</label>
+            <select id="usuarioLoja"></select>
+            <span class="panel-subtitle" id="usuarioLojaAjuda">A pessoa só enxerga o estoque, as compras e as vendas dessa loja.</span>
           </div>
           <p id="usuarioErro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
           <div class="modal-actions">

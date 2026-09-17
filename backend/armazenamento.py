@@ -189,6 +189,14 @@ def inicializar_banco():
             )
             """
         )
+        colunas_usuario = {c["name"] for c in conn.execute("PRAGMA table_info(usuario)").fetchall()}
+        if "loja" not in colunas_usuario:
+            # Loja do funcionário: gerente e operação só enxergam a dela.
+            # NULL = a rede inteira, que é o caso do admin (card #35, 17/09).
+            conn.execute("ALTER TABLE usuario ADD COLUMN loja TEXT")
+        # 'equipe' era o único papel de funcionário antes do card #35. Virou
+        # 'operacao', o mesmo acesso do dia a dia com nome que diz o que é.
+        conn.execute("UPDATE usuario SET papel = 'operacao' WHERE papel = 'equipe'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS preco_cardapio (
@@ -1578,12 +1586,12 @@ def adicionar_comentario(tarefa_id, autor, texto):
 
 # --- USUÁRIOS (login da equipe) ---------------------------------------------
 
-def criar_usuario(nome, email, senha_hash, papel="equipe"):
+def criar_usuario(nome, email, senha_hash, papel="operacao", loja=None):
     agora = datetime.now().isoformat()
     with conexao() as conn:
         cursor = conn.execute(
-            "INSERT INTO usuario (nome, email, senha_hash, papel, ativo, criado_em) VALUES (?, ?, ?, ?, 1, ?)",
-            (nome, email.strip().lower(), senha_hash, papel, agora),
+            "INSERT INTO usuario (nome, email, senha_hash, papel, loja, ativo, criado_em) VALUES (?, ?, ?, ?, ?, 1, ?)",
+            (nome, email.strip().lower(), senha_hash, papel, loja or None, agora),
         )
         return cursor.lastrowid
 

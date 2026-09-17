@@ -225,7 +225,7 @@ usam `ALTER TABLE ... ADD COLUMN` com checagem prévia (ver exemplo em
 | `tarefa` | Tarefas do quadro Kanban (ClickUp) |
 | `tarefa_subtarefa` | Itens de checklist de cada tarefa |
 | `tarefa_comentario` | Comentários de cada tarefa |
-| `usuario` | Login da equipe — `senha_hash` (nunca texto puro), `papel` (`admin`/`equipe`), `ativo` |
+| `usuario` | Login da equipe — `senha_hash` (nunca texto puro), `papel` (`admin`/`gerente`/`operacao`), `loja` (NULL = a rede toda), `ativo` |
 | `preco_cardapio` | Comparativo de preços do cardápio, só leitura (ver 6.1) |
 | `pedido_preparo` | Tempo de cada pedido concluído (ver 6.2) |
 | `ajuste_faturamento_canal` | Correção manual de faturamento/pedidos por canal (ver 6.3) |
@@ -1577,7 +1577,7 @@ fecha de vez o ciclo Requisição → Contagem → Cotação → Pedido →
 solto, sem ligação nenhuma com o pedido de verdade). Tela nova
 (`recebimentos.html`), primeira do fluxo de Compras **liberada pra
 qualquer pessoa logada, não só admin** — pensada pra ser a primeira função
-de verdade que a equipe (papel "equipe") vai ter acesso, sem precisar de
+de verdade que a equipe (hoje papel "operacao", ver 8.0) vai ter acesso, sem precisar de
 conta admin só pra confirmar que uma entrega chegou.
 
 A tabela mostra a data em que o pedido foi feito (coluna "Pedido em",
@@ -3101,7 +3101,7 @@ Campos de `PUT /api/tarefas/<id>` aceitos (camelCase na API → coluna no banco)
 - `GET /api/me` — dados do usuário logado (nome, e-mail, papel)
 - `PUT /api/me/senha` — troca a própria senha (`{senhaAtual, senhaNova}`) — exige a senha atual, qualquer usuário logado pode usar
 
-**Gestão de equipe (só `papel=admin`)**
+**Gestão de funcionários (só `papel=admin`)**
 - `GET|POST /api/usuarios` — listar / criar membro
 - `PUT /api/usuarios/<id>` — editar nome/papel/ativo, opcionalmente resetar senha
 - `DELETE /api/usuarios/<id>` — excluir
@@ -3111,8 +3111,8 @@ Campos de `PUT /api/tarefas/<id>` aceitos (camelCase na API → coluna no banco)
 
 Adicionado em 2026-08-19. Cada pessoa da equipe tem seu próprio usuário
 (e-mail + senha com hash PBKDF2, via `werkzeug.security`), com papel
-`admin` ou `equipe`. Sessão via cookie assinado (`HttpOnly` + `SameSite=Lax`,
-`Secure` em produção).
+`admin`, `gerente` ou `operacao` (ver 8.0). Sessão via cookie assinado
+(`HttpOnly` + `SameSite=Lax`, `Secure` em produção).
 
 **Toda rota exige login** — `@app.before_request` em `app.py` bloqueia
 qualquer página `.html` (redireciona pra `login.html`) e qualquer `/api/*`
@@ -3127,6 +3127,54 @@ minutos (em memória, em `app.py` — não é compartilhado entre workers do
 Gunicorn, mas já corta bastante a velocidade de um ataque de força bruta).
 Não há CORS configurado — frontend e backend são a mesma origem, nunca foi
 necessário em produção.
+
+### 8.0 Perfis de acesso (card #35, 2026-09-17)
+
+Até aqui só existiam `admin` e `equipe`, todo mundo enxergava as 4 lojas e a
+diferença era só quais botões apareciam. Com a rede crescendo, a Julia pediu
+pra "arquitetar e estruturar os acessos dos funcionários". Ela escolheu três
+perfis e uma loja por funcionário:
+
+| Perfil | Alcance | O que faz |
+| --- | --- | --- |
+| `admin` | a rede inteira | tudo, inclusive funcionários, integrações, ClickUp e Zona de perigo |
+| `gerente` | uma loja | compras (cotação, pedido, recebimento), estoque e cadastro de insumo, ficha técnica e as vendas da loja |
+| `operacao` | uma loja | o dia a dia: contagem/requisição, recebimento e consulta de insumo, custo, ficha técnica e preparo — sem criar pedido nem editar cadastro |
+
+A coluna `usuario.loja` guarda a loja (NULL = a rede inteira, o caso do
+admin). A migração converte o papel antigo `equipe` em `operacao`. Um
+funcionário que ficasse sem loja não enxerga loja nenhuma (`SEM_LOJA` em
+`app.py`) — nunca todas.
+
+**Como isso é garantido (tudo em `app.py`):**
+
+- `_loja_no_escopo(loja)` troca a loja que veio na requisição pela loja da
+  pessoa. Todas as rotas que recebem `loja`/`unidade` passam por ela, então
+  não adianta trocar o parâmetro na mão: a resposta é sempre da loja dela.
+- `_loja_visivel(loja)` vale pro caso contrário, quando a loja vem do próprio
+  registro — abrir um pedido ou uma contagem de outra loja dá 403.
+- `_so_da_minha_loja(lista)` filtra as listagens (Pedidos, Recebimentos,
+  Contagens). O que não tem loja (uma cotação da rede) continua aparecendo.
+- `_exigir_gestao()` (admin + gerente) substituiu `_exigir_admin()` nas ~60
+  rotas de compra e cadastro; `_exigir_equipe()` libera as 3 rotas de contagem
+  pra operação. Continuam só do admin: funcionários, preço do cardápio,
+  conferência de requisição, datas especiais, importação da VMarket, Zona de
+  perigo, faturamento semanal, exclusão/mesclagem de insumo e ajuste de
+  produto pendente.
+- `PAGINAS_POR_PAPEL` bloqueia a tela inteira: quem não pode abrir cai na
+  página inicial do perfil dela (gerente no Resumo, operação em Insumos).
+
+**No frontend (`script.js`)**: `_possoGerir()` (admin ou gerente) no lugar de
+`papel === 'admin'` nas telas de gestão, `_ajustarMenuAoPerfil()` tira do menu
+o que o perfil não abre, e `_travarNaLojaDoFuncionario()` deixa só a loja da
+pessoa nos seletores (e some com a aba "Visão Geral (Todas)", que não quer
+dizer nada pra quem tem uma loja só).
+
+A tela fica em Configurações → **Funcionários**, com perfil, loja, ativar/
+desativar e redefinir senha. O campo Loja some quando o perfil é Admin.
+
+Teste: `teste_acessos.py` no scratchpad — 30 checagens cobrindo as três
+contas (o que cada uma vê, o que recebe 403 e pra onde é redirecionada).
 
 ### 8.1 Bootstrap do admin inicial
 

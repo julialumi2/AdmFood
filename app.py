@@ -5,7 +5,7 @@ import threading
 import time
 import uuid
 from datetime import date, datetime, timedelta
-from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
+from flask import Flask, abort, g, jsonify, redirect, request, send_from_directory, session
 
 from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON
 from backend.armazenamento import (
@@ -242,7 +242,7 @@ def _criar_equipe_inicial_se_necessario():
     # ambiente (mesmo aviso do admin: enquanto estiver definida, um
     # redeploy volta a senha de cada um pro valor daqui).
     for membro in _membros_equipe_inicial():
-        papel = membro.get('papel') if membro.get('papel') in ('admin', 'equipe') else 'equipe'
+        papel = membro.get('papel') if membro.get('papel') in ('admin', 'gerente', 'operacao') else 'operacao'
         _sincronizar_usuario_inicial(
             membro.get('nome'), membro.get('email'), membro.get('senha'), papel, 'Usuário da equipe inicial'
         )
@@ -262,7 +262,7 @@ def _tentar_bootstrap_sob_demanda(email):
         return
     for membro in _membros_equipe_inicial():
         if (membro.get('email') or '').strip().lower() == email_norm:
-            papel = membro.get('papel') if membro.get('papel') in ('admin', 'equipe') else 'equipe'
+            papel = membro.get('papel') if membro.get('papel') in ('admin', 'gerente', 'operacao') else 'operacao'
             _sincronizar_usuario_inicial(
                 membro.get('nome'), membro.get('email'), membro.get('senha'), papel, 'Usuário da equipe inicial (sob demanda)'
             )
@@ -283,7 +283,98 @@ def _usuario_logado():
     usuario_id = session.get("usuario_id")
     if not usuario_id:
         return None
-    return buscar_usuario_por_id(usuario_id)
+    # Guarda na requisição: cada guarda de rota chama isso, e sem o cache
+    # seria uma ida ao banco por chamada.
+    if getattr(g, 'usuario_cache_id', None) != usuario_id:
+        g.usuario_cache_id = usuario_id
+        g.usuario_cache = buscar_usuario_por_id(usuario_id)
+    return g.usuario_cache
+
+
+# --- PERFIS DE ACESSO (card #35) --------------------------------------------
+#
+# admin    — a rede inteira, tudo que existe no sistema.
+# gerente  — uma loja só: compras, estoque, ficha técnica e vendas dela.
+# operacao — uma loja só, o dia a dia: contagem, recebimento e consulta de
+#            insumo, ficha técnica e preparo. Não cria pedido nem edita
+#            cadastro.
+PAPEIS = ('admin', 'gerente', 'operacao')
+
+# Telas de cada perfil. O admin não aparece aqui porque vê todas.
+PAGINAS_POR_PAPEL = {
+    'gerente': {
+        'index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html',
+        'contagens.html', 'pedidos.html', 'recebimentos.html', 'guia-compras.html',
+        'cardapio.html', 'preparo.html', 'curva-abc.html', 'insight.html',
+        'mais-vendidos.html', 'vendas-semanais.html', 'configuracoes.html',
+    },
+    'operacao': {
+        'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
+        'cardapio.html', 'guia-compras.html', 'configuracoes.html',
+    },
+}
+# Pra onde cai quem tenta abrir uma tela que o perfil não alcança. A operação
+# não vê faturamento, então nem o Resumo (index) serve de casa pra ela.
+PAGINA_INICIAL_POR_PAPEL = {'gerente': '/index.html', 'operacao': '/estoque.html'}
+
+
+def _papel_do_usuario():
+    usuario = _usuario_logado()
+    return usuario['papel'] if usuario else None
+
+
+SEM_LOJA = '(sem loja)'
+
+
+def _loja_do_usuario():
+    """Loja a que a pessoa está presa. None = a rede inteira (admin)."""
+    usuario = _usuario_logado()
+    if not usuario or usuario['papel'] == 'admin':
+        return None
+    # Funcionário que ficou sem loja (conta antiga, cadastro pela metade) não
+    # enxerga loja nenhuma, em vez de cair no None e enxergar todas.
+    return usuario['loja'] or SEM_LOJA
+
+
+def _loja_no_escopo(loja):
+    """Amarra a requisição à loja da pessoa. Pro admin devolve o que veio; pra
+    gerente e operação devolve sempre a loja dela, então nenhuma rota entrega
+    (nem grava) dado de outra loja, mesmo com o parâmetro adulterado."""
+    minha = _loja_do_usuario()
+    return minha if minha else loja
+
+
+def _loja_visivel(loja):
+    """Pra quando a loja vem do próprio registro (uma contagem, um pedido) em
+    vez de vir na requisição."""
+    minha = _loja_do_usuario()
+    return minha is None or loja == minha
+
+
+def _so_da_minha_loja(itens, campo='loja'):
+    """Tira da lista o que é de outra loja. O que não tem loja (uma cotação da
+    rede, por exemplo) continua aparecendo pra todo mundo."""
+    minha = _loja_do_usuario()
+    if not minha:
+        return itens
+    return [item for item in itens if not item.get(campo) or item.get(campo) == minha]
+
+
+def _exigir_papeis(*papeis):
+    usuario = _usuario_logado()
+    if not usuario or usuario['papel'] not in papeis:
+        return jsonify({"erro": "Seu acesso não permite fazer isso."}), 403
+    return None
+
+
+def _exigir_gestao():
+    """Admin e gerente: o que cadastra, compra e aprova."""
+    return _exigir_papeis('admin', 'gerente')
+
+
+def _exigir_equipe():
+    """Qualquer pessoa com conta ativa, operação incluída."""
+    return _exigir_papeis(*PAPEIS)
 
 
 @app.before_request
@@ -309,8 +400,12 @@ def _exigir_login():
         nome_pagina = 'index.html' if caminho == '/' else caminho.lstrip('/')
         if nome_pagina in PAGINAS_PUBLICAS:
             return
-        if not _usuario_logado():
+        usuario = _usuario_logado()
+        if not usuario:
             return redirect('/login.html')
+        paginas = PAGINAS_POR_PAPEL.get(usuario['papel'])
+        if paginas is not None and nome_pagina not in paginas:
+            return redirect(PAGINA_INICIAL_POR_PAPEL.get(usuario['papel'], '/index.html'))
 
 def _sou_o_unico_worker_a_agendar():
     """Em produção o Gunicorn roda vários workers (processos separados), e
@@ -650,6 +745,7 @@ def _formatar_usuario(usuario):
         "nome": usuario["nome"],
         "email": usuario["email"],
         "papel": usuario["papel"],
+        "loja": usuario["loja"] or None,
     }
 
 
@@ -765,9 +861,25 @@ def _formatar_membro_equipe(usuario):
         "nome": usuario["nome"],
         "email": usuario["email"],
         "papel": usuario["papel"],
+        "loja": usuario["loja"] or None,
         "ativo": bool(usuario["ativo"]),
         "criadoEm": usuario["criado_em"],
     }
+
+
+def _papel_e_loja_do_formulario(dados, papel_atual=None, loja_atual=None):
+    """Lê perfil e loja da tela de Funcionários. Admin enxerga a rede inteira,
+    então não tem loja; gerente e operação precisam de uma."""
+    papel = dados.get('papel') if 'papel' in dados else papel_atual
+    if papel not in PAPEIS:
+        return None, None, jsonify({"erro": "Perfil inválido."}), 400
+    if papel == 'admin':
+        return papel, None, None, None
+    loja = dados.get('loja') if 'loja' in dados else loja_atual
+    loja = (loja or '').strip()
+    if loja not in LOJAS:
+        return None, None, jsonify({"erro": "Escolha a loja do funcionário."}), 400
+    return papel, loja, None, None
 
 
 @app.route('/api/usuarios', methods=['GET'])
@@ -788,7 +900,9 @@ def api_criar_usuario():
     nome = (dados.get('nome') or '').strip()
     email = (dados.get('email') or '').strip()
     senha = dados.get('senha') or ''
-    papel = dados.get('papel') if dados.get('papel') in ('admin', 'equipe') else 'equipe'
+    papel, loja, erro_papel, status = _papel_e_loja_do_formulario(dados, papel_atual='operacao')
+    if erro_papel:
+        return erro_papel, status
 
     if not nome or not email:
         return jsonify({"erro": "Informe nome e e-mail."}), 400
@@ -797,7 +911,7 @@ def api_criar_usuario():
     if buscar_usuario_por_email(email):
         return jsonify({"erro": "Já existe um usuário com esse e-mail."}), 400
 
-    usuario_id = criar_usuario(nome, email, gerar_hash_senha(senha), papel)
+    usuario_id = criar_usuario(nome, email, gerar_hash_senha(senha), papel, loja)
     return jsonify({"usuario": _formatar_membro_equipe(buscar_usuario_por_id(usuario_id))})
 
 
@@ -807,7 +921,8 @@ def api_atualizar_usuario(usuario_id):
     if erro:
         return erro
 
-    if not buscar_usuario_por_id(usuario_id):
+    usuario_alvo = buscar_usuario_por_id(usuario_id)
+    if not usuario_alvo:
         return jsonify({"erro": "Usuário não encontrado."}), 404
 
     dados = request.get_json(silent=True) or {}
@@ -816,10 +931,14 @@ def api_atualizar_usuario(usuario_id):
         if not (dados.get('nome') or '').strip():
             return jsonify({"erro": "Nome não pode ficar vazio."}), 400
         campos['nome'] = dados['nome'].strip()
-    if 'papel' in dados:
-        if dados['papel'] not in ('admin', 'equipe'):
-            return jsonify({"erro": "Papel inválido."}), 400
-        campos['papel'] = dados['papel']
+    if 'papel' in dados or 'loja' in dados:
+        papel, loja, erro_papel, status = _papel_e_loja_do_formulario(
+            dados, papel_atual=usuario_alvo['papel'], loja_atual=usuario_alvo['loja']
+        )
+        if erro_papel:
+            return erro_papel, status
+        campos['papel'] = papel
+        campos['loja'] = loja
     if 'ativo' in dados:
         campos['ativo'] = 1 if dados['ativo'] else 0
     if 'senha' in dados and dados['senha']:
@@ -836,7 +955,7 @@ def api_atualizar_usuario(usuario_id):
     if usuario_logado['id'] == usuario_id:
         if campos.get('ativo') == 0:
             return jsonify({"erro": "Você não pode desativar a si mesmo."}), 400
-        if campos.get('papel') == 'equipe':
+        if 'papel' in campos and campos['papel'] != 'admin':
             return jsonify({"erro": "Você não pode remover seu próprio acesso de admin."}), 400
 
     atualizar_usuario(usuario_id, campos)
@@ -1119,13 +1238,13 @@ def api_listar_misturas():
 def api_nova_mistura():
     """"Nova mistura" do Cardápio: devolve o insumo que vai ganhar a receita
     — o que já existe com esse nome, ou um novo, só da loja em tela."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
     nome = (dados.get('nome') or '').strip()
     unidade = (dados.get('unidadeMedida') or 'g').strip() or 'g'
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if not nome:
         return jsonify({"erro": "Informe o nome da mistura."}), 400
     if loja not in LOJAS:
@@ -1136,7 +1255,7 @@ def api_nova_mistura():
 
 @app.route('/api/insumos/<int:insumo_id>/receita', methods=['PUT'])
 def api_definir_receita_insumo(insumo_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
@@ -1224,7 +1343,7 @@ def _campos_fornecedor_homologado(dados):
 
 @app.route('/api/insumos', methods=['POST'])
 def api_criar_insumo():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1272,7 +1391,7 @@ def api_criar_insumos_em_lote():
     """Cadastra vários insumos novos de uma vez, já restritos às lojas
     marcadas (ex: catálogo da VMarket de uma loja que ainda não tinha
     nenhum insumo cadastrado no AdmFood)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1297,7 +1416,7 @@ def api_listar_insumos_por_loja():
     """Todo insumo com uma marcação se a loja pedida usa ele ou não —
     alimenta a tela "Insumos da loja" (Estoque) e decide quem entra no
     link de Requisição de cada loja."""
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     return jsonify({"insumos": listar_insumos_por_loja(loja)})
@@ -1305,12 +1424,12 @@ def api_listar_insumos_por_loja():
 
 @app.route('/api/insumos/por-loja', methods=['POST'])
 def api_salvar_insumos_da_loja():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -1325,7 +1444,7 @@ def api_salvar_insumos_da_loja():
 
 @app.route('/api/insumos/<int:insumo_id>', methods=['PUT'])
 def api_atualizar_insumo(insumo_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1392,7 +1511,7 @@ def api_mesclar_insumo(insumo_id):
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     try:
@@ -1409,11 +1528,14 @@ def api_mesclar_insumo(insumo_id):
 
 @app.route('/api/insumos/<int:insumo_id>/estoque/<loja>', methods=['PUT'])
 def api_atualizar_estoque_loja(insumo_id, loja):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
+    # Aqui a loja vem na URL, então não passa pelo _loja_no_escopo das outras.
+    if not _loja_visivel(loja):
+        return jsonify({"erro": "Essa loja não é a sua."}), 403
 
     dados = request.get_json(silent=True) or {}
     campos = {}
@@ -1433,7 +1555,7 @@ def api_atualizar_estoque_loja(insumo_id, loja):
 
 @app.route('/api/insumos/<int:insumo_id>/entrada', methods=['POST'])
 def api_entrada_insumo(insumo_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1475,7 +1597,7 @@ def api_consumo_medio_insumo():
     conta (fica mais completo conforme a Ficha Técnica for preenchida)."""
     inicio_str = request.args.get('inicio')
     fim_str = request.args.get('fim')
-    unidade = request.args.get('unidade') or None
+    unidade = _loja_no_escopo(request.args.get('unidade') or None)
     if unidade and unidade not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -1513,7 +1635,7 @@ def api_definir_baixa_automatica():
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     inicio = dados.get('inicio') or None
@@ -1536,7 +1658,7 @@ def api_listar_produtos_pendentes():
     produtos vendidos que ainda não casaram com nenhum item da Ficha
     Técnica. Aparece em toda loja, com a baixa ligada ou não: com ela
     desligada, é a lista do que ainda falta casar antes de ligar."""
-    unidade = request.args.get('unidade', 'Hamburgueria Artesanos')
+    unidade = _loja_no_escopo(request.args.get('unidade', 'Hamburgueria Artesanos'))
     if unidade not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     dias = request.args.get('dias', 30, type=int)
@@ -1675,7 +1797,7 @@ def api_lotes_vencendo():
 
 @app.route('/api/lotes/<int:lote_id>/resolver', methods=['PUT'])
 def api_resolver_lote(lote_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1695,7 +1817,7 @@ def api_listar_produtos_cardapio():
     com o item da Ficha Técnica quando existir, com custo (digitado à mão)
     e valor de venda do balcão (Cardápio Web) — base da tela de Ficha
     Técnica por loja."""
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     produtos = listar_produtos_por_loja(loja)
@@ -1709,7 +1831,7 @@ def api_listar_produtos_cardapio():
 def api_curva_abc():
     """Curva ABC de Cardápio (Etapa 10 do motor de compra) — volume ×
     margem × CMV real por produto, no período pedido."""
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     try:
@@ -1724,7 +1846,7 @@ def api_curva_abc():
 def api_curva_abc_insumos():
     """Curva ABC de insumos (Etapa 8) — quanto cada insumo movimenta em
     compra recebida, pra separar o que exige revisão manual na Requisição."""
-    erro = _exigir_admin()
+    erro = _exigir_gestao()
     if erro:
         return erro
     try:
@@ -1746,7 +1868,7 @@ def api_definir_produto_protegido(item_id):
 
 @app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['GET'])
 def api_buscar_ficha_tecnica_item(item_id):
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -1790,7 +1912,7 @@ def _insumos_unicos(linhas_estoque):
 
 @app.route('/api/itens-cardapio', methods=['POST'])
 def api_criar_item_cardapio():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1807,7 +1929,7 @@ def api_criar_item_cardapio():
     # Produto criado na aba de uma loja entra no cardápio dela, senão não
     # aparece na tela (que lista o cardápio de preços). Complemento não
     # tem cardápio: a aba de complementos lista os itens direto.
-    loja = (dados.get('loja') or '').strip()
+    loja = _loja_no_escopo((dados.get('loja') or '').strip())
     if tipo == 'produto' and loja in LOJAS:
         adicionar_produto_ao_cardapio(loja, nome, categoria)
     return jsonify({"id": item_id})
@@ -1815,7 +1937,7 @@ def api_criar_item_cardapio():
 
 @app.route('/api/itens-cardapio/<int:item_id>', methods=['DELETE'])
 def api_excluir_item_cardapio(item_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1827,7 +1949,7 @@ def api_excluir_item_cardapio(item_id):
 def api_renomear_item_cardapio(item_id):
     """Renomeia o item em todas as lojas, guardando o nome antigo como
     vínculo — ver renomear_item_cardapio."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
@@ -1840,7 +1962,7 @@ def api_renomear_item_cardapio(item_id):
 
 @app.route('/api/complementos', methods=['GET'])
 def api_listar_complementos():
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     return jsonify({"complementos": listar_complementos_por_loja(loja)})
@@ -1848,7 +1970,7 @@ def api_listar_complementos():
 
 @app.route('/api/complementos/lote', methods=['POST'])
 def api_criar_complementos_em_lote():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -1867,12 +1989,12 @@ def api_definir_ficha_tecnica(item_id):
     """Grava a ficha (`insumos`) e/ou a embalagem pra viagem
     (`embalagemViagem`) do item na loja. Só troca a lista que vier no corpo:
     quem manda só a ficha não apaga a embalagem."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -1919,7 +2041,7 @@ def _links_de_insumo(brutos):
 def api_listar_porcoes_complemento(item_id):
     """Porção (g) de cada complemento escolhido nesse produto — ex: no
     Frutas ao Creme 500ml, cada fruta 70 g e o adicional 60 g."""
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     return jsonify({"complementos": listar_porcoes_complemento(item_id, loja)})
@@ -1927,11 +2049,11 @@ def api_listar_porcoes_complemento(item_id):
 
 @app.route('/api/itens-cardapio/<int:item_id>/porcoes-complemento', methods=['PUT'])
 def api_definir_porcoes_complemento(item_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     porcoes = []
@@ -1958,7 +2080,7 @@ def api_salvar_custo_item_cardapio(item_id):
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     # Campo em branco apaga o custo à mão e devolve o produto pro cálculo
@@ -2053,7 +2175,7 @@ def api_listar_fornecedores():
 
 @app.route('/api/fornecedores', methods=['POST'])
 def api_criar_fornecedor():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2071,7 +2193,7 @@ def api_criar_fornecedor():
 
 @app.route('/api/fornecedores/<int:fornecedor_id>', methods=['PUT'])
 def api_atualizar_fornecedor(fornecedor_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2147,7 +2269,7 @@ def api_historico_compras():
 
 @app.route('/api/cotacoes', methods=['POST'])
 def api_criar_cotacao():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2196,7 +2318,7 @@ def api_detalhe_cotacao(cotacao_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>', methods=['PUT'])
 def api_atualizar_cotacao(cotacao_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2218,7 +2340,7 @@ def api_atualizar_cotacao(cotacao_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>', methods=['DELETE'])
 def api_excluir_cotacao(cotacao_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2231,7 +2353,7 @@ def api_excluir_cotacao(cotacao_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/precos', methods=['POST'])
 def api_adicionar_preco_cotacao(cotacao_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2251,7 +2373,7 @@ def api_adicionar_preco_cotacao(cotacao_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/precos/<int:preco_id>', methods=['DELETE'])
 def api_excluir_preco_cotacao(cotacao_id, preco_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2261,7 +2383,7 @@ def api_excluir_preco_cotacao(cotacao_id, preco_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/precos/<int:preco_id>/selecionar', methods=['PUT'])
 def api_selecionar_preco_cotacao(cotacao_id, preco_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2271,7 +2393,7 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/selecionar-melhores-precos', methods=['POST'])
 def api_selecionar_melhores_precos_cotacao(cotacao_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2281,7 +2403,7 @@ def api_selecionar_melhores_precos_cotacao(cotacao_id):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/itens/<int:insumo_id>', methods=['PUT'])
 def api_salvar_quantidade_item_cotacao(cotacao_id, insumo_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2313,7 +2435,7 @@ def _formatar_convite(convite):
 
 @app.route('/api/cotacoes/<int:cotacao_id>/convites', methods=['GET'])
 def api_listar_convites_cotacao(cotacao_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     return jsonify({
@@ -2328,7 +2450,7 @@ def api_criar_convites_cotacao(cotacao_id):
     """Manda o link de preenchimento pra todo fornecedor ativo, pros
     insumos dessa cotação que ainda não têm fornecedor vinculado (ver
     `criar_convites_cotacao` em armazenamento.py pra regra completa)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2361,7 +2483,7 @@ def api_reabrir_convite_cotacao(convite_id):
     """Destrava de novo o link de um fornecedor que já respondeu — pra
     corrigir preço enviado errado (ver reabrir_convite_cotacao em
     armazenamento.py)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     reabrir_convite_cotacao(convite_id)
@@ -2428,7 +2550,7 @@ def api_gerar_pedidos_cotacao(cotacao_id):
     """Fecha a cotação em pedido(s) de compra — etapa manual e separada de
     marcar o vencedor de cada insumo (pergunta 23 do roteiro de compras:
     ela não quer isso automático)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
@@ -2572,21 +2694,24 @@ def _formatar_pedido_resumo(pedido):
 
 @app.route('/api/pedidos', methods=['GET'])
 def api_listar_pedidos():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
-    return jsonify({"pedidos": [_formatar_pedido_resumo(p) for p in listar_pedidos()], "estagios": ESTAGIOS_PEDIDO})
+    pedidos = _so_da_minha_loja([_formatar_pedido_resumo(p) for p in listar_pedidos()])
+    return jsonify({"pedidos": pedidos, "estagios": ESTAGIOS_PEDIDO})
 
 
 @app.route('/api/pedidos/<int:pedido_id>', methods=['GET'])
 def api_buscar_pedido(pedido_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     pedido = buscar_pedido(pedido_id)
     if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
 
     resposta = _formatar_pedido_resumo(pedido)
     resposta["itens"] = [
@@ -2614,13 +2739,15 @@ def api_mensagem_whatsapp_pedido(pedido_id):
     ser bloqueado pelo navegador — achado testando ao vivo, 2026-09-04 —
     então esse link precisa poder ser reconstruído a qualquer momento,
     não só na hora da criação)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     pedido = buscar_pedido(pedido_id)
     if not pedido or not pedido["token"]:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
 
     pedidos_do_token = buscar_pedidos_por_token(pedido["token"]) or [pedido]
     mensagem = _mensagem_whatsapp_pedido_token(pedido["token"], [p["id"] for p in pedidos_do_token])
@@ -2631,12 +2758,14 @@ def api_mensagem_whatsapp_pedido(pedido_id):
 def api_marcar_pedido_enviado_whatsapp(pedido_id):
     """Clicou em "Enviar por WhatsApp": o pedido (e os da mesma leva, que vão
     na mesma mensagem) sai de "Pendente de envio" pra "Pedido enviado"."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     pedido = buscar_pedido(pedido_id)
     if not pedido or not pedido["token"]:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
     marcar_pedidos_enviados_whatsapp(pedido["token"])
     return jsonify({"ok": True})
 
@@ -2652,7 +2781,7 @@ def _etapa_de_compra_fora(pedido_id):
 
 @app.route('/api/pedidos/<int:pedido_id>/avancar', methods=['POST'])
 def api_avancar_pedido(pedido_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     erro_etapa = _etapa_de_compra_fora(pedido_id)
@@ -2662,12 +2791,14 @@ def api_avancar_pedido(pedido_id):
     novo_status = avancar_status_pedido(pedido_id)
     if novo_status is None:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
     return jsonify({"ok": True, "status": novo_status})
 
 
 @app.route('/api/pedidos/<int:pedido_id>/voltar', methods=['POST'])
 def api_voltar_pedido(pedido_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     erro_etapa = _etapa_de_compra_fora(pedido_id)
@@ -2677,6 +2808,8 @@ def api_voltar_pedido(pedido_id):
     novo_status = voltar_status_pedido(pedido_id)
     if novo_status is None:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
     return jsonify({"ok": True, "status": novo_status})
 
 
@@ -2684,13 +2817,15 @@ def api_voltar_pedido(pedido_id):
 def api_excluir_pedido(pedido_id):
     """Cancela um pedido gerado por engano — libera o insumo pra entrar
     de novo na próxima "Gerar pedidos" dessa cotação."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     pedido = buscar_pedido(pedido_id)
     if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
     excluir_pedido(pedido_id)
     _apagar_nota_fiscal(pedido["nota_fiscal_arquivo"])
     return jsonify({"ok": True})
@@ -2759,7 +2894,8 @@ def _formatar_recebimento_resumo(pedido):
 
 @app.route('/api/recebimentos', methods=['GET'])
 def api_listar_recebimentos():
-    return jsonify({"pedidos": [_formatar_recebimento_resumo(p) for p in listar_pedidos_pendentes_recebimento()]})
+    recebimentos = _so_da_minha_loja([_formatar_recebimento_resumo(p) for p in listar_pedidos_pendentes_recebimento()])
+    return jsonify({"pedidos": recebimentos})
 
 
 @app.route('/api/recebimentos/<int:pedido_id>', methods=['GET'])
@@ -2767,6 +2903,8 @@ def api_buscar_recebimento(pedido_id):
     pedido = buscar_pedido(pedido_id)
     if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
 
     resposta = _formatar_pedido_resumo(pedido)
     resposta["itens"] = [
@@ -2822,6 +2960,8 @@ def api_confirmar_recebimento(pedido_id):
     pedido = buscar_pedido(pedido_id)
     if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
     if pedido['status'] == 'recebido':
         return jsonify({"erro": "Esse pedido já foi confirmado como recebido."}), 400
     data_pedido = date.fromisoformat(pedido['criado_em'][:10])
@@ -2842,7 +2982,7 @@ def api_criar_pedidos_diretos():
     """Pedido de preço homologado, sem cotação: {fornecedorId, itens:
     [{insumoId, loja, quantidade}]} — um pedido por loja, com um WhatsApp
     só pro fornecedor (ver criar_pedidos_diretos)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
@@ -2887,14 +3027,14 @@ def api_lancar_compra_fora():
     (novo), loja, compradoPor, dataCompra, numeroNf, valorNf, somarEstoque
     ('1'/'0'), itens (JSON [{insumoId, quantidade, precoUnitario}] na
     unidade do insumo) e o arquivo opcional notaFiscal."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     if (request.content_length or 0) > TAMANHO_MAXIMO_NOTA_FISCAL:
         return jsonify({"erro": "O arquivo da nota passa de 15 MB. Mande uma foto menor."}), 400
 
     dados = request.form
-    loja = dados.get('loja') or ''
+    loja = _loja_no_escopo(dados.get('loja') or '')
     if loja not in LOJAS:
         return jsonify({"erro": "Escolha a loja da compra."}), 400
     comprado_por = (dados.get('compradoPor') or '').strip()
@@ -2947,7 +3087,7 @@ def api_lancar_compra_fora():
 
 @app.route('/api/pedidos/<int:pedido_id>/nota-fiscal', methods=['GET'])
 def api_nota_fiscal_pedido(pedido_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     pedido = buscar_pedido(pedido_id)
@@ -2960,7 +3100,7 @@ def api_nota_fiscal_pedido(pedido_id):
 def api_pendencias_compras():
     """Quanto está parado em cada etapa de Compras, pros números do menu (ver
     pendencias_compras)."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
     return jsonify(pendencias_compras())
@@ -3031,10 +3171,10 @@ def _formatar_contagem(contagem):
 
 @app.route('/api/contagens', methods=['GET'])
 def api_listar_contagens():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_equipe()
     if erro_admin:
         return erro_admin
-    return jsonify({"contagens": [_formatar_contagem(c) for c in listar_contagens()]})
+    return jsonify({"contagens": _so_da_minha_loja([_formatar_contagem(c) for c in listar_contagens()])})
 
 
 def _formatar_requisicao_resumo(requisicao):
@@ -3204,12 +3344,12 @@ def api_gerar_cotacao_requisicao():
 
 @app.route('/api/contagens', methods=['POST'])
 def api_criar_contagem():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_equipe()
     if erro_admin:
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = (dados.get('loja') or '').strip()
+    loja = _loja_no_escopo((dados.get('loja') or '').strip())
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     descricao = (dados.get('descricao') or '').strip()
@@ -3224,13 +3364,15 @@ def api_criar_contagem():
 
 @app.route('/api/contagens/<int:contagem_id>', methods=['GET'])
 def api_buscar_contagem(contagem_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_equipe()
     if erro_admin:
         return erro_admin
 
     contagem = buscar_contagem(contagem_id)
     if not contagem:
         return jsonify({"erro": "Contagem não encontrada."}), 404
+    if not _loja_visivel(contagem['loja']):
+        return jsonify({"erro": "Essa contagem é de outra loja."}), 403
 
     resposta = _formatar_contagem(contagem)
     resposta['itens'] = listar_itens_contagem(contagem_id, contagem['loja'])
@@ -3239,13 +3381,15 @@ def api_buscar_contagem(contagem_id):
 
 @app.route('/api/contagens/<int:contagem_id>/aprovar', methods=['POST'])
 def api_aprovar_contagem(contagem_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     contagem = buscar_contagem(contagem_id)
     if not contagem:
         return jsonify({"erro": "Contagem não encontrada."}), 404
+    if not _loja_visivel(contagem['loja']):
+        return jsonify({"erro": "Essa contagem é de outra loja."}), 403
     if contagem['status'] == 'aprovada':
         return jsonify({"erro": "Essa contagem já foi aprovada."}), 400
 
@@ -3255,13 +3399,15 @@ def api_aprovar_contagem(contagem_id):
 
 @app.route('/api/contagens/<int:contagem_id>/reabrir', methods=['POST'])
 def api_reabrir_contagem(contagem_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     contagem = buscar_contagem(contagem_id)
     if not contagem:
         return jsonify({"erro": "Contagem não encontrada."}), 404
+    if not _loja_visivel(contagem['loja']):
+        return jsonify({"erro": "Essa contagem é de outra loja."}), 403
     if contagem['status'] == 'aberta':
         return jsonify({"erro": "Essa contagem já está aberta."}), 400
 
@@ -3274,11 +3420,11 @@ def api_ajustar_quantidade_ideal(insumo_id):
     """Sobrescreve manualmente a quantidade ideal calculada, quando o
     número não bate com o que a Kethllyn sabe da realidade da loja (ver
     seção 9 da documentação, 'Quantidade ideal inteligente')."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -3296,11 +3442,11 @@ def api_ajustar_quantidade_ideal(insumo_id):
 
 @app.route('/api/insumos/<int:insumo_id>/quantidade-ideal', methods=['DELETE'])
 def api_remover_ajuste_quantidade_ideal(insumo_id):
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -3317,7 +3463,7 @@ def api_remover_ajustes_quantidade_ideal_da_loja():
     if erro_admin:
         return erro_admin
 
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -3330,12 +3476,12 @@ def api_ajustar_quantidade_ideal_lote():
     """Ajusta a quantidade ideal de vários insumos de uma vez, pra não
     precisar passar um por um quando a Ficha Técnica ainda não calcula
     sozinha pra muitos insumos."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -3365,12 +3511,12 @@ def api_atualizar_quantidades_atuais_lote():
     uma vez — pra importar contagem física ou relatório externo sem
     editar um por um pelo lápis. `minimos` é opcional: quando vem, o
     estoque mínimo daquele insumo também é sobrescrito."""
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
@@ -3407,7 +3553,7 @@ def api_ajustes_quantidade_ideal():
     """Ajustes manuais de quantidade ideal de uma loja — usado pela tela de
     Estoque pra mostrar o mesmo valor ajustado que já vale na Contagem
     (leitura liberada pra todo mundo logado, igual o resto do Estoque)."""
-    loja = request.args.get('loja')
+    loja = _loja_no_escopo(request.args.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     mapa = mapa_ajustes_quantidade_ideal(loja)
@@ -3469,7 +3615,7 @@ def api_criar_data_especial():
     data_inicio = (dados.get('dataInicio') or '').strip()
     data_fim = (dados.get('dataFim') or '').strip() or data_inicio
     descricao = (dados.get('descricao') or '').strip()
-    loja = dados.get('loja') or None
+    loja = _loja_no_escopo(dados.get('loja') or None)
 
     if not data_inicio:
         return jsonify({"erro": "Informe a data de início."}), 400
@@ -3689,7 +3835,7 @@ def api_sincronizar_agora():
 @app.route('/api/venda-presencial', methods=['POST'])
 def api_salvar_venda_presencial():
     dados = request.get_json(silent=True) or {}
-    unidade = dados.get('unidade')
+    unidade = _loja_no_escopo(dados.get('unidade'))
     dia = dados.get('dia')
     valor = dados.get('valor')
     quantidade = dados.get('quantidade', 0)
@@ -3717,7 +3863,7 @@ def api_salvar_venda_presencial():
 
 @app.route('/api/venda-presencial', methods=['DELETE'])
 def api_excluir_venda_presencial():
-    unidade = request.args.get('unidade')
+    unidade = _loja_no_escopo(request.args.get('unidade'))
     dia = request.args.get('dia')
 
     if unidade not in UNIDADES_COM_PRESENCIAL:
@@ -3731,7 +3877,7 @@ def api_excluir_venda_presencial():
 
 @app.route('/api/venda-presencial', methods=['GET'])
 def api_listar_venda_presencial():
-    unidade = request.args.get('unidade')
+    unidade = _loja_no_escopo(request.args.get('unidade'))
     if unidade not in UNIDADES_COM_PRESENCIAL:
         return jsonify({"erro": "Unidade inválida para lançamento presencial."}), 400
 
@@ -3752,7 +3898,7 @@ def api_listar_venda_presencial():
 
 @app.route('/api/canal-analise', methods=['GET'])
 def api_canal_analise():
-    unidade = request.args.get('unidade', 'geral')
+    unidade = _loja_no_escopo(request.args.get('unidade', 'geral'))
     dia = request.args.get('dia')
 
     if not dia:
@@ -3779,12 +3925,12 @@ def api_canal_analise():
 
 @app.route('/api/ajuste-canal', methods=['PUT'])
 def api_salvar_ajuste_canal():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
     dados = request.get_json(silent=True) or {}
-    unidade = dados.get('unidade')
+    unidade = _loja_no_escopo(dados.get('unidade'))
     dia = dados.get('dia')
     canal = dados.get('canal')
 
@@ -3810,11 +3956,11 @@ def api_salvar_ajuste_canal():
 
 @app.route('/api/ajuste-canal', methods=['DELETE'])
 def api_excluir_ajuste_canal():
-    erro_admin = _exigir_admin()
+    erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
 
-    unidade = request.args.get('unidade')
+    unidade = _loja_no_escopo(request.args.get('unidade'))
     dia = request.args.get('dia')
     canal = request.args.get('canal')
     if not unidade or not dia or not canal:
@@ -3831,7 +3977,7 @@ def api_faturamento_mesmo_dia_semana():
     # atravessando virada de mês livremente (pedido do chefe da Julia,
     # 2026-09-03 — antes era só "dentro do mês corrente", o que dava menos
     # de 4 comparações no início do mês).
-    unidade = request.args.get('unidade')
+    unidade = _loja_no_escopo(request.args.get('unidade'))
     dia = request.args.get('dia')
 
     if unidade not in LOJAS:
@@ -3970,7 +4116,7 @@ def api_faturamento_semanal():
     """Histórico semanal por canal, importado de planilha (ver 'Vendas
     Semanais' — tela separada das Vendas Diárias de propósito, porque essa
     fonte só tem o total da semana, não quebra por dia)."""
-    unidade = request.args.get('loja')
+    unidade = _loja_no_escopo(request.args.get('loja'))
     if not unidade or unidade not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     return jsonify({"semanas": listar_resultado_semanal(unidade)})
@@ -4035,7 +4181,7 @@ def api_salvar_resultado_semanal():
         return erro
 
     dados = request.get_json(silent=True) or {}
-    loja = dados.get('loja')
+    loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     inicio, fim = dados.get('periodoInicio'), dados.get('periodoFim')

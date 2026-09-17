@@ -154,3 +154,31 @@
   font-size: 0.85rem;
 }
 
+
+/* Legenda dos perfis, no topo da tabela de Funcionários (card #35) */
+.perfis-legenda {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--surface-muted-border);
+}
+
+.perfis-legenda div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perfis-legenda strong {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dark);
+}
+
+.perfis-legenda span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
