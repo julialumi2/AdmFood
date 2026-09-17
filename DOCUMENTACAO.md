@@ -2823,7 +2823,82 @@ tivesse sido feito aqui — sem tela nova.
   numa transação só — item com insumo ou loja inválidos desfaz o lote.
   `DELETE /api/admin/importar-vmarket` desfaz a carga (cotações, pedidos e
   contagens importados), menos pedido que a loja já confirmou aqui e a
-  cotação dele; os fornecedores ficam.
+  cotação dele; os fornecedores ficam. A carga também aceita
+  `precosHomologados` (`fornecedorVmarket`, `insumoId`, `preco`, `validade`)
+  — vira o fornecedor homologado do insumo (ver 6.20); desfazer não apaga.
+
+### 6.20 Fornecedor homologado e pedido direto (2026-09-16)
+
+Na VMarket, 68 dos 159 pedidos do último mês antes da migração saíram direto,
+pelo preço já combinado com o fornecedor, sem cotação. Aqui:
+
+- **Onde se define:** no cadastro do insumo (Insumos → editar), campos
+  "Fornecedor homologado", "Preço combinado" e "Vale até". Colunas
+  `insumo.fornecedor_homologado_id`, `preco_homologado` (na unidade do
+  insumo; a tela digita por kg/litro quando o insumo é em grama/ml, igual ao
+  custo) e `validade_preco_homologado` (`AAAA-MM-DD`, vale até o fim do dia;
+  em branco vale até alguém mudar). Um fornecedor homologado por insumo.
+  Fornecedor sem preço dá 400; tirar o fornecedor limpa preço e validade. O
+  homologado entra na lista de fornecedores do insumo (`insumo_fornecedor`)
+  mesmo se não estiver marcado. Os três campos só vão pra admin em
+  `GET /api/insumos` (como o custo).
+- **Vale** quando o fornecedor está ativo, o preço é maior que zero e a
+  validade está em branco ou é de hoje em diante (`_homologados_validos`).
+- **Requisição → "Fazer Cotação/Pedido"** (`gerar_cotacao_do_deficit`): do
+  déficit, o insumo com homologado valendo vira pedido direto pro
+  fornecedor, com a mesma quantidade por loja; o resto vai pra cotação como
+  antes. Se todo o déficit for homologado, não abre cotação (`cotacaoId`
+  null) e a tela vai pra Pedidos. O pedido guarda a requisição
+  (`pedido_compra.requisicao_titulo`/`requisicao_prazo`): clicar de novo
+  devolve o que já foi gerado, e excluir a requisição apaga esses pedidos.
+  Preço vencido ou fornecedor inativo: o insumo vai pra cotação.
+- **Pedido extra:** Pedidos → "Novo pedido". Aparecem os fornecedores que
+  são homologados de algum insumo com preço valendo; escolhido o
+  fornecedor, uma coluna de quantidade por loja (as lojas marcadas no
+  cadastro dele, ou as quatro; "Pedir pra outras lojas também" abre todas),
+  com estoque e mínimo da loja, total por loja e aviso de pedido mínimo
+  (que vale por loja). Gerar abre o pedido, de onde sai o WhatsApp.
+- **Regras do pedido direto** (`_gravar_pedidos_diretos`): um pedido por
+  fornecedor × loja; os do mesmo fornecedor dividem o token — uma mensagem
+  só de WhatsApp, "feito em conjunto", como no "Gerar pedidos" da cotação. O
+  preço é sempre o do cadastro, nunca o da tela. Nasce `enviado` sem
+  WhatsApp (pendente de envio) e segue por Pedidos e Recebimentos. O insumo
+  passa a valer pra loja (`insumo_loja` + linha zerada em `estoque_insumo`),
+  senão o recebimento não teria onde somar.
+- **Cotação dos pedidos diretos:** todo pedido pertence a uma cotação
+  (Pedidos e Recebimentos buscam os dois juntos), então os pedidos diretos
+  ficam na cotação "Pedidos diretos (preço homologado)", marcada
+  `cotacao.pedido_direto = 1`. Cotação marcada não aparece na lista de
+  Cotações nem no histórico de compras — a da carga da VMarket ("Pedidos da
+  VMarket sem cotação") também foi marcada.
+- **Rotas (admin):** `PUT/POST /api/insumos` com `fornecedorHomologadoId`,
+  `precoHomologado`, `validadePrecoHomologado`; `POST /api/pedidos/direto`
+  (`{fornecedorId, itens: [{insumoId, loja, quantidade}]}`);
+  `POST /api/requisicoes/conferencia/gerar-cotacao` devolve também
+  `pedidosDiretos`.
+
+### 6.21 Pendências de Compras no menu (2026-09-16)
+
+No lugar de uma tela de painel (a Julia preferiu assim), o menu de Compras
+mostra quanto está parado em cada etapa, só pra admin:
+
+- **Requisições:** contagem que a loja não respondeu + contagem respondida
+  esperando aprovação. Vermelho se alguma sem resposta passou do prazo.
+- **Cotações:** fornecedor convidado que não mandou preço + cotação aberta
+  com insumo sem vencedor, ou com vencedor que ainda não virou pedido (só o
+  que tem quebra por loja, que é o que "Gerar pedidos" usa). Vermelho se
+  algum convite passou do prazo.
+- **Pedidos:** pedido gerado que não foi enviado pelo WhatsApp.
+- **Recebimentos:** pedido enviado que não foi recebido. Vermelho quando
+  algum passou de `DIAS_ENTREGA_ATRASADA` (3) dias desde o envio pelo
+  WhatsApp (ou da criação, se não passou por ele).
+- **Compras** (o grupo): a soma, que some quando o grupo está aberto.
+
+Contagem e cotação criadas há mais de `DIAS_PENDENCIA_COMPRAS` (30) dias não
+contam — é abandono, não pendência; pedido não tem esse corte. Passar o
+mouse no número mostra o que ele soma. Os números carregam com a tela e
+recarregam depois de mexer em Pedidos e Recebimentos. Rota:
+`GET /api/compras/pendencias` (admin, `pendencias_compras`).
 
 ## 7. API — principais endpoints
 
@@ -2885,6 +2960,10 @@ Todos em `app.py`, prefixo `/api`.
 - `POST /api/cotacoes/<id>/precos` — lançar/corrigir preço (upsert por insumo+fornecedor) — só admin
 - `DELETE /api/cotacoes/<id>/precos/<preco_id>` — remover um preço lançado — só admin
 - `PUT /api/cotacoes/<id>/precos/<preco_id>/selecionar` — marcar vencedor do insumo (desmarca os demais) — só admin
+
+**Pedido direto e pendências** (seções 6.20 e 6.21; o fornecedor homologado vai no `PUT /api/insumos/<id>`)
+- `POST /api/pedidos/direto` — pedido pelo preço homologado, sem cotação, um por loja — só admin
+- `GET /api/compras/pendencias` — quanto está parado em cada etapa, pros números do menu — só admin
 
 **Tarefas (Kanban / ClickUp)**
 - `GET|POST /api/tarefas` — listar todas / criar

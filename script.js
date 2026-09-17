@@ -4016,6 +4016,7 @@ async function carregarPedidos() {
     if (dados.estagios) pedidoEstagios = dados.estagios;
     await carregarLinksWhatsAppPedidos(pedidosLista);
     renderPedidosTabela();
+    carregarContadoresMenuCompras();
   } catch (erro) {
     console.error('Falha ao carregar pedidos:', erro);
     tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
@@ -4453,8 +4454,8 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
       });
       const gerarDados = await gerarResposta.json();
       if (gerarResposta.ok) {
-        if (!jaAprovada) alert('Todas as lojas aprovadas — cotação gerada!' + _avisoInsumosSemIdeal(gerarDados.insumosSemIdeal));
-        window.location.href = `cotacoes.html?abrir=${gerarDados.cotacaoId}`;
+        if (!jaAprovada) alert(`Todas as lojas aprovadas: ${_textoResultadoRequisicao(gerarDados)}.` + _avisoInsumosSemIdeal(gerarDados.insumosSemIdeal));
+        window.location.href = _destinoResultadoRequisicao(gerarDados);
         return;
       }
       alert(gerarDados.erro || (jaAprovada ? 'Não foi possível abrir a cotação dessa requisição.' : 'Loja aprovada, mas não foi possível gerar a cotação.'));
@@ -4676,6 +4677,21 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
   }
 });
 
+// Resultado de "Fazer Cotação/Pedido" (2026-09-16): o que tem fornecedor
+// homologado já sai em pedido direto; o resto vira cotação. Sem cotação (tudo
+// homologado), quem abre é a tela de Pedidos.
+function _textoResultadoRequisicao(dados) {
+  const pedidos = (dados.pedidosDiretos || []).length;
+  const partes = [];
+  if (dados.cotacaoId) partes.push('a cotação foi aberta com o que precisa de preço');
+  if (pedidos) partes.push(`${pedidos} ${pedidos > 1 ? 'pedidos diretos saíram' : 'pedido direto saiu'} pros fornecedores homologados, pra enviar pelo WhatsApp em Pedidos`);
+  return partes.join(' e ');
+}
+
+function _destinoResultadoRequisicao(dados) {
+  return dados.cotacaoId ? `cotacoes.html?abrir=${dados.cotacaoId}` : 'pedidos.html';
+}
+
 // Avisa quais insumos ficaram de fora da cotação por não terem quantidade
 // ideal calculável ainda — antes sumiam da lista sem ninguém perceber, só
 // descobrindo bem depois que aquele insumo nunca entrou num pedido.
@@ -4688,7 +4704,7 @@ function _avisoInsumosSemIdeal(insumosSemIdeal) {
 document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
   const r = requisicaoConferenciaAtual;
   if (!r || !r.totalmenteAprovada) return;
-  if (!confirm('Gerar cotação com o déficit dessa requisição? Você ainda vai poder editar antes de mandar pros fornecedores.')) return;
+  if (!confirm('Gerar a compra dessa requisição? O que tem fornecedor homologado sai direto em pedido pra ele; o resto vai pra cotação, que ainda dá pra editar antes de mandar pros fornecedores.')) return;
   try {
     const resposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
       method: 'POST',
@@ -4698,8 +4714,9 @@ document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar cotação');
     const aviso = _avisoInsumosSemIdeal(dados.insumosSemIdeal);
-    if (aviso) alert(aviso.trim());
-    window.location.href = `cotacoes.html?abrir=${dados.cotacaoId}`;
+    const pedidosDiretos = (dados.pedidosDiretos || []).length;
+    if (pedidosDiretos || aviso) alert(`${pedidosDiretos ? `Pronto: ${_textoResultadoRequisicao(dados)}.` : ''}${aviso}`.trim());
+    window.location.href = _destinoResultadoRequisicao(dados);
   } catch (erro) {
     console.error('Falha ao gerar cotação:', erro);
     alert(erro.message || 'Não foi possível gerar a cotação.');
@@ -5267,6 +5284,7 @@ function abrirModalNovoInsumo(insumo) {
   emUso.textContent = insumo ? _textoCustoEmUso(insumo) : '';
   emUso.hidden = !insumo;
   _renderChecklistFornecedores(insumo ? insumo.fornecedorIds : []);
+  _renderFornecedorHomologado(insumo);
   document.getElementById('modal-novo-insumo').style.display = 'flex';
 }
 
@@ -5314,6 +5332,7 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
   const fornecedorIds = Array.from(document.querySelectorAll('#novo-insumo-fornecedores input:checked')).map(el => parseInt(el.value, 10));
   const unidadeMedida = document.getElementById('novo-insumo-unidade').value;
   const custoDigitado = document.getElementById('novo-insumo-custo').value;
+  const precoHomologadoDigitado = document.getElementById('novo-insumo-preco-homologado').value;
   const corpo = {
     nome: document.getElementById('novo-insumo-nome').value,
     categoria: document.getElementById('novo-insumo-categoria').value,
@@ -5326,6 +5345,10 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     conteudoPorUnidade: document.getElementById('novo-insumo-conteudo').value,
     unidadeConteudo: document.getElementById('novo-insumo-unidade-conteudo').value,
     fornecedorIds,
+    // Com fornecedor homologado, a Requisição manda o insumo direto em pedido pra ele.
+    fornecedorHomologadoId: document.getElementById('novo-insumo-fornecedor-homologado').value,
+    precoHomologado: precoHomologadoDigitado === '' ? '' : parseFloat(precoHomologadoDigitado) / _escalaDeCusto(unidadeMedida).fator,
+    validadePrecoHomologado: document.getElementById('novo-insumo-validade-homologado').value,
   };
   try {
     const resposta = await fetch(insumoId ? `/api/insumos/${insumoId}` : '/api/insumos', {
@@ -5958,6 +5981,7 @@ async function carregarRecebimentos() {
     const dados = await resposta.json();
     recebimentosLista = dados.pedidos || [];
     renderRecebimentosTabela();
+    carregarContadoresMenuCompras();
   } catch (erro) {
     console.error('Falha ao carregar recebimentos:', erro);
     tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
@@ -6103,6 +6127,316 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
     erro.style.display = '';
   }
 });
+
+// --- FORNECEDOR HOMOLOGADO E PEDIDO DIRETO (2026-09-16) ---
+// Na VMarket boa parte dos pedidos saía direto, pelo preço já combinado com o
+// fornecedor. Aqui o fornecedor homologado e o preço ficam no cadastro do
+// insumo; a Requisição manda esses insumos direto em pedido, e "Novo pedido"
+// em Pedidos usa o mesmo preço pra um pedido extra.
+const LOJA_CURTA = { 'Hamburgueria Artesanos': 'Artesanos', 'Açaí Na Lata': 'Açaí', 'Tradiça ZN': 'Tradiça ZN', 'Tradiça Simus': 'Tradiça Simus' };
+let insumosParaPreco = null;    // /api/insumos, carregado na primeira vez que o "Novo pedido" abre
+let pedidoDiretoFornecedorId = null;
+let pedidoDiretoTodasLojas = false;
+let fornecedoresPedidoDireto = [];
+
+// Preço de unidade pode ter mais de 2 casas (guardanapo a R$ 0,0525).
+function _formatarPrecoUnitario(valor) {
+  return Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+// Mesma regra do servidor (_homologados_validos): fornecedor, preço e validade em branco ou de hoje em diante.
+function _homologadoValido(insumo) {
+  return !!insumo.fornecedorHomologadoId && insumo.precoHomologado > 0
+    && (!insumo.validadePrecoHomologado || insumo.validadePrecoHomologado >= _hojeLocalISO());
+}
+
+async function _carregarInsumosParaPreco(forcar = false) {
+  if (insumosParaPreco && !forcar) return insumosParaPreco;
+  const resposta = await fetch('/api/insumos');
+  if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+  insumosParaPreco = (await resposta.json()).insumos || [];
+  return insumosParaPreco;
+}
+
+// Insumos → modal do insumo: select do fornecedor homologado + preço e validade.
+// O preço é digitado como o custo (por kg/litro quando o insumo é em grama/ml).
+function _renderFornecedorHomologado(insumo) {
+  const select = document.getElementById('novo-insumo-fornecedor-homologado');
+  if (!select) return;
+  const atual = insumo?.fornecedorHomologadoId || null;
+  const opcoes = fornecedoresLista
+    .filter((f) => f.ativo || f.id === atual)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  select.innerHTML = '<option value="">Nenhum, vai pra cotação</option>'
+    + opcoes.map((f) => `<option value="${f.id}" ${f.id === atual ? 'selected' : ''}>${escaparHtml(f.nome)}</option>`).join('');
+  const { fator } = _escalaDeCusto(insumo ? insumo.unidadeMedida : 'un');
+  document.getElementById('novo-insumo-preco-homologado').value = insumo && insumo.precoHomologado != null
+    ? _arredondarQuantidade(insumo.precoHomologado * fator)
+    : '';
+  document.getElementById('novo-insumo-validade-homologado').value = insumo?.validadePrecoHomologado || '';
+  _atualizarCamposHomologado();
+}
+
+function _atualizarCamposHomologado() {
+  const select = document.getElementById('novo-insumo-fornecedor-homologado');
+  if (!select) return;
+  const escolhido = !!select.value;
+  document.getElementById('novo-insumo-homologado-campos').style.display = escolhido ? '' : 'none';
+  document.getElementById('novo-insumo-homologado-ajuda').style.display = escolhido ? '' : 'none';
+  document.getElementById('novo-insumo-preco-homologado').required = escolhido;
+  const { rotulo } = _escalaDeCusto(document.getElementById('novo-insumo-unidade').value);
+  document.getElementById('novo-insumo-preco-homologado-rotulo').textContent = `Preço combinado (R$ por ${rotulo})`;
+}
+
+document.getElementById('novo-insumo-fornecedor-homologado')?.addEventListener('change', _atualizarCamposHomologado);
+document.getElementById('novo-insumo-unidade')?.addEventListener('input', _atualizarCamposHomologado);
+
+// Pedidos → "Novo pedido" pelo preço homologado (pedido extra, fora da Requisição)
+async function abrirNovoPedidoDireto() {
+  const select = document.getElementById('pedido-direto-fornecedor');
+  pedidoDiretoFornecedorId = null;
+  pedidoDiretoTodasLojas = false;
+  document.getElementById('pedido-direto-erro').style.display = 'none';
+  document.getElementById('pedido-direto-subtitulo').textContent = '';
+  document.getElementById('pedido-direto-itens').innerHTML = '';
+  document.getElementById('pedido-direto-tabela-wrap').style.display = 'none';
+  document.getElementById('btn-pedido-direto-todas-lojas').style.display = 'none';
+  document.getElementById('btn-pedido-direto-gerar').disabled = true;
+  select.innerHTML = '<option value="">Carregando fornecedores...</option>';
+  document.getElementById('modal-pedido-direto').style.display = 'flex';
+  try {
+    const [respostaFornecedores] = await Promise.all([fetch('/api/fornecedores'), _carregarInsumosParaPreco(true)]);
+    fornecedoresPedidoDireto = (await respostaFornecedores.json()).fornecedores || [];
+    const itensPorFornecedor = new Map();
+    insumosParaPreco.filter(_homologadoValido).forEach((insumo) => {
+      itensPorFornecedor.set(insumo.fornecedorHomologadoId, (itensPorFornecedor.get(insumo.fornecedorHomologadoId) || 0) + 1);
+    });
+    const opcoes = fornecedoresPedidoDireto
+      .filter((f) => f.ativo && itensPorFornecedor.has(f.id))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    if (!opcoes.length) {
+      select.innerHTML = '<option value="">Nenhum fornecedor homologado</option>';
+      document.getElementById('pedido-direto-subtitulo').textContent = 'Escolha o fornecedor homologado e o preço combinado no cadastro do insumo, em Insumos.';
+      return;
+    }
+    select.innerHTML = '<option value="">Escolha o fornecedor</option>' + opcoes.map((f) => {
+      const n = itensPorFornecedor.get(f.id);
+      return `<option value="${f.id}">${escaparHtml(f.nome)} (${n} ${n > 1 ? 'itens' : 'item'})</option>`;
+    }).join('');
+  } catch (erro) {
+    console.error('Falha ao abrir novo pedido:', erro);
+    select.innerHTML = '<option value="">Não foi possível carregar</option>';
+  }
+}
+
+// Colunas de loja: as lojas que já compram desse fornecedor (cadastro dele);
+// sem nenhuma marcada, todas. "Pedir pra outras lojas também" abre as quatro.
+function _lojasPedidoDireto() {
+  const fornecedor = fornecedoresPedidoDireto.find((f) => f.id === pedidoDiretoFornecedorId);
+  const lojasDele = (fornecedor?.lojas || []).filter((l) => LOJAS_ESTOQUE.includes(l));
+  if (pedidoDiretoTodasLojas || !lojasDele.length) return LOJAS_ESTOQUE;
+  return LOJAS_ESTOQUE.filter((l) => lojasDele.includes(l));
+}
+
+function renderPedidoDireto() {
+  const wrap = document.getElementById('pedido-direto-tabela-wrap');
+  if (!pedidoDiretoFornecedorId) {
+    wrap.style.display = 'none';
+    document.getElementById('btn-pedido-direto-todas-lojas').style.display = 'none';
+    document.getElementById('pedido-direto-subtitulo').textContent = '';
+    document.getElementById('btn-pedido-direto-gerar').disabled = true;
+    return;
+  }
+  const doFornecedor = insumosParaPreco
+    .filter((i) => i.fornecedorHomologadoId === pedidoDiretoFornecedorId)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const itens = doFornecedor.filter(_homologadoValido);
+  const vencidos = doFornecedor.length - itens.length;
+  const lojas = _lojasPedidoDireto();
+  // Re-render (abrir outras lojas) não pode apagar o que já foi digitado.
+  const digitado = {};
+  document.querySelectorAll('#pedido-direto-itens input').forEach((input) => {
+    if (input.value) digitado[`${input.dataset.insumoId}|${input.dataset.loja}`] = input.value;
+  });
+
+  document.getElementById('pedido-direto-subtitulo').textContent =
+    'Digite quanto cada loja precisa. Vale o preço combinado, sai um pedido por loja e uma mensagem só de WhatsApp pro fornecedor.'
+    + (vencidos ? ` ${vencidos} ${vencidos > 1 ? 'insumos com preço vencido ficaram' : 'insumo com preço vencido ficou'} de fora.` : '');
+  document.getElementById('pedido-direto-cabecalho').innerHTML =
+    `<tr><th>Insumo</th><th>Preço</th>${lojas.map((l) => `<th>${escaparHtml(LOJA_CURTA[l] || l)}</th>`).join('')}</tr>`;
+
+  document.getElementById('pedido-direto-itens').innerHTML = itens.map((insumo) => {
+    const colunas = lojas.map((loja) => {
+      const estoque = insumo.porLoja?.[loja];
+      const info = estoque && estoque.aplica
+        ? `tem ${_formatarQuantidade(estoque.quantidadeAtual, insumo.unidadeMedida)} · mín ${_formatarQuantidade(estoque.estoqueMinimo, insumo.unidadeMedida)}`
+        : 'não usa hoje';
+      const valor = digitado[`${insumo.id}|${loja}`] || '';
+      return `
+        <td>
+          <input type="number" min="0" step="any" value="${escaparHtml(valor)}" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" data-preco="${insumo.precoHomologado}" aria-label="${escaparHtml(insumo.nome)}, ${escaparHtml(loja)}">
+          <span class="pedido-direto-estoque">${info}</span>
+        </td>`;
+    }).join('');
+    return `
+      <tr>
+        <td class="font-bold">${escaparHtml(insumo.nome)}</td>
+        <td class="preco-combinado-valor">R$ ${_formatarPrecoUnitario(insumo.precoHomologado)}<span class="pedido-direto-estoque">por ${escaparHtml(insumo.unidadeMedida)}</span></td>
+        ${colunas}
+      </tr>`;
+  }).join('');
+
+  wrap.style.display = '';
+  document.getElementById('btn-pedido-direto-todas-lojas').style.display = lojas.length < LOJAS_ESTOQUE.length ? '' : 'none';
+  document.querySelectorAll('#pedido-direto-itens input').forEach((input) => {
+    input.addEventListener('input', _atualizarTotaisPedidoDireto);
+  });
+  _atualizarTotaisPedidoDireto();
+}
+
+function _atualizarTotaisPedidoDireto() {
+  const lojas = _lojasPedidoDireto();
+  const fornecedor = fornecedoresPedidoDireto.find((f) => f.id === pedidoDiretoFornecedorId);
+  const minimo = fornecedor?.pedidoMinimo || 0;
+  const totais = Object.fromEntries(lojas.map((l) => [l, 0]));
+  document.querySelectorAll('#pedido-direto-itens input').forEach((input) => {
+    const quantidade = parseFloat(input.value) || 0;
+    if (quantidade > 0) totais[input.dataset.loja] += quantidade * parseFloat(input.dataset.preco);
+  });
+  const geral = Object.values(totais).reduce((soma, valor) => soma + valor, 0);
+  const reais = (valor) => `R$ ${_formatarMoedaBR(Math.round(valor * 100) / 100)}`;
+  // O pedido mínimo do fornecedor vale por loja, não somado (q29).
+  document.getElementById('pedido-direto-totais').innerHTML = `
+    <tr>
+      <td class="font-bold">Total</td>
+      <td class="font-bold">${reais(geral)}</td>
+      ${lojas.map((loja) => `<td class="font-bold">${totais[loja] > 0
+        ? `${reais(totais[loja])}${minimo > 0 && totais[loja] < minimo ? `<span class="pedido-direto-abaixo">abaixo do mínimo de ${reais(minimo)}</span>` : ''}`
+        : '<span class="text-muted">—</span>'}</td>`).join('')}
+    </tr>`;
+  document.getElementById('btn-pedido-direto-gerar').disabled = geral <= 0;
+}
+
+function fecharNovoPedidoDireto() {
+  document.getElementById('modal-pedido-direto').style.display = 'none';
+  pedidoDiretoFornecedorId = null;
+}
+
+document.getElementById('btn-novo-pedido-direto')?.addEventListener('click', abrirNovoPedidoDireto);
+document.getElementById('btn-pedido-direto-fechar')?.addEventListener('click', fecharNovoPedidoDireto);
+document.getElementById('btn-pedido-direto-cancelar')?.addEventListener('click', fecharNovoPedidoDireto);
+document.getElementById('pedido-direto-fornecedor')?.addEventListener('change', (evento) => {
+  pedidoDiretoFornecedorId = parseInt(evento.target.value, 10) || null;
+  pedidoDiretoTodasLojas = false;
+  document.getElementById('pedido-direto-itens').innerHTML = '';
+  renderPedidoDireto();
+});
+document.getElementById('btn-pedido-direto-todas-lojas')?.addEventListener('click', () => {
+  pedidoDiretoTodasLojas = true;
+  renderPedidoDireto();
+});
+
+document.getElementById('form-pedido-direto')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const erro = document.getElementById('pedido-direto-erro');
+  erro.style.display = 'none';
+  const itens = Array.from(document.querySelectorAll('#pedido-direto-itens input'))
+    .map((input) => ({ insumoId: parseInt(input.dataset.insumoId, 10), loja: input.dataset.loja, quantidade: parseFloat(input.value) || 0 }))
+    .filter((item) => item.quantidade > 0);
+  const botao = document.getElementById('btn-pedido-direto-gerar');
+  botao.disabled = true;
+  try {
+    const resposta = await fetch('/api/pedidos/direto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fornecedorId: pedidoDiretoFornecedorId, itens }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível gerar o pedido.');
+    fecharNovoPedidoDireto();
+    await carregarPedidos();
+    // Abre o pedido: é de lá que sai o WhatsApp (um só pras lojas dessa leva).
+    abrirPedidoDetalhe(dados.pedidos[0].id);
+  } catch (erroCatch) {
+    console.error('Falha ao gerar pedido direto:', erroCatch);
+    erro.textContent = erroCatch.message;
+    erro.style.display = '';
+    botao.disabled = false;
+  }
+});
+
+// --- PENDÊNCIAS DE COMPRAS NO MENU (2026-09-16) ---
+// No lugar de uma tela de painel: o menu mostra quanto está parado ao lado de
+// Requisições, Cotações, Pedidos e Recebimentos (e o total em Compras). Só pra
+// admin; vermelho quando tem prazo vencido ou entrega atrasada.
+async function carregarContadoresMenuCompras() {
+  if (window.usuarioLogado?.papel !== 'admin') return;
+  const links = document.querySelectorAll('.menu-subgroup a[href]');
+  if (!links.length) return;
+  try {
+    const resposta = await fetch('/api/compras/pendencias');
+    if (!resposta.ok) return;
+    const p = await resposta.json();
+    const qtd = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+    const aReceber = p.entregasAtrasadas + p.entregasNoPrazo;
+    const pendencias = {
+      'contagens.html': {
+        total: p.contagensSemResposta + p.contagensPraAprovar,
+        alerta: p.contagensVencidas > 0,
+        dica: [
+          p.contagensSemResposta && qtd(p.contagensSemResposta, 'contagem sem resposta', 'contagens sem resposta'),
+          p.contagensVencidas && `${p.contagensVencidas} com prazo vencido`,
+          p.contagensPraAprovar && `${p.contagensPraAprovar} pra aprovar`,
+        ],
+      },
+      'cotacoes.html': {
+        total: p.fornecedoresSemPreco + p.cotacoesParadas,
+        alerta: p.convitesVencidos > 0,
+        dica: [
+          p.fornecedoresSemPreco && qtd(p.fornecedoresSemPreco, 'fornecedor sem mandar preço', 'fornecedores sem mandar preço'),
+          p.convitesVencidos && `${p.convitesVencidos} com prazo vencido`,
+          p.cotacoesParadas && qtd(p.cotacoesParadas, 'cotação aberta com decisão pendente', 'cotações abertas com decisão pendente'),
+        ],
+      },
+      'pedidos.html': {
+        total: p.pedidosNaoEnviados,
+        alerta: false,
+        dica: [qtd(p.pedidosNaoEnviados, 'pedido pra enviar pelo WhatsApp', 'pedidos pra enviar pelo WhatsApp')],
+      },
+      'recebimentos.html': {
+        total: aReceber,
+        alerta: p.entregasAtrasadas > 0,
+        dica: [
+          qtd(aReceber, 'entrega a receber', 'entregas a receber'),
+          p.entregasAtrasadas && `${p.entregasAtrasadas} há mais de ${p.diasEntregaAtrasada} dias`,
+        ],
+      },
+    };
+    const contador = (total, alerta, dica) => (
+      `<span class="menu-contador${alerta ? ' alerta' : ''}" title="${escaparHtml(dica)}">${total}</span>`
+    );
+    let grupo = null;
+    let totalGrupo = 0;
+    let alertaGrupo = false;
+    links.forEach((link) => {
+      const item = pendencias[link.getAttribute('href')];
+      if (!item) return;
+      grupo = link.closest('.menu-group');
+      link.querySelector('.menu-contador')?.remove();
+      if (!item.total) return;
+      totalGrupo += item.total;
+      alertaGrupo = alertaGrupo || item.alerta;
+      link.insertAdjacentHTML('beforeend', contador(item.total, item.alerta, item.dica.filter(Boolean).join(' · ')));
+    });
+    const toggle = grupo?.querySelector('.menu-group-toggle');
+    toggle?.querySelector('.menu-contador')?.remove();
+    if (toggle && totalGrupo) {
+      toggle.querySelector('.menu-group-chevron')?.insertAdjacentHTML('beforebegin', contador(totalGrupo, alertaGrupo, 'Pendências de compras'));
+    }
+  } catch (erro) {
+    console.error('Falha ao carregar pendências de compras:', erro);
+  }
+}
 
 // --- VENDAS PRESENCIAIS (CRUD manual, fora da Cardápio Web) ---
 // Quando não-nulo, o formulário está editando esse dia (em vez de criar um
@@ -6897,6 +7231,7 @@ async function carregarUsuarioLogado() {
     elAvatar.forEach(el => { el.textContent = iniciais; });
 
     window.usuarioLogado = usuario;
+    carregarContadoresMenuCompras();
 
     // Tela de Configurações: painel "Sua Conta" + seção "Equipe" (só admin)
     const contaNome = document.getElementById('conta-nome-label');

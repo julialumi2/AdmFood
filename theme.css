@@ -462,6 +462,32 @@ body {
   transition: color 0.15s ease;
 }
 
+/* Pendências de Compras no menu (2026-09-16): quanto está parado em cada
+   etapa. Vermelho quando tem prazo vencido ou entrega atrasada. O total no
+   "Compras" some com o grupo aberto, porque aí cada subitem já mostra o seu. */
+.menu-contador {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background-color: var(--menu-hover);
+  color: var(--menu-texto-forte);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-contador.alerta {
+  background-color: var(--danger);
+  color: #fff;
+}
+
+.menu-contador + .menu-group-chevron { margin-left: 8px; }
+.menu-group.expandido > .menu-group-toggle .menu-contador { display: none; }
+.menu-group.expandido > .menu-group-toggle .menu-group-chevron { margin-left: auto; }
+
 /* Rodapé: quem está usando, depois de uma divisória fina. */
 .sidebar-user-card {
   margin-top: auto;

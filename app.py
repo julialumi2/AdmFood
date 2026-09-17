@@ -137,6 +137,9 @@ from backend.armazenamento import (
     excluir_pedido,
     listar_pedidos_pendentes_recebimento,
     confirmar_recebimento_pedido,
+    vincular_insumo_fornecedor,
+    criar_pedidos_diretos,
+    pendencias_compras,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
     marcar_pedidos_enviados_whatsapp,
@@ -1061,6 +1064,10 @@ def _formatar_insumos(linhas, com_custo=False):
             # (pode ser uma cotação, a última compra ou a receita da mistura).
             insumo["custoReferencia"] = linha['custo_referencia']
             insumo["custoEmUso"] = custos_em_uso.get(linha['insumo_id'])
+            # Fornecedor homologado: vai direto em pedido na Requisição.
+            insumo["fornecedorHomologadoId"] = linha['fornecedor_homologado_id']
+            insumo["precoHomologado"] = linha['preco_homologado']
+            insumo["validadePrecoHomologado"] = linha['validade_preco_homologado']
         insumo["porLoja"][linha['loja']] = {
             "quantidadeAtual": linha['quantidade_atual'],
             "estoqueMinimo": linha['estoque_minimo'],
@@ -1178,6 +1185,40 @@ def _campo_custo_referencia(dados):
     return {"custo_referencia": round(custo, 8)}, None
 
 
+def _campos_fornecedor_homologado(dados):
+    """Fornecedor homologado do insumo (2026-09-16): quem já combinou preço
+    (na unidade do insumo) e até quando vale. Com fornecedor e preço, a
+    Requisição manda o insumo direto em pedido pra ele, sem cotação. Sem
+    fornecedor, limpa preço e validade."""
+    if 'fornecedorHomologadoId' not in dados:
+        return {}, None
+    if dados.get('fornecedorHomologadoId') in (None, ''):
+        return {"fornecedor_homologado_id": None, "preco_homologado": None, "validade_preco_homologado": None}, None
+    try:
+        fornecedor_id = int(dados.get('fornecedorHomologadoId'))
+    except (TypeError, ValueError):
+        return {}, "Fornecedor homologado inválido."
+    if not buscar_fornecedor_por_id(fornecedor_id):
+        return {}, "Fornecedor homologado não encontrado."
+    try:
+        preco = float(dados.get('precoHomologado'))
+    except (TypeError, ValueError):
+        return {}, "Informe o preço combinado com o fornecedor homologado."
+    if preco <= 0:
+        return {}, "O preço combinado precisa ser maior que zero."
+    validade = (dados.get('validadePrecoHomologado') or '').strip() or None
+    if validade:
+        try:
+            date.fromisoformat(validade)
+        except ValueError:
+            return {}, "Validade do preço combinado inválida."
+    return {
+        "fornecedor_homologado_id": fornecedor_id,
+        "preco_homologado": preco,
+        "validade_preco_homologado": validade,
+    }, None
+
+
 @app.route('/api/insumos', methods=['POST'])
 def api_criar_insumo():
     erro_admin = _exigir_admin()
@@ -1206,7 +1247,7 @@ def api_criar_insumo():
         except (TypeError, ValueError):
             return jsonify({"erro": "Fator de conversão inválido."}), 400
         campos["fator_conversao_compra"] = fator if fator and fator > 0 else None
-    for validar in (_campos_conteudo_por_unidade, _campo_custo_referencia):
+    for validar in (_campos_conteudo_por_unidade, _campo_custo_referencia, _campos_fornecedor_homologado):
         campos_extra, erro = validar(dados)
         if erro:
             return jsonify({"erro": erro}), 400
@@ -1217,6 +1258,8 @@ def api_criar_insumo():
     fornecedor_ids = dados.get('fornecedorIds')
     if fornecedor_ids is not None:
         definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
+    if campos.get('fornecedor_homologado_id'):
+        vincular_insumo_fornecedor(insumo_id, campos['fornecedor_homologado_id'])
 
     return jsonify({"id": insumo_id})
 
@@ -1306,7 +1349,7 @@ def api_atualizar_insumo(insumo_id):
         except (TypeError, ValueError):
             return jsonify({"erro": "Fator de conversão inválido."}), 400
         campos['fator_conversao_compra'] = fator if fator and fator > 0 else None
-    for validar in (_campos_conteudo_por_unidade, _campo_custo_referencia):
+    for validar in (_campos_conteudo_por_unidade, _campo_custo_referencia, _campos_fornecedor_homologado):
         campos_extra, erro = validar(dados)
         if erro:
             return jsonify({"erro": erro}), 400
@@ -1320,6 +1363,9 @@ def api_atualizar_insumo(insumo_id):
         except (TypeError, ValueError):
             return jsonify({"erro": "Lista de fornecedores inválida."}), 400
         definir_fornecedores_insumo(insumo_id, fornecedor_ids)
+
+    if campos.get('fornecedor_homologado_id'):
+        vincular_insumo_fornecedor(insumo_id, campos['fornecedor_homologado_id'])
 
     return jsonify({"ok": True})
 
@@ -2762,6 +2808,47 @@ def api_confirmar_recebimento(pedido_id):
     return jsonify({"ok": True, **resultado})
 
 
+# --- FORNECEDOR HOMOLOGADO E PEDIDO DIRETO (2026-09-16) ----------------------
+# O fornecedor homologado e o preço combinado ficam no cadastro do insumo
+# (ver _campos_fornecedor_homologado); a Requisição manda esses insumos direto
+# em pedido, e "Novo pedido" em Pedidos usa o mesmo preço. Ver seção 6.20.
+
+@app.route('/api/pedidos/direto', methods=['POST'])
+def api_criar_pedidos_diretos():
+    """Pedido de preço homologado, sem cotação: {fornecedorId, itens:
+    [{insumoId, loja, quantidade}]} — um pedido por loja, com um WhatsApp
+    só pro fornecedor (ver criar_pedidos_diretos)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        fornecedor_id = int(dados.get('fornecedorId'))
+        itens = [
+            {"insumoId": int(item['insumoId']), "loja": item['loja'], "quantidade": float(item['quantidade'])}
+            for item in dados.get('itens') or []
+        ]
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"erro": "Item inválido na lista."}), 400
+    if any(item["loja"] not in LOJAS for item in itens):
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        pedidos = criar_pedidos_diretos(fornecedor_id, itens)
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    return jsonify({"ok": True, "pedidos": pedidos})
+
+
+@app.route('/api/compras/pendencias', methods=['GET'])
+def api_pendencias_compras():
+    """Quanto está parado em cada etapa de Compras, pros números do menu (ver
+    pendencias_compras)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify(pendencias_compras())
+
+
 @app.route('/api/admin/limpar-requisicoes-cotacoes', methods=['POST'])
 def api_limpar_requisicoes_cotacoes():
     """Apaga todo o histórico de requisições/contagens, cotações e pedidos
@@ -2987,11 +3074,13 @@ def api_gerar_cotacao_requisicao():
         return jsonify({"erro": "Só é possível gerar a cotação depois que todas as lojas forem aprovadas."}), 400
 
     resultado = gerar_cotacao_do_deficit(titulo, prazo_validade)
-    if resultado["cotacaoId"] is None:
+    if resultado["cotacaoId"] is None and not resultado["pedidosDiretos"]:
         return jsonify({"erro": "Nenhum insumo com déficit — não há nada para cotar."}), 400
+    # cotacaoId None + pedidosDiretos: tudo que faltava tem fornecedor homologado.
     return jsonify({
         "ok": True,
         "cotacaoId": resultado["cotacaoId"],
+        "pedidosDiretos": resultado["pedidosDiretos"],
         "insumosSemIdeal": resultado["insumosSemIdeal"],
     })
 

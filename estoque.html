@@ -742,6 +742,26 @@
               <!-- Renderizado dinamicamente via JS -->
             </div>
           </div>
+          <!-- Fornecedor homologado (2026-09-16): com preço combinado, a Requisição manda direto em pedido pra ele, sem cotação -->
+          <div class="form-group">
+            <label for="novo-insumo-fornecedor-homologado">Fornecedor homologado (opcional)</label>
+            <select id="novo-insumo-fornecedor-homologado">
+              <option value="">Nenhum, vai pra cotação</option>
+            </select>
+          </div>
+          <div class="form-group-row" id="novo-insumo-homologado-campos" style="display:none;">
+            <div class="form-group">
+              <label for="novo-insumo-preco-homologado" id="novo-insumo-preco-homologado-rotulo">Preço combinado (R$)</label>
+              <input type="number" step="any" min="0" id="novo-insumo-preco-homologado">
+            </div>
+            <div class="form-group">
+              <label for="novo-insumo-validade-homologado">Vale até</label>
+              <input type="date" id="novo-insumo-validade-homologado">
+            </div>
+          </div>
+          <p class="panel-subtitle" id="novo-insumo-homologado-ajuda" style="display:none; margin-top: calc(-1 * var(--space-2)); margin-bottom: var(--space-3);">
+            Na Requisição, esse insumo vira pedido direto pra esse fornecedor, sem passar por cotação. Validade em branco vale até alguém mudar.
+          </p>
           <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
             Cadastra pra rede toda — depois é só distribuir a quantidade recebida entre as lojas em "Registrar entrada".
           </p>

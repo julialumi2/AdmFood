@@ -70,3 +70,46 @@
 .pedido-estagio-linha.concluida {
   background-color: var(--success);
 }
+
+/* Novo pedido pelo preço combinado (2026-09-16): uma coluna de quantidade por loja */
+.modal-content.modal-pedido-direto { max-width: 860px; }
+
+.pedido-direto-tabela-wrap {
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.pedido-direto-tabela th,
+.pedido-direto-tabela td {
+  vertical-align: top;
+}
+
+.pedido-direto-tabela input[type="number"] {
+  width: 84px;
+}
+
+.preco-combinado-valor {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pedido-direto-estoque {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pedido-direto-tabela tfoot td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pedido-direto-abaixo {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--danger-texto);
+}

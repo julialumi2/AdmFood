@@ -928,6 +928,31 @@ def inicializar_banco():
                 f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{tabela}_id_vmarket ON {tabela}(id_vmarket) "
                 "WHERE id_vmarket IS NOT NULL"
             )
+        # Fornecedor homologado do insumo (2026-09-16): o fornecedor com preço
+        # já combinado (na unidade do insumo) e até quando vale. Insumo assim
+        # não passa por cotação — a Requisição manda direto em pedido pra ele,
+        # como os "produtos homologados" da VMarket. Ver criar_pedidos_diretos.
+        colunas_insumo = {c["name"] for c in conn.execute("PRAGMA table_info(insumo)").fetchall()}
+        for coluna, tipo in (
+            ("fornecedor_homologado_id", "INTEGER"),
+            ("preco_homologado", "REAL"),
+            ("validade_preco_homologado", "TEXT"),
+        ):
+            if coluna not in colunas_insumo:
+                conn.execute(f"ALTER TABLE insumo ADD COLUMN {coluna} {tipo}")
+        # Pedido direto que nasceu de uma Requisição guarda de qual (título +
+        # prazo), pra "Fazer Cotação/Pedido" não gerar de novo nem ficar órfão
+        # quando a requisição é excluída.
+        colunas_pedido_compra = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra)").fetchall()}
+        for coluna in ("requisicao_titulo", "requisicao_prazo"):
+            if coluna not in colunas_pedido_compra:
+                conn.execute(f"ALTER TABLE pedido_compra ADD COLUMN {coluna} TEXT")
+        # Cotação que só guarda pedido direto (sem preço cotado): não aparece
+        # na lista de Cotações nem no histórico de compras.
+        colunas_cotacao = {c["name"] for c in conn.execute("PRAGMA table_info(cotacao)").fetchall()}
+        if "pedido_direto" not in colunas_cotacao:
+            conn.execute("ALTER TABLE cotacao ADD COLUMN pedido_direto INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE cotacao SET pedido_direto = 1 WHERE id_vmarket = 'pedidos-sem-cotacao'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ajuste_quantidade_ideal (
@@ -2626,6 +2651,7 @@ def listar_insumos():
                    i.marca_homologada, i.unidade_compra, i.fator_conversao_compra,
                    (i.rendimento_receita IS NOT NULL) AS eh_mistura,
                    i.conteudo_por_unidade, i.unidade_conteudo, i.custo_referencia,
+                   i.fornecedor_homologado_id, i.preco_homologado, i.validade_preco_homologado,
                    e.loja, e.quantidade_atual, e.estoque_minimo, e.atualizado_em,
                    EXISTS(SELECT 1 FROM insumo_loja il WHERE il.insumo_id = i.id AND il.loja = e.loja) AS aplica
             FROM insumo i
@@ -4000,7 +4026,7 @@ def listar_historico_compras():
     "o que foi decidido", o outro é "o que já chegou")."""
     with conexao() as conn:
         cotacoes = conn.execute(
-            "SELECT id, titulo, criado_em FROM cotacao WHERE status = 'fechada' ORDER BY criado_em DESC"
+            "SELECT id, titulo, criado_em FROM cotacao WHERE status = 'fechada' AND pedido_direto = 0 ORDER BY criado_em DESC"
         ).fetchall()
         historico = []
         for cotacao in cotacoes:
@@ -4065,7 +4091,8 @@ def listar_cotacoes():
     pequeno (poucas centenas de linhas no máximo)."""
     with conexao() as conn:
         cotacoes = conn.execute(
-            "SELECT id, titulo, status, criado_em, requisicao_titulo FROM cotacao ORDER BY criado_em DESC"
+            "SELECT id, titulo, status, criado_em, requisicao_titulo FROM cotacao WHERE pedido_direto = 0 "
+            "ORDER BY criado_em DESC"
         ).fetchall()
         precos = conn.execute(
             "SELECT cotacao_id, insumo_id, fornecedor_id, preco, selecionado FROM cotacao_preco"
@@ -4766,6 +4793,238 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
     return {"divergencia": divergencia, "valorCalculado": valor_calculado}
 
 
+# --- FORNECEDOR HOMOLOGADO E PEDIDO DIRETO (2026-09-16) ----------------------
+# Insumo com fornecedor homologado (preço já combinado, no cadastro do insumo)
+# não passa por cotação: a Requisição manda ele direto em pedido pro
+# fornecedor. Na VMarket, 68 dos 159 pedidos do último mês antes da migração
+# saíram assim. "Novo pedido" em Pedidos usa o mesmo preço pra pedido extra.
+
+TITULO_COTACAO_PEDIDOS_DIRETOS = "Pedidos diretos (preço homologado)"
+
+
+def _homologados_validos(conn, fornecedor_id=None):
+    """{insumo_id: {fornecedor_id, preco, nome}} dos insumos com fornecedor
+    homologado ativo e preço combinado valendo hoje (validade em branco ou
+    de hoje em diante). Com `fornecedor_id`, só os desse fornecedor."""
+    parametros = [datetime.now().date().isoformat()]
+    filtro = ""
+    if fornecedor_id is not None:
+        filtro = "AND i.fornecedor_homologado_id = ?"
+        parametros.append(fornecedor_id)
+    linhas = conn.execute(
+        f"""
+        SELECT i.id, i.nome, i.fornecedor_homologado_id, i.preco_homologado
+        FROM insumo i
+        JOIN fornecedor f ON f.id = i.fornecedor_homologado_id AND f.ativo = 1
+        WHERE i.preco_homologado > 0
+          AND (i.validade_preco_homologado IS NULL OR i.validade_preco_homologado >= ?)
+          {filtro}
+        """,
+        parametros,
+    ).fetchall()
+    return {
+        linha["id"]: {"fornecedor_id": linha["fornecedor_homologado_id"], "preco": linha["preco_homologado"], "nome": linha["nome"]}
+        for linha in linhas
+    }
+
+
+def vincular_insumo_fornecedor(insumo_id, fornecedor_id):
+    """Garante o insumo na lista de fornecedores que cotam ele — o
+    homologado entra mesmo se não estiver marcado na tela."""
+    with conexao() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
+            (insumo_id, fornecedor_id),
+        )
+
+
+def _cotacao_dos_pedidos_diretos(conn):
+    """Todo pedido pertence a uma cotação (Pedidos e Recebimentos buscam os
+    dois juntos), então os pedidos diretos ficam numa cotação só, marcada
+    `pedido_direto`, que não aparece na lista de Cotações."""
+    linha = conn.execute(
+        "SELECT id FROM cotacao WHERE pedido_direto = 1 AND id_vmarket IS NULL ORDER BY id LIMIT 1"
+    ).fetchone()
+    if linha:
+        return linha["id"]
+    return conn.execute(
+        "INSERT INTO cotacao (titulo, status, criado_em, pedido_direto) VALUES (?, 'fechada', ?, 1)",
+        (TITULO_COTACAO_PEDIDOS_DIRETOS, datetime.now().isoformat()),
+    ).lastrowid
+
+
+def _gravar_pedidos_diretos(conn, quantidades, precos, requisicao=None):
+    """`quantidades`: {(fornecedor_id, loja, insumo_id): quantidade};
+    `precos`: {insumo_id: preço homologado}. Um pedido por fornecedor × loja,
+    e os do mesmo fornecedor dividem o token — um WhatsApp só, "feito em
+    conjunto", como no "Gerar pedidos" da cotação. Nasce 'enviado' sem
+    WhatsApp: em Pedidos aparece pendente de envio. O insumo passa a valer
+    pra loja (insumo_loja + linha de estoque zerada), senão o recebimento não
+    teria onde somar. `requisicao` = (título, prazo) de onde o pedido veio.
+    Devolve [{id, fornecedorId, loja, token}]."""
+    agora = datetime.now().isoformat()
+    cotacao_id = _cotacao_dos_pedidos_diretos(conn)
+    requisicao_titulo, requisicao_prazo = requisicao or (None, None)
+    tokens, pedidos = {}, {}
+    for (fornecedor_id, loja, insumo_id), quantidade in quantidades.items():
+        if fornecedor_id not in tokens:
+            tokens[fornecedor_id] = secrets.token_urlsafe(24)
+        chave = (fornecedor_id, loja)
+        if chave not in pedidos:
+            pedidos[chave] = conn.execute(
+                """
+                INSERT INTO pedido_compra
+                    (cotacao_id, fornecedor_id, loja, status, criado_em, token, requisicao_titulo, requisicao_prazo)
+                VALUES (?, ?, ?, 'enviado', ?, ?, ?, ?)
+                """,
+                (cotacao_id, fornecedor_id, loja, agora, tokens[fornecedor_id], requisicao_titulo, requisicao_prazo),
+            ).lastrowid
+        conn.execute(
+            "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
+            (pedidos[chave], insumo_id, quantidade, precos[insumo_id]),
+        )
+        conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, loja))
+        conn.execute(
+            "INSERT OR IGNORE INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+            "VALUES (?, ?, 0, 0, ?)",
+            (insumo_id, loja, agora),
+        )
+    return [
+        {"id": pedido_id, "fornecedorId": fornecedor_id, "loja": loja, "token": tokens[fornecedor_id]}
+        for (fornecedor_id, loja), pedido_id in pedidos.items()
+    ]
+
+
+def criar_pedidos_diretos(fornecedor_id, itens):
+    """"Novo pedido" em Pedidos: pedido extra pelo preço homologado, fora da
+    Requisição. `itens`: [{insumoId, loja, quantidade}] (loja já validada).
+    Só entra insumo que tem esse fornecedor como homologado e preço valendo;
+    o preço é sempre o do cadastro, nunca o da tela. Levanta ValueError com a
+    mensagem pra tela. Devolve [{id, fornecedorId, loja, token}]."""
+    quantidades = {}
+    for item in itens:
+        if item["quantidade"] <= 0:
+            continue
+        chave = (fornecedor_id, item["loja"], item["insumoId"])
+        quantidades[chave] = quantidades.get(chave, 0) + item["quantidade"]
+    if not quantidades:
+        raise ValueError("Informe a quantidade de pelo menos um insumo.")
+
+    with conexao() as conn:
+        if not conn.execute("SELECT 1 FROM fornecedor WHERE id = ?", (fornecedor_id,)).fetchone():
+            raise ValueError("Fornecedor não encontrado.")
+        validos = _homologados_validos(conn, fornecedor_id)
+        for _, _, insumo_id in quantidades:
+            if insumo_id not in validos:
+                linha = conn.execute("SELECT nome FROM insumo WHERE id = ?", (insumo_id,)).fetchone()
+                nome = linha["nome"] if linha else "Um dos insumos"
+                raise ValueError(f"{nome} não tem preço homologado valendo com esse fornecedor.")
+        return _gravar_pedidos_diretos(conn, quantidades, {insumo_id: v["preco"] for insumo_id, v in validos.items()})
+
+
+# --- PENDÊNCIAS DE COMPRAS NO MENU (2026-09-16) ------------------------------
+# Quanto está parado em cada etapa, pro menu de Compras mostrar um número ao
+# lado de Requisições, Cotações, Pedidos e Recebimentos (a Julia preferiu isso
+# a uma tela de painel).
+
+DIAS_ENTREGA_ATRASADA = 3   # pedido enviado há mais que isso e não recebido
+DIAS_PENDENCIA_COMPRAS = 30  # contagem e cotação mais velhas que isso são abandono, não pendência
+
+
+def pendencias_compras():
+    """Contagens por etapa: contagem que a loja não respondeu ou que espera
+    aprovação (e quantas venceram o prazo), fornecedor convidado que não
+    mandou preço, cotação aberta com insumo sem vencedor ou pronto pra virar
+    pedido, pedido gerado que não foi pro WhatsApp e pedido esperando
+    entrega — atrasado depois de DIAS_ENTREGA_ATRASADA dias do envio (ou da
+    criação, se não passou pelo WhatsApp). Pedido não tem corte de data:
+    entrega que não chegou é pendência até alguém confirmar."""
+    agora = datetime.now()
+    agora_minuto = agora.isoformat()[:16]
+    corte = (agora - timedelta(days=DIAS_PENDENCIA_COMPRAS)).isoformat()
+    with conexao() as conn:
+        contagens = conn.execute(
+            "SELECT status, prazo_validade FROM contagem WHERE status IN ('aberta', 'respondida') AND criado_em >= ?",
+            (corte,),
+        ).fetchall()
+        convites = conn.execute(
+            """
+            SELECT cv.prazo_validade
+            FROM cotacao_convite cv
+            JOIN cotacao c ON c.id = cv.cotacao_id
+            WHERE cv.status = 'aberta' AND c.status = 'aberta' AND c.pedido_direto = 0 AND c.criado_em >= ?
+            """,
+            (corte,),
+        ).fetchall()
+        cotacoes_abertas = [
+            linha["id"]
+            for linha in conn.execute(
+                "SELECT id FROM cotacao WHERE status = 'aberta' AND pedido_direto = 0 AND criado_em >= ?", (corte,)
+            ).fetchall()
+        ]
+        marcadores = ",".join("?" * len(cotacoes_abertas)) or "NULL"
+
+        def pares(sql, parametros):
+            return {(linha[0], linha[1]) for linha in conn.execute(sql, parametros).fetchall()}
+
+        cotados = pares(
+            f"SELECT cotacao_id, insumo_id FROM cotacao_item WHERE cotacao_id IN ({marcadores}) "
+            f"UNION SELECT cotacao_id, insumo_id FROM cotacao_preco WHERE cotacao_id IN ({marcadores})",
+            cotacoes_abertas * 2,
+        )
+        com_vencedor = pares(
+            f"SELECT cotacao_id, insumo_id FROM cotacao_preco WHERE selecionado = 1 AND cotacao_id IN ({marcadores})",
+            cotacoes_abertas,
+        )
+        com_quebra_por_loja = pares(
+            f"SELECT cotacao_id, insumo_id FROM cotacao_item_loja WHERE cotacao_id IN ({marcadores})",
+            cotacoes_abertas,
+        )
+        ja_pedidos = pares(
+            f"""
+            SELECT pc.cotacao_id, pi.insumo_id
+            FROM pedido_compra_item pi JOIN pedido_compra pc ON pc.id = pi.pedido_id
+            WHERE pc.cotacao_id IN ({marcadores})
+            """,
+            cotacoes_abertas,
+        )
+        pedidos = conn.execute(
+            "SELECT status, criado_em, whatsapp_enviado_em FROM pedido_compra WHERE status != 'recebido'"
+        ).fetchall()
+
+    # Cotação parada: tem insumo sem vencedor, ou vencedor que ainda não virou
+    # pedido (só conta o que tem quebra por loja, que é o que "Gerar pedidos" usa).
+    parados = {par[0] for par in cotados - com_vencedor}
+    parados |= {par[0] for par in (com_vencedor & com_quebra_por_loja) - ja_pedidos}
+
+    nao_enviados = atrasadas = no_prazo = 0
+    for pedido in pedidos:
+        if pedido["status"] == "enviado" and not pedido["whatsapp_enviado_em"]:
+            nao_enviados += 1
+            continue
+        try:
+            dias = (agora - datetime.fromisoformat(pedido["whatsapp_enviado_em"] or pedido["criado_em"])).days
+        except (TypeError, ValueError):
+            dias = 0
+        if dias > DIAS_ENTREGA_ATRASADA:
+            atrasadas += 1
+        else:
+            no_prazo += 1
+
+    return {
+        "contagensSemResposta": sum(1 for c in contagens if c["status"] == "aberta"),
+        "contagensVencidas": sum(1 for c in contagens if c["status"] == "aberta" and (c["prazo_validade"] or "") < agora_minuto),
+        "contagensPraAprovar": sum(1 for c in contagens if c["status"] == "respondida"),
+        "fornecedoresSemPreco": len(convites),
+        "convitesVencidos": sum(1 for cv in convites if (cv["prazo_validade"] or "") < agora_minuto),
+        "cotacoesParadas": len(parados),
+        "pedidosNaoEnviados": nao_enviados,
+        "entregasAtrasadas": atrasadas,
+        "entregasNoPrazo": no_prazo,
+        "diasEntregaAtrasada": DIAS_ENTREGA_ATRASADA,
+    }
+
+
 def limpar_requisicoes_e_cotacoes():
     """Apaga TODO o histórico de requisições/contagens, cotações (com
     convites e preços) e pedidos de compra — ação de manutenção sem volta,
@@ -4815,6 +5074,16 @@ def excluir_requisicao(titulo, prazo_validade):
             conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,))
             conn.execute("DELETE FROM cotacao_item_loja WHERE cotacao_id = ?", (cotacao_id,))
             conn.execute("DELETE FROM cotacao WHERE id = ?", (cotacao_id,))
+        # Pedido direto (fornecedor homologado) que nasceu dessa requisição.
+        conn.execute(
+            "DELETE FROM pedido_compra_item WHERE pedido_id IN "
+            "(SELECT id FROM pedido_compra WHERE requisicao_titulo = ? AND requisicao_prazo = ?)",
+            (titulo, prazo_validade),
+        )
+        conn.execute(
+            "DELETE FROM pedido_compra WHERE requisicao_titulo = ? AND requisicao_prazo = ?",
+            (titulo, prazo_validade),
+        )
         conn.execute(
             "DELETE FROM contagem_item WHERE contagem_id IN (SELECT id FROM contagem WHERE descricao = ? AND prazo_validade = ?)",
             (titulo, prazo_validade),
@@ -4872,11 +5141,14 @@ def importar_da_vmarket(dados, lojas):
         "cotacoes": 0, "precos": 0,
         "pedidosCriados": 0, "pedidosJaImportados": 0,
         "contagensCriadas": 0, "contagensJaImportadas": 0,
+        "precosHomologados": 0,
     }
     with conexao() as conn:
         valida = _ValidaCargaVmarket(conn, lojas)
         for fornecedor in dados.get("fornecedores") or []:
             _importar_fornecedor_vmarket(conn, fornecedor, valida, resumo)
+        for preco in dados.get("precosHomologados") or []:
+            _importar_preco_homologado_vmarket(conn, preco, valida, resumo)
         for cotacao in dados.get("cotacoes") or []:
             _importar_cotacao_vmarket(conn, cotacao, valida, resumo)
         for pedido in dados.get("pedidos") or []:
@@ -4884,6 +5156,26 @@ def importar_da_vmarket(dados, lojas):
         for contagem in dados.get("contagens") or []:
             _importar_contagem_vmarket(conn, contagem, valida, resumo)
     return resumo
+
+
+def _importar_preco_homologado_vmarket(conn, preco, valida, resumo):
+    """Produto homologado na VMarket: vira o fornecedor homologado do insumo,
+    com o preço (já na unidade do insumo daqui) e a validade. Importar de
+    novo troca. Desfazer a carga não apaga (igual aos fornecedores)."""
+    valor = float(preco["preco"])
+    if valor <= 0:
+        raise ValueError(f"Preço homologado inválido pro insumo {preco['insumoId']}.")
+    insumo_id = valida.insumo(preco["insumoId"])
+    fornecedor_id = _fornecedor_da_vmarket(conn, preco["fornecedorVmarket"])
+    conn.execute(
+        "UPDATE insumo SET fornecedor_homologado_id = ?, preco_homologado = ?, validade_preco_homologado = ? WHERE id = ?",
+        (fornecedor_id, valor, preco.get("validade") or None, insumo_id),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
+        (insumo_id, fornecedor_id),
+    )
+    resumo["precosHomologados"] += 1
 
 
 def _fornecedor_da_vmarket(conn, id_vmarket):
@@ -4997,7 +5289,7 @@ def _cotacao_dos_pedidos_avulsos(conn):
     if linha:
         return linha["id"]
     return conn.execute(
-        "INSERT INTO cotacao (titulo, status, criado_em, id_vmarket) VALUES (?, 'fechada', ?, 'pedidos-sem-cotacao')",
+        "INSERT INTO cotacao (titulo, status, criado_em, id_vmarket, pedido_direto) VALUES (?, 'fechada', ?, 'pedidos-sem-cotacao', 1)",
         ("Pedidos da VMarket sem cotação (produtos homologados)", datetime.now().isoformat()),
     ).lastrowid
 
@@ -5495,14 +5787,26 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     (clicar duas vezes em "Gerar cotação", ou aprovar a última loja duas
     vezes), devolve a cotação que já existe em vez de criar uma duplicada
     com os mesmos insumos — risco real que ela apontou (roteiro de
-    compras, revisão 2026-08-28)."""
+    compras, revisão 2026-08-28).
+
+    Insumo com fornecedor homologado e preço valendo não entra na cotação
+    (2026-09-16): vira pedido direto pro fornecedor, com o mesmo déficit por
+    loja (`pedidosDiretos` = ids). Se todo o déficit for homologado, nem abre
+    cotação (`cotacaoId` None). A idempotência vale pros dois."""
     with conexao() as conn:
         existente = conn.execute(
             "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ?",
             (titulo, prazo_validade),
         ).fetchone()
-    if existente:
-        return {"cotacaoId": existente["id"], "insumosSemIdeal": []}
+        pedidos_existentes = [
+            linha["id"]
+            for linha in conn.execute(
+                "SELECT id FROM pedido_compra WHERE requisicao_titulo = ? AND requisicao_prazo = ? ORDER BY id",
+                (titulo, prazo_validade),
+            ).fetchall()
+        ]
+    if existente or pedidos_existentes:
+        return {"cotacaoId": existente["id"] if existente else None, "pedidosDiretos": pedidos_existentes, "insumosSemIdeal": []}
 
     grupo = None
     for r in listar_requisicoes():
@@ -5510,9 +5814,9 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
             grupo = r
             break
     if not grupo:
-        return {"cotacaoId": None, "insumosSemIdeal": []}
+        return {"cotacaoId": None, "pedidosDiretos": [], "insumosSemIdeal": []}
     if any(c['status'] != 'aprovada' for c in grupo['contagens']):
-        return {"cotacaoId": None, "insumosSemIdeal": []}
+        return {"cotacaoId": None, "pedidosDiretos": [], "insumosSemIdeal": []}
 
     deficits = {}
     sem_ideal = {}
@@ -5536,11 +5840,28 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     insumos_sem_ideal = [{"insumoId": insumo_id, "nome": nome} for insumo_id, nome in sem_ideal.items()]
 
     if not deficits:
-        return {"cotacaoId": None, "insumosSemIdeal": insumos_sem_ideal}
+        return {"cotacaoId": None, "pedidosDiretos": [], "insumosSemIdeal": insumos_sem_ideal}
+
+    with conexao() as conn:
+        homologados = _homologados_validos(conn)
+        quantidades_diretas = {
+            (homologados[insumo_id]["fornecedor_id"], loja, insumo_id): quantidade
+            for insumo_id, info in deficits.items() if insumo_id in homologados
+            for loja, quantidade in info['porLoja'].items()
+        }
+        pedidos_diretos = []
+        if quantidades_diretas:
+            precos = {insumo_id: h["preco"] for insumo_id, h in homologados.items()}
+            pedidos_diretos = [
+                p["id"] for p in _gravar_pedidos_diretos(conn, quantidades_diretas, precos, (titulo, prazo_validade))
+            ]
+    para_cotar = {insumo_id: info for insumo_id, info in deficits.items() if insumo_id not in homologados}
+    if not para_cotar:
+        return {"cotacaoId": None, "pedidosDiretos": pedidos_diretos, "insumosSemIdeal": insumos_sem_ideal}
 
     cotacao_id = criar_cotacao(titulo, requisicao_titulo=titulo, requisicao_prazo=prazo_validade)
     with conexao() as conn:
-        for insumo_id, info in deficits.items():
+        for insumo_id, info in para_cotar.items():
             total = round(sum(info['porLoja'].values()), 2)
             conn.execute(
                 "INSERT INTO cotacao_item (cotacao_id, insumo_id, quantidade_total) VALUES (?, ?, ?)",
@@ -5551,7 +5872,7 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
                     "INSERT INTO cotacao_item_loja (cotacao_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
                     (cotacao_id, insumo_id, loja, quantidade),
                 )
-    return {"cotacaoId": cotacao_id, "insumosSemIdeal": insumos_sem_ideal}
+    return {"cotacaoId": cotacao_id, "pedidosDiretos": pedidos_diretos, "insumosSemIdeal": insumos_sem_ideal}
 
 
 def listar_itens_cotacao(cotacao_id):

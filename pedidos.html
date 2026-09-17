@@ -169,11 +169,17 @@
             </div>
             <div class="title-row">
               <h1>Pedidos</h1>
+              <div class="page-acoes-topo">
+                <button type="button" class="btn-primary" id="btn-novo-pedido-direto">
+                  <i data-lucide="plus"></i>
+                  Novo pedido
+                </button>
+              </div>
             </div>
           </div>
 
           <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
-            Nascem de uma cotação fechada com vencedor escolhido — um pedido por fornecedor e por loja. Acompanhe aqui até a entrega chegar.
+            Nascem de uma cotação fechada com vencedor escolhido, ou direto pelo preço combinado com o fornecedor em "Novo pedido" — um pedido por fornecedor e por loja. Acompanhe aqui até a entrega chegar.
           </p>
 
           <div class="chart-card">
@@ -269,6 +275,37 @@
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
   </div> <!-- /dashboard-wrapper -->
+
+  <!-- MODAL: NOVO PEDIDO PELO PREÇO COMBINADO (SEM COTAÇÃO) -->
+  <div class="modal-overlay" id="modal-pedido-direto" style="display:none;">
+    <div class="modal-content modal-large modal-pedido-direto">
+      <div class="modal-header">
+        <h3 class="panel-title">Novo pedido</h3>
+        <button type="button" class="btn-close" id="btn-pedido-direto-fechar" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form-pedido-direto">
+        <div class="form-group">
+          <label for="pedido-direto-fornecedor">Fornecedor</label>
+          <select id="pedido-direto-fornecedor" required></select>
+          <small class="text-muted">Aparecem os fornecedores com preço combinado. O preço se cadastra em Fornecedores.</small>
+        </div>
+        <p class="panel-subtitle" id="pedido-direto-subtitulo"></p>
+        <div class="table-responsive pedido-direto-tabela-wrap" id="pedido-direto-tabela-wrap" style="display:none;">
+          <table class="inventory-table pedido-direto-tabela">
+            <thead id="pedido-direto-cabecalho"></thead>
+            <tbody id="pedido-direto-itens"></tbody>
+            <tfoot id="pedido-direto-totais"></tfoot>
+          </table>
+        </div>
+        <button type="button" class="btn-limpar-filtro" id="btn-pedido-direto-todas-lojas" style="display:none;">Pedir pra outras lojas também</button>
+        <p id="pedido-direto-erro" style="color:var(--danger-texto); display:none;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-pedido-direto-cancelar">Cancelar</button>
+          <button type="submit" class="btn-primary-sm" id="btn-pedido-direto-gerar" disabled>Gerar pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
 </body>
 </html>
