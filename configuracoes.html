@@ -324,6 +324,48 @@
           </div>
         </div>
 
+        <!-- CÓPIA DE SEGURANÇA (só admin) -->
+        <div class="panel" id="painel-backup" style="display:none;">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Cópia de segurança</h3>
+              <span class="panel-subtitle">Todo o sistema num arquivo só — histórico, estoque, fichas e notas</span>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-gerar-backup">Gerar cópia agora</button>
+          </div>
+          <div class="backup-resumo" id="backup-resumo">
+            <span class="panel-subtitle">Carregando...</span>
+          </div>
+          <div class="backup-aviso">
+            <i data-lucide="shield-alert"></i>
+            <div>
+              <strong>A cópia automática fica no mesmo servidor.</strong>
+              Ela salva de erro de operação e de banco corrompido, mas não de perder o servidor.
+              Baixe a cópia completa de vez em quando e guarde fora daqui (computador, Drive, HD).
+            </div>
+          </div>
+          <div class="backup-acoes">
+            <a class="btn-primary" id="link-backup-completo" href="/api/admin/backup-completo">
+              <i data-lucide="download"></i>
+              Baixar cópia completa (.zip)
+            </a>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cópia</th>
+                  <th>Tamanho</th>
+                  <th style="text-align:right;">Baixar</th>
+                </tr>
+              </thead>
+              <tbody id="backup-tbody">
+                <tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- ZONA DE PERIGO (só admin) -->
         <div class="panel" id="painel-zona-perigo" style="display:none; border-color: var(--danger);">
           <div class="panel-header">

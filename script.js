@@ -7661,6 +7661,11 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
+    const painelBackup = document.getElementById('painel-backup');
+    if (painelBackup && usuario.papel === 'admin') {
+      painelBackup.style.display = '';
+      carregarBackups();
+    }
     const painelBaixa = document.getElementById('painel-baixa-automatica');
     if (painelBaixa && usuario.papel === 'admin') {
       painelBaixa.style.display = '';
@@ -7739,6 +7744,89 @@ async function carregarUsuarioLogado() {
     console.error('Falha ao carregar usuário logado:', erro);
   }
 }
+
+// --- CÓPIA DE SEGURANÇA DO BANCO (Configurações, só admin) ---
+
+function _tamanhoLegivel(bytes) {
+  if (!bytes) return '—';
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+async function carregarBackups() {
+  const resumo = document.getElementById('backup-resumo');
+  const tbody = document.getElementById('backup-tbody');
+  if (!resumo || !tbody) return;
+
+  try {
+    const resposta = await fetch('/api/admin/backups');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    const copias = dados.backups || [];
+    const ultima = copias[0];
+
+    resumo.innerHTML = `
+      <div>
+        <span class="backup-rotulo">Última cópia</span>
+        <span class="backup-valor">${ultima ? _dataBR(ultima.arquivo.slice(8, 18)) : 'nenhuma ainda'}</span>
+      </div>
+      <div>
+        <span class="backup-rotulo">Cópias guardadas</span>
+        <span class="backup-valor">${copias.length}</span>
+      </div>
+      <div>
+        <span class="backup-rotulo">Tamanho do banco</span>
+        <span class="backup-valor">${_tamanhoLegivel(dados.tamanhoBanco)}</span>
+      </div>
+      <div>
+        <span class="backup-rotulo">Cópia automática</span>
+        <span class="backup-valor">${dados.automatico ? `todo dia às ${dados.horaAutomatica}` : 'desligada'}</span>
+      </div>
+    `;
+
+    tbody.innerHTML = copias.length
+      ? copias.slice(0, 7).map((c) => `
+        <tr>
+          <td class="font-bold">${_dataBR(c.arquivo.slice(8, 18))}</td>
+          <td class="text-muted">${_tamanhoLegivel(c.tamanho)}</td>
+          <td class="col-acoes"><div class="acoes-linha" style="justify-content:flex-end;">
+            <a class="btn-acao-icone" href="/api/admin/backups/${encodeURIComponent(c.arquivo)}" title="Baixar só o banco">
+              <i data-lucide="download"></i>
+            </a>
+          </div></td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="3" class="panel-subtitle">A primeira cópia sai na próxima madrugada — ou clique em "Gerar cópia agora".</td></tr>';
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('Falha ao carregar as cópias de segurança:', erro);
+    resumo.innerHTML = '<span class="panel-subtitle" style="color:var(--danger);">Não foi possível ler as cópias.</span>';
+    tbody.innerHTML = '';
+  }
+}
+
+document.getElementById('btn-gerar-backup')?.addEventListener('click', async (evento) => {
+  const botao = evento.currentTarget;
+  const textoOriginal = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = 'Gerando...';
+  try {
+    const resposta = await fetch('/api/admin/backups', { method: 'POST' });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      alert(dados.erro || 'Não foi possível gerar a cópia.');
+      return;
+    }
+    await carregarBackups();
+  } catch (erro) {
+    console.error('Falha ao gerar cópia:', erro);
+    alert('Não foi possível conectar ao servidor.');
+  } finally {
+    botao.disabled = false;
+    botao.textContent = textoOriginal;
+  }
+});
 
 // --- PERFIS DE ACESSO (card #35) ---
 // admin: a rede inteira. gerente: uma loja, com compras e cadastro dela.

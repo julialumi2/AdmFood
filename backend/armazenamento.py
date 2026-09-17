@@ -28,6 +28,15 @@ os.makedirs(PASTA_FOTOS_CARDAPIO, exist_ok=True)
 PASTA_NOTAS_FISCAIS = os.path.join(os.path.dirname(os.path.abspath(CAMINHO_BANCO)), "notas_fiscais")
 os.makedirs(PASTA_NOTAS_FISCAIS, exist_ok=True)
 
+# Cópias de segurança do banco, no mesmo volume (ver seção 8.3 da
+# documentação). Protegem contra erro de operação e contra o banco corromper;
+# contra perder o servidor inteiro, só a cópia que sai daqui (o botão "Baixar
+# cópia" na tela de Configurações, ou o backup de volume do Dokploy).
+PASTA_BACKUPS = os.path.join(os.path.dirname(os.path.abspath(CAMINHO_BANCO)), "backups")
+os.makedirs(PASTA_BACKUPS, exist_ok=True)
+DIAS_DE_BACKUP_DIARIO = 14
+DIAS_DE_BACKUP_MENSAL = 365
+
 
 @contextmanager
 def conexao():
@@ -6241,3 +6250,101 @@ def reabrir_contagem(contagem_id):
             "UPDATE contagem SET status = 'aberta', respondida_em = NULL, aprovada_em = NULL WHERE id = ?",
             (contagem_id,),
         )
+
+
+# --- CÓPIAS DE SEGURANÇA DO BANCO -------------------------------------------
+#
+# O banco inteiro é um arquivo só no volume do Dokploy: sem cópia, um erro de
+# operação (ou o arquivo corromper) leva todo o histórico junto. A cópia roda
+# sozinha de madrugada e fica no mesmo volume; pra sobreviver a perder o
+# servidor, a cópia precisa SAIR daqui (botão "Baixar cópia" em Configurações).
+
+_NOME_BACKUP = re.compile(r"^admfood-(\d{4})-(\d{2})-(\d{2})\.db$")
+
+
+def _data_do_backup(nome_arquivo):
+    achado = _NOME_BACKUP.match(nome_arquivo)
+    if not achado:
+        return None
+    try:
+        return datetime(*(int(p) for p in achado.groups())).date()
+    except ValueError:
+        return None
+
+
+def gerar_backup(caminho_destino=None):
+    """Cópia consistente do banco, mesmo com gente usando o sistema.
+
+    `VACUUM INTO` (SQLite 3.27+) escreve um arquivo novo já compactado, sem
+    travar quem está lendo; em SQLite antigo cai na API de backup do próprio
+    sqlite3, que faz o mesmo sem compactar. Escreve num arquivo ".parcial" e
+    só renomeia no fim, pra uma cópia interrompida no meio nunca passar por
+    cópia boa."""
+    os.makedirs(PASTA_BACKUPS, exist_ok=True)
+    destino = caminho_destino or os.path.join(
+        PASTA_BACKUPS, f"admfood-{datetime.now():%Y-%m-%d}.db"
+    )
+    parcial = destino + ".parcial"
+    for caminho in (parcial, destino):
+        if os.path.exists(caminho):
+            os.remove(caminho)
+
+    conn = sqlite3.connect(CAMINHO_BANCO, isolation_level=None)
+    try:
+        try:
+            conn.execute("VACUUM INTO ?", (parcial,))
+        except sqlite3.OperationalError:
+            copia = sqlite3.connect(parcial)
+            try:
+                conn.backup(copia)
+            finally:
+                copia.close()
+    finally:
+        conn.close()
+
+    os.replace(parcial, destino)
+    return destino
+
+
+def limpar_backups_antigos(hoje=None):
+    """Guarda as cópias dos últimos 14 dias e a do dia 1º de cada mês por um
+    ano — o resto sai, senão a pasta cresce pra sempre."""
+    hoje = hoje or datetime.now().date()
+    apagados = []
+    for nome in os.listdir(PASTA_BACKUPS):
+        data = _data_do_backup(nome)
+        if not data:
+            continue
+        idade = (hoje - data).days
+        if idade <= DIAS_DE_BACKUP_DIARIO:
+            continue
+        if data.day == 1 and idade <= DIAS_DE_BACKUP_MENSAL:
+            continue
+        os.remove(os.path.join(PASTA_BACKUPS, nome))
+        apagados.append(nome)
+    return apagados
+
+
+def listar_backups():
+    """Cópias guardadas, da mais nova pra mais velha."""
+    copias = []
+    for nome in os.listdir(PASTA_BACKUPS):
+        if not _data_do_backup(nome):
+            continue
+        caminho = os.path.join(PASTA_BACKUPS, nome)
+        copias.append({
+            "arquivo": nome,
+            "tamanho": os.path.getsize(caminho),
+            "criadoEm": datetime.fromtimestamp(os.path.getmtime(caminho)).isoformat(),
+        })
+    return sorted(copias, key=lambda c: c["arquivo"], reverse=True)
+
+
+def rodar_backup_diario():
+    """O que o agendador chama de madrugada."""
+    destino = gerar_backup()
+    apagados = limpar_backups_antigos()
+    print(f"💾 Backup do banco: {os.path.basename(destino)}"
+          f" ({os.path.getsize(destino) // 1024} KB)"
+          + (f" — {len(apagados)} cópia(s) antiga(s) apagada(s)" if apagados else ""))
+    return destino

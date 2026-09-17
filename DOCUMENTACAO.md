@@ -87,6 +87,7 @@ Variáveis usadas (ver `config.py` e `app.py`):
 | `MAKE_WEBHOOK_URL` | Webhook do Make.com (integração legada/reservada) |
 | `DATABASE_PATH` | Caminho do arquivo SQLite. Em produção aponta pra um volume persistente do Dokploy — sem isso, o banco se perde a cada deploy |
 | `SINCRONIZACAO_AUTOMATICA` | `"true"` liga o agendador automático dentro do próprio Flask (usado em produção; localmente a sincronização roda via Agendador de Tarefas do Windows chamando `sincronizar.py`, fora do processo do Flask) |
+| `BACKUP_AUTOMATICO` | `"false"` desliga a cópia diária do banco às 3h30 (ver 8.3); qualquer outro valor, ou ausente, mantém ligada |
 | `SECRET_KEY` | Assina o cookie de sessão do login. Precisa ser o **mesmo valor em todos os workers** do Gunicorn — por isso vem de env var fixa, nunca gerada em runtime |
 | `SESSION_COOKIE_SECURE` | `"true"` em produção (HTTPS) — o cookie de sessão só é enviado em conexão segura |
 | `ADMIN_INICIAL_EMAIL`, `ADMIN_INICIAL_SENHA`, `ADMIN_INICIAL_NOME` | Cria/sincroniza esse usuário como admin a cada subida do app (ver seção 8.1) — só precisa ficar setado até o primeiro login funcionar |
@@ -3223,6 +3224,43 @@ do banco precisa passar por `escaparHtml()`.** Campos com valores fechados
 (prioridade, status, papel) também são validados no backend contra uma
 lista fixa, não só no frontend — o `<select>` da tela não impede alguém de
 chamar a API direto com outro valor.
+
+### 8.3 Cópia de segurança do banco (2026-09-17)
+
+Todo o sistema vive num arquivo SQLite só, num volume do Dokploy — hoje com
+2.635 pedidos, o histórico inteiro desde dezembro de 2024. Enquanto a VMarket
+existia ela era a rede de segurança; saindo de lá, sem cópia um erro de
+operação ou um arquivo corrompido leva tudo. Daí esta rotina.
+
+**Automático:** às 3h30 (depois da sincronização das 3h), `rodar_backup_diario`
+em `backend/armazenamento.py` grava `backups/admfood-AAAA-MM-DD.db` do lado do
+banco. Usa `VACUUM INTO`, que escreve uma cópia consistente e já compactada com
+o sistema em uso (sem travar quem está lendo); em SQLite anterior ao 3.27 cai
+na API `Connection.backup`. Escreve em `.parcial` e só renomeia no fim, então
+cópia interrompida no meio nunca passa por cópia boa. Desliga com
+`BACKUP_AUTOMATICO=false`.
+
+**Faxina:** guarda as cópias dos últimos 14 dias e a do dia 1º de cada mês por
+um ano (`limpar_backups_antigos`). O que não tem nome de backup não é tocado.
+
+**Na tela** (Configurações → Cópia de segurança, só admin): última cópia,
+quantas estão guardadas, tamanho do banco, botão "Gerar cópia agora" e a lista
+das 7 últimas pra baixar. O botão **"Baixar cópia completa (.zip)"** monta na
+memória um pacote com o banco + `notas_fiscais/` + `cardapio_fotos/` — é esse
+arquivo que reconstrói o sistema do zero.
+
+**O limite, que está escrito na própria tela:** a cópia diária fica no MESMO
+volume. Ela salva de erro de operação e de banco corrompido, não de perder o
+servidor. Pra isso a cópia precisa sair de lá — baixando o .zip de vez em
+quando, ou ligando o backup de volume do próprio Dokploy.
+
+Rotas (todas só admin): `GET/POST /api/admin/backups`,
+`GET /api/admin/backups/<arquivo>` (só aceita o nome no formato
+`admfood-AAAA-MM-DD.db`) e `GET /api/admin/backup-completo`.
+
+Teste: `teste_backup.py` no scratchpad — 25 checagens (cópia abre e tem os
+mesmos dados, faxina por idade, nome fora do padrão não baixa nada, gerente
+recebe 403, zip traz banco e anexos).
 
 ## 9. Pendências conhecidas (roadmap em aberto)
 

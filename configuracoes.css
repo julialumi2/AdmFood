@@ -182,3 +182,59 @@
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+/* Cópia de segurança do banco (card do backup, 2026-09-17) */
+.backup-resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding: var(--space-4) 0;
+}
+
+.backup-resumo div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.backup-resumo .backup-rotulo {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.backup-resumo .backup-valor {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.backup-aviso {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.backup-aviso strong { color: var(--text-dark); display: block; }
+.backup-aviso i { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+
+.backup-acoes {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0;
+}
+
+.backup-acoes .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}

@@ -1,11 +1,17 @@
+import io
 import json
 import os
 import re
+import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from datetime import date, datetime, timedelta
-from flask import Flask, abort, g, jsonify, redirect, request, send_from_directory, session
+from flask import (
+    Flask, abort, g, jsonify, redirect, request,
+    send_file, send_from_directory, session,
+)
 
 from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON
 from backend.armazenamento import (
@@ -142,6 +148,11 @@ from backend.armazenamento import (
     criar_pedidos_diretos,
     lancar_compra_fora,
     PASTA_NOTAS_FISCAIS,
+    PASTA_BACKUPS,
+    CAMINHO_BANCO,
+    gerar_backup,
+    listar_backups,
+    rodar_backup_diario,
     pendencias_compras,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
@@ -413,14 +424,20 @@ def _sou_o_unico_worker_a_agendar():
     seu próprio agendador, multiplicando as sincronizações (e estourando o
     limite de requisição da Cardápio Web, causando sincronizações incompletas
     no meio do dia). O arquivo de trava é criado uma vez só por processo do
-    container (some no próximo deploy/restart, já que /tmp é recriado)."""
-    caminho_trava = "/tmp/admfood_scheduler.lock"
+    container (some no próximo deploy/restart, já que a pasta temporária é
+    recriada). No Windows (desenvolvimento) a pasta temporária é outra, daí o
+    gettempdir em vez de "/tmp" na unha."""
+    caminho_trava = os.path.join(tempfile.gettempdir(), "admfood_scheduler.lock")
     try:
         descritor = os.open(caminho_trava, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(descritor, str(os.getpid()).encode())
         os.close(descritor)
         return True
     except FileExistsError:
+        return False
+    except OSError:
+        # Sem pasta temporária gravável não dá pra coordenar os workers; melhor
+        # não agendar nada do que agendar em todos ao mesmo tempo.
         return False
 
 
@@ -436,10 +453,17 @@ def _sou_o_unico_worker_a_agendar():
 # - A cada 15 min: sincroniza HOJE (o dia em andamento), pra quem estiver
 #   olhando o sistema durante o dia ver os números indo perto do tempo real,
 #   em vez de só descobrir o resultado do dia no dia seguinte.
+# Evita agendar duas vezes por causa do reloader do modo debug, e evita
+# agendar em mais de um worker do Gunicorn ao mesmo tempo. Fica numa variável
+# porque a trava só pode ser tirada uma vez por processo — a sincronização e o
+# backup dividem a mesma resposta.
+_ESTE_WORKER_AGENDA = (
+    (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true")
+    and _sou_o_unico_worker_a_agendar()
+)
+
 if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
-    # Evita agendar duas vezes por causa do reloader do modo debug, e evita
-    # agendar em mais de um worker do Gunicorn ao mesmo tempo.
-    if (not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true") and _sou_o_unico_worker_a_agendar():
+    if _ESTE_WORKER_AGENDA:
         from apscheduler.schedulers.background import BackgroundScheduler
 
         # Reconfere os últimos 7 dias (não só ontem) — pedido que ainda estava
@@ -468,6 +492,19 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
             _rodar_sincronizacao_hoje, "interval", minutes=15, next_run_time=datetime.now()
         )
         _scheduler.start()
+
+# Cópia de segurança do banco, todo dia às 3h30 (depois da sincronização das
+# 3h, pra guardar o dia já fechado). Desligável com BACKUP_AUTOMATICO=false.
+HORA_DO_BACKUP = (3, 30)
+
+if os.environ.get("BACKUP_AUTOMATICO", "true").lower() == "true" and _ESTE_WORKER_AGENDA:
+    from apscheduler.schedulers.background import BackgroundScheduler as _AgendadorBackup
+
+    _scheduler_backup = _AgendadorBackup(timezone="America/Sao_Paulo")
+    _scheduler_backup.add_job(
+        rodar_backup_diario, "cron", hour=HORA_DO_BACKUP[0], minute=HORA_DO_BACKUP[1]
+    )
+    _scheduler_backup.start()
 
 # Lojas que registram vendas presenciais (não passam pela Cardápio Web e
 # precisam ser lançadas manualmente).
@@ -977,6 +1014,96 @@ def api_excluir_usuario(usuario_id):
 
     excluir_usuario(usuario_id)
     return jsonify({"sucesso": True})
+
+
+# --- CÓPIA DE SEGURANÇA DO BANCO (só admin) ---------------------------------
+#
+# O banco é um arquivo só no volume do Dokploy. A cópia diária (3h30) protege
+# contra erro de operação e contra o arquivo corromper; contra perder o
+# servidor, só a cópia que a pessoa baixa e guarda fora daqui.
+
+NOME_DE_BACKUP = re.compile(r"^admfood-\d{4}-\d{2}-\d{2}\.db$")
+
+
+@app.route('/api/admin/backups', methods=['GET'])
+def api_listar_backups():
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    return jsonify({
+        "backups": listar_backups(),
+        "horaAutomatica": f"{HORA_DO_BACKUP[0]:02d}:{HORA_DO_BACKUP[1]:02d}",
+        "automatico": os.environ.get("BACKUP_AUTOMATICO", "true").lower() == "true",
+        "tamanhoBanco": os.path.getsize(CAMINHO_BANCO) if os.path.exists(CAMINHO_BANCO) else 0,
+    })
+
+
+@app.route('/api/admin/backups', methods=['POST'])
+def api_gerar_backup_agora():
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    try:
+        destino = gerar_backup()
+    except Exception:
+        import traceback
+        print("❌ Falha ao gerar a cópia do banco:")
+        traceback.print_exc()
+        return jsonify({"erro": "Não foi possível gerar a cópia agora."}), 500
+    return jsonify({"arquivo": os.path.basename(destino), "tamanho": os.path.getsize(destino)})
+
+
+@app.route('/api/admin/backups/<nome>', methods=['GET'])
+def api_baixar_backup(nome):
+    erro = _exigir_admin()
+    if erro:
+        return erro
+    # Só nome no formato admfood-AAAA-MM-DD.db — nada de caminho vindo de fora.
+    if not NOME_DE_BACKUP.match(nome):
+        abort(404)
+    return send_from_directory(PASTA_BACKUPS, nome, as_attachment=True)
+
+
+@app.route('/api/admin/backup-completo', methods=['GET'])
+def api_baixar_backup_completo():
+    """Banco + notas fiscais + fotos do cardápio num .zip. É esse arquivo que
+    reconstrói o sistema do zero se o servidor sumir."""
+    erro = _exigir_admin()
+    if erro:
+        return erro
+
+    # O zip é montado na memória: só o banco precisa passar pelo disco (o
+    # VACUUM INTO escreve arquivo), e esse sai no finally.
+    copia_banco = os.path.join(tempfile.gettempdir(), f"admfood-{uuid.uuid4().hex}.db")
+    pacote = io.BytesIO()
+    try:
+        gerar_backup(copia_banco)
+        with zipfile.ZipFile(pacote, 'w', zipfile.ZIP_DEFLATED) as zipado:
+            zipado.write(copia_banco, 'admfood.db')
+            for pasta, nome_dentro in (
+                (PASTA_NOTAS_FISCAIS, 'notas_fiscais'),
+                (PASTA_FOTOS_CARDAPIO, 'cardapio_fotos'),
+            ):
+                for arquivo in sorted(os.listdir(pasta)):
+                    caminho = os.path.join(pasta, arquivo)
+                    if os.path.isfile(caminho):
+                        zipado.write(caminho, f"{nome_dentro}/{arquivo}")
+    except Exception:
+        import traceback
+        print("❌ Falha ao montar a cópia completa:")
+        traceback.print_exc()
+        return jsonify({"erro": "Não foi possível montar a cópia completa."}), 500
+    finally:
+        if os.path.exists(copia_banco):
+            os.remove(copia_banco)
+
+    pacote.seek(0)
+    return send_file(
+        pacote,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f"admfood-{date.today().isoformat()}.zip",
+    )
 
 
 # --- COMPARATIVO DE PREÇOS DO CARDÁPIO ---
