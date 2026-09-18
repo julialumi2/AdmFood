@@ -284,13 +284,17 @@
 /* Filtro por categoria do lado da busca (2026-09-17) */
 .estoque-filtros-tabela {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
 }
 
-.estoque-filtros-tabela .search-box { min-width: 180px; }
+/* Largura fixa: com o 100% do theme.css a busca pulava sozinha pra outra
+   linha quando o filtro de fornecedor entrou (card #41). */
+.estoque-filtros-tabela .search-box { min-width: 180px; width: 240px; }
 
-#estoque-filtro-categoria {
+#estoque-filtro-categoria,
+#estoque-filtro-fornecedor {
   min-width: 200px;
   padding-top: 8px;
   padding-bottom: 8px;
@@ -299,7 +303,8 @@
 
 @media (max-width: 768px) {
   .estoque-filtros-tabela { flex-direction: column; align-items: stretch; }
-  #estoque-filtro-categoria { width: 100%; }
+  #estoque-filtro-categoria,
+  #estoque-filtro-fornecedor { width: 100%; }
 }
 
 #estoque-cards [data-filtro-status]:focus-visible {

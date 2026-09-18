@@ -575,6 +575,15 @@ primeira montagem da tabela; quem não é admin nem gerente não recebe a lista
 grudado no nome na carga da VMarket ("43.118.957 GUILHERME NUNES" vira GN) e
 ligamentos de razão social.
 
+**Filtro "Sem fornecedor"** (card #41, 2026-09-18): ao lado do filtro de
+categoria, "Todos os fornecedores / Sem fornecedor (N)" deixa na tabela só o
+insumo que ninguém cota — nem pelo cadastro, nem pelo histórico, ou seja, a
+coluna Fornecedores vazia. É o insumo que o link de cotação manda pra todos os
+fornecedores (6.8); com o filtro dá pra ir um a um pelo "+" da coluna ligando
+quem fornece, e a linha some da lista quando ganha fornecedor. O N conta a
+loja e a categoria escolhidas, e o filtro vale pros cartões também, como a
+categoria. Aparece só junto com a coluna (admin e gerente).
+
 **Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
 de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
 topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via

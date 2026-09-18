@@ -206,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
     document.getElementById('estoque-filtro-categoria')?.addEventListener('change', () => renderEstoqueTab());
+    document.getElementById('estoque-filtro-fornecedor')?.addEventListener('change', () => renderEstoqueTab());
 
     // Cartões de nível viram filtro da tabela: clicar de novo, ou em Itens
     // cadastrados, mostra todos. Filtrar rola até a tabela, que fica abaixo
@@ -1820,6 +1821,24 @@ function _atualizarOpcoesCategoriaEstoque(linhas) {
   return select.value;
 }
 
+// Card #41: insumo que ninguém cota, nem pelo cadastro nem pelo histórico — a
+// coluna Fornecedores vazia. É o que o link de cotação manda pra todos os
+// fornecedores; com o filtro dá pra ir um a um ligando quem fornece. O número
+// é da loja e categoria da tela. Só aparece junto com a coluna (admin e
+// gerente, depois que a lista de fornecedores chegou).
+function _atualizarOpcoesFornecedorEstoque(linhas, disponivel) {
+  const select = document.getElementById('estoque-filtro-fornecedor');
+  if (!select) return '';
+  document.getElementById('estoque-filtro-fornecedor-wrapper').style.display = disponivel ? '' : 'none';
+  if (!disponivel) return '';
+  const escolhido = select.value;
+  const semFornecedor = linhas.filter((l) => _fornecedoresDoInsumo(l.insumo).length === 0).length;
+  select.innerHTML = '<option value="">Todos os fornecedores</option>'
+    + `<option value="sem">Sem fornecedor (${semFornecedor})</option>`;
+  select.value = escolhido === 'sem' ? 'sem' : '';
+  return select.value;
+}
+
 function renderEstoqueTab() {
   const isAdmin = _possoGerir();
   const tbody = document.getElementById('estoque-tabela-body');
@@ -1865,6 +1884,10 @@ function renderEstoqueTab() {
   if (categoria) {
     linhas = linhas.filter((l) => (l.insumo.categoria || 'Geral') === categoria);
   }
+  const soSemFornecedor = _atualizarOpcoesFornecedorEstoque(linhas, mostrarFornecedores) === 'sem';
+  if (soSemFornecedor) {
+    linhas = linhas.filter((l) => _fornecedoresDoInsumo(l.insumo).length === 0);
+  }
 
   const termoBusca = (document.getElementById('estoque-busca')?.value || '').trim().toLowerCase();
   if (termoBusca) {
@@ -1903,7 +1926,9 @@ function renderEstoqueTab() {
 
   if (!linhas.length) {
     const colspan = 6 + (isAdmin ? 1 : 0);
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">${rotuloFiltro ? `Nenhum insumo ${rotuloFiltro} aqui.` : 'Nenhum insumo encontrado.'}</td></tr>`;
+    const vazio = rotuloFiltro ? `Nenhum insumo ${rotuloFiltro} aqui.`
+      : (soSemFornecedor ? 'Todo insumo aqui já tem fornecedor.' : 'Nenhum insumo encontrado.');
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">${vazio}</td></tr>`;
     return;
   }
 
