@@ -246,6 +246,19 @@ document.addEventListener('DOMContentLoaded', () => {
       renderEstoqueTab();
     });
 
+    // Lotes vencendo e Datas especiais dividem um bloco, em abas (18/09).
+    const abasAlertas = [...document.querySelectorAll('.estoque-aba')];
+    abasAlertas.forEach((aba) => {
+      aba.addEventListener('click', () => _mostrarAbaAlertasEstoque(aba.id));
+      aba.addEventListener('keydown', (evento) => {
+        if (evento.key !== 'ArrowRight' && evento.key !== 'ArrowLeft') return;
+        const visiveis = abasAlertas.filter((a) => !a.hidden);
+        const proxima = visiveis[(visiveis.indexOf(aba) + (evento.key === 'ArrowRight' ? 1 : -1) + visiveis.length) % visiveis.length];
+        _mostrarAbaAlertasEstoque(proxima.id);
+        proxima.focus();
+      });
+    });
+
     // Link do cartão de estoque crítico da Home: ?loja=...&nivel=critico
     // abre a loja com a tabela já filtrada e rola até ela.
     const parametros = new URLSearchParams(location.search);
@@ -1830,6 +1843,16 @@ function _renderValorEmEstoque(linhas, isAdmin) {
   nota.style.display = semCusto ? '' : 'none';
 }
 
+// Categoria com cor própria (redesenho de Insumos, 18/09): a cor sai do nome,
+// então "Embalagens" tem a mesma cor em qualquer loja e em qualquer filtro.
+const TOTAL_CORES_CATEGORIA = 10;
+
+function _corDaCategoria(nome) {
+  let soma = 0;
+  for (const letra of String(nome || 'Geral')) soma = (soma * 31 + letra.codePointAt(0)) % 9973;
+  return soma % TOTAL_CORES_CATEGORIA;
+}
+
 // Filtro por categoria (card #31 do ClickUp, 2026-09-17): as opções são as
 // categorias da aba aberta, com quantos insumos cada uma tem. Trocar de aba
 // mantém a categoria se ela existir lá. Devolve a categoria escolhida.
@@ -1929,6 +1952,7 @@ function renderEstoqueTab() {
   document.getElementById('estoque-val-ok').textContent = contagem.ok;
   document.getElementById('estoque-val-baixo').textContent = contagem.baixo;
   document.getElementById('estoque-val-critico').textContent = contagem.critico;
+  document.querySelector('#estoque-cards .store-card--critico')?.classList.toggle('tem-alerta', contagem.critico > 0);
   _renderValorEmEstoque(linhas, isAdmin);
 
   const totalSaude = linhas.length || 1;
@@ -1986,26 +2010,25 @@ function renderEstoqueTab() {
             </div>
           </div>
         </td>
-        <td><span class="badge badge-neutral tag-categoria">${escaparHtml(insumo.categoria)}</span></td>
-        <td class="font-bold col-atual-destaque">${_formatarQuantidade(dados.quantidadeAtual, insumo.unidadeMedida)}</td>
+        <td><span class="badge tag-categoria" data-cor="${_corDaCategoria(insumo.categoria)}">${escaparHtml(insumo.categoria)}</span></td>
+        <td class="font-bold col-atual-destaque${dados.quantidadeAtual < 0 ? ' estoque-negativo' : ''}"${dados.quantidadeAtual < 0 ? ' title="Saiu mais do que entrou: confira a contagem ou a ficha técnica"' : ''}>${_formatarQuantidade(dados.quantidadeAtual, insumo.unidadeMedida)}</td>
         <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
           ${dados.consumoMedio === null ? '—' : `${_formatarQuantidade(Math.round(dados.consumoMedio * 100) / 100, insumo.unidadeMedida)}/dia`}
         </td>
         <td class="col-nivel" ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
           ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
             <div class="nivel-cell">
-              <div class="nivel-valor-linha">
-                <span class="font-bold">${_formatarQuantidade(quantidadeIdeal, insumo.unidadeMedida)}</span>
-                ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
-                ${sugestaoCompra > 0 ? `<span class="badge-pill neg" title="Diferença entre a quantidade ideal e o estoque atual">comprar ${_formatarQuantidade(sugestaoCompra, insumo.unidadeMedida)}</span>` : ''}
-              </div>
               <div class="nivel-gauge" title="Estoque atual em relação ao mínimo — o traço marca o limite mínimo">
                 <div class="progress-container">
                   <div class="progress-bar ${STATUS_CLASSE_BARRA_ESTOQUE[dados.status]}" style="width: ${percentual}%;"></div>
                 </div>
                 <span class="nivel-gauge-tick"></span>
               </div>
-              <span class="min-label">mínimo ${_formatarQuantidade(dados.estoqueMinimo, insumo.unidadeMedida)}</span>
+              <span class="nivel-legenda">
+                mín. ${_formatarQuantidade(dados.estoqueMinimo, insumo.unidadeMedida)} · ideal <strong>${_formatarQuantidade(quantidadeIdeal, insumo.unidadeMedida)}</strong>
+                ${dados.quantidadeIdealAjustada ? '<span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}
+              </span>
+              ${sugestaoCompra > 0 ? `<span class="nivel-comprar" title="Diferença entre a quantidade ideal e o estoque atual">Comprar ${_formatarQuantidade(sugestaoCompra, insumo.unidadeMedida)}</span>` : ''}
               ${tendencia ? `<span class="tendencia-texto" title="Consumo médio dos últimos 14 dias comparado com a média de 30 dias — não muda o cálculo de déficit, é só um alerta">${tendencia.subindo ? '↑' : '↓'} tendência: ${_formatarQuantidade(tendencia.valor, insumo.unidadeMedida)} (${tendencia.subindo ? '+' : ''}${tendencia.desvioPercentual}%)</span>` : ''}
             </div>
           `}
@@ -3047,14 +3070,40 @@ function _diasAteValidade(validade) {
   return Math.round((dataValidade - hoje) / (1000 * 60 * 60 * 24));
 }
 
+const AJUDA_ABA_ALERTAS_ESTOQUE = {
+  'estoque-aba-lotes': 'Validade nos próximos 7 dias (inclui já vencidos)',
+  'estoque-aba-datas': 'Feriado, evento, data que costuma vender mais: enquanto a data cair nos próximos 7 dias, a quantidade ideal calculada aumenta (ajuste manual não muda).',
+};
+
+function _mostrarAbaAlertasEstoque(idAba) {
+  document.querySelectorAll('.estoque-aba').forEach((aba) => {
+    const ativa = aba.id === idAba;
+    aba.classList.toggle('ativa', ativa);
+    aba.setAttribute('aria-selected', String(ativa));
+    aba.tabIndex = ativa ? 0 : -1;
+    const painel = document.getElementById(aba.getAttribute('aria-controls'));
+    if (painel) painel.hidden = !ativa;
+  });
+  document.getElementById('estoque-alertas-ajuda').textContent = AJUDA_ABA_ALERTAS_ESTOQUE[idAba] || '';
+  document.getElementById('btn-nova-data-especial').hidden = idAba !== 'estoque-aba-datas';
+}
+
 function renderLotesVencendo() {
   const isAdmin = _possoGerir();
+  const contador = document.getElementById('estoque-aba-lotes-contador');
+  if (contador) {
+    contador.textContent = lotesVencendo.length;
+    contador.classList.toggle('tem-alerta', lotesVencendo.length > 0);
+    contador.classList.toggle('vencido', lotesVencendo.some((l) => _diasAteValidade(l.validade) < 0));
+  }
   const tbody = document.getElementById('lotes-vencendo-tabela-body');
   if (!tbody) return;
 
   const thAcoes = document.getElementById('lotes-th-acoes');
   if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
 
+  // Sem lote, a tabela vira uma linha de aviso: o cabeçalho some.
+  tbody.closest('table')?.classList.toggle('tabela-vazia', !lotesVencendo.length);
   if (!lotesVencendo.length) {
     const colspan = 4 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum lote vencendo nos próximos 7 dias.</td></tr>`;
@@ -3117,6 +3166,7 @@ async function carregarDatasEspeciais() {
     const dados = await resposta.json();
     datasEspeciaisLista = dados.datasEspeciais || [];
     card.style.display = '';
+    document.getElementById('estoque-aba-datas').hidden = false;
     renderDatasEspeciais();
   } catch (erro) {
     console.error('Falha ao carregar datas especiais:', erro);
@@ -3126,6 +3176,9 @@ async function carregarDatasEspeciais() {
 function renderDatasEspeciais() {
   const tbody = document.getElementById('datas-especiais-tabela-body');
   if (!tbody) return;
+  const contador = document.getElementById('estoque-aba-datas-contador');
+  if (contador) contador.textContent = datasEspeciaisLista.length;
+  tbody.closest('table')?.classList.toggle('tabela-vazia', !datasEspeciaisLista.length);
 
   if (!datasEspeciaisLista.length) {
     tbody.innerHTML = `<tr><td colspan="5" class="panel-subtitle">Nenhuma data especial cadastrada.</td></tr>`;

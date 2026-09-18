@@ -584,6 +584,20 @@ quem fornece, e a linha some da lista quando ganha fornecedor. O N conta a
 loja e a categoria escolhidas, e o filtro vale pros cartões também, como a
 categoria. Aparece só junto com a coluna (admin e gerente).
 
+**Tela redesenhada** (2026-09-18, pedido dela): a mesma informação em menos
+altura, nada saiu. O seletor de loja subiu pro lado do título; a saúde do
+estoque virou um fio fino (rótulo, barra e % em nível ideal numa linha) logo
+acima dos 5 indicadores, que ficam numa linha só e mais baixos (o de nível
+crítico ganha tom de alerta quando tem insumo); Lotes vencendo e Datas
+especiais viraram abas de um bloco só, com contador (laranja com lote
+vencendo, vermelho com lote vencido) e, vazias, uma linha de aviso sem
+cabeçalho de tabela; a aba de datas e o botão "Nova data especial" seguem
+só pra admin. Na tabela, linha mais baixa (8 px em cima e embaixo), categoria
+com cor pastel própria (a cor sai do nome, `_corDaCategoria`, igual em toda
+loja), quantidade negativa em vermelho e a coluna "Mínimo e compra": barra,
+mínimo e ideal numa linha e "Comprar X" em vermelho discreto. Estilos no fim
+de `estoque.css`, com `body.pagina-estoque`.
+
 **Favorito** (`insumo.favorito`, 2026-08-25) — marcação simples (estrela),
 de rede toda (não é por usuário), pra insumo de acesso rápido subir pro
 topo da lista (`ORDER BY favorito DESC` em `listar_insumos`). Toggle via
