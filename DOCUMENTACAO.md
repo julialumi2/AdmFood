@@ -2646,6 +2646,18 @@ lista, de um dia e uma loja, os pedidos que não estão fechados/entregues nem
 cancelados, com canal, status, horário, número e valor, e a contagem por
 status. Teste: `teste_pedidos_abertos.py` no scratchpad.
 
+**A causa era a segunda-feira** (2026-09-18): nenhum pedido estava aberto — a
+sincronização pulava toda segunda sem consultar a Cardápio Web ("lojas
+fechadas"), mas a segunda 14/09 teve 6 pedidos no Artesanos e 11 na ZN.
+Sincronizando 14/09 à mão, o Artesanos ganhou iFood R$ 150,91 e 99 R$ 351,38,
+exatamente o que faltava pra bater com a planilha. Agora `sincronizar_dia`
+consulta a segunda como qualquer dia e só não grava a segunda sem pedido (pra
+loja fechada não virar um zero no gráfico), a não ser que já tivesse dado
+daquele dia pra zerar. O botão Sincronizar usa o mesmo caminho, e o
+`forcar=1` de feriado saiu. Segunda antiga sincronizada depois não mexe no
+estoque: a baixa só vale a partir do dia em que foi ligada em cada loja.
+Teste: `teste_segunda.py` no scratchpad.
+
 ### 6.14 Unidade de medida, custo de insumo e conteúdo por pacote
 
 Três decisões que se complementam, todas vindas de erros reais:

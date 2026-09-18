@@ -4469,18 +4469,8 @@ def api_config_lojas():
 
 
 def _sincronizar_lojas_em_segundo_plano(dia_alvo):
-    dia_iso = dia_alvo.isoformat()
-    for nome_unidade, config_loja in LOJAS.items():
-        token = config_loja.get("cardapio_web_token")
-        if not token:
-            continue
-        try:
-            resumo = buscar_resumo_do_dia(token, dia_alvo)
-            salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
-            salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
-            salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
-        except Exception as erro:
-            print(f"❌ Sincronização manual falhou para {nome_unidade} ({dia_iso}): {erro}")
+    # Mesmo caminho da sincronização automática (segunda sem pedido não grava).
+    sincronizar_dia(dia_alvo)
 
 
 # Pedidos que o faturamento não conta (2026-09-18): a semana do Artesanos não
@@ -4563,18 +4553,9 @@ def api_sincronizar_agora():
     else:
         dia_alvo = date.today() - timedelta(days=1)
 
-    # `forcar=1` ignora o "segunda-feira é sempre fechado" — feriado que cai
-    # numa segunda e a loja abre mesmo assim (achado ao vivo, 2026-09-08: a
-    # Julia pediu pra sincronizar 07/09, Independência, que caiu numa
-    # segunda e a loja funcionou). Sem isso não tinha jeito nenhum de puxar
-    # esse dia pela tela, nem escolhendo a data.
-    forcar = request.args.get('forcar') == '1'
-    if dia_alvo.weekday() == DIA_FECHADO and not forcar:
-        return jsonify({
-            "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
-            "fechado": True,
-            "resultados": [],
-        })
+    # Segunda-feira sincroniza como qualquer dia desde 2026-09-18 (ver
+    # sincronizar.py): o `forcar=1` de antes, pra feriado aberto, não é mais
+    # preciso.
 
     # Roda em segundo plano e responde na hora — sincronizar as 4 lojas pedido
     # por pedido pode passar do tempo que o proxy/gateway de produção espera

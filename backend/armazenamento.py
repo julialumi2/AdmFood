@@ -1489,6 +1489,13 @@ def buscar_presencial_periodo(inicio_iso, fim_iso):
 
 
 
+def tem_faturamento_no_dia(unidade, dia_iso):
+    with conexao() as conn:
+        return conn.execute(
+            "SELECT 1 FROM faturamento_diario WHERE unidade = ? AND dia = ?", (unidade, dia_iso)
+        ).fetchone() is not None
+
+
 def buscar_ultima_sincronizacao(unidade=None):
     """Data mais recente com faturamento registrado — de uma unidade
     específica, ou de qualquer uma (usada como indicativo aproximado de
