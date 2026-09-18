@@ -3881,6 +3881,15 @@ function _linkWhatsAppConvite(telefone, fornecedorNome, link) {
 // data-admfood-extensao ao carregar).
 let enviadosPeloWhatsapp = new Set();
 
+// O botão de cada linha só existe a partir da versão 1.0.1 da extensão; com a
+// 1.0.0 (carregada antes de atualizar) o clique não faria nada.
+function _extensaoEnviaUmPorUm() {
+  const versao = (document.documentElement.dataset.admfoodExtensao || '').split('.').map(Number);
+  if (!versao.length || Number.isNaN(versao[0])) return false;
+  const [maior = 0, menor = 0, correcao = 0] = versao;
+  return maior > 1 || (maior === 1 && (menor > 0 || correcao >= 1));
+}
+
 function _atualizarEnvioWhatsappConvites() {
   const botao = document.getElementById('btn-enviar-cotacoes');
   const fila = document.getElementById('fila-whatsapp');
@@ -3931,9 +3940,11 @@ function renderConvitesCotacao(convites) {
   _atualizarEnvioWhatsappConvites();
   if (!convites.length) return;
 
-  // Com a extensão, o botão da linha vira "Abrir no WhatsApp" (o manual), pra
-  // não confundir com o "Enviar ... pelo WhatsApp" do topo, que manda sozinho.
+  // Com a extensão, o botão da linha manda aquele convite sozinho (pedido
+  // dela, 18/09); convite respondido ou vencido fica com "Abrir no WhatsApp",
+  // o manual, pra conversar com o fornecedor. Sem a extensão, tudo manual.
   const comExtensao = !!document.documentElement.dataset.admfoodExtensao;
+  const envioPorLinha = _extensaoEnviaUmPorUm();
   tbody.innerHTML = convites.map((c) => {
     const expirado = c.status === 'aberta' && new Date(c.prazoValidade) < new Date();
     const statusTexto = expirado ? 'Prazo vencido' : STATUS_LABEL_CONVITE[c.status];
@@ -3946,7 +3957,13 @@ function renderConvitesCotacao(convites) {
         <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
         <td class="col-acoes"><div class="acoes-linha">
-          ${linkWhatsApp ? `
+          ${linkWhatsApp && envioPorLinha && c.status === 'aberta' && !expirado ? `
+            <button type="button" class="btn-secondary-sm" data-admfood-envio="${c.id}"
+                    title="A extensão manda sozinha pelo WhatsApp Web, só pra esse fornecedor">
+              <i data-lucide="send"></i>
+              Enviar o convite pelo WhatsApp
+            </button>
+          ` : linkWhatsApp ? `
             <a class="btn-secondary-sm" href="${escaparHtml(linkWhatsApp)}" target="_blank" rel="noopener"
                title="Abre a conversa com a mensagem pronta; você aperta enviar no WhatsApp">
               <i data-lucide="${comExtensao ? 'external-link' : 'send'}"></i>

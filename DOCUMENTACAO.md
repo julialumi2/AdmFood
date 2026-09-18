@@ -3219,8 +3219,11 @@ painel de andamento). O botão só aparece com a extensão instalada — ela mar
 o `<html>` com `data-admfood-extensao` e dispara `admfood:extensao-pronta`;
 sem ela aparece o aviso de instalar. A cada envio a extensão dispara
 `admfood:envio-whatsapp` e a linha do convite ganha "enviado" (só na tela,
-não fica gravado). O botão "Enviar por WhatsApp" de cada fornecedor
-(wa.me) continua. Risco aceito pelo chefe: automação no WhatsApp comum pode
+não fica gravado). Da versão 1.0.1 em diante, cada linha também tem
+"Enviar o convite pelo WhatsApp" (`data-admfood-envio=<id do convite>`), que
+manda só aquele fornecedor, sozinho (pedido dela, 18/09); convite respondido
+ou vencido fica com "Abrir no WhatsApp" (wa.me, manual). Sem a extensão, a
+linha segue com "Enviar por WhatsApp" (wa.me). Risco aceito pelo chefe: automação no WhatsApp comum pode
 levar o número a ser bloqueado. A política de privacidade exigida pela loja
 é `privacidade-extensao.html` (pública, sem login). O código da extensão fica
 em `extensao-whatsapp/` (manifest V3, só `storage`, `alarms` e acesso ao
