@@ -7,3 +7,196 @@
 
 .fornecedor-lojas { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .fornecedor-lojas label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; }
+
+/* ===========================================================================
+   REDESENHO DE 18/09 (pedido dela): busca e cadastro no topo, 4 indicadores
+   que dizem coisas diferentes, e a tabela com uma linha por fornecedor —
+   CNPJ embaixo do nome, lojas em etiquetas curtas, condições comerciais numa
+   linha só. O resto do cadastro fica no "Ver detalhes".
+   =========================================================================== */
+
+.fornecedores-topo { align-items: flex-end; }
+
+.fornecedores-titulo { display: flex; flex-direction: column; gap: 4px; }
+
+.fornecedores-titulo .panel-subtitle { margin: 0; }
+
+.fornecedores-acoes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.fornecedores-busca { width: 300px; max-width: 100%; }
+
+/* INDICADORES */
+.fornecedores-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.fornecedores-kpis .store-card {
+  padding: 12px 14px;
+  gap: 2px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.fornecedores-kpis .store-card[hidden] { display: none; }
+
+.fornecedores-kpis .kpi-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.fornecedores-kpis .card-subtitle { font-size: 0.66rem; }
+
+.fornecedores-kpis .metric-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+}
+
+.fornecedores-kpis .metric-icon.icon-green { color: var(--success-texto); }
+
+.fornecedores-kpis .store-value { font-size: 1.35rem; line-height: 1.2; }
+
+.fornecedores-kpis .store-value small {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+.kpi-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fornecedores-kpi-entregas.tem-atraso .kpi-sub { color: var(--warning-texto); font-weight: 600; }
+
+/* TABELA: densidade de planilha, uma linha por fornecedor */
+.fornecedores-tabela-card { padding: var(--space-4) var(--space-5); }
+
+.fornecedores-tabela-card .table-header-row { margin-bottom: var(--space-3); }
+
+.fornecedores-tabela th,
+.fornecedores-tabela td {
+  padding: 9px 8px;
+  vertical-align: middle;
+}
+
+.fornecedores-tabela th:first-child,
+.fornecedores-tabela td:first-child { padding-left: var(--space-4); }
+
+.fornecedor-nome { display: block; }
+
+/* Larguras: as condições comerciais cabem em duas linhas (pagamento e mínimo
+   numa, entrega na outra), e o contato cede a sobra. */
+.fornecedores-tabela th:nth-child(1), .fornecedores-tabela td:nth-child(1) { min-width: 150px; }
+.fornecedores-tabela th:nth-child(2), .fornecedores-tabela td:nth-child(2) { min-width: 130px; }
+.fornecedores-tabela th:nth-child(5), .fornecedores-tabela td:nth-child(5) { min-width: 210px; }
+
+.fornecedor-sub {
+  display: block;
+  max-width: 170px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.fornecedor-nome-contato { display: block; font-weight: 500; }
+
+.lojas-atendidas { display: inline-flex; flex-wrap: nowrap; gap: 4px; }
+
+.tag-loja {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  border: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.tag-loja.resto { color: var(--text-muted); }
+
+.fornecedor-condicoes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  max-width: 240px;
+  font-size: 0.78rem;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.fornecedor-condicoes span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.fornecedor-condicoes span.vazio { color: var(--text-faint); }
+
+.fornecedor-condicoes svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.badge-pill.fornecedor-status-inativo {
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.fornecedor-inativo .fornecedor-nome,
+.fornecedor-inativo .fornecedor-nome-contato { color: var(--text-muted); }
+
+/* DETALHES (só leitura) */
+.fornecedor-detalhes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3) var(--space-5);
+  margin: 0 0 var(--space-5);
+}
+
+.fornecedor-detalhes div { min-width: 0; }
+
+.fornecedor-detalhes dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.fornecedor-detalhes dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  overflow-wrap: anywhere;
+}
+
+.fornecedor-detalhes a { color: var(--info); }
+
+@media (max-width: 768px) {
+  .fornecedores-acoes { width: 100%; }
+  .fornecedores-busca { width: 100%; }
+  .fornecedor-detalhes { grid-template-columns: 1fr; }
+}

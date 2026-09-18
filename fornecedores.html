@@ -164,69 +164,86 @@
       <!-- PÁGINA DE FORNECEDORES -->
       <div class="page-content">
 
+        <!-- TOPO: título à esquerda; busca e cadastro à direita -->
         <div class="dashboard-title-area">
           <div class="title-top">
             <i data-lucide="truck" class="icon-pin"></i>
             <span>CADASTRO DE FORNECEDORES</span>
           </div>
-          <div class="title-row">
-            <h1>Fornecedores</h1>
-            <div class="page-acoes-topo" id="fornecedores-acoes-admin" style="display:none;">
-              <button type="button" class="btn-registrar-entrada" id="btn-novo-fornecedor">
-                <i data-lucide="plus"></i>
-                Novo fornecedor
-              </button>
+          <div class="title-row fornecedores-topo">
+            <div class="fornecedores-titulo">
+              <h1>Fornecedores</h1>
+              <p class="panel-subtitle">Diretório da rede — base das cotações e dos pedidos com fornecedor.</p>
+            </div>
+            <div class="fornecedores-acoes">
+              <div class="search-box fornecedores-busca">
+                <i data-lucide="search"></i>
+                <input type="text" placeholder="Buscar fornecedor..." id="fornecedores-busca" aria-label="Buscar fornecedor por nome, CNPJ, categoria, contato ou loja">
+              </div>
+              <div class="page-acoes-topo" id="fornecedores-acoes-admin" style="display:none;">
+                <button type="button" class="btn-registrar-entrada" id="btn-novo-fornecedor">
+                  <i data-lucide="plus"></i>
+                  Cadastrar fornecedor
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <p class="panel-subtitle" style="margin-top: -8px;">
-          Diretório da rede — base pro futuro fluxo de cotação com fornecedor. Ainda sem envio de cotação, só cadastro.
-        </p>
-
-        <!-- CARDS DE RESUMO -->
-        <div class="cards-grid cards-grid-2x2-mobile">
+        <!-- INDICADORES: cada um diz uma coisa diferente -->
+        <div class="cards-grid fornecedores-kpis">
           <div class="store-card">
-            <span class="card-subtitle">FORNECEDORES CADASTRADOS</span>
-            <div class="metric-card-content">
-              <i data-lucide="truck" class="metric-icon icon-red"></i>
-              <span class="store-value" id="fornecedores-val-total">0</span>
+            <div class="kpi-topo">
+              <span class="card-subtitle">Fornecedores</span>
+              <i data-lucide="truck" class="metric-icon"></i>
             </div>
+            <span class="store-value" id="fornecedores-val-total">0</span>
+            <span class="kpi-sub">cadastrados na rede</span>
           </div>
-
           <div class="store-card">
-            <span class="card-subtitle">ATIVOS</span>
-            <div class="metric-card-content">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Ativos e inativos</span>
               <i data-lucide="check-circle-2" class="metric-icon icon-green"></i>
-              <span class="store-value" id="fornecedores-val-ativos">0</span>
             </div>
+            <span class="store-value"><span id="fornecedores-val-ativos">0</span> <small>ativos</small></span>
+            <span class="kpi-sub" id="fornecedores-val-inativos">0 inativos</span>
           </div>
+          <div class="store-card">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Categorias</span>
+              <i data-lucide="tags" class="metric-icon"></i>
+            </div>
+            <span class="store-value"><span id="fornecedores-val-categorias">0</span> <small>mapeadas</small></span>
+            <span class="kpi-sub" id="fornecedores-val-categorias-top">—</span>
+          </div>
+          <a class="store-card fornecedores-kpi-entregas" id="fornecedores-card-entregas" href="recebimentos.html" hidden>
+            <div class="kpi-topo">
+              <span class="card-subtitle">Entregas a receber</span>
+              <i data-lucide="package-check" class="metric-icon"></i>
+            </div>
+            <span class="store-value"><span id="fornecedores-val-entregas">0</span> <small>pedidos</small></span>
+            <span class="kpi-sub" id="fornecedores-val-entregas-sub">—</span>
+          </a>
         </div>
 
-        <!-- CONTAINER DA TABELA -->
-        <div class="chart-card">
+        <!-- TABELA: uma linha por fornecedor -->
+        <div class="chart-card fornecedores-tabela-card">
           <div class="table-header-row">
             <div>
               <h3 class="table-title">Fornecedores cadastrados</h3>
-              <p class="table-subtitle">Nome, contato e condições comerciais de cada fornecedor</p>
-            </div>
-
-            <div class="search-box">
-              <i data-lucide="search"></i>
-              <input type="text" placeholder="Buscar fornecedor..." id="fornecedores-busca">
+              <p class="table-subtitle" id="fornecedores-tabela-sub">Contato, lojas atendidas e condições comerciais de cada fornecedor</p>
             </div>
           </div>
 
           <div class="table-responsive">
-          <table>
+          <table class="fornecedores-tabela">
             <thead>
               <tr>
                 <th>Fornecedor</th>
+                <th>Lojas atendidas</th>
                 <th>Categoria</th>
                 <th>Contato</th>
-                <th>Prazo pagto.</th>
-                <th>Entrega</th>
-                <th>Pedido mínimo</th>
+                <th title="Prazo de pagamento, pedido mínimo e dia de entrega">Condições comerciais</th>
                 <th>Status</th>
                 <th id="fornecedores-th-acoes" style="display:none;">Ações</th>
               </tr>
@@ -243,6 +260,21 @@
 
 
     <!-- MODAL: NOVO/EDITAR FORNECEDOR -->
+    <!-- MODAL: detalhes do fornecedor (só leitura) -->
+    <div class="modal-overlay" id="modal-fornecedor-detalhes" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="panel-title" id="fornecedor-detalhes-titulo">Fornecedor</h3>
+          <button type="button" class="btn-close" id="btn-fornecedor-detalhes-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <dl class="fornecedor-detalhes" id="fornecedor-detalhes-corpo"></dl>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-fornecedor-detalhes-ok">Fechar</button>
+          <button type="button" class="btn-primary-sm" id="btn-fornecedor-detalhes-editar">Editar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="modal-fornecedor" style="display:none;">
       <div class="modal-content">
         <div class="modal-header">

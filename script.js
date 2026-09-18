@@ -3293,40 +3293,44 @@ function renderFornecedoresTabela() {
   const acoesTopo = document.getElementById('fornecedores-acoes-admin');
   if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
 
-  document.getElementById('fornecedores-val-total').textContent = fornecedoresLista.length;
-  document.getElementById('fornecedores-val-ativos').textContent = fornecedoresLista.filter(f => f.ativo).length;
+  _renderIndicadoresFornecedores(isAdmin);
 
+  // A busca acha por nome, CNPJ, categoria, contato e loja.
   const termoBusca = (document.getElementById('fornecedores-busca')?.value || '').trim().toLowerCase();
   let linhas = fornecedoresLista;
   if (termoBusca) {
-    linhas = linhas.filter(f => f.nome.toLowerCase().includes(termoBusca) || f.categoria.toLowerCase().includes(termoBusca));
+    linhas = linhas.filter((f) => [f.nome, f.cnpj, f.categoria, f.contatoNome, f.contatoTelefone, f.contatoEmail, ...(f.lojas || [])]
+      .some((campo) => String(campo || '').toLowerCase().includes(termoBusca)));
   }
+  document.getElementById('fornecedores-tabela-sub').textContent = termoBusca
+    ? `${linhas.length} de ${fornecedoresLista.length} fornecedores`
+    : 'Contato, lojas atendidas e condições comerciais de cada fornecedor';
 
   if (!linhas.length) {
-    const colspan = 7 + (isAdmin ? 1 : 0);
+    const colspan = 6 + (isAdmin ? 1 : 0);
     tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhum fornecedor encontrado.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = linhas.map((f) => `
-    <tr>
+    <tr class="${f.ativo ? '' : 'fornecedor-inativo'}">
       <td>
-        <span class="font-bold">${escaparHtml(f.nome)}</span>
-        ${f.cnpj ? `<span class="insumo-unidade">${escaparHtml(f.cnpj)}</span>` : ''}
-        ${(f.lojas || []).length ? `<span class="insumo-unidade">Compra: ${escaparHtml(f.lojas.join(', '))}</span>` : ''}
+        <span class="font-bold fornecedor-nome">${escaparHtml(f.nome)}</span>
+        <span class="fornecedor-sub">${escaparHtml(f.cnpj) || 'Sem CNPJ'}</span>
       </td>
-      <td class="text-muted">${escaparHtml(f.categoria)}</td>
-      <td class="fornecedor-contato-cell">
-        ${f.contatoNome ? `<span>${escaparHtml(f.contatoNome)}</span>` : ''}
-        ${f.contatoTelefone ? `<span class="text-muted">${escaparHtml(f.contatoTelefone)}</span>` : ''}
-        ${f.contatoEmail ? `<span class="text-muted">${escaparHtml(f.contatoEmail)}</span>` : ''}
+      <td>${_lojasAtendidasHTML(f.lojas || [])}</td>
+      <td><span class="badge tag-categoria" data-cor="${_corDaCategoria(f.categoria)}">${escaparHtml(f.categoria)}</span></td>
+      <td>
+        <span class="fornecedor-nome-contato">${escaparHtml(f.contatoNome) || '—'}</span>
+        ${f.contatoTelefone || f.contatoEmail ? `<span class="fornecedor-sub" title="${escaparHtml([f.contatoTelefone, f.contatoEmail].filter(Boolean).join(' · '))}">${escaparHtml(f.contatoTelefone || f.contatoEmail)}</span>` : ''}
       </td>
-      <td class="text-muted">${escaparHtml(f.prazoPagamento) || '—'}</td>
-      <td class="text-muted">${escaparHtml(f.diasEntrega) || '—'}</td>
-      <td>${f.pedidoMinimo ? `R$ ${f.pedidoMinimo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</td>
-      <td><span class="badge-pill ${f.ativo ? 'pos' : 'neg'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td>${_condicoesComerciaisHTML(f)}</td>
+      <td><span class="badge-pill ${f.ativo ? 'pos' : 'fornecedor-status-inativo'}">${f.ativo ? 'Ativo' : 'Inativo'}</span></td>
       ${isAdmin ? `
         <td class="col-acoes"><div class="acoes-linha">
+          <button type="button" class="btn-acao-icone" data-acao="detalhes-fornecedor" data-id="${f.id}" title="Ver detalhes">
+            <i data-lucide="eye"></i>
+          </button>
           <button type="button" class="btn-acao-icone" data-acao="editar-fornecedor" data-id="${f.id}" title="Editar fornecedor">
             <i data-lucide="pencil"></i>
           </button>
@@ -3342,7 +3346,113 @@ function renderFornecedoresTabela() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// Redesenho de Fornecedores (18/09): uma linha por fornecedor. As lojas viram
+// etiquetas curtas (no máximo duas e "+N"), as condições comerciais ficam
+// numa linha só e o resto do cadastro vai pro "Ver detalhes".
+function _lojasAtendidasHTML(lojas) {
+  if (!lojas.length) return '<span class="text-muted">—</span>';
+  if (lojas.length >= LOJAS_ESTOQUE.length) return '<span class="tag-loja" title="' + escaparHtml(lojas.join(', ')) + '">Todas as lojas</span>';
+  const visiveis = lojas.slice(0, 2);
+  const resto = lojas.slice(2);
+  return `<span class="lojas-atendidas">${visiveis.map((l) => `<span class="tag-loja" title="${escaparHtml(l)}">${escaparHtml(_nomeCurtoLoja(l))}</span>`).join('')}${resto.length ? `<span class="tag-loja resto" title="${escaparHtml(resto.join(', '))}">+${resto.length}</span>` : ''}</span>`;
+}
+
+function _pedidoMinimoTexto(valor) {
+  return valor ? `R$ ${Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Sem mínimo';
+}
+
+function _condicoesComerciaisHTML(f) {
+  const item = (icone, rotulo, texto, vazio) => `<span class="${texto ? '' : 'vazio'}" title="${rotulo}"><i data-lucide="${icone}"></i>${escaparHtml(texto || vazio)}</span>`;
+  return `<span class="fornecedor-condicoes">
+    ${item('credit-card', 'Prazo de pagamento', f.prazoPagamento, 'Não informado')}
+    ${item('shopping-basket', 'Pedido mínimo', f.pedidoMinimo ? _pedidoMinimoTexto(f.pedidoMinimo) : '', 'Sem mínimo')}
+    ${item('calendar-days', 'Dia de entrega', f.diasEntrega, 'Não informado')}
+  </span>`;
+}
+
+let entregasAReceberFornecedores = null; // busca uma vez por carregamento da tela
+
+function _renderIndicadoresFornecedores(isAdmin) {
+  const ativos = fornecedoresLista.filter((f) => f.ativo).length;
+  const inativos = fornecedoresLista.length - ativos;
+  document.getElementById('fornecedores-val-total').textContent = fornecedoresLista.length;
+  document.getElementById('fornecedores-val-ativos').textContent = ativos;
+  document.getElementById('fornecedores-val-inativos').textContent = `${inativos} ${inativos === 1 ? 'inativo' : 'inativos'}`;
+  const porCategoria = new Map();
+  fornecedoresLista.filter((f) => f.ativo).forEach((f) => porCategoria.set(f.categoria, (porCategoria.get(f.categoria) || 0) + 1));
+  document.getElementById('fornecedores-val-categorias').textContent = porCategoria.size;
+  const principais = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2);
+  document.getElementById('fornecedores-val-categorias-top').textContent = principais.length
+    ? `Mais: ${principais.map(([nome, n]) => `${nome} (${n})`).join(', ')}`
+    : '—';
+
+  // Entregas a receber = pedidos enviados que ainda não chegaram (mesma conta
+  // dos números do menu de Compras). Só pra quem vê compras.
+  const cartao = document.getElementById('fornecedores-card-entregas');
+  if (!cartao || !isAdmin) return;
+  if (!entregasAReceberFornecedores) {
+    entregasAReceberFornecedores = fetch('/api/compras/pendencias')
+      .then((resposta) => (resposta.ok ? resposta.json() : null))
+      .catch(() => null);
+  }
+  entregasAReceberFornecedores.then((dados) => {
+    if (!dados) return;
+    const total = (dados.entregasNoPrazo || 0) + (dados.entregasAtrasadas || 0);
+    cartao.hidden = false;
+    document.getElementById('fornecedores-val-entregas').textContent = total;
+    const sub = document.getElementById('fornecedores-val-entregas-sub');
+    sub.textContent = dados.entregasAtrasadas
+      ? `${dados.entregasAtrasadas} ${dados.entregasAtrasadas === 1 ? 'atrasada' : 'atrasadas'} (mais de ${dados.diasEntregaAtrasada} dias)`
+      : (total ? 'todas no prazo' : 'nada a receber');
+    cartao.classList.toggle('tem-atraso', !!dados.entregasAtrasadas);
+  });
+}
+
+let fornecedorDetalhesId = null;
+
+function abrirDetalhesFornecedor(fornecedor) {
+  fornecedorDetalhesId = fornecedor.id;
+  document.getElementById('fornecedor-detalhes-titulo').textContent = fornecedor.nome;
+  const linkWhats = _linkWhatsAppContato(fornecedor.contatoTelefone);
+  const campo = (rotulo, valor) => `<div><dt>${rotulo}</dt><dd>${valor}</dd></div>`;
+  document.getElementById('fornecedor-detalhes-corpo').innerHTML = [
+    campo('Status', `<span class="badge-pill ${fornecedor.ativo ? 'pos' : 'fornecedor-status-inativo'}">${fornecedor.ativo ? 'Ativo' : 'Inativo'}</span>`),
+    campo('CNPJ', escaparHtml(fornecedor.cnpj) || '—'),
+    campo('Categoria', `<span class="badge tag-categoria" data-cor="${_corDaCategoria(fornecedor.categoria)}">${escaparHtml(fornecedor.categoria)}</span>`),
+    campo('Lojas atendidas', escaparHtml((fornecedor.lojas || []).join(', ')) || '—'),
+    campo('Contato', escaparHtml(fornecedor.contatoNome) || '—'),
+    campo('Telefone', fornecedor.contatoTelefone
+      ? `${escaparHtml(fornecedor.contatoTelefone)}${linkWhats ? ` · <a href="${escaparHtml(linkWhats)}" target="_blank" rel="noopener">abrir no WhatsApp</a>` : ''}`
+      : '—'),
+    campo('E-mail', fornecedor.contatoEmail ? `<a href="mailto:${escaparHtml(fornecedor.contatoEmail)}">${escaparHtml(fornecedor.contatoEmail)}</a>` : '—'),
+    campo('Prazo de pagamento', escaparHtml(fornecedor.prazoPagamento) || 'Não informado'),
+    campo('Pedido mínimo', _pedidoMinimoTexto(fornecedor.pedidoMinimo)),
+    campo('Dia de entrega', escaparHtml(fornecedor.diasEntrega) || 'Não informado'),
+    campo('Observações', escaparHtml(fornecedor.observacoes) || '—'),
+  ].join('');
+  document.getElementById('btn-fornecedor-detalhes-editar').hidden = !_possoGerir();
+  document.getElementById('modal-fornecedor-detalhes').style.display = 'flex';
+}
+
+function fecharDetalhesFornecedor() {
+  document.getElementById('modal-fornecedor-detalhes').style.display = 'none';
+}
+
+document.getElementById('btn-fornecedor-detalhes-fechar')?.addEventListener('click', fecharDetalhesFornecedor);
+document.getElementById('btn-fornecedor-detalhes-ok')?.addEventListener('click', fecharDetalhesFornecedor);
+document.getElementById('btn-fornecedor-detalhes-editar')?.addEventListener('click', () => {
+  const fornecedor = fornecedoresLista.find((f) => f.id === fornecedorDetalhesId);
+  fecharDetalhesFornecedor();
+  if (fornecedor) abrirModalFornecedor(fornecedor);
+});
+
 function wireFornecedoresTableEvents() {
+  document.querySelectorAll('[data-acao="detalhes-fornecedor"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const fornecedor = fornecedoresLista.find((f) => f.id === parseInt(btn.dataset.id, 10));
+      if (fornecedor) abrirDetalhesFornecedor(fornecedor);
+    });
+  });
   document.querySelectorAll('[data-acao="editar-fornecedor"]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = parseInt(btn.dataset.id, 10);

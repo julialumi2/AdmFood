@@ -816,29 +816,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Categoria com cor pastel própria (a cor sai do nome, ver _corDaCategoria). */
-.tag-categoria[data-cor] { border: none; }
-.tag-categoria[data-cor="0"] { background-color: #FDEBDD; color: #9A4A12; }
-.tag-categoria[data-cor="1"] { background-color: #FBF1CF; color: #7A5A08; }
-.tag-categoria[data-cor="2"] { background-color: #DDF3E6; color: #1D6B45; }
-.tag-categoria[data-cor="3"] { background-color: #DDEDFB; color: #1E5A8A; }
-.tag-categoria[data-cor="4"] { background-color: #ECE6FB; color: #5B3E9E; }
-.tag-categoria[data-cor="5"] { background-color: #FBE3EA; color: #9B2C4E; }
-.tag-categoria[data-cor="6"] { background-color: #D9F1F0; color: #16655F; }
-.tag-categoria[data-cor="7"] { background-color: #EAF3D6; color: #4D6516; }
-.tag-categoria[data-cor="8"] { background-color: #EDE9F2; color: #56506A; }
-.tag-categoria[data-cor="9"] { background-color: #FDE4DF; color: #A13A28; }
-
-body.dark-mode .tag-categoria[data-cor="0"] { background-color: rgba(249, 115, 22, 0.16); color: #FDBA8C; }
-body.dark-mode .tag-categoria[data-cor="1"] { background-color: rgba(234, 179, 8, 0.16); color: #FDE68A; }
-body.dark-mode .tag-categoria[data-cor="2"] { background-color: rgba(34, 197, 94, 0.15); color: #86EFAC; }
-body.dark-mode .tag-categoria[data-cor="3"] { background-color: rgba(59, 130, 246, 0.16); color: #93C5FD; }
-body.dark-mode .tag-categoria[data-cor="4"] { background-color: rgba(139, 92, 246, 0.18); color: #C4B5FD; }
-body.dark-mode .tag-categoria[data-cor="5"] { background-color: rgba(236, 72, 153, 0.16); color: #F9A8D4; }
-body.dark-mode .tag-categoria[data-cor="6"] { background-color: rgba(20, 184, 166, 0.16); color: #5EEAD4; }
-body.dark-mode .tag-categoria[data-cor="7"] { background-color: rgba(132, 204, 22, 0.15); color: #BEF264; }
-body.dark-mode .tag-categoria[data-cor="8"] { background-color: rgba(161, 161, 170, 0.18); color: #D4D4D8; }
-body.dark-mode .tag-categoria[data-cor="9"] { background-color: rgba(239, 68, 68, 0.15); color: #FCA5A5; }
 
 @media (max-width: 1100px) {
   .cards-grid#estoque-cards,

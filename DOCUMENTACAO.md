@@ -967,6 +967,20 @@ também aparecem aqui (steppers `.stepper-btn`, `.page-acoes-topo`) foram
 promovidos de `estoque.css` pra `theme.css` nessa mudança, por já serem
 usados em duas páginas.
 
+**Tela redesenhada** (2026-09-18, pedido dela): busca e "Cadastrar
+fornecedor" no topo, ao lado do título; quatro indicadores que dizem coisas
+diferentes (total, ativos e inativos, categorias mapeadas com as duas que mais
+têm fornecedor, e entregas a receber — pedidos enviados que não chegaram, com
+as atrasadas, a mesma conta dos números do menu; o cartão leva a
+Recebimentos); e a tabela com uma linha por fornecedor: CNPJ embaixo do nome,
+lojas atendidas em etiquetas curtas (no máximo duas e "+N", ou "Todas as
+lojas"), categoria com a cor pastel do nome (a mesma de Insumos, agora em
+`theme.css`), contato com o telefone embaixo (o e-mail vai no título e nos
+detalhes), condições comerciais numa célula (pagamento, mínimo, entrega) e
+ações Ver detalhes / Editar / Ativar-desativar. "Ver detalhes" abre o cadastro
+inteiro só pra leitura, com o telefone abrindo no WhatsApp. A busca acha por
+nome, CNPJ, categoria, contato e loja.
+
 **Menu recolhível "Compras"** (`.menu-group`/`.menu-subgroup`, ver
 `theme.css`/`script.js`) — replicando o padrão de menu da VMarket (grupos
 que expandem/recolhem), mantendo as cores do sistema. "Compras" é o grupo,
