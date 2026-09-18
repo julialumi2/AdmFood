@@ -195,7 +195,13 @@ from backend.armazenamento import (
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.vendas_semanais_planilha import ler_vendas_semanais_da_planilha
 from backend.auth import gerar_hash_senha, senha_confere
-from backend.cardapio_web import buscar_resumo_do_dia
+from backend.cardapio_web import (
+    buscar_resumo_do_dia,
+    buscar_pedidos_do_dia,
+    buscar_detalhes_pedido,
+    STATUS_CONCLUIDOS,
+    _total_com_desconto_ifood,
+)
 from sincronizar import sincronizar_dia, DIA_FECHADO
 
 app = Flask(__name__)
@@ -4475,6 +4481,72 @@ def _sincronizar_lojas_em_segundo_plano(dia_alvo):
             salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
         except Exception as erro:
             print(f"❌ Sincronização manual falhou para {nome_unidade} ({dia_iso}): {erro}")
+
+
+# Pedidos que o faturamento não conta (2026-09-18): a semana do Artesanos não
+# batia com a planilha no iFood e no 99, sempre com o sistema abaixo. O
+# sistema só soma pedido "fechado" ou "entregue" na Cardápio Web; pedido
+# despachado e nunca finalizado fica de fora, mas o painel deles conta. Uma
+# loja e um dia por vez: o histórico da Cardápio Web aceita 5 chamadas por
+# minuto e o detalhe de cada pedido é mais uma chamada.
+MAXIMO_DETALHES_PEDIDOS_ABERTOS = 40
+
+
+@app.route('/api/admin/pedidos-nao-finalizados', methods=['GET'])
+def api_pedidos_nao_finalizados():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    unidade = request.args.get('unidade')
+    if unidade not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        dia = date.fromisoformat(request.args.get('dia') or '')
+    except ValueError:
+        return jsonify({"erro": "Dia inválido (use AAAA-MM-DD)."}), 400
+    token = LOJAS[unidade].get("cardapio_web_token")
+    if not token:
+        return jsonify({"erro": "Loja sem token da Cardápio Web."}), 400
+
+    try:
+        pedidos = buscar_pedidos_do_dia(token, dia)
+    except Exception as falha:
+        return jsonify({"erro": f"A Cardápio Web não respondeu: {falha}"}), 502
+
+    por_status = {}
+    for pedido in pedidos:
+        por_status[pedido["status"]] = por_status.get(pedido["status"], 0) + 1
+    # Cancelado não é venda: só entra na contagem por status.
+    abertos = [
+        p for p in pedidos
+        if p["status"] not in STATUS_CONCLUIDOS and "cancel" not in (p["status"] or "").lower()
+    ]
+    lista = []
+    for pedido in abertos[:MAXIMO_DETALHES_PEDIDOS_ABERTOS]:
+        item = {
+            "id": pedido["id"],
+            "canal": pedido["sales_channel"],
+            "status": pedido["status"],
+            "criadoEm": pedido["created_at"],
+            "atualizadoEm": pedido["updated_at"],
+        }
+        try:
+            detalhes = buscar_detalhes_pedido(token, pedido["id"])
+            item["numero"] = detalhes.get("display_id") or detalhes.get("code")
+            item["total"] = round(_total_com_desconto_ifood(detalhes, pedido["sales_channel"]), 2)
+        except Exception:
+            item["total"] = None
+        lista.append(item)
+        time.sleep(0.65)
+
+    return jsonify({
+        "unidade": unidade,
+        "dia": dia.isoformat(),
+        "totalPedidos": len(pedidos),
+        "porStatus": por_status,
+        "naoFinalizados": lista,
+        "naoFinalizadosSemDetalhe": max(0, len(abertos) - MAXIMO_DETALHES_PEDIDOS_ABERTOS),
+    })
 
 
 @app.route('/api/sincronizar-agora', methods=['POST'])

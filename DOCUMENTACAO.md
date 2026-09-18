@@ -2636,6 +2636,16 @@ Presencial (`portal`) — antes ficava de fora, e a semana do Artesanos saía
 uns R$ 20 mil menor. O cartão Semanal da Home usa a mesma semana. Teste:
 `teste_vendas_semanais.py` no scratchpad.
 
+**Pedido não finalizado fica de fora** (2026-09-18): comparando com a
+planilha, o Cardápio Web bate no centavo, mas iFood e 99 às vezes ficam
+abaixo (nunca acima) — e em outras semanas batem exato. O faturamento só
+conta pedido `closed`/`delivered` (`STATUS_CONCLUIDOS` em
+`backend/cardapio_web.py`); despachado e nunca finalizado não entra. Pra
+conferir: `GET /api/admin/pedidos-nao-finalizados?unidade=&dia=` (só admin)
+lista, de um dia e uma loja, os pedidos que não estão fechados/entregues nem
+cancelados, com canal, status, horário, número e valor, e a contagem por
+status. Teste: `teste_pedidos_abertos.py` no scratchpad.
+
 ### 6.14 Unidade de medida, custo de insumo e conteúdo por pacote
 
 Três decisões que se complementam, todas vindas de erros reais:
