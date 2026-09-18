@@ -239,3 +239,27 @@
   margin: 4px 0 0 14px;
   line-height: 1.4;
 }
+
+/* Envio de todos os convites pela extensão do WhatsApp (card #26, 18/09). */
+.convites-envio-whatsapp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 320px;
+  text-align: right;
+}
+
+.convites-envio-whatsapp #btn-enviar-cotacoes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.convites-envio-whatsapp #btn-enviar-cotacoes[hidden],
+.convites-envio-whatsapp #convites-extensao-aviso[hidden] { display: none; }
+
+.convites-envio-whatsapp svg {
+  width: 15px;
+  height: 15px;
+}

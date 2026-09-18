@@ -296,8 +296,21 @@
             <div class="table-header-row">
               <div>
                 <h3 class="table-title">Convites enviados aos fornecedores</h3>
-                <p class="table-subtitle">Link sem login pra cada fornecedor preencher o próprio preço — clique em "Enviar por WhatsApp" pra mandar direto</p>
+                <p class="table-subtitle">Link sem login pra cada fornecedor preencher o próprio preço. "Enviar todos pelo WhatsApp" manda um por um sozinho; o botão de cada fornecedor abre o WhatsApp com a mensagem pronta.</p>
               </div>
+              <!-- A extensão "AdmFood · Cotações no WhatsApp" (card #26) lê a
+                   lista abaixo quando o botão é clicado; sem ela, o botão
+                   fica escondido e aparece o aviso. -->
+              <div class="convites-envio-whatsapp">
+                <button type="button" class="btn-primary-sm" id="btn-enviar-cotacoes" hidden>
+                  <i data-lucide="send"></i>
+                  <span id="btn-enviar-cotacoes-texto">Enviar todos pelo WhatsApp</span>
+                </button>
+                <span class="table-subtitle" id="convites-extensao-aviso" hidden>
+                  Pra mandar todos de uma vez, instale a extensão “AdmFood · Cotações no WhatsApp” no Chrome.
+                </span>
+              </div>
+              <script type="application/json" id="fila-whatsapp">[]</script>
             </div>
             <div class="table-responsive">
             <table>

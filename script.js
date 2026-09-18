@@ -3873,6 +3873,51 @@ function _linkWhatsAppConvite(telefone, fornecedorNome, link) {
   return `https://wa.me/${numeroCompleto}?text=${encodeURIComponent(mensagem)}`;
 }
 
+// Envio de todos os convites pela extensão do Chrome (card #26, decisão do
+// chefe em 2026-09-18: "se a VMarket já faz e nunca deu problema, bora"). A
+// extensão lê a lista em #fila-whatsapp quando alguém clica no botão e manda
+// um fornecedor por vez pelo WhatsApp Web; aqui só se monta a lista e se
+// mostra o botão quando a extensão está instalada (ela marca o <html> com
+// data-admfood-extensao ao carregar).
+let enviadosPeloWhatsapp = new Set();
+
+function _atualizarEnvioWhatsappConvites() {
+  const botao = document.getElementById('btn-enviar-cotacoes');
+  const fila = document.getElementById('fila-whatsapp');
+  if (!botao || !fila) return;
+  const agora = new Date();
+  const itens = convitesCotacaoAtuais
+    .filter((c) => c.status === 'aberta' && new Date(c.prazoValidade) >= agora && c.fornecedorTelefone)
+    .map((c) => {
+      const link = `${location.origin}/preencher_cotacao.html?token=${c.token}`;
+      return {
+        id: c.id,
+        fornecedor: c.fornecedorNome,
+        telefone: c.fornecedorTelefone,
+        mensagem: `Olá! Segue o link pra você preencher os preços da nossa cotação:\n${link}`,
+      };
+    });
+  fila.textContent = JSON.stringify(itens);
+  const temExtensao = !!document.documentElement.dataset.admfoodExtensao;
+  botao.hidden = !(temExtensao && itens.length && _possoGerir());
+  document.getElementById('btn-enviar-cotacoes-texto').textContent =
+    `Enviar ${itens.length === 1 ? 'o convite' : `os ${itens.length} convites`} pelo WhatsApp`;
+  document.getElementById('convites-extensao-aviso').hidden = temExtensao || !itens.length || !_possoGerir();
+}
+
+// A extensão avisa quando carrega (pode ser depois da tela) e a cada
+// fornecedor enviado: a linha dele ganha "enviado".
+document.addEventListener('admfood:extensao-pronta', () => _atualizarEnvioWhatsappConvites());
+document.addEventListener('admfood:envio-whatsapp', (evento) => {
+  try {
+    const resumo = JSON.parse(evento.detail);
+    (resumo.itens || []).filter((i) => i.status === 'enviado' && i.id).forEach((i) => enviadosPeloWhatsapp.add(i.id));
+    if (convitesCotacaoAtuais.length) renderConvitesCotacao(convitesCotacaoAtuais);
+  } catch (erro) {
+    console.error('Resumo do envio pelo WhatsApp inválido:', erro);
+  }
+});
+
 function renderConvitesCotacao(convites) {
   convitesCotacaoAtuais = convites;
   const card = document.getElementById('cotacao-convites-card');
@@ -3880,6 +3925,7 @@ function renderConvitesCotacao(convites) {
   if (!card || !tbody) return;
 
   card.style.display = convites.length ? '' : 'none';
+  _atualizarEnvioWhatsappConvites();
   if (!convites.length) return;
 
   tbody.innerHTML = convites.map((c) => {
@@ -3890,7 +3936,7 @@ function renderConvitesCotacao(convites) {
     const linkWhatsApp = _linkWhatsAppConvite(c.fornecedorTelefone, c.fornecedorNome, link);
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(c.fornecedorNome)}</td>
+        <td class="font-bold">${escaparHtml(c.fornecedorNome)}${enviadosPeloWhatsapp.has(c.id) ? ' <span class="badge-pill pos" title="Mandado agora pela extensão do WhatsApp">enviado</span>' : ''}</td>
         <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
         <td class="col-acoes"><div class="acoes-linha">

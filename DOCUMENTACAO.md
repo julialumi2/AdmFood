@@ -3202,6 +3202,26 @@ recebimento, operação anexando a foto, operação barrada ao trocar, troca pel
 gestão apagando o arquivo antigo, só o número sem arquivo, extensão recusada,
 outra loja, 404 de pedido inexistente e o registro de quem anexou).
 
+### 6.26 Envio das cotações pela extensão do WhatsApp (card #26, 2026-09-18)
+
+O chefe escolheu a extensão do Chrome ("se a VMarket já faz e nunca deu
+problema, bora"), publicada na Chrome Web Store. Na tela da cotação, o cartão
+de convites ganhou "Enviar os N convites pelo WhatsApp": o AdmFood monta a
+lista em `<script type="application/json" id="fila-whatsapp">` (convite em
+aberto, dentro do prazo e com telefone: id, fornecedor, telefone, mensagem
+com o link) e a extensão, ao clique, manda um por vez pelo WhatsApp Web da
+pessoa (pausas sorteadas, confere a mensagem antes de enviar, botão Parar,
+painel de andamento). O botão só aparece com a extensão instalada — ela marca
+o `<html>` com `data-admfood-extensao` e dispara `admfood:extensao-pronta`;
+sem ela aparece o aviso de instalar. A cada envio a extensão dispara
+`admfood:envio-whatsapp` e a linha do convite ganha "enviado" (só na tela,
+não fica gravado). O botão "Enviar por WhatsApp" de cada fornecedor
+(wa.me) continua. Risco aceito pelo chefe: automação no WhatsApp comum pode
+levar o número a ser bloqueado. A política de privacidade exigida pela loja
+é `privacidade-extensao.html` (pública, sem login). O código da extensão fica
+em `extensao-whatsapp/` (manifest V3, só `storage`, `alarms` e acesso ao
+domínio do AdmFood e ao web.whatsapp.com).
+
 ### 6.25 Evolução do preço de um insumo (card #40, 2026-09-18)
 
 Tela nova em **Insights → Evolução do preço** (`precos.html`, admin e

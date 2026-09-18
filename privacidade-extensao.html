@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacidade · AdmFood · Cotações no WhatsApp</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Página pública (sem login): a Chrome Web Store pede um endereço de
+       política de privacidade pra extensão do card #26 (2026-09-18). -->
+  <style>
+    :root {
+      --fundo: #F7F2E8;
+      --papel: #FFFFFF;
+      --texto: #18181B;
+      --texto-suave: #52525B;
+      --borda: #E6DDCC;
+      --marca: #D93829;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fundo: #121214;
+        --papel: #1C1C1F;
+        --texto: #FAFAFA;
+        --texto-suave: #A1A1AA;
+        --borda: #27272A;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 48px 20px;
+      background: var(--fundo);
+      color: var(--texto);
+      font: 16px/1.65 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    main {
+      max-width: 680px;
+      margin: 0 auto;
+      background: var(--papel);
+      border: 1px solid var(--borda);
+      border-radius: 12px;
+      padding: 40px 44px;
+    }
+    .marca {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--texto-suave);
+    }
+    .marca img { width: 28px; height: 28px; }
+    h1 {
+      margin: 12px 0 4px;
+      font-size: 1.6rem;
+      font-weight: 800;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+      text-wrap: balance;
+    }
+    .atualizado { margin: 0 0 28px; font-size: 0.85rem; color: var(--texto-suave); }
+    h2 {
+      margin: 28px 0 6px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    p, li { max-width: 62ch; }
+    ul { padding-left: 20px; }
+    li + li { margin-top: 4px; }
+    code {
+      font-size: 0.88em;
+      background: var(--fundo);
+      border: 1px solid var(--borda);
+      border-radius: 4px;
+      padding: 0 4px;
+    }
+    @media (max-width: 560px) {
+      body { padding: 20px 16px; }
+      main { padding: 28px 22px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="marca">
+      <img src="imgs/favicon-32.png" alt="">
+      <span>AdmFood · Grupo Artesanos</span>
+    </div>
+    <h1>Política de privacidade da extensão “AdmFood · Cotações no WhatsApp”</h1>
+    <p class="atualizado">Atualizada em 18 de setembro de 2026</p>
+
+    <h2>O que a extensão faz</h2>
+    <p>
+      O AdmFood é o sistema de gestão de compras e estoque das lojas do Grupo Artesanos.
+      Quando a pessoa que faz as compras clica em “Enviar todos pelo WhatsApp” na tela de uma
+      cotação, a extensão abre o WhatsApp Web dela e manda, um fornecedor por vez, a mensagem com o
+      link para ele preencher os preços. Ela não faz nada sem esse clique.
+    </p>
+
+    <h2>Quais dados ela usa</h2>
+    <ul>
+      <li>O nome e o telefone de cada fornecedor e o texto da mensagem com o link da cotação, lidos da tela do AdmFood no momento do clique.</li>
+      <li>No WhatsApp Web, ela só abre a conversa com o número do fornecedor, confere se a mensagem na caixa é a daquele fornecedor e aperta enviar. Não lê conversas, contatos nem mensagens recebidas.</li>
+    </ul>
+
+    <h2>Onde esses dados ficam</h2>
+    <p>
+      A fila do envio (fornecedores, telefones, mensagens e o resultado de cada envio) fica guardada
+      só no próprio navegador, em <code>chrome.storage.local</code>, para o envio continuar se a
+      página recarregar. Ela não é mandada para nenhum servidor, nem para quem fez a extensão, nem
+      para terceiros. O envio seguinte substitui a fila anterior.
+    </p>
+
+    <h2>O que ela não faz</h2>
+    <ul>
+      <li>Não coleta histórico de navegação nem dados de outros sites.</li>
+      <li>Não usa ferramentas de análise, anúncios ou rastreamento.</li>
+      <li>Não vende, não empresta e não compartilha dados com ninguém.</li>
+      <li>Só funciona em <code>admfood.artesanosburger.com.br</code> e <code>web.whatsapp.com</code>.</li>
+    </ul>
+
+    <h2>Permissões pedidas</h2>
+    <ul>
+      <li><strong>Armazenamento</strong>: guardar a fila do envio no navegador.</li>
+      <li><strong>Alarmes</strong>: perceber se o WhatsApp Web travou num fornecedor e seguir para o próximo.</li>
+      <li><strong>Acesso ao AdmFood</strong>: ler a lista de fornecedores da cotação e mostrar o andamento do envio.</li>
+      <li><strong>Acesso ao WhatsApp Web</strong>: abrir a conversa de cada fornecedor e enviar a mensagem.</li>
+    </ul>
+
+    <h2>Quem usa</h2>
+    <p>
+      É uma ferramenta interna, para quem tem acesso ao AdmFood nas lojas do Grupo Artesanos.
+    </p>
+
+    <h2>Contato</h2>
+    <p>
+      Dúvidas sobre esta política: pelo e-mail de contato do desenvolvedor informado na página da
+      extensão na Chrome Web Store.
+    </p>
+  </main>
+</body>
+</html>

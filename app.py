@@ -307,7 +307,9 @@ _criar_equipe_inicial_se_necessario()
 
 # --- LOGIN ------------------------------------------------------------------
 
-PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html", "preencher_cotacao.html", "confirmar_pedido.html"}
+PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html", "preencher_cotacao.html", "confirmar_pedido.html",
+                    # política de privacidade da extensão do WhatsApp: a Chrome Web Store precisa abrir sem login
+                    "privacidade-extensao.html"}
 ROTAS_API_PUBLICAS = {"/api/login"}
 
 
