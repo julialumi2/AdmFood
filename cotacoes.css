@@ -257,7 +257,10 @@
 }
 
 .convites-envio-whatsapp #btn-enviar-cotacoes[hidden],
-.convites-envio-whatsapp #convites-extensao-aviso[hidden] { display: none; }
+.convites-envio-whatsapp #convites-extensao-aviso[hidden],
+.convites-envio-whatsapp #convites-extensao-atualizar[hidden] { display: none; }
+
+.convites-envio-whatsapp a { color: var(--info); font-weight: 600; }
 
 .convites-envio-whatsapp svg {
   width: 15px;

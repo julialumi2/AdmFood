@@ -341,6 +341,7 @@ PAGINAS_POR_PAPEL = {
         'contagens.html', 'pedidos.html', 'recebimentos.html', 'guia-compras.html',
         'cardapio.html', 'preparo.html', 'curva-abc.html', 'insight.html',
         'mais-vendidos.html', 'vendas-semanais.html', 'precos.html', 'configuracoes.html',
+        'instalar-extensao.html',
     },
     'operacao': {
         'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
@@ -4482,6 +4483,46 @@ def _sincronizar_lojas_em_segundo_plano(dia_alvo):
 # loja e um dia por vez: o histórico da Cardápio Web aceita 5 chamadas por
 # minuto e o detalhe de cada pedido é mais uma chamada.
 MAXIMO_DETALHES_PEDIDOS_ABERTOS = 40
+
+
+# Extensão do WhatsApp instalada à mão (2026-09-18: sem a Chrome Web Store por
+# enquanto, decisão dela). O zip é montado na hora a partir da pasta do
+# repositório, então baixar traz sempre a versão que está no ar — e a tela
+# compara com a instalada pra avisar quando tem versão nova.
+PASTA_EXTENSAO_WHATSAPP = os.path.join(DIRETORIO_BASE, 'extensao-whatsapp')
+ARQUIVOS_DA_EXTENSAO = ('manifest.json', 'background.js', 'script-sistema.js', 'script-whatsapp.js')
+
+
+def _versao_extensao_whatsapp():
+    with open(os.path.join(PASTA_EXTENSAO_WHATSAPP, 'manifest.json'), encoding='utf-8') as arquivo:
+        return json.load(arquivo)['version']
+
+
+@app.route('/api/extensao-whatsapp/versao', methods=['GET'])
+def api_versao_extensao_whatsapp():
+    erro_acesso = _exigir_gestao()
+    if erro_acesso:
+        return erro_acesso
+    return jsonify({"versao": _versao_extensao_whatsapp()})
+
+
+@app.route('/api/extensao-whatsapp/pacote.zip', methods=['GET'])
+def api_pacote_extensao_whatsapp():
+    erro_acesso = _exigir_gestao()
+    if erro_acesso:
+        return erro_acesso
+    versao = _versao_extensao_whatsapp()
+    pacote = io.BytesIO()
+    with zipfile.ZipFile(pacote, 'w', zipfile.ZIP_DEFLATED) as zip_saida:
+        for nome in ARQUIVOS_DA_EXTENSAO:
+            zip_saida.write(os.path.join(PASTA_EXTENSAO_WHATSAPP, nome), f'admfood-whatsapp/{nome}')
+        pasta_icones = os.path.join(PASTA_EXTENSAO_WHATSAPP, 'icones')
+        for icone in sorted(os.listdir(pasta_icones)):
+            if icone.endswith('.png'):
+                zip_saida.write(os.path.join(pasta_icones, icone), f'admfood-whatsapp/icones/{icone}')
+    pacote.seek(0)
+    return send_file(pacote, mimetype='application/zip', as_attachment=True,
+                     download_name=f'admfood-whatsapp-{versao}.zip')
 
 
 @app.route('/api/admin/pedidos-nao-finalizados', methods=['GET'])

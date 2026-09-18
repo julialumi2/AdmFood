@@ -3881,13 +3881,73 @@ function _linkWhatsAppConvite(telefone, fornecedorNome, link) {
 // data-admfood-extensao ao carregar).
 let enviadosPeloWhatsapp = new Set();
 
+// "1.0.10" > "1.0.9": compara número a número, não como texto.
+function _compararVersoes(a, b) {
+  const pa = String(a || '').split('.').map(Number);
+  const pb = String(b || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const diferenca = (pa[i] || 0) - (pb[i] || 0);
+    if (diferenca) return diferenca > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function _versaoExtensaoInstalada() {
+  return document.documentElement.dataset.admfoodExtensao || null;
+}
+
 // O botão de cada linha só existe a partir da versão 1.0.1 da extensão; com a
 // 1.0.0 (carregada antes de atualizar) o clique não faria nada.
 function _extensaoEnviaUmPorUm() {
-  const versao = (document.documentElement.dataset.admfoodExtensao || '').split('.').map(Number);
-  if (!versao.length || Number.isNaN(versao[0])) return false;
-  const [maior = 0, menor = 0, correcao = 0] = versao;
-  return maior > 1 || (maior === 1 && (menor > 0 || correcao >= 1));
+  const instalada = _versaoExtensaoInstalada();
+  return !!instalada && _compararVersoes(instalada, '1.0.1') >= 0;
+}
+
+// Instalada à mão, a extensão não se atualiza sozinha: a versão mais nova é a
+// que está no servidor (manifest da pasta extensao-whatsapp). Busca uma vez.
+let versaoMaisNovaExtensao = null;
+function _buscarVersaoMaisNovaExtensao() {
+  if (!versaoMaisNovaExtensao) {
+    versaoMaisNovaExtensao = fetch('/api/extensao-whatsapp/versao')
+      .then((resposta) => (resposta.ok ? resposta.json() : null))
+      .then((dados) => dados?.versao || null)
+      .catch(() => null);
+  }
+  return versaoMaisNovaExtensao;
+}
+
+// Página "Extensão do WhatsApp": diz se está instalada e se está em dia.
+async function renderStatusExtensao() {
+  const quadro = document.querySelector('.extensao-status');
+  if (!quadro) return;
+  const instalada = _versaoExtensaoInstalada();
+  const maisNova = await _buscarVersaoMaisNovaExtensao();
+  const texto = document.getElementById('extensao-status-texto');
+  const detalhe = document.getElementById('extensao-status-detalhe');
+  const botao = document.getElementById('btn-baixar-extensao-texto');
+  quadro.classList.remove('ok', 'antiga');
+  if (!instalada) {
+    texto.textContent = 'Não instalada';
+    detalhe.textContent = 'Siga os passos abaixo.';
+    botao.textContent = maisNova ? `Baixar a extensão (versão ${maisNova})` : 'Baixar a extensão';
+  } else if (maisNova && _compararVersoes(instalada, maisNova) < 0) {
+    quadro.classList.add('antiga');
+    texto.textContent = `Instalada, versão ${instalada} — tem a ${maisNova}`;
+    detalhe.textContent = 'Veja como atualizar, lá embaixo.';
+    botao.textContent = `Baixar a versão ${maisNova}`;
+  } else {
+    quadro.classList.add('ok');
+    texto.textContent = `Instalada, versão ${instalada}`;
+    detalhe.textContent = 'Está em dia.';
+    botao.textContent = 'Baixar de novo';
+  }
+}
+
+if (document.querySelector('.extensao-status')) {
+  // A extensão marca a página quando carrega, às vezes depois deste script.
+  document.addEventListener('admfood:extensao-pronta', () => renderStatusExtensao());
+  renderStatusExtensao();
+  setTimeout(renderStatusExtensao, 1500);
 }
 
 function _atualizarEnvioWhatsappConvites() {
@@ -3912,6 +3972,15 @@ function _atualizarEnvioWhatsappConvites() {
   document.getElementById('btn-enviar-cotacoes-texto').textContent =
     `Enviar ${itens.length === 1 ? 'o convite' : `os ${itens.length} convites`} pelo WhatsApp`;
   document.getElementById('convites-extensao-aviso').hidden = temExtensao || !itens.length || !_possoGerir();
+  const avisoAtualizar = document.getElementById('convites-extensao-atualizar');
+  if (avisoAtualizar) {
+    avisoAtualizar.hidden = true;
+    if (temExtensao && _possoGerir()) {
+      _buscarVersaoMaisNovaExtensao().then((maisNova) => {
+        avisoAtualizar.hidden = !(maisNova && _compararVersoes(_versaoExtensaoInstalada(), maisNova) < 0);
+      });
+    }
+  }
 }
 
 // A extensão avisa quando carrega (pode ser depois da tela) e a cada
@@ -8516,7 +8585,7 @@ const PAGINAS_POR_PAPEL = {
   gerente: ['index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html', 'contagens.html',
     'pedidos.html', 'recebimentos.html', 'guia-compras.html', 'cardapio.html', 'preparo.html',
     'curva-abc.html', 'insight.html', 'mais-vendidos.html', 'vendas-semanais.html', 'precos.html',
-    'configuracoes.html'],
+    'configuracoes.html', 'instalar-extensao.html'],
   operacao: ['estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html', 'cardapio.html',
     'guia-compras.html', 'configuracoes.html'],
 };

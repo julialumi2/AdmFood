@@ -1,0 +1,66 @@
+/* Página "Extensão do WhatsApp" (instalação à mão, 2026-09-18). */
+
+.extensao-intro { max-width: 680px; margin-top: calc(-1 * var(--space-2)); }
+
+.extensao-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.extensao-status > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.extensao-rotulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#extensao-status-texto { font-size: 1.05rem; }
+.extensao-status.ok #extensao-status-texto { color: var(--success-texto); }
+.extensao-status.antiga #extensao-status-texto { color: var(--warning-texto); }
+
+#btn-baixar-extensao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+#btn-baixar-extensao svg { width: 15px; height: 15px; }
+
+.extensao-titulo {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+
+.extensao-passos {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 72ch;
+  line-height: 1.55;
+  color: var(--text-dark);
+}
+
+.extensao-texto { max-width: 72ch; line-height: 1.55; font-size: 0.95rem; color: var(--text-dark); }
+
+.extensao-passos code,
+.extensao-texto code {
+  font-size: 0.85em;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 4px;
+}

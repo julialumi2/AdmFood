@@ -3229,6 +3229,20 @@ levar o número a ser bloqueado. A política de privacidade exigida pela loja
 em `extensao-whatsapp/` (manifest V3, só `storage`, `alarms` e acesso ao
 domínio do AdmFood e ao web.whatsapp.com).
 
+**Instalação à mão** (2026-09-18, decisão dela: sem a Chrome Web Store por
+enquanto, pra não pagar a taxa de US$ 5). A página `instalar-extensao.html`
+(admin e gerente; linkada do aviso da cotação) tem o passo a passo — baixar,
+extrair numa pasta que não vai ser apagada, Modo do desenvolvedor, Carregar
+sem compactação — e diz se a extensão está instalada neste Chrome e se está
+em dia. O botão de baixar é `GET /api/extensao-whatsapp/pacote.zip`, que monta
+o zip na hora a partir da pasta `extensao-whatsapp` do repositório (manifest,
+os três scripts e os ícones, dentro de `admfood-whatsapp/`); a versão mais
+nova sai de `GET /api/extensao-whatsapp/versao` (o `version` do manifest).
+Instalada à mão, ela não se atualiza sozinha: com versão nova no ar, a
+cotação mostra "Tem versão nova da extensão" e a página explica como
+atualizar (extrair por cima da mesma pasta e clicar no ↻). Pra lançar versão
+nova, basta subir o `version` do manifest e dar push.
+
 ### 6.25 Evolução do preço de um insumo (card #40, 2026-09-18)
 
 Tela nova em **Insights → Evolução do preço** (`precos.html`, admin e
