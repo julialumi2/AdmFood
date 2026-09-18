@@ -3907,7 +3907,10 @@ function _atualizarEnvioWhatsappConvites() {
 
 // A extensão avisa quando carrega (pode ser depois da tela) e a cada
 // fornecedor enviado: a linha dele ganha "enviado".
-document.addEventListener('admfood:extensao-pronta', () => _atualizarEnvioWhatsappConvites());
+document.addEventListener('admfood:extensao-pronta', () => {
+  if (convitesCotacaoAtuais.length) renderConvitesCotacao(convitesCotacaoAtuais);
+  else _atualizarEnvioWhatsappConvites();
+});
 document.addEventListener('admfood:envio-whatsapp', (evento) => {
   try {
     const resumo = JSON.parse(evento.detail);
@@ -3928,6 +3931,9 @@ function renderConvitesCotacao(convites) {
   _atualizarEnvioWhatsappConvites();
   if (!convites.length) return;
 
+  // Com a extensão, o botão da linha vira "Abrir no WhatsApp" (o manual), pra
+  // não confundir com o "Enviar ... pelo WhatsApp" do topo, que manda sozinho.
+  const comExtensao = !!document.documentElement.dataset.admfoodExtensao;
   tbody.innerHTML = convites.map((c) => {
     const expirado = c.status === 'aberta' && new Date(c.prazoValidade) < new Date();
     const statusTexto = expirado ? 'Prazo vencido' : STATUS_LABEL_CONVITE[c.status];
@@ -3941,9 +3947,10 @@ function renderConvitesCotacao(convites) {
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
         <td class="col-acoes"><div class="acoes-linha">
           ${linkWhatsApp ? `
-            <a class="btn-secondary-sm" href="${escaparHtml(linkWhatsApp)}" target="_blank" rel="noopener">
-              <i data-lucide="send"></i>
-              Enviar por WhatsApp
+            <a class="btn-secondary-sm" href="${escaparHtml(linkWhatsApp)}" target="_blank" rel="noopener"
+               title="Abre a conversa com a mensagem pronta; você aperta enviar no WhatsApp">
+              <i data-lucide="${comExtensao ? 'external-link' : 'send'}"></i>
+              ${comExtensao ? 'Abrir no WhatsApp' : 'Enviar por WhatsApp'}
             </a>
           ` : `
             <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}" title="Fornecedor sem telefone cadastrado">
