@@ -1,0 +1,110 @@
+/* Evolução do preço de um insumo (card #40). Reaproveita os botões de
+   período da Curva ABC (.curva-periodo-btn, de curva-abc.css). */
+
+.precos-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.precos-listas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .precos-listas { grid-template-columns: 1fr; }
+}
+
+.precos-ranking {
+  list-style: none;
+  margin: 0;
+  /* 6px + os 10px do item: o nome alinha com o título do cartão. */
+  padding: 0 6px var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.precos-ranking-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dark);
+  font: inherit;
+  font-size: 0.84rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.precos-ranking-item:hover { background-color: var(--surface-muted); }
+
+.precos-ranking-nome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.precos-ranking-valores {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.precos-sobe { color: var(--danger-texto); font-weight: 700; }
+.precos-desce { color: var(--success-texto); font-weight: 700; }
+
+.precos-vazio {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  padding: 8px 10px;
+}
+
+.precos-busca { min-width: 260px; }
+
+.precos-resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding: 0 var(--space-6) var(--space-4);
+}
+
+.precos-resumo div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.precos-resumo strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.precos-resumo small { color: var(--text-muted); font-size: 0.75rem; }
+
+.precos-rotulo {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.precos-grafico-area {
+  position: relative;
+  height: 300px;
+  padding: 0 var(--space-6) var(--space-4);
+}

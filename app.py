@@ -155,6 +155,8 @@ from backend.armazenamento import (
     listar_backups,
     rodar_backup_diario,
     registrar_acao,
+    historico_precos_insumo,
+    variacoes_de_preco,
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
     pendencias_compras,
@@ -325,7 +327,7 @@ PAGINAS_POR_PAPEL = {
         'index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html',
         'contagens.html', 'pedidos.html', 'recebimentos.html', 'guia-compras.html',
         'cardapio.html', 'preparo.html', 'curva-abc.html', 'insight.html',
-        'mais-vendidos.html', 'vendas-semanais.html', 'configuracoes.html',
+        'mais-vendidos.html', 'vendas-semanais.html', 'precos.html', 'configuracoes.html',
     },
     'operacao': {
         'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
@@ -1166,6 +1168,28 @@ def api_excluir_usuario(usuario_id):
 # servidor, só a cópia que a pessoa baixa e guarda fora daqui.
 
 NOME_DE_BACKUP = re.compile(r"^admfood-\d{4}-\d{2}-\d{2}\.db$")
+
+
+@app.route('/api/precos/variacoes', methods=['GET'])
+def api_variacoes_de_preco():
+    """O que mais subiu e o que mais caiu no período (card #40)."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+    dias = max(7, min(request.args.get('dias', 90, type=int), 730))
+    return jsonify({"dias": dias, "variacoes": variacoes_de_preco(dias)})
+
+
+@app.route('/api/precos/insumo/<int:insumo_id>', methods=['GET'])
+def api_historico_precos_insumo(insumo_id):
+    """Cada compra recebida e cada preço de cotação de um insumo, no tempo."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+    historico = historico_precos_insumo(insumo_id)
+    if not historico:
+        return jsonify({"erro": "Insumo não encontrado."}), 404
+    return jsonify(historico)
 
 
 @app.route('/api/admin/registro', methods=['GET'])

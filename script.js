@@ -8117,7 +8117,8 @@ function _possoGerir() {
 const PAGINAS_POR_PAPEL = {
   gerente: ['index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html', 'contagens.html',
     'pedidos.html', 'recebimentos.html', 'guia-compras.html', 'cardapio.html', 'preparo.html',
-    'curva-abc.html', 'insight.html', 'mais-vendidos.html', 'vendas-semanais.html', 'configuracoes.html'],
+    'curva-abc.html', 'insight.html', 'mais-vendidos.html', 'vendas-semanais.html', 'precos.html',
+    'configuracoes.html'],
   operacao: ['estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html', 'cardapio.html',
     'guia-compras.html', 'configuracoes.html'],
 };
@@ -10712,4 +10713,192 @@ function renderPreparoDoInsight(dados) {
         <td>${_formatarMinutos(l.tempoMedioMinutos)}</td>
       </tr>`).join('')
     : `<tr><td colspan="3" class="panel-subtitle">Nenhum pedido com tempo medido nesse período.</td></tr>`;
+}
+
+// --- EVOLUÇÃO DO PREÇO DE UM INSUMO (card #40, 18/09) ---
+// O histórico de compra (2.635 pedidos da VMarket + o que entra pelo sistema)
+// vira série no tempo: o que mais subiu ou caiu no período, e o gráfico de
+// cada compra de um insumo. Preço é sempre o pago de fato (compra recebida);
+// cotação aparece como ponto solto, porque é oferta, não pagamento.
+let precosDias = 90;
+let precosVariacoes = [];
+let precosInsumosPorNome = new Map();
+let precosGraficoInstance = null;
+
+function _variacaoHTML(v) {
+  const sinal = v.variacaoPct > 0 ? '+' : '';
+  const classe = v.variacaoPct > 0 ? 'precos-sobe' : 'precos-desce';
+  return `<span class="${classe}">${sinal}${String(v.variacaoPct).replace('.', ',')}%</span>`;
+}
+
+function _linhaRankingPreco(v) {
+  return `
+    <li>
+      <button type="button" class="precos-ranking-item" data-insumo-id="${v.insumoId}">
+        <span class="precos-ranking-nome">
+          ${escaparHtml(v.nome)}
+          ${v.suspeito ? '<span class="badge-pill neu-orange" title="Preço 4x maior ou menor que o anterior: quase sempre é compra lançada em outra unidade (caixa em vez de unidade)">confira a unidade</span>' : ''}
+        </span>
+        <span class="precos-ranking-valores">
+          R$ ${_formatarPrecoUnitario(v.precoAntes)} → R$ ${_formatarPrecoUnitario(v.precoAgora)}
+          ${_variacaoHTML(v)}
+        </span>
+      </button>
+    </li>`;
+}
+
+function renderVariacoesPreco() {
+  // Preço 4x diferente quase sempre é unidade trocada, não aumento: vai pro
+  // fim da lista pra não esconder a variação de verdade.
+  const reaisPrimeiro = (lista) => [...lista.filter((v) => !v.suspeito), ...lista.filter((v) => v.suspeito)];
+  const altas = reaisPrimeiro(precosVariacoes.filter((v) => v.variacaoPct > 0)).slice(0, 10);
+  const quedas = reaisPrimeiro(precosVariacoes.filter((v) => v.variacaoPct < 0).sort((a, b) => a.variacaoPct - b.variacaoPct)).slice(0, 10);
+  const vazio = (texto) => `<li class="precos-vazio">${texto}</li>`;
+  document.getElementById('precos-altas').innerHTML = altas.length ? altas.map(_linhaRankingPreco).join('') : vazio('Nenhum insumo ficou mais caro no período.');
+  document.getElementById('precos-quedas').innerHTML = quedas.length ? quedas.map(_linhaRankingPreco).join('') : vazio('Nenhum insumo ficou mais barato no período.');
+  const total = precosVariacoes.length;
+  const periodo = precosDias >= 365 ? 'no último ano' : `nos últimos ${precosDias} dias`;
+  document.getElementById('precos-altas-sub').textContent = `${precosVariacoes.filter((v) => v.variacaoPct > 0).length} de ${total} insumos comprados ${periodo}`;
+  document.getElementById('precos-quedas-sub').textContent = `${precosVariacoes.filter((v) => v.variacaoPct < 0).length} de ${total} insumos comprados ${periodo}`;
+  document.querySelectorAll('.precos-ranking-item').forEach((botao) => {
+    botao.addEventListener('click', () => abrirHistoricoPreco(parseInt(botao.dataset.insumoId, 10)));
+  });
+}
+
+async function carregarVariacoesPreco() {
+  try {
+    const resposta = await fetch(`/api/precos/variacoes?dias=${precosDias}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    precosVariacoes = (await resposta.json()).variacoes || [];
+    renderVariacoesPreco();
+  } catch (erro) {
+    console.error('Falha ao carregar variações de preço:', erro);
+    document.getElementById('precos-altas').innerHTML = '<li class="precos-vazio">Não foi possível carregar.</li>';
+  }
+}
+
+async function carregarInsumosParaBuscaDePreco() {
+  try {
+    const resposta = await fetch('/api/insumos');
+    if (!resposta.ok) return;
+    const insumos = (await resposta.json()).insumos || [];
+    precosInsumosPorNome = new Map(insumos.map((i) => [i.nome, i.id]));
+    document.getElementById('precos-lista-insumos').innerHTML = insumos
+      .map((i) => `<option value="${escaparHtml(i.nome)}"></option>`).join('');
+  } catch (erro) {
+    console.error('Falha ao carregar insumos pra busca de preço:', erro);
+  }
+}
+
+// Meio-dia no fuso de quem usa: a data do banco vira ponto no eixo sem
+// escorregar pro dia anterior por causa do UTC.
+function _instanteDoDia(iso) {
+  return new Date(`${String(iso).slice(0, 10)}T12:00:00`).getTime();
+}
+
+function _dataCurtaDoInstante(ms) {
+  const d = new Date(ms);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}`;
+}
+
+async function abrirHistoricoPreco(insumoId) {
+  try {
+    const resposta = await fetch(`/api/precos/insumo/${insumoId}`);
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const d = await resposta.json();
+    const compras = d.compras || [];
+    const unidade = d.insumo.unidade_medida;
+
+    document.getElementById('precos-insumo-titulo').textContent = d.insumo.nome;
+    document.getElementById('precos-busca-insumo').value = d.insumo.nome;
+
+    if (!compras.length) {
+      document.getElementById('precos-insumo-sub').textContent = 'Nenhuma compra recebida desse insumo ainda.';
+      ['precos-resumo', 'precos-grafico-area', 'precos-tabela-area'].forEach((id) => { document.getElementById(id).style.display = 'none'; });
+      return;
+    }
+
+    const precos = compras.map((c) => c.preco);
+    const ultima = compras[compras.length - 1];
+    const primeira = compras[0];
+    const variacaoTotal = ((ultima.preco - primeira.preco) / primeira.preco) * 100;
+    document.getElementById('precos-insumo-sub').textContent =
+      `${compras.length} ${compras.length === 1 ? 'compra recebida' : 'compras recebidas'} desde ${_dataBR(primeira.data)} · preço por ${unidade}`;
+
+    document.getElementById('precos-resumo').innerHTML = `
+      <div><span class="precos-rotulo">Último preço</span><strong>R$ ${_formatarPrecoUnitario(ultima.preco)}</strong><small>${_dataBR(ultima.data)} · ${escaparHtml(ultima.fornecedor || '—')}</small></div>
+      <div><span class="precos-rotulo">Menor pago</span><strong>R$ ${_formatarPrecoUnitario(Math.min(...precos))}</strong></div>
+      <div><span class="precos-rotulo">Maior pago</span><strong>R$ ${_formatarPrecoUnitario(Math.max(...precos))}</strong></div>
+      <div><span class="precos-rotulo">Desde a primeira compra</span><strong>${_variacaoHTML({variacaoPct: Math.round(variacaoTotal * 10) / 10})}</strong></div>
+    `;
+    document.getElementById('precos-resumo').style.display = '';
+
+    const estilo = getComputedStyle(document.body);
+    const corTexto = estilo.getPropertyValue('--text-muted').trim() || '#71717A';
+    const corGrade = estilo.getPropertyValue('--border-color').trim() || '#E6DDCC';
+    const pontos = compras.map((c) => ({ x: _instanteDoDia(c.data), y: c.preco, data: c.data, fornecedor: c.fornecedor, loja: c.loja }));
+    const ofertas = (d.cotacoes || []).map((c) => ({ x: _instanteDoDia(c.data), y: c.preco, data: c.data, fornecedor: c.fornecedor }));
+
+    if (precosGraficoInstance) precosGraficoInstance.destroy();
+    document.getElementById('precos-grafico-area').style.display = '';
+    precosGraficoInstance = new Chart(document.getElementById('precos-grafico').getContext('2d'), {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'Preço pago', data: pontos, borderColor: CORES_GRAFICO[0], backgroundColor: CORES_GRAFICO[0], tension: 0.2, pointRadius: 3, borderWidth: 2 },
+          { label: 'Cotação recebida', data: ofertas, showLine: false, borderColor: CORES_GRAFICO[1], backgroundColor: CORES_GRAFICO[1], pointRadius: 3, pointStyle: 'rectRot' },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        parsing: false,
+        interaction: { mode: 'nearest', intersect: false },
+        plugins: {
+          legend: { labels: { color: corTexto, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              title: (itens) => _dataBR(itens[0].raw.data),
+              label: (item) => `${item.dataset.label}: R$ ${_formatarPrecoUnitario(item.raw.y)} · ${item.raw.fornecedor || '—'}${item.raw.loja ? ` · ${item.raw.loja}` : ''}`,
+            },
+          },
+        },
+        scales: {
+          x: { type: 'linear', ticks: { color: corTexto, maxTicksLimit: 8, callback: (v) => _dataCurtaDoInstante(v) }, grid: { color: corGrade } },
+          y: { beginAtZero: false, ticks: { color: corTexto, callback: (v) => `R$ ${_formatarPrecoUnitario(v)}` }, grid: { color: corGrade } },
+        },
+      },
+    });
+
+    document.getElementById('precos-tabela-body').innerHTML = [...compras].reverse().map((c) => `
+      <tr>
+        <td>${_dataBR(c.data)}</td>
+        <td>${escaparHtml(c.fornecedor || '—')}</td>
+        <td class="text-muted">${escaparHtml(c.loja || '—')}</td>
+        <td>${_formatarQuantidade(c.quantidade, unidade)}</td>
+        <td class="font-bold">R$ ${_formatarPrecoUnitario(c.preco)}</td>
+      </tr>
+    `).join('');
+    document.getElementById('precos-tabela-area').style.display = '';
+  } catch (erro) {
+    console.error('Falha ao carregar histórico de preço:', erro);
+    document.getElementById('precos-insumo-sub').textContent = 'Não foi possível carregar o histórico desse insumo.';
+  }
+}
+
+if (document.getElementById('precos-altas')) {
+  document.querySelectorAll('#precos-periodo .curva-periodo-btn').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      document.querySelectorAll('#precos-periodo .curva-periodo-btn').forEach((b) => b.classList.remove('active'));
+      botao.classList.add('active');
+      precosDias = parseInt(botao.dataset.dias, 10);
+      carregarVariacoesPreco();
+    });
+  });
+  document.getElementById('precos-busca-insumo')?.addEventListener('change', (evento) => {
+    const id = precosInsumosPorNome.get(evento.target.value);
+    if (id) abrirHistoricoPreco(id);
+  });
+  carregarVariacoesPreco();
+  carregarInsumosParaBuscaDePreco();
 }

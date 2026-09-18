@@ -6480,6 +6480,107 @@ def reabrir_contagem(contagem_id):
         )
 
 
+# --- EVOLUÇÃO DO PREÇO DE UM INSUMO (card #40, 2026-09-18) --------------------
+#
+# O histórico de compra da VMarket (2.635 pedidos desde dez/2024) já estava no
+# banco, mas só servia pro custo do CMV. Aqui ele vira série no tempo: quanto
+# se pagou em cada compra, de quem, e o que mais subiu ou caiu no período.
+# Preço é o de `pedido_compra_item.preco_unitario`, que já está na unidade do
+# insumo (é o mesmo número que o custo em uso usa).
+
+FATOR_PRECO_SUSPEITO = 4
+
+
+def historico_precos_insumo(insumo_id):
+    """Compras recebidas e preços de cotação de um insumo, do mais antigo pro
+    mais novo. None se o insumo não existe."""
+    with conexao() as conn:
+        insumo = conn.execute(
+            "SELECT id, nome, unidade_medida, categoria FROM insumo WHERE id = ?", (insumo_id,)
+        ).fetchone()
+        if not insumo:
+            return None
+        compras = conn.execute(
+            """
+            SELECT COALESCE(pc.recebido_em, pc.criado_em) AS data, pci.preco_unitario AS preco,
+                   pci.quantidade, f.nome AS fornecedor, pc.loja, pc.id AS pedido_id
+            FROM pedido_compra_item pci
+            JOIN pedido_compra pc ON pc.id = pci.pedido_id
+            LEFT JOIN fornecedor f ON f.id = pc.fornecedor_id
+            WHERE pci.insumo_id = ? AND pc.status = 'recebido' AND pci.preco_unitario > 0
+            ORDER BY data, pc.id
+            """,
+            (insumo_id,),
+        ).fetchall()
+        cotacoes = conn.execute(
+            """
+            SELECT cp.criado_em AS data, cp.preco, cp.selecionado, f.nome AS fornecedor
+            FROM cotacao_preco cp
+            LEFT JOIN fornecedor f ON f.id = cp.fornecedor_id
+            WHERE cp.insumo_id = ? AND cp.preco > 0
+            ORDER BY cp.criado_em
+            """,
+            (insumo_id,),
+        ).fetchall()
+    return {
+        "insumo": dict(insumo),
+        "compras": [dict(c) for c in compras],
+        "cotacoes": [dict(c) for c in cotacoes],
+    }
+
+
+def variacoes_de_preco(dias=90):
+    """O que subiu e o que caiu: pra cada insumo com compra recebida antes E
+    dentro do período, o último preço pago antes do período contra o último
+    pago dentro dele. Preço que ficou 4x maior ou 4x menor vem marcado como
+    suspeito — quase sempre é compra lançada em outra unidade (caixa em vez de
+    unidade), não aumento de verdade."""
+    corte = (datetime.now() - timedelta(days=int(dias))).isoformat()
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pci.insumo_id, i.nome, i.unidade_medida, i.categoria,
+                   COALESCE(pc.recebido_em, pc.criado_em) AS data, pci.preco_unitario AS preco,
+                   f.nome AS fornecedor
+            FROM pedido_compra_item pci
+            JOIN pedido_compra pc ON pc.id = pci.pedido_id
+            JOIN insumo i ON i.id = pci.insumo_id
+            LEFT JOIN fornecedor f ON f.id = pc.fornecedor_id
+            WHERE pc.status = 'recebido' AND pci.preco_unitario > 0
+            ORDER BY pci.insumo_id, data, pc.id
+            """
+        ).fetchall()
+
+    por_insumo = {}
+    for linha in linhas:
+        por_insumo.setdefault(linha["insumo_id"], []).append(linha)
+
+    saida = []
+    for insumo_id, compras in por_insumo.items():
+        antes = [c for c in compras if c["data"] < corte]
+        depois = [c for c in compras if c["data"] >= corte]
+        if not antes or not depois:
+            continue
+        preco_antes = antes[-1]["preco"]
+        preco_agora = depois[-1]["preco"]
+        variacao = (preco_agora - preco_antes) / preco_antes * 100
+        saida.append({
+            "insumoId": insumo_id,
+            "nome": compras[0]["nome"],
+            "unidade": compras[0]["unidade_medida"],
+            "categoria": compras[0]["categoria"],
+            "precoAntes": round(preco_antes, 4),
+            "dataAntes": antes[-1]["data"][:10],
+            "precoAgora": round(preco_agora, 4),
+            "dataAgora": depois[-1]["data"][:10],
+            "fornecedorAgora": depois[-1]["fornecedor"],
+            "variacaoPct": round(variacao, 1),
+            "suspeito": not (1 / FATOR_PRECO_SUSPEITO < preco_agora / preco_antes < FATOR_PRECO_SUSPEITO),
+        })
+    saida.sort(key=lambda v: -v["variacaoPct"])
+    return saida
+
+
 # --- REGISTRO DE AÇÕES (quem fez o quê) -------------------------------------
 #
 # Só recebimento e algumas telas guardavam o nome de quem fez. Com mais gente

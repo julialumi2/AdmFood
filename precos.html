@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Preparo</title>
+  <title>AdmFood - Evolução do preço</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="preparo.css">
+  <link rel="stylesheet" href="curva-abc.css">
+  <link rel="stylesheet" href="precos.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -109,7 +110,7 @@
               <i data-lucide="calendar-range"></i>
               <span>Vendas Semanais</span>
             </a>
-            <a href="precos.html" class="menu-subitem">
+            <a href="precos.html" class="menu-subitem active">
               <i data-lucide="trending-up"></i>
               <span>Evolução do preço</span>
             </a>
@@ -143,7 +144,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">PREPARO</span>
+          <span class="header-page-title">EVOLUÇÃO DO PREÇO</span>
         </div>
 
         <div class="header-right">
@@ -162,158 +163,88 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE PREPARO -->
+      <!-- PÁGINA DE CURVA ABC -->
       <div class="page-content">
 
         <div class="dashboard-title-area">
           <div class="title-top">
-            <i data-lucide="timer" class="icon-pin"></i>
-            <span>INDICADORES OPERACIONAIS DA COZINHA</span>
+            <i data-lucide="trending-up" class="icon-pin"></i>
+            <span>HISTÓRICO DE COMPRAS</span>
           </div>
           <div class="title-row">
-            <h1>Preparo</h1>
+            <h1>Evolução do preço</h1>
           </div>
         </div>
 
-        <p class="panel-subtitle" style="margin-top: -8px;">
-          Tempo do pedido inteiro (do recebido ao fechado/entregue) — a Cardápio Web não marca separadamente
-          quando a cozinha termina de preparar, só quando o pedido é finalizado.
+        <p class="panel-subtitle" style="max-width: 680px;">
+          Quanto se pagou por cada insumo em cada compra recebida, desde dezembro de 2024.
+          A comparação usa o último preço pago antes do período contra o último pago dentro dele.
         </p>
 
-        <!-- FILTRO DE PERÍODO -->
-        <div class="content-header">
-          <div class="header-titles">
-            <span class="atualizado-em" id="preparo-atualizado-em"></span>
+        <div class="precos-filtros">
+          <div class="curva-periodo" id="precos-periodo">
+            <button type="button" class="curva-periodo-btn" data-dias="30">30 dias</button>
+            <button type="button" class="curva-periodo-btn active" data-dias="90">90 dias</button>
+            <button type="button" class="curva-periodo-btn" data-dias="180">6 meses</button>
+            <button type="button" class="curva-periodo-btn" data-dias="365">1 ano</button>
           </div>
-          <div class="action-controls">
-            <div class="date-range-picker">
-              <div class="date-range-field">
-                <label for="preparo-data-inicio">De</label>
-                <input type="date" id="preparo-data-inicio">
+        </div>
+
+        <div class="precos-listas">
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Mais subiram</h3>
+                <p class="table-subtitle" id="precos-altas-sub">—</p>
               </div>
-              <span class="date-range-sep">–</span>
-              <div class="date-range-field">
-                <label for="preparo-data-fim">Até</label>
-                <input type="date" id="preparo-data-fim">
+            </div>
+            <ul class="precos-ranking" id="precos-altas"></ul>
+          </div>
+          <div class="chart-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Mais caíram</h3>
+                <p class="table-subtitle" id="precos-quedas-sub">—</p>
               </div>
             </div>
+            <ul class="precos-ranking" id="precos-quedas"></ul>
           </div>
         </div>
 
-        <!-- ABAS POR LOJA -->
-        <div class="tabs-bar" id="preparo-tabs">
-          <button class="tab-btn active" data-tab="geral">
-            <i data-lucide="store"></i>
-            <span>Visão Geral (Todas)</span>
-            <span class="tab-badge">4 Unidades</span>
-          </button>
-          <button class="tab-btn" data-tab="Hamburgueria Artesanos">
-            <i data-lucide="store"></i>
-            <span>Hamburgueria Artesanos</span>
-          </button>
-          <button class="tab-btn" data-tab="Açaí Na Lata">
-            <i data-lucide="store"></i>
-            <span>Açaí Na Lata</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça ZN">
-            <i data-lucide="store"></i>
-            <span>Tradiça ZN</span>
-          </button>
-          <button class="tab-btn" data-tab="Tradiça Simus">
-            <i data-lucide="store"></i>
-            <span>Tradiça Simus</span>
-          </button>
-        </div>
-
-        <!-- CARDS DE MÉTRICAS -->
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Tempo Médio do Pedido</span>
-              <div class="card-icon"><i data-lucide="timer"></i></div>
+        <div class="chart-card">
+          <div class="table-header-row">
+            <div>
+              <h3 class="table-title" id="precos-insumo-titulo">Um insumo no tempo</h3>
+              <p class="table-subtitle" id="precos-insumo-sub">Escolha um insumo, ou clique num da lista acima.</p>
             </div>
-            <div class="card-value" id="preparo-val-tempo-medio">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label"></span></div>
-          </div>
-
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Total de Pedidos</span>
-              <div class="card-icon"><i data-lucide="shopping-bag"></i></div>
+            <div class="search-box precos-busca">
+              <i data-lucide="search"></i>
+              <input type="text" id="precos-busca-insumo" list="precos-lista-insumos" placeholder="Buscar insumo...">
+              <datalist id="precos-lista-insumos"></datalist>
             </div>
-            <div class="card-value" id="preparo-val-pedidos">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label-2"></span></div>
           </div>
-
-          <div class="metric-card">
-            <div class="card-header">
-              <span class="card-label">Horário de Pico</span>
-              <div class="card-icon"><i data-lucide="flame"></i></div>
-            </div>
-            <div class="card-value" id="preparo-val-pico">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-pico-sub"></span></div>
+          <div class="precos-resumo" id="precos-resumo" style="display:none;"></div>
+          <div class="precos-grafico-area" id="precos-grafico-area" style="display:none;">
+            <canvas id="precos-grafico"></canvas>
           </div>
-        </div>
-
-        <!-- VOLUME POR HORÁRIO -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Volume de pedidos por horário do dia</h3>
-            <span class="panel-subtitle">Quando os pedidos mais chegam — ajuda a prever picos de movimento</span>
-          </div>
-          <div class="preparo-chart-wrapper">
-            <canvas id="preparoHorarioChart"></canvas>
-          </div>
-        </div>
-
-        <!-- TEMPO MÉDIO POR LOJA (só na Visão Geral) -->
-        <div class="panel" id="preparo-panel-por-loja">
-          <div class="panel-header">
-            <h3 class="panel-title">Tempo médio por loja</h3>
-            <span class="panel-subtitle">Comparativo entre as 4 unidades no período selecionado</span>
-          </div>
-          <div class="table-responsive">
+          <div class="table-responsive" id="precos-tabela-area" style="display:none;">
             <table>
               <thead>
                 <tr>
+                  <th>Recebido em</th>
+                  <th>Fornecedor</th>
                   <th>Loja</th>
-                  <th>Pedidos</th>
-                  <th>Tempo médio</th>
+                  <th>Quantidade</th>
+                  <th>Preço pago</th>
                 </tr>
               </thead>
-              <tbody id="preparo-por-loja-body">
-                <!-- Renderizado dinamicamente via JS -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- GARGALOS -->
-        <div class="panel panel-table">
-          <div class="panel-header">
-            <h3 class="panel-title">Dias mais lentos do período</h3>
-            <span class="panel-subtitle">Loja + dia com maior tempo médio (mínimo 3 pedidos, pra não contar ruído)</span>
-          </div>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Dia</th>
-                  <th>Loja</th>
-                  <th>Pedidos</th>
-                  <th>Tempo médio</th>
-                </tr>
-              </thead>
-              <tbody id="preparo-gargalos-body">
-                <!-- Renderizado dinamicamente via JS -->
-              </tbody>
+              <tbody id="precos-tabela-body"></tbody>
             </table>
           </div>
         </div>
 
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
-
   </div> <!-- /dashboard-wrapper -->
 
 </body>

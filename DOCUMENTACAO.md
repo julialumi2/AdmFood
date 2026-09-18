@@ -3125,6 +3125,35 @@ sozinho no recebimento em vez de digitar.
 
 Teste: `teste_nota_fiscal_pedido.py` no scratchpad.
 
+### 6.25 Evolução do preço de um insumo (card #40, 2026-09-18)
+
+Tela nova em **Insights → Evolução do preço** (`precos.html`, admin e
+gerente; operação não vê preço). O histórico de compra inteiro da VMarket
+(6.23) só servia pro custo do CMV; aqui ele vira série no tempo.
+
+- **Mais subiram / Mais caíram**: pra cada insumo com compra recebida antes
+  *e* dentro do período (30 dias, 90, 6 meses, 1 ano), compara o último preço
+  pago antes do período com o último pago dentro dele. Clicar no insumo abre o
+  histórico dele.
+- **Preço 4x maior ou 4x menor vem marcado "confira a unidade"** e vai pro fim
+  da lista: quase sempre é compra lançada em outra unidade (caixa em vez de
+  unidade), não aumento de verdade (`FATOR_PRECO_SUSPEITO`).
+- **Um insumo no tempo**: último preço, menor e maior pago, variação desde a
+  primeira compra, gráfico de cada compra recebida (com as cotações recebidas
+  como pontos soltos — cotação é oferta, não pagamento) e a tabela de compras
+  com fornecedor, loja e quantidade.
+
+Só entra compra **recebida** com preço maior que zero; a data é a do
+recebimento (ou a do pedido, pra quem veio sem data de recebimento). O preço é
+o de `pedido_compra_item.preco_unitario`, já na unidade do insumo — o mesmo
+número que o custo em uso do CMV usa.
+
+Funções: `historico_precos_insumo` e `variacoes_de_preco` em
+`backend/armazenamento.py`. Rotas: `GET /api/precos/variacoes?dias=` (7 a 730,
+padrão 90) e `GET /api/precos/insumo/<id>`.
+
+Teste: `teste_evolucao_preco.py` no scratchpad (24 verificações).
+
 ## 7. API — principais endpoints
 
 Todos em `app.py`, prefixo `/api`.
@@ -3170,6 +3199,10 @@ Todos em `app.py`, prefixo `/api`.
 - `POST /api/itens-cardapio` — cadastrar item (prato) novo — só admin
 - `DELETE /api/itens-cardapio/<id>` — excluir item — só admin
 - `PUT /api/itens-cardapio/<id>/ficha-tecnica` — substitui a lista inteira de insumos (`insumos`) e/ou da embalagem pra viagem (`embalagemViagem`) do item na loja; só troca a lista que vier no corpo (seção 6.18) — só admin
+
+**Evolução do preço** (seção 6.25, admin e gerente)
+- `GET /api/precos/variacoes?dias=N` — o que mais subiu e caiu no período (último preço antes × último dentro)
+- `GET /api/precos/insumo/<id>` — compras recebidas e cotações de um insumo, da mais antiga pra mais nova
 
 **Fornecedores**
 - `GET /api/fornecedores` — diretório completo (ativos e inativos)
