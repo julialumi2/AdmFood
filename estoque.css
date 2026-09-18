@@ -556,6 +556,14 @@
 
 .pagina-estoque .page-content { gap: var(--space-4); }
 
+/* Título com a mesma fonte da saudação da Home (pedido dela, 18/09). */
+.pagina-estoque .title-row h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
 /* CABEÇALHO: título + loja numa linha, ações à direita */
 .estoque-titulo {
   display: flex;
