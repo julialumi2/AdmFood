@@ -1091,9 +1091,13 @@ pra eles; o histórico de quem já cotou ou já vendeu só vale nos insumos que
 ninguém marcou. Sem isso, tirar um fornecedor da lista não adiantaria nada,
 porque o histórico o convidaria do mesmo jeito. Somam-se a isso **os insumos
 que não têm fornecedor nenhum**,
-que vão pra todo mundo pra não ficarem sem preço. Fornecedor que não
-fornece nada da cotação e não tem órfão pra cotar não recebe convite, e a
-tela diz o nome dele. A resposta traz `totalInsumos` por convite, que o
+que vão pra todo mundo pra não ficarem sem preço. **Fornecedor que ainda
+não é ligado a insumo nenhum** (novo, ou o de teste dela) **recebe a cotação
+inteira** (2026-09-18, pedido dela: antes ficava sem convite); depois que ele
+responde, o histórico liga ele aos insumos que cotou e as próximas vêm só
+com esses. Fornecedor ligado a outros insumos, mas a nenhum dessa cotação, e
+sem órfão pra cotar, não recebe convite, e a tela diz o nome dele (a prévia
+marca `recebeTudo` e mostra "a cotação inteira" no fornecedor novo). A resposta traz `totalInsumos` por convite, que o
 aviso da tela mostra ("Forn A (7), Forn B (3)").
 `_insumos_da_cotacao_por_fornecedor` monta esse mapa e `_quem_cota_o_que` é
 a base compartilhada com a prévia.

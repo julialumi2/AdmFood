@@ -3849,13 +3849,13 @@ function renderPreviaConvite() {
       ${receberao.map((f) => `
         <li>
           <details>
-            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — ${f.insumos.length} ${f.insumos.length === 1 ? 'item' : 'itens'}</summary>
+            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — ${f.insumos.length} ${f.insumos.length === 1 ? 'item' : 'itens'}${f.recebeTudo ? ' (a cotação inteira: ainda não é ligado a nenhum insumo)' : ''}</summary>
             <span class="text-muted">${escaparHtml(f.insumos.join(', '))}</span>
           </details>
         </li>
       `).join('')}
       ${jaTem.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — já tem convite nessa cotação</li>`).join('')}
-      ${semItens.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — não fornece nada dessa cotação, fica de fora</li>`).join('')}
+      ${semItens.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — é ligado a outros insumos, nenhum dessa cotação; fica de fora</li>`).join('')}
     </ul>
   `;
 }

@@ -4595,20 +4595,39 @@ def _insumos_da_cotacao_por_fornecedor(cotacao_id):
     }
 
 
+def _fornecedores_ligados_a_algum_insumo():
+    """Quem já é ligado a pelo menos um insumo, em qualquer cotação: pelo
+    cadastro do insumo ou pelo histórico (já cotou ou já vendeu)."""
+    ligados = set()
+    for fornecedores in mapa_insumo_fornecedores().values():
+        ligados |= set(fornecedores)
+    for fornecedores in mapa_fornecedores_do_historico().values():
+        ligados |= set(fornecedores)
+    return ligados
+
+
 def _quem_cota_o_que(cotacao_id, fornecedor_ids=None):
     """Base do convite e da prévia: (mapa insumo→fornecedores, insumos órfãos,
-    fornecedores ativos escolhidos). Ficar num lugar só evita a prévia mostrar
-    uma coisa e o convite mandar outra."""
+    fornecedores ativos escolhidos, fornecedores já ligados a algum insumo).
+    Ficar num lugar só evita a prévia mostrar uma coisa e o convite mandar
+    outra."""
     por_insumo = _insumos_da_cotacao_por_fornecedor(cotacao_id)
     orfaos = [insumo_id for insumo_id, forns in por_insumo.items() if not forns]
     fornecedores = [f for f in listar_fornecedores() if f["ativo"]]
     if fornecedor_ids is not None:
         escolhidos = set(fornecedor_ids)
         fornecedores = [f for f in fornecedores if f["id"] in escolhidos]
-    return por_insumo, orfaos, fornecedores
+    return por_insumo, orfaos, fornecedores, _fornecedores_ligados_a_algum_insumo()
 
 
-def _itens_do_fornecedor(fornecedor_id, por_insumo, orfaos):
+def _itens_do_fornecedor(fornecedor_id, por_insumo, orfaos, ligados):
+    """Os insumos dele + os que ninguém cota. Fornecedor que ainda não é
+    ligado a insumo nenhum (novo, ou de teste) recebe a cotação inteira —
+    pedido dela em 2026-09-18: antes ele ficava sem convite ("Nenhum insumo
+    dessa cotação é fornecido por..."). Depois que ele responder, o histórico
+    liga ele aos insumos que cotou, e as próximas cotações vêm só com esses."""
+    if fornecedor_id not in ligados:
+        return list(por_insumo)
     dele = [i for i, forns in por_insumo.items() if fornecedor_id in forns]
     return dele + [i for i in orfaos if i not in dele]
 
@@ -4618,7 +4637,7 @@ def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
     gerar nada. A tela mostra isso antes de mandar (pedido dela, 2026-09-17),
     porque link de cotação errado só se descobre depois que o fornecedor
     responde."""
-    por_insumo, orfaos, fornecedores = _quem_cota_o_que(cotacao_id, fornecedor_ids)
+    por_insumo, orfaos, fornecedores, ligados = _quem_cota_o_que(cotacao_id, fornecedor_ids)
     if not por_insumo:
         return {"fornecedores": [], "orfaos": [], "insumosDaCotacao": 0}
 
@@ -4639,11 +4658,12 @@ def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
 
     saida = []
     for fornecedor in fornecedores:
-        itens = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos)
+        itens = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados)
         saida.append({
             "fornecedorId": fornecedor["id"],
             "fornecedorNome": fornecedor["nome"],
             "jaTemConvite": fornecedor["id"] in com_convite,
+            "recebeTudo": fornecedor["id"] not in ligados,
             "insumos": sorted(nomes.get(i, f"#{i}") for i in itens),
         })
     saida.sort(key=lambda f: (-len(f["insumos"]), f["fornecedorNome"]))
@@ -4663,11 +4683,13 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
     insumos que não têm fornecedor nenhum, que vão pra todo mundo pra não
     ficarem sem preço. É como era na VMarket (pedido dela em 2026-09-17, no
     lugar da regra de 2026-08-27, que mandava a mesma lista de órfãos pra
-    todos). Fornecedor sem nenhum item não recebe convite — link vazio não
-    serve pra nada. Quem já tem convite nessa cotação não recebe outro (evita
-    resetar o token de quem está respondendo).
+    todos). Fornecedor que ainda não é ligado a insumo nenhum recebe a
+    cotação inteira (2026-09-18, ver _itens_do_fornecedor). Fornecedor ligado
+    a outros insumos, mas a nenhum dessa cotação, não recebe convite — link
+    vazio não serve pra nada. Quem já tem convite nessa cotação não recebe
+    outro (evita resetar o token de quem está respondendo).
     """
-    por_insumo, orfaos, fornecedores = _quem_cota_o_que(cotacao_id, fornecedor_ids)
+    por_insumo, orfaos, fornecedores, ligados = _quem_cota_o_que(cotacao_id, fornecedor_ids)
     if not por_insumo:
         return {"convites": [], "insumosSemFornecedor": 0, "fornecedoresSemItens": []}
     agora = datetime.now().isoformat()
@@ -4683,7 +4705,7 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
         for fornecedor in fornecedores:
             if fornecedor["id"] in existentes:
                 continue
-            insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos)
+            insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados)
             if not insumo_ids:
                 sem_itens.append(fornecedor["nome"])
                 continue
