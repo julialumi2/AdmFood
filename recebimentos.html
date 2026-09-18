@@ -265,9 +265,16 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="recebimento-numero-nf">Número da nota fiscal</label>
-          <input type="text" id="recebimento-numero-nf" placeholder="Opcional">
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="recebimento-numero-nf">Número da nota fiscal</label>
+            <input type="text" id="recebimento-numero-nf" placeholder="Opcional">
+          </div>
+          <div class="form-group">
+            <label for="recebimento-nota-arquivo">Foto ou PDF da nota</label>
+            <input type="file" id="recebimento-nota-arquivo" accept=".jpg,.jpeg,.png,.webp,.pdf">
+            <small class="text-muted">Opcional. Se a nota chegar depois, admin ou gerente anexa na tela do pedido.</small>
+          </div>
         </div>
 
         <p id="recebimento-erro" style="color:#ef4444; display:none;"></p>

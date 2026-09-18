@@ -150,6 +150,7 @@ from backend.armazenamento import (
     lancar_compra_fora,
     PASTA_NOTAS_FISCAIS,
     PASTA_BACKUPS,
+    definir_nota_fiscal_pedido,
     CAMINHO_BANCO,
     gerar_backup,
     listar_backups,
@@ -499,6 +500,7 @@ DESCRICAO_DA_ACAO = {
     ('DELETE', '/api/pedidos/<int:pedido_id>'): 'Excluiu pedido',
     ('POST', '/api/pedidos/<int:pedido_id>/whatsapp-enviado'): 'Marcou o pedido como enviado no WhatsApp',
     ('POST', '/api/recebimentos/<int:pedido_id>/confirmar'): 'Confirmou recebimento (soma no estoque)',
+    ('POST', '/api/pedidos/<int:pedido_id>/nota-fiscal'): 'Anexou a nota fiscal do pedido',
     ('PUT', '/api/itens-cardapio/<int:item_id>/ficha-tecnica'): 'Alterou a ficha técnica',
     ('POST', '/api/itens-cardapio'): 'Criou item de cardápio',
     ('DELETE', '/api/itens-cardapio/<int:item_id>'): 'Excluiu item de cardápio',
@@ -3430,6 +3432,61 @@ def api_lancar_compra_fora():
         _apagar_nota_fiscal(nome_arquivo)
         return jsonify({"erro": str(falha)}), 400
     return jsonify({"ok": True, "pedidoId": pedido_id})
+
+
+@app.route('/api/pedidos/<int:pedido_id>/nota-fiscal', methods=['POST'])
+def api_anexar_nota_fiscal(pedido_id):
+    """Anexa (ou troca) a nota de um pedido que já existe: multipart com o
+    arquivo `notaFiscal` e/ou o campo `numeroNf`. Quem recebe a mercadoria
+    (operação incluída) tira a foto na hora do recebimento — o chefe conta com
+    essas fotos (2026-09-18); quando a nota chega depois, por e-mail, a gestão
+    anexa pela tela do pedido."""
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+
+    if (request.content_length or 0) > TAMANHO_MAXIMO_NOTA_FISCAL:
+        return jsonify({"erro": "A nota fiscal passa de 15 MB."}), 400
+
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+
+    arquivo = request.files.get('notaFiscal')
+    # Trocar apaga a foto que estava lá, então fica com admin e gerente.
+    if arquivo and arquivo.filename and pedido['nota_fiscal_arquivo'] and _exigir_gestao():
+        return jsonify({"erro": "Essa nota já está anexada; só admin ou gerente troca."}), 403
+
+    numero_nf = request.form.get('numeroNf')
+    if numero_nf is not None:
+        numero_nf = numero_nf.strip()
+
+    nome_arquivo = None
+    if arquivo and arquivo.filename:
+        extensao = os.path.splitext(arquivo.filename)[1].lower()
+        if extensao not in EXTENSOES_NOTA_FISCAL:
+            return jsonify({"erro": "A nota tem de ser foto (JPG, PNG ou WEBP) ou PDF."}), 400
+        nome_arquivo = f"nf_{uuid.uuid4().hex}{extensao}"
+        arquivo.save(os.path.join(PASTA_NOTAS_FISCAIS, nome_arquivo))
+
+    if nome_arquivo is None and numero_nf is None:
+        return jsonify({"erro": "Mande a foto/PDF da nota ou o número dela."}), 400
+
+    try:
+        anterior = definir_nota_fiscal_pedido(pedido_id, nome_arquivo, numero_nf)
+    except Exception:
+        _apagar_nota_fiscal(nome_arquivo)
+        raise
+    # Só apaga o arquivo antigo depois que o banco já aponta pro novo.
+    _apagar_nota_fiscal(anterior)
+
+    return jsonify({
+        "ok": True,
+        "numeroNf": numero_nf if numero_nf is not None else pedido["numero_nf"],
+        "notaFiscalUrl": f"/api/pedidos/{pedido_id}/nota-fiscal" if (nome_arquivo or pedido["nota_fiscal_arquivo"]) else None,
+    })
 
 
 @app.route('/api/pedidos/<int:pedido_id>/nota-fiscal', methods=['GET'])
