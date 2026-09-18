@@ -2624,6 +2624,18 @@ mesmo leitor do script `importar_vendas_semanais.py` —, que nunca
 sobrescreve semana que já existe. Intenção da Julia: parar de usar a
 planilha e deixar tudo no sistema.
 
+**Semana de terça a segunda** (2026-09-18, a semana não batia com a
+planilha): as semanas que o sistema monta sozinho, depois da última da
+planilha, vão de terça a segunda, como a planilha (segunda as lojas fecham;
+a semana começa quando reabrem). Antes eram de segunda a domingo: depois da
+semana 01/09–07/09 da planilha vinha "07/09 a 13/09", e o feriado de 07/09
+(lojas abertas) contava de novo. O dia a dia agora leva os mesmos acertos
+das Vendas Diárias e da Home: ajuste manual de canal vence o sincronizado,
+e a venda presencial lançada à mão (Artesanos e ZN) entra no canal
+Presencial (`portal`) — antes ficava de fora, e a semana do Artesanos saía
+uns R$ 20 mil menor. O cartão Semanal da Home usa a mesma semana. Teste:
+`teste_vendas_semanais.py` no scratchpad.
+
 ### 6.14 Unidade de medida, custo de insumo e conteúdo por pacote
 
 Três decisões que se complementam, todas vindas de erros reais:

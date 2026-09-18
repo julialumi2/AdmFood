@@ -1278,15 +1278,31 @@ def _classificar_cmv(pct):
 
 def _semanas_do_faturamento_diario(unidade):
     """Faturamento por canal de cada dia já sincronizado, agrupado por dia —
-    matéria-prima pra montar a semana sem depender da planilha."""
+    matéria-prima pra montar a semana sem depender da planilha. Com os mesmos
+    acertos das Vendas Diárias e da Home (2026-09-18, a semana não batia com
+    a planilha): o ajuste manual de canal vence o valor sincronizado, e a
+    venda presencial lançada à mão entra como Presencial ("portal")."""
     with conexao() as conn:
         linhas = conn.execute(
             "SELECT dia, canal, faturamento FROM faturamento_canal WHERE unidade = ?",
             (unidade,),
         ).fetchall()
+        ajustes = conn.execute(
+            "SELECT dia, canal, faturamento FROM ajuste_faturamento_canal WHERE unidade = ?",
+            (unidade,),
+        ).fetchall()
+        presencial = conn.execute(
+            "SELECT dia, valor FROM venda_presencial WHERE unidade = ?",
+            (unidade,),
+        ).fetchall()
     por_dia = {}
     for linha in linhas:
         por_dia.setdefault(linha["dia"], {})[linha["canal"]] = linha["faturamento"]
+    for ajuste in ajustes:
+        por_dia.setdefault(ajuste["dia"], {})[ajuste["canal"]] = ajuste["faturamento"]
+    for venda in presencial:
+        canais = por_dia.setdefault(venda["dia"], {})
+        canais["portal"] = round(canais.get("portal", 0.0) + venda["valor"], 2)
     return por_dia
 
 
@@ -1336,16 +1352,19 @@ def listar_resultado_semanal(unidade):
     faturamento_diario = _semanas_do_faturamento_diario(unidade)
 
     # Semanas que o sistema já tem por conta própria e a planilha não
-    # cobre: agrupa em semana cheia de segunda a domingo, a partir do dia
-    # seguinte ao fim do que veio da planilha.
+    # cobre: agrupa em semana cheia de TERÇA A SEGUNDA, como a planilha delas
+    # (segunda as lojas fecham, a semana começa quando reabrem), a partir do
+    # dia seguinte ao fim do que veio da planilha. Era de segunda a domingo e
+    # a semana depois da planilha saía "07/09 a 13/09", repetindo o feriado
+    # de 07/09 que já estava na semana anterior (2026-09-18).
     ultimo_fim = max((info["periodoFim"] for info in periodos.values()), default=None)
     for dia in sorted(faturamento_diario):
         if ultimo_fim and dia <= ultimo_fim:
             continue
         data = datetime.fromisoformat(dia).date()
-        inicio = (data - timedelta(days=data.weekday())).isoformat()
-        fim = (data + timedelta(days=6 - data.weekday())).isoformat()
-        periodos.setdefault(inicio, {"periodoFim": fim, "canais": {}})
+        inicio = data - timedelta(days=(data.weekday() - 1) % 7)
+        fim = inicio + timedelta(days=6)
+        periodos.setdefault(inicio.isoformat(), {"periodoFim": fim.isoformat(), "canais": {}})
 
     semanas = []
     for periodo_inicio in sorted(periodos):

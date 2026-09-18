@@ -7820,12 +7820,9 @@ function _formatarMoedaBRL(valor) {
 }
 
 /**
- * Consulta o backend Flask e monta os cards de Diário/Semanal/Mensal da
- * Home. "Diário" é ontem (o último dia já fechado, igual ao resto do
- * sistema). "Semanal" e "Mensal" mostram sempre o último período FECHADO
- * por calendário — nunca a semana/mês em andamento: se hoje é terça e a
- * semana atual começou ontem/hoje, mostra a semana passada inteira
- * (segunda a domingo); se agosto ainda não fechou, mostra julho inteiro.
+ * Consulta o backend Flask e monta o quadro de ontem e o cartão Semanal da
+ * Home. O Semanal mostra sempre a última semana FECHADA, de terça a segunda
+ * como a planilha delas — nunca a semana em andamento.
  */
 async function carregarDadosLojas() {
   const container = document.getElementById('container-periodo');
@@ -7861,12 +7858,13 @@ async function carregarDadosLojas() {
 
     const hoje = new Date();
 
-    // Semana passada (segunda a domingo) — a semana em andamento nunca
-    // aparece aqui, só a última já fechada.
-    const diaSemanaHoje = (hoje.getDay() + 6) % 7; // 0 = segunda ... 6 = domingo
-    const segundaDestaSemana = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - diaSemanaHoje);
-    const semanaPassadaInicio = new Date(segundaDestaSemana.getFullYear(), segundaDestaSemana.getMonth(), segundaDestaSemana.getDate() - 7);
-    const semanaPassadaFim = new Date(segundaDestaSemana.getFullYear(), segundaDestaSemana.getMonth(), segundaDestaSemana.getDate() - 1);
+    // Semana passada de TERÇA A SEGUNDA, como a planilha e o Vendas Semanais
+    // (segunda as lojas fecham) — a semana em andamento nunca aparece aqui,
+    // só a última já fechada.
+    const diasDesdeTerca = (hoje.getDay() + 5) % 7; // 0 = terça ... 6 = segunda
+    const tercaDestaSemana = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - diasDesdeTerca);
+    const semanaPassadaInicio = new Date(tercaDestaSemana.getFullYear(), tercaDestaSemana.getMonth(), tercaDestaSemana.getDate() - 7);
+    const semanaPassadaFim = new Date(tercaDestaSemana.getFullYear(), tercaDestaSemana.getMonth(), tercaDestaSemana.getDate() - 1);
 
     const somarNoIntervalo = (inicio, fim) => dias
       .filter(d => { const dt = paraData(d.dia); return dt >= inicio && dt <= fim; })
