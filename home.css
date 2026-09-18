@@ -238,3 +238,227 @@
 }
 
 .home-atalhos .quick-action-btn { height: 32px; }
+
+/* ---------------------------------------------------------------------------
+   Segunda rodada (2026-09-18): insight dentro do quadro, a linha de métricas
+   (60%) com as atividades do dia (40%) e a queda perigosa de margem em
+   vermelho. */
+
+/* INSIGHT no rodapé do quadro preto: mesma chapa, separado por um fio. */
+.hero-insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--sidebar-text);
+}
+
+.hero-insight[hidden] { display: none; }
+
+.hero-insight > svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  flex-shrink: 0;
+  color: #FBBF24;
+}
+
+.hero-insight p {
+  flex: 1;
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+.hero-insight strong { color: #FFFFFF; font-weight: 600; }
+
+.hero-insight a {
+  margin-left: 4px;
+  color: var(--sidebar-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.hero-insight a:hover { color: #FFFFFF; }
+
+.hero-insight-proximo {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.07);
+  color: var(--sidebar-text);
+  font: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.hero-insight-proximo:hover { background-color: rgba(255, 255, 255, 0.12); }
+.hero-insight-proximo[hidden] { display: none; }
+.hero-insight-proximo svg { width: 14px; height: 14px; }
+
+.hero-insight a:focus-visible,
+.hero-insight-proximo:focus-visible {
+  outline: 2px solid #FBBF24;
+  outline-offset: 2px;
+}
+
+/* LINHA DE MÉTRICAS (60%) + ATIVIDADES DO DIA (40%) */
+.home-linha-rotina {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+}
+
+.home-linha-rotina .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.home-linha-rotina .store-card {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.home-linha-rotina .home-kpi-valor { font-size: 1.3rem; }
+
+.home-kpi-rotulo svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+}
+
+.home-kpi-rotulo:has(svg) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-kpi-linha {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Saúde financeira: a régua do Vendas Semanais (ótimo/bom/ruim). */
+.home-veredito {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  vertical-align: middle;
+  letter-spacing: 0;
+}
+
+.home-veredito[hidden] { display: none; }
+.home-veredito.otimo { background-color: var(--success-soft); color: var(--success-texto); }
+.home-veredito.bom { background-color: var(--warning-soft); color: var(--warning-texto); }
+.home-veredito.ruim { background-color: var(--danger-soft); color: var(--danger-texto); }
+.home-card-saude.ruim #home-saude-cmv { color: var(--danger-texto); }
+
+/* Atividades do dia: checklist enxuto, pendente com o caminho pra resolver. */
+.home-rotina-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-rotina-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.8125rem;
+  color: var(--text-dark);
+}
+
+.home-rotina-item:last-child { border-bottom: none; }
+
+.home-rotina-check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-rotina-check svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 3;
+}
+
+.home-rotina-item.feita { color: var(--text-muted); }
+
+.home-rotina-item.feita .home-rotina-check {
+  border-color: var(--success);
+  background-color: var(--success);
+  color: #FFFFFF;
+}
+
+.home-rotina-item.feita .home-rotina-texto {
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.home-rotina-acao {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dark);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.home-rotina-acao svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.home-rotina-acao:hover { color: var(--home-destaque); }
+.home-rotina-acao:hover svg { color: var(--home-destaque); }
+
+.home-rotina-acao:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Queda perigosa de margem (2 pontos ou mais): vermelho em vez de laranja. */
+.home-alerta-item.perigoso .home-alerta-icone {
+  background-color: var(--danger-soft);
+  color: var(--danger-texto);
+}
+
+.home-alerta-item.perigoso .home-alerta-pct { color: var(--danger-texto); }
+
+@media (max-width: 1180px) {
+  .home-linha-rotina { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .home-linha-rotina .cards-grid { grid-template-columns: minmax(0, 1fr); }
+}

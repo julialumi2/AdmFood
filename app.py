@@ -158,6 +158,9 @@ from backend.armazenamento import (
     registrar_acao,
     historico_precos_insumo,
     alertas_de_custo_na_margem,
+    faturamento_por_loja_nos_dias,
+    numeros_da_rotina,
+    _classificar_cmv,
     variacoes_de_preco,
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
@@ -1173,12 +1176,251 @@ def api_excluir_usuario(usuario_id):
 NOME_DE_BACKUP = re.compile(r"^admfood-\d{4}-\d{2}-\d{2}\.db$")
 
 
-# Bloco de gestão da Home (2026-09-18, pedido dela): o card de faturamento
-# de ontem repetia o banner, e a lista de sincronização ocupava meia tela pra
-# dizer "em dia". No lugar: estoque crítico, a Curva A da rede e as altas de
-# custo que comem margem. Tudo dos últimos 30 dias e só das lojas que a
-# pessoa enxerga.
+# Home (2026-09-18, dois pedidos dela no mesmo dia). O cartão de faturamento
+# de ontem repetia o quadro preto e a lista de sincronização ocupava meia tela
+# pra dizer "em dia". No lugar: saúde financeira do mês, estoque crítico,
+# atividades do dia, a Curva A da rede, as altas de custo que comem margem e
+# uma linha de insight dentro do quadro. Só das lojas que a pessoa enxerga.
 DIAS_DA_HOME = 30
+PONTOS_DE_MARGEM_PERIGOSOS = 2
+VARIACAO_FATURAMENTO_INSIGHT_PCT = 15
+# Curva ABC de 3 janelas × 4 lojas pesa (~1 s): a análise fica guardada 5
+# minutos em cada processo; estoque e atividades do dia são sempre na hora.
+TEMPO_CACHE_ANALISE_HOME_S = 300
+_cache_analise_home = {}
+
+NOME_CURTO_LOJA = {"Hamburgueria Artesanos": "Artesanos"}
+DIAS_DA_SEMANA_PLURAL = ["segundas", "terças", "quartas", "quintas", "sextas", "sábados", "domingos"]
+MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
+         "setembro", "outubro", "novembro", "dezembro"]
+
+
+def _curto(loja):
+    return NOME_CURTO_LOJA.get(loja, loja)
+
+
+def _num_br(valor, casas=1):
+    """25.0 → "25", 9.14 → "9,1"."""
+    texto = f"{valor:.{casas}f}"
+    if "." in texto:
+        texto = texto.rstrip("0").rstrip(".")
+    return texto.replace(".", ",")
+
+
+def _plural(n, singular, plural):
+    return singular if n == 1 else plural
+
+
+def _sincronizacao_em_dia(ultimo_dia_iso, hoje):
+    """Em dia = tem venda de ontem (ou de hoje). Segunda as lojas fecham, então
+    na terça o último dia com venda é domingo."""
+    if not ultimo_dia_iso:
+        return False
+    ontem = hoje - timedelta(days=1)
+    minimo = ontem - timedelta(days=1) if ontem.weekday() == 0 else ontem
+    return ultimo_dia_iso >= minimo.isoformat()
+
+
+def _analise_da_home(lojas):
+    hoje = date.today()
+    chave = (tuple(lojas), hoje.isoformat())
+    guardado = _cache_analise_home.get(chave)
+    if guardado and time.time() - guardado[0] < TEMPO_CACHE_ANALISE_HOME_S:
+        return guardado[1]
+
+    corte_atual = (datetime.now() - timedelta(days=DIAS_DA_HOME)).date().isoformat()
+    dias_do_mes = (hoje - hoje.replace(day=1)).days
+    atual, anterior, mes = {}, {}, {}
+    for loja in lojas:
+        atual[loja] = curva_abc_cardapio(loja, DIAS_DA_HOME)["itens"]
+        anterior[loja] = curva_abc_cardapio(loja, DIAS_DA_HOME, ate=corte_atual)["itens"]
+        mes[loja] = curva_abc_cardapio(loja, dias_do_mes)["itens"] if dias_do_mes else atual[loja]
+
+    # Saúde financeira: CMV de ficha técnica × custo das compras, sobre o que
+    # tem custo; a cobertura diz quanto do faturamento isso representa.
+    receita_total = receita_com_custo = custo_total = 0.0
+    for loja in lojas:
+        for item in mes[loja]:
+            receita_total += item["receita"]
+            if item["margem"] is not None:
+                receita_com_custo += item["receita"]
+                custo_total += item["receita"] - item["margem"]
+    cmv = round(custo_total / receita_com_custo * 100, 1) if receita_com_custo else None
+    saude = {
+        "periodo": f"{MESES[hoje.month - 1].capitalize()} até hoje" if dias_do_mes else "Últimos 30 dias",
+        "cmvPercent": cmv,
+        "margemBrutaPercent": round(100 - cmv, 1) if cmv is not None else None,
+        "coberturaPercent": round(receita_com_custo / receita_total * 100) if receita_total else 0,
+        # A régua do Vendas Semanais trabalha em fração (0,31), não em %.
+        "classificacao": _classificar_cmv(cmv / 100) if cmv is not None else None,
+    }
+
+    # Curva A da rede: o mesmo produto nas duas Tradiças soma numa linha só.
+    produtos = {}
+    for loja in lojas:
+        for item in atual[loja]:
+            if item["curva"] != "A":
+                continue
+            produto = produtos.setdefault(item["nome"], {
+                "nome": item["nome"], "lojas": [], "margem": 0.0, "receita": 0.0, "volume": 0.0,
+            })
+            produto["lojas"].append(loja)
+            produto["margem"] += item["margem"]
+            produto["receita"] += item["receita"]
+            produto["volume"] += item["volume"]
+    curva_a = sorted(produtos.values(), key=lambda p: -p["margem"])[:3]
+    for produto in curva_a:
+        produto["cmvPercent"] = (
+            round((produto["receita"] - produto["margem"]) / produto["receita"] * 100, 1)
+            if produto["receita"] else None
+        )
+        for campo in ("margem", "receita", "volume"):
+            produto[campo] = round(produto[campo], 2)
+
+    alertas = alertas_de_custo_na_margem(lojas, DIAS_DA_HOME, limite=10)
+    for alerta in alertas:
+        alerta["perigoso"] = alerta["pontosDeMargem"] >= PONTOS_DE_MARGEM_PERIGOSOS
+
+    # Insights: frases feitas a partir dos números, da mais urgente pra menos.
+    insights = []
+    for alerta in alertas:
+        if alerta["pontosDeMargem"] < 1:
+            continue
+        insights.append((0 if alerta["perigoso"] else 3, {
+            "tipo": "custo",
+            "texto": (
+                f"{alerta['insumo']} subiu {_num_br(alerta['variacaoPct'])}% e tirou "
+                f"{_num_br(alerta['pontosDeMargem'])} {_plural(alerta['pontosDeMargem'], 'ponto', 'pontos')} "
+                f"da margem do item “{alerta['produto']}” ({_curto(alerta['loja'])}). Avalie reajustar o preço."
+            ),
+            "link": "precos.html",
+        }))
+    for loja in lojas:
+        volume_agora = sum(i["volume"] for i in atual[loja])
+        volume_antes = sum(i["volume"] for i in anterior[loja])
+        # Sem venda registrada na janela anterior, tudo pareceria "novo na A".
+        if not volume_agora or volume_antes < volume_agora * 0.5:
+            continue
+        a_antes = {i["nome"] for i in anterior[loja] if i["curva"] == "A"}
+        a_agora = {i["nome"] for i in atual[loja] if i["curva"] == "A"}
+        entraram = sorted((i for i in atual[loja] if i["nome"] in a_agora - a_antes), key=lambda i: -i["margem"])
+        for item in entraram[:2]:
+            insights.append((1, {
+                "tipo": "curva",
+                "texto": (
+                    f"O item “{item['nome']}” subiu para a Curva A na {_curto(loja)}. "
+                    "Avalie reajuste de preço para proteger sua margem."
+                ),
+                "link": "curva-abc.html",
+            }))
+        volumes_antes = {i["nome"]: i["volume"] for i in anterior[loja]}
+        volumes_agora = {i["nome"]: i["volume"] for i in atual[loja]}
+        for nome in sorted(a_antes - a_agora):
+            antes = volumes_antes.get(nome) or 0
+            queda = round((1 - volumes_agora.get(nome, 0) / antes) * 100) if antes else 0
+            if queda <= 0:
+                continue
+            insights.append((4, {
+                "tipo": "curva",
+                "texto": (
+                    f"O item “{nome}” saiu da Curva A na {_curto(loja)}: vendeu {queda}% menos "
+                    "que nos 30 dias anteriores."
+                ),
+                "link": "curva-abc.html",
+            }))
+
+    ontem = hoje - timedelta(days=1)
+    if ontem.weekday() != 0:  # segunda as lojas fecham
+        base = [ontem - timedelta(weeks=semanas) for semanas in range(1, 5)]
+        valores = faturamento_por_loja_nos_dias([d.isoformat() for d in (ontem, *base)])
+        maiores = []
+        for loja in lojas:
+            valor_ontem = valores.get((loja, ontem.isoformat()))
+            anteriores = [valores[(loja, d.isoformat())] for d in base if (loja, d.isoformat()) in valores]
+            if valor_ontem is None or len(anteriores) < 2:
+                continue
+            media = sum(anteriores) / len(anteriores)
+            variacao = (valor_ontem - media) / media * 100 if media > 0 else 0
+            if abs(variacao) >= VARIACAO_FATURAMENTO_INSIGHT_PCT:
+                maiores.append((abs(variacao), loja, variacao, len(anteriores)))
+        if maiores:
+            _, loja, variacao, semanas = max(maiores)
+            insights.append((2, {
+                "tipo": "vendas",
+                "texto": (
+                    f"Ontem a loja {_curto(loja)} faturou {abs(round(variacao))}% "
+                    f"{'abaixo' if variacao < 0 else 'acima'} da média das últimas {semanas} "
+                    f"{DIAS_DA_SEMANA_PLURAL[ontem.weekday()]}."
+                ),
+                "link": "insight.html",
+            }))
+    insights.sort(key=lambda par: par[0])
+
+    resultado = {
+        "saudeFinanceira": saude,
+        "curvaA": curva_a,
+        "custosEmAlta": alertas[:3],
+        "insights": [par[1] for par in insights[:4]],
+    }
+    _cache_analise_home.clear()
+    _cache_analise_home[chave] = (time.time(), resultado)
+    return resultado
+
+
+def _atividades_do_dia(lojas, usuario):
+    """Checklist da rotina de quem gere: o que está pendente vem primeiro, com
+    o link de onde resolver; o que já está feito aparece riscado."""
+    hoje = date.today()
+    ontem = hoje - timedelta(days=1)
+    numeros = numeros_da_rotina(lojas, usuario["id"], ontem.isoformat(), hoje.isoformat())
+    pendentes, feitas = [], []
+
+    def atividade(pendente, texto, link=None, acao=None):
+        (pendentes if pendente else feitas).append({"pendente": pendente, "texto": texto, "link": link, "acao": acao})
+
+    atrasadas = [l for l in lojas if not _sincronizacao_em_dia(buscar_ultima_sincronizacao(l), hoje)]
+    atividade(
+        bool(atrasadas),
+        f"Sincronizar as vendas de ontem: {', '.join(_curto(l) for l in atrasadas)}" if atrasadas
+        else "Vendas de ontem sincronizadas",
+        acao="sincronizar" if atrasadas else None,
+    )
+
+    com_presencial = [l for l in lojas if l in UNIDADES_COM_PRESENCIAL]
+    if com_presencial and ontem.weekday() != 0:
+        faltando = [l for l in com_presencial if l not in numeros["presencialLancado"]]
+        atividade(
+            bool(faltando),
+            f"Lançar a venda presencial de ontem: {', '.join(_curto(l) for l in faltando)}" if faltando
+            else "Venda presencial de ontem lançada",
+            link="insight.html#panel-vendas-presenciais" if faltando else None,
+        )
+
+    compras = pendencias_compras()
+    tarefas_compras = [
+        (compras["contagensPraAprovar"], "Aprovar {n} requisição", "Aprovar {n} requisições", "contagens.html"),
+        (compras["cotacoesParadas"], "Fechar {n} cotação parada", "Fechar {n} cotações paradas", "cotacoes.html"),
+        (compras["pedidosNaoEnviados"], "Enviar {n} pedido ao fornecedor", "Enviar {n} pedidos aos fornecedores", "pedidos.html"),
+        (compras["entregasAtrasadas"], "Cobrar {n} entrega atrasada", "Cobrar {n} entregas atrasadas", "recebimentos.html"),
+    ]
+    for quantidade, singular, plural, link in tarefas_compras:
+        if quantidade:
+            atividade(True, _plural(quantidade, singular, plural).format(n=quantidade), link=link)
+    if not any(tarefa[0] for tarefa in tarefas_compras):
+        atividade(False, "Compras sem pendência")
+
+    if numeros["vendasNovasSemVinculo"]:
+        n = numeros["vendasNovasSemVinculo"]
+        atividade(True, f"Conciliar {n} {_plural(n, 'produto novo vendido', 'produtos novos vendidos')} sem ficha técnica",
+                  link="mais-vendidos.html#painel-integracoes-estoque")
+    if numeros["lotesVencendo"]:
+        n = numeros["lotesVencendo"]
+        atividade(True, f"Resolver {n} {_plural(n, 'lote vencendo', 'lotes vencendo')}", link="estoque.html")
+    if numeros["tarefasNoPrazo"]:
+        n = numeros["tarefasNoPrazo"]
+        atividade(True, f"Concluir {n} {_plural(n, 'tarefa', 'tarefas')} do ClickUp com prazo até hoje", link="clickup.html")
+
+    return pendentes + feitas
 
 
 @app.route('/api/home/gestao', methods=['GET'])
@@ -1200,28 +1442,6 @@ def api_home_gestao():
             if linha["quantidade_atual"] <= 0:
                 contagem["zerados"] += 1
 
-    # Curva A da rede: o mesmo produto nas duas Tradiças soma numa linha só.
-    produtos = {}
-    for loja in lojas:
-        for item in curva_abc_cardapio(loja, DIAS_DA_HOME)["itens"]:
-            if item["curva"] != "A":
-                continue
-            produto = produtos.setdefault(item["nome"], {
-                "nome": item["nome"], "lojas": [], "margem": 0.0, "receita": 0.0, "volume": 0.0,
-            })
-            produto["lojas"].append(loja)
-            produto["margem"] += item["margem"]
-            produto["receita"] += item["receita"]
-            produto["volume"] += item["volume"]
-    curva_a = sorted(produtos.values(), key=lambda p: -p["margem"])[:3]
-    for produto in curva_a:
-        produto["cmvPercent"] = (
-            round((produto["receita"] - produto["margem"]) / produto["receita"] * 100, 1)
-            if produto["receita"] else None
-        )
-        for campo in ("margem", "receita", "volume"):
-            produto[campo] = round(produto[campo], 2)
-
     return jsonify({
         "dias": DIAS_DA_HOME,
         "estoqueCritico": {
@@ -1229,8 +1449,8 @@ def api_home_gestao():
             "zerados": sum(c["zerados"] for c in criticos.values()),
             "porLoja": list(criticos.values()),
         },
-        "curvaA": curva_a,
-        "custosEmAlta": alertas_de_custo_na_margem(lojas, DIAS_DA_HOME),
+        "atividades": _atividades_do_dia(lojas, _usuario_logado()),
+        **_analise_da_home(lojas),
     })
 
 

@@ -120,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4.07 GESTÃO OPERACIONAL (Home): estoque crítico, Curva A e custos em alta
   if (document.getElementById('home-curva-a')) {
     carregarGestaoHome();
+    document.getElementById('home-insight-proximo')?.addEventListener('click', _proximoInsightHome);
   }
 
   // 4.08 ATUALIZAÇÃO AUTOMÁTICA DA HOME (quase em tempo real)
@@ -7604,7 +7605,14 @@ function _sincronizacaoEmDia(dataStr) {
   const ontem = new Date(hoje);
   ontem.setDate(hoje.getDate() - 1);
   const formatarBr = d => d.toLocaleDateString('pt-BR');
-  return dataStr === formatarBr(hoje) || dataStr === formatarBr(ontem);
+  const aceitas = [formatarBr(hoje), formatarBr(ontem)];
+  // Segunda as lojas fecham: na terça, o último dia com venda é domingo.
+  if (ontem.getDay() === 1) {
+    const domingo = new Date(ontem);
+    domingo.setDate(ontem.getDate() - 1);
+    aceitas.push(formatarBr(domingo));
+  }
+  return aceitas.includes(dataStr);
 }
 
 function _badgeSincronizacao(dataStr) {
@@ -7807,26 +7815,19 @@ async function carregarDadosLojas() {
     const semanaPassadaInicio = new Date(segundaDestaSemana.getFullYear(), segundaDestaSemana.getMonth(), segundaDestaSemana.getDate() - 7);
     const semanaPassadaFim = new Date(segundaDestaSemana.getFullYear(), segundaDestaSemana.getMonth(), segundaDestaSemana.getDate() - 1);
 
-    // Mês passado inteiro — o dia 0 de um mês em JS é o último dia do mês anterior.
-    const mesPassadoInicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-    const mesPassadoFim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-
     const somarNoIntervalo = (inicio, fim) => dias
       .filter(d => { const dt = paraData(d.dia); return dt >= inicio && dt <= fim; })
       .reduce((soma, d) => soma + d.faturamento, 0);
 
     const totalSemanal = somarNoIntervalo(semanaPassadaInicio, semanaPassadaFim);
-    const totalMensal = somarNoIntervalo(mesPassadoInicio, mesPassadoFim);
 
     const fmtCurto = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-    // O faturamento de ontem está no quadro de cima; os cartões ficam com a
-    // semana e o mês passados (o primeiro é o estoque crítico, ver
-    // carregarGestaoHome).
+    // O faturamento de ontem está no quadro de cima; dos períodos fechados só
+    // a semana passada fica nos cartões (saúde financeira e estoque crítico
+    // vêm de carregarGestaoHome).
     document.getElementById('home-semanal-valor').textContent = _formatarMoedaBRL(totalSemanal);
     document.getElementById('home-semanal-periodo').textContent = `Semana passada, ${fmtCurto(semanaPassadaInicio)} a ${fmtCurto(semanaPassadaFim)}`;
-    document.getElementById('home-mensal-valor').textContent = _formatarMoedaBRL(totalMensal);
-    document.getElementById('home-mensal-periodo').textContent = `Mês passado, ${fmtCurto(mesPassadoInicio)} a ${fmtCurto(mesPassadoFim)}`;
 
     renderRankingLojasHome(dadosOntem.lojas);
 
@@ -7837,9 +7838,7 @@ async function carregarDadosLojas() {
 
   } catch (error) {
     console.error('Falha ao conectar com o backend Flask:', error);
-    ['home-semanal-periodo', 'home-mensal-periodo'].forEach((id) => {
-      document.getElementById(id).textContent = 'Não foi possível carregar o faturamento.';
-    });
+    document.getElementById('home-semanal-periodo').textContent = 'Não foi possível carregar o faturamento.';
   }
 }
 
@@ -7946,15 +7945,103 @@ function _renderCustosEmAltaHome(alertas) {
     const margens = a.margemAntes != null ? ` (${num(a.margemAntes)}% → ${num(a.margemAgora)}%)` : '';
     const outros = a.outrosProdutos ? ` · e mais ${a.outrosProdutos} ${a.outrosProdutos === 1 ? 'produto' : 'produtos'}` : '';
     return `
-      <li class="home-alerta-item">
+      <li class="home-alerta-item${a.perigoso ? ' perigoso' : ''}">
         <span class="home-alerta-icone" aria-hidden="true"><i data-lucide="trending-up"></i></span>
         <div class="home-alerta-texto">
           <span><strong>${escaparHtml(a.insumo)}</strong> subiu <strong class="home-alerta-pct">${num(a.variacaoPct)}%</strong>
             · R$ ${_formatarPrecoUnitario(a.precoAntes)} → R$ ${_formatarPrecoUnitario(a.precoAgora)}/${escaparHtml(a.unidade)}</span>
-          <span class="home-alerta-detalhe">A margem do ${escaparHtml(a.produto)} (${escaparHtml(_nomeCurtoLoja(a.loja))}) caiu ${pontos}${margens}${outros}</span>
+          <span class="home-alerta-detalhe">A margem do item “${escaparHtml(a.produto)}” (${escaparHtml(_nomeCurtoLoja(a.loja))}) caiu ${pontos}${margens}${outros}</span>
         </div>
       </li>`;
   }).join('');
+}
+
+const VEREDITO_CMV_HOME = { otimo: 'Ótimo', bom: 'Bom', ruim: 'Ruim' };
+
+// Saúde financeira: CMV do mês (ficha técnica × custo das compras) com a
+// mesma régua do Vendas Semanais (<31% ótimo, 31-34% bom, acima ruim).
+function _renderSaudeFinanceiraHome(saude) {
+  const card = document.getElementById('home-card-saude');
+  if (!card) return;
+  const num = (v) => String(v).replace('.', ',');
+  const veredito = document.getElementById('home-saude-veredito');
+  card.classList.remove('otimo', 'bom', 'ruim');
+  if (saude.cmvPercent == null) {
+    document.getElementById('home-saude-cmv').textContent = 'CMV —';
+    veredito.hidden = true;
+    document.getElementById('home-saude-margem').textContent = 'Nenhum produto vendido tem custo ainda';
+    document.getElementById('home-saude-periodo').textContent = saude.periodo || '';
+    return;
+  }
+  card.classList.add(saude.classificacao);
+  document.getElementById('home-saude-cmv').textContent = `CMV ${num(saude.cmvPercent)}%`;
+  veredito.hidden = false;
+  veredito.textContent = VEREDITO_CMV_HOME[saude.classificacao] || '';
+  veredito.className = `home-veredito ${saude.classificacao}`;
+  document.getElementById('home-saude-margem').textContent = `Margem bruta ${num(saude.margemBrutaPercent)}%`;
+  const periodo = document.getElementById('home-saude-periodo');
+  periodo.textContent = `${saude.periodo} · ${saude.coberturaPercent}% das vendas com custo`;
+  periodo.title = 'O CMV é calculado só sobre os produtos que têm ficha técnica com todos os insumos custeados. '
+    + 'Margem bruta = 100% − CMV; não desconta taxa dos apps nem despesas fixas.';
+}
+
+// Atividades do dia: o servidor manda o que está pendente primeiro, com o
+// link de onde resolver; o que já foi feito vem riscado no fim.
+function _renderAtividadesHome(atividades) {
+  const lista = document.getElementById('home-rotina-lista');
+  if (!lista) return;
+  const pendentes = atividades.filter((a) => a.pendente).length;
+  document.getElementById('home-rotina-resumo').textContent = pendentes
+    ? `${pendentes} ${pendentes === 1 ? 'pendente' : 'pendentes'}`
+    : 'Tudo em dia';
+  lista.innerHTML = atividades.map((a) => {
+    const marca = `<span class="home-rotina-check" aria-hidden="true">${a.pendente ? '' : '<i data-lucide="check"></i>'}</span>`;
+    const estado = `<span class="visualmente-oculto">${a.pendente ? 'Pendente: ' : 'Feito: '}</span>`;
+    let texto = `<span class="home-rotina-texto">${estado}${escaparHtml(a.texto)}</span>`;
+    if (a.pendente && a.acao === 'sincronizar') {
+      texto = `<button type="button" class="home-rotina-acao" data-acao="sincronizar">${estado}${escaparHtml(a.texto)}<i data-lucide="chevron-right"></i></button>`;
+    } else if (a.pendente && a.link) {
+      texto = `<a class="home-rotina-acao" href="${escaparHtml(a.link)}">${estado}${escaparHtml(a.texto)}<i data-lucide="chevron-right"></i></a>`;
+    }
+    return `<li class="home-rotina-item${a.pendente ? '' : ' feita'}">${marca}${texto}</li>`;
+  }).join('');
+  lista.querySelector('[data-acao="sincronizar"]')?.addEventListener('click', () => sincronizarAgora());
+}
+
+// Insight no rodapé do quadro preto: um por vez, com a seta passando pro
+// próximo quando tem mais de um.
+let homeInsights = [];
+let homeInsightAtual = 0;
+
+function _mostrarInsightHome() {
+  const insight = homeInsights[homeInsightAtual];
+  if (!insight) return;
+  document.getElementById('home-insight-texto').textContent = insight.texto;
+  const link = document.getElementById('home-insight-link');
+  link.href = insight.link || '#';
+  link.hidden = !insight.link;
+  document.getElementById('home-insight-posicao').textContent = `${homeInsightAtual + 1}/${homeInsights.length}`;
+}
+
+function _renderInsightsHome(insights) {
+  const bloco = document.getElementById('home-insight');
+  if (!bloco) return;
+  const textoAnterior = homeInsights[homeInsightAtual]?.texto;
+  homeInsights = insights.length ? insights : [{
+    texto: 'Vendas, margem e Curva ABC dentro do esperado: nada fora do normal pra olhar agora.',
+    link: null,
+  }];
+  // Na atualização automática, fica no mesmo insight se ele ainda existe.
+  const mesmo = homeInsights.findIndex((i) => i.texto === textoAnterior);
+  homeInsightAtual = mesmo >= 0 ? mesmo : 0;
+  bloco.hidden = false;
+  document.getElementById('home-insight-proximo').hidden = homeInsights.length < 2;
+  _mostrarInsightHome();
+}
+
+function _proximoInsightHome() {
+  homeInsightAtual = (homeInsightAtual + 1) % homeInsights.length;
+  _mostrarInsightHome();
 }
 
 async function carregarGestaoHome() {
@@ -7964,13 +8051,17 @@ async function carregarGestaoHome() {
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
     _renderEstoqueCriticoHome(dados.estoqueCritico || {});
+    _renderSaudeFinanceiraHome(dados.saudeFinanceira || {});
+    _renderAtividadesHome(dados.atividades || []);
+    _renderInsightsHome(dados.insights || []);
     _renderCurvaAHome(dados.curvaA || []);
     _renderCustosEmAltaHome(dados.custosEmAlta || []);
     if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch (erro) {
     console.error('Falha ao carregar a gestão da Home:', erro);
     document.getElementById('home-estoque-sub').textContent = 'Não foi possível carregar o estoque.';
-    ['home-curva-a', 'home-custos-alta'].forEach((id) => {
+    document.getElementById('home-saude-margem').textContent = 'Não foi possível carregar.';
+    ['home-curva-a', 'home-custos-alta', 'home-rotina-lista'].forEach((id) => {
       document.getElementById(id).innerHTML = '<li class="panel-subtitle">Não foi possível carregar.</li>';
     });
   }

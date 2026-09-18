@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 import unicodedata
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 # Em produção (Dokploy), aponta pra um volume persistente (ex: /app/data/admfood.db)
 # via a variável DATABASE_PATH, senão perde os dados a cada novo deploy.
@@ -3773,7 +3773,7 @@ def _ranking_pendencias_cmv(itens):
     return ranking
 
 
-def curva_abc_cardapio(loja, dias=30):
+def curva_abc_cardapio(loja, dias=30, ate=None):
     """Etapa 10 do motor de compra — cruza volume vendido × margem gerada ×
     CMV real de cada produto do cardápio, pra orientar decisão de cardápio
     com dado em vez de intuição.
@@ -3784,44 +3784,53 @@ def curva_abc_cardapio(loja, dias=30):
     nunca produto marcado como protegido (opção vegetariana, item de
     assinatura). Produto sem custo confiável fica como "sem CMV": aparece
     com volume e receita, mas fora das duas listas, porque não dá pra
-    julgar margem sem saber o custo."""
-    corte = (datetime.now() - timedelta(days=dias)).date().isoformat()
+    julgar margem sem saber o custo.
+
+    `ate` (data ISO, fora da janela) fecha o período no passado: a Home
+    compara os 30 dias de agora com os 30 anteriores pra saber quem entrou
+    ou saiu da Curva A."""
+    if ate:
+        corte = (date.fromisoformat(ate) - timedelta(days=dias)).isoformat()
+        filtro_fim, parametros_fim = " AND dia < ?", (ate,)
+    else:
+        corte = (datetime.now() - timedelta(days=dias)).date().isoformat()
+        filtro_fim, parametros_fim = "", ()
 
     with conexao() as conn:
         vendas = conn.execute(
-            """
+            f"""
             SELECT item_cardapio_id, canal, SUM(quantidade) AS quantidade
             FROM venda_item
-            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NOT NULL
+            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NOT NULL{filtro_fim}
             GROUP BY item_cardapio_id, canal
             """,
-            (loja, corte),
+            (loja, corte, *parametros_fim),
         ).fetchall()
         protegidos = {
             l["id"] for l in conn.execute("SELECT id FROM item_cardapio WHERE protegido = 1").fetchall()
         }
         nao_casadas = conn.execute(
-            """
+            f"""
             SELECT COUNT(*) AS vendas, COUNT(DISTINCT nome_produto) AS produtos
             FROM venda_item
-            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NULL
+            WHERE unidade = ? AND dia >= ? AND item_cardapio_id IS NULL{filtro_fim}
             """,
-            (loja, corte),
+            (loja, corte, *parametros_fim),
         ).fetchone()
         # Complementos escolhidos junto de cada produto no período. Só os que
         # casaram com um item de complemento: o resto é modificador ("Sem
         # cebola", "Ao ponto") ou nome ainda sem cadastro.
         complementos_vendidos = conn.execute(
-            """
+            f"""
             SELECT v.item_cardapio_id AS produto_id, c.item_cardapio_id AS complemento_id,
                    SUM(c.quantidade) AS quantidade, SUM(c.quantidade * c.preco_unitario) AS receita
             FROM venda_complemento c
             JOIN venda_item v ON v.unidade = c.unidade AND v.pedido_id = c.pedido_id AND v.linha = c.linha
-            WHERE c.unidade = ? AND c.dia >= ?
+            WHERE c.unidade = ? AND c.dia >= ?{filtro_fim.replace('dia', 'c.dia')}
               AND v.item_cardapio_id IS NOT NULL AND c.item_cardapio_id IS NOT NULL
             GROUP BY v.item_cardapio_id, c.item_cardapio_id
             """,
-            (loja, corte),
+            (loja, corte, *parametros_fim),
         ).fetchall()
 
     produtos_loja = {p["itemCardapioId"]: p for p in listar_produtos_por_loja(loja) if p["itemCardapioId"]}
@@ -6662,6 +6671,85 @@ def alertas_de_custo_na_margem(lojas, dias=30, limite=3):
         })
     saida.sort(key=lambda a: -a["pontosDeMargem"])
     return saida[:limite]
+
+
+def faturamento_por_loja_nos_dias(dias):
+    """{(loja, dia): faturamento} com a venda presencial somada, como toda
+    tela de faturamento faz. Dia sem venda nenhuma fica de fora."""
+    if not dias:
+        return {}
+    marcadores = ",".join("?" * len(dias))
+    with conexao() as conn:
+        linhas = conn.execute(
+            f"""
+            SELECT unidade, dia, faturamento_dia AS valor FROM faturamento_diario WHERE dia IN ({marcadores})
+            UNION ALL
+            SELECT unidade, dia, valor FROM venda_presencial WHERE dia IN ({marcadores})
+            """,
+            [*dias, *dias],
+        ).fetchall()
+    total = {}
+    for linha in linhas:
+        chave = (linha["unidade"], linha["dia"])
+        total[chave] = total.get(chave, 0.0) + (linha["valor"] or 0.0)
+    return total
+
+
+DIAS_DE_LOTE_NA_ROTINA = 3
+
+
+def numeros_da_rotina(lojas, usuario_id, dia_ontem, dia_hoje):
+    """Contagens das atividades do dia da Home, só leitura: lojas que já
+    lançaram a venda presencial de ontem, produto vendido pela primeira vez
+    de ontem pra cá sem vínculo com a ficha técnica (o acúmulo antigo fica
+    no painel de Vendas não reconhecidas), lote vencendo em até 3 dias e
+    tarefa do ClickUp com prazo até hoje."""
+    marcadores = ",".join("?" * len(lojas)) or "NULL"
+    limite_lote = (date.fromisoformat(dia_hoje) + timedelta(days=DIAS_DE_LOTE_NA_ROTINA)).isoformat()
+    with conexao() as conn:
+        presencial = {
+            linha["unidade"] for linha in conn.execute(
+                f"SELECT unidade FROM venda_presencial WHERE dia = ? AND unidade IN ({marcadores})",
+                [dia_ontem, *lojas],
+            ).fetchall()
+        }
+        sem_vinculo = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM (
+                SELECT v.unidade, v.nome_normalizado, MIN(v.dia) AS primeira_vez
+                FROM venda_item v
+                WHERE v.unidade IN ({marcadores}) AND v.item_cardapio_id IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM composicao_produto_venda c
+                      WHERE c.nome_produto_normalizado = v.nome_normalizado
+                  )
+                GROUP BY v.unidade, v.nome_normalizado
+                HAVING primeira_vez >= ?
+            )
+            """,
+            [*lojas, dia_ontem],
+        ).fetchone()[0]
+        lotes = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM lote_insumo
+            WHERE resolvido_em IS NULL AND validade IS NOT NULL AND validade <= ? AND loja IN ({marcadores})
+            """,
+            [limite_lote, *lojas],
+        ).fetchone()[0]
+        tarefas = conn.execute(
+            """
+            SELECT COUNT(*) FROM tarefa
+            WHERE status != 'done' AND data_limite IS NOT NULL AND data_limite != '' AND data_limite <= ?
+              AND (visivel_para IS NULL OR visivel_para = ?)
+            """,
+            (dia_hoje, usuario_id),
+        ).fetchone()[0]
+    return {
+        "presencialLancado": presencial,
+        "vendasNovasSemVinculo": sem_vinculo,
+        "lotesVencendo": lotes,
+        "tarefasNoPrazo": tarefas,
+    }
 
 
 # --- REGISTRO DE AÇÕES (quem fez o quê) -------------------------------------

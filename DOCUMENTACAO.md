@@ -3194,7 +3194,7 @@ Todos em `app.py`, prefixo `/api`.
 - `GET /api/faturamento-mesmo-dia-semana?unidade=&dia=` — todas as ocorrências do mesmo dia da semana no mês (usado no relatório comparativo)
 - `GET /api/insights?inicio=&fim=&diaSemana=` — visão completa por período, com filtro opcional por dia da semana; retorna um bloco por loja + "geral"
 - `GET /api/insights-automaticos` — compara ontem contra a média dos 7 dias anteriores, destaca variações >8% (usado nos cards da Home)
-- `GET /api/home/gestao` — bloco de gestão da Home: estoque crítico por loja, top 3 da Curva A da rede e custos em alta que comem margem, últimos 30 dias (admin e gerente)
+- `GET /api/home/gestao` — tudo que a Home tem além do faturamento: estoque crítico por loja, saúde financeira do mês, atividades do dia, insights, top 3 da Curva A da rede e custos em alta (admin e gerente)
 
 **Configuração / Sincronização**
 - `GET /api/config/lojas` — status de cada loja (token mascarado, última sincronização)
@@ -3617,35 +3617,51 @@ sistema está pronto, falta o número):
   da marca) e a hora da atualização num selo dentro dele. O `style.css`
   guarda o quadro e as cores próprias da Home (`body.pagina-home`); o que
   entrou na reforma de 2026-09-18 está em `home.css` (ver abaixo).
-- **Home reformada (2026-09-18, pedido dela):** o quadro da rede ficou
-  intacto; o que mudou foi tirar repetição e abrir espaço pra compra e
-  estoque.
-  - O cartão "Diário" repetia o faturamento de ontem do quadro: virou
-    **Estoque crítico** — zerados ou abaixo do mínimo, contados loja por
-    loja com a regra dos cartões de Insumos (somar a rede esconderia a loja
-    zerada atrás da que tem sobra). Cada loja é um link pra
-    `estoque.html?loja=<loja>&nivel=critico`, que abre a tabela da loja já
-    filtrada. Semanal e Mensal continuam.
+- **Home reformada (2026-09-18, dois pedidos dela no mesmo dia):** o quadro
+  preto da rede ficou intacto; o que mudou foi tirar repetição e trazer
+  finança, compra e estoque pra primeira tela.
+  - **Insight no rodapé do quadro** (ícone de brilho, seta pro próximo quando
+    há mais de um): frases montadas a partir dos números, da mais urgente pra
+    menos — alta de insumo que tirou 2+ pontos de margem de um produto;
+    produto que entrou na Curva A (30 dias contra os 30 anteriores, só quando
+    a janela anterior tem venda registrada); loja que ontem faturou 15%+
+    acima/abaixo da média das últimas 4 do mesmo dia da semana; alta de 1 a
+    2 pontos; produto que saiu da Curva A. Não é modelo de IA: é regra sobre
+    os dados, por isso o rótulo é "Insight". Sem nada fora do normal, diz
+    isso.
+  - **Linha 60/40**: três cartões — **Saúde financeira** (CMV do mês até
+    hoje = ficha técnica × custo das compras, sobre os produtos com custo; a
+    porcentagem das vendas cobertas aparece junto; margem bruta = 100% − CMV,
+    sem taxa de app nem despesa fixa, que o sistema não tem; régua do Vendas
+    Semanais: <31% ótimo, 31-34% bom, acima ruim), **Semanal** e **Estoque
+    crítico** (zerado ou abaixo do mínimo, loja por loja, cada loja com link
+    pra `estoque.html?loja=<loja>&nivel=critico`) — e ao lado as
+    **Atividades pendentes do dia**: sincronizar vendas de ontem, lançar a
+    venda presencial de ontem (Artesanos e ZN; segunda não conta, as lojas
+    fecham), pendências de Compras (aprovar requisição, fechar cotação
+    parada, enviar pedido, cobrar entrega atrasada), produto novo vendido
+    sem ficha técnica, lote vencendo em 3 dias e tarefa do ClickUp com
+    prazo até hoje. Pendente vem primeiro com o link de onde resolver;
+    feito vem riscado. O cartão Mensal saiu.
   - A lista "Status de sincronização" virou um **ponto no ícone do
     Sincronizar**: verde com todas as lojas em dia, vermelho com alguma
-    atrasada (o nome delas vai no texto do botão, no hover). A resposta do
-    botão aparece logo abaixo do cabeçalho.
-  - O gráfico da rede ficou mais baixo (200 px); canais continua ao lado
-    (60/40).
-  - No lugar da lista, o painel **Gestão operacional** (últimos 30 dias):
-    os 3 produtos da Curva A que mais deram margem na rede (o mesmo
-    produto nas duas Tradiças soma numa linha), os **custos em alta** — o
-    insumo que subiu 5% ou mais e o produto em que a alta mais come
-    margem, em pontos do preço de venda ("a margem do X caiu 1,7 ponto";
-    fica de fora preço suspeito de unidade trocada e alta que mexe menos
-    de 0,1 ponto) — e dois atalhos: "Lançar nota de compra"
+    atrasada (nome no hover). Na terça, venda de domingo conta como em dia
+    (segunda as lojas fecham) — vale pra Configurações também.
+  - Gráfico da rede mais baixo (200 px), canais ao lado (60/40).
+  - **Gestão operacional** ao lado do ranking (últimos 30 dias): top 3 da
+    Curva A da rede por margem (o mesmo produto nas duas Tradiças soma numa
+    linha), **custos em alta** (insumo que subiu 5%+ e o produto em que a
+    alta mais come margem, em pontos do preço de venda; laranja, e vermelho
+    a partir de 2 pontos; fora preço suspeito de unidade trocada e alta que
+    mexe menos de 0,1 ponto) e os atalhos "Lançar nota de compra"
     (`pedidos.html?acao=compra-fora`) e "Nova ficha técnica"
-    (`cardapio.html?acao=novo-item`), que abrem o formulário direto.
-  - Tudo numa chamada: `GET /api/home/gestao` (admin e gerente, só as
-    lojas que a pessoa enxerga), com `alertas_de_custo_na_margem` em
-    `backend/armazenamento.py`. Cor de alerta só nesses blocos: vermelho no
-    estoque, laranja na margem. Teste: `teste_home_gestao.py` no scratchpad
-    (14 verificações).
+    (`cardapio.html?acao=novo-item`).
+  - Tudo numa chamada, `GET /api/home/gestao` (admin e gerente, só as lojas
+    que a pessoa enxerga). A parte pesada (Curva ABC de 3 janelas × 4 lojas,
+    custos e insights) fica guardada 5 minutos em cada processo; estoque e
+    atividades são sempre na hora. `curva_abc_cardapio` ganhou `ate` pra
+    fechar a janela no passado. Estilos em `home.css`. Teste:
+    `teste_home_gestao.py` no scratchpad (26 verificações).
 - **Cabeçalho de vidro** (`.top-header`, todas as telas): barra flutuante
   a 12px das bordas, meio transparente (`--header-vidro`), com
   `backdrop-filter` desfocando o que passa por baixo, fio de borda e

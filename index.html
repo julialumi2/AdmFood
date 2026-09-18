@@ -210,25 +210,49 @@
             </div>
             <span class="atualizado-em hero-badge" id="home-atualizado-em"></span>
           </div>
+          <!-- Insight: frase montada a partir dos números (custo × margem, Curva ABC, vendas) -->
+          <div class="hero-insight" id="home-insight" hidden>
+            <i data-lucide="sparkles"></i>
+            <p><strong>Insight:</strong> <span id="home-insight-texto"></span>
+              <a href="#" id="home-insight-link">Ver detalhes</a></p>
+            <button type="button" class="hero-insight-proximo" id="home-insight-proximo" hidden>
+              <span id="home-insight-posicao">1/1</span>
+              <i data-lucide="chevron-right"></i>
+              <span class="visualmente-oculto">Próximo insight</span>
+            </button>
+          </div>
         </div>
 
-        <!-- ESTOQUE CRÍTICO + SEMANA E MÊS PASSADOS (o dia de ontem já está no quadro acima) -->
-        <div class="cards-grid" id="container-periodo">
-          <div class="store-card home-card-estoque" id="home-card-estoque">
-            <span class="home-kpi-rotulo"><i data-lucide="alert-triangle"></i>Estoque crítico</span>
-            <div class="home-kpi-valor" id="home-estoque-total">—</div>
-            <span class="home-kpi-periodo" id="home-estoque-sub">Carregando...</span>
-            <div class="home-estoque-lojas" id="home-estoque-lojas"></div>
+        <!-- MÉTRICAS (saúde financeira, semana passada, estoque crítico) + ATIVIDADES DO DIA -->
+        <div class="home-linha-rotina">
+          <div class="cards-grid" id="container-periodo">
+            <div class="store-card home-card-saude" id="home-card-saude">
+              <span class="home-kpi-rotulo"><i data-lucide="heart-pulse"></i>Saúde financeira</span>
+              <div class="home-kpi-valor"><span id="home-saude-cmv">—</span> <span class="home-veredito" id="home-saude-veredito" hidden></span></div>
+              <span class="home-kpi-linha" id="home-saude-margem">Carregando...</span>
+              <span class="home-kpi-periodo" id="home-saude-periodo"></span>
+            </div>
+            <div class="store-card">
+              <span class="home-kpi-rotulo"><i data-lucide="calendar-range"></i>Semanal</span>
+              <div class="home-kpi-valor" id="home-semanal-valor">—</div>
+              <span class="home-kpi-periodo" id="home-semanal-periodo">Carregando...</span>
+            </div>
+            <div class="store-card home-card-estoque" id="home-card-estoque">
+              <span class="home-kpi-rotulo"><i data-lucide="alert-triangle"></i>Estoque crítico</span>
+              <div class="home-kpi-valor" id="home-estoque-total">—</div>
+              <span class="home-kpi-periodo" id="home-estoque-sub">Carregando...</span>
+              <div class="home-estoque-lojas" id="home-estoque-lojas"></div>
+            </div>
           </div>
-          <div class="store-card">
-            <span class="home-kpi-rotulo">Semanal</span>
-            <div class="home-kpi-valor" id="home-semanal-valor">—</div>
-            <span class="home-kpi-periodo" id="home-semanal-periodo">Carregando...</span>
-          </div>
-          <div class="store-card">
-            <span class="home-kpi-rotulo">Mensal</span>
-            <div class="home-kpi-valor" id="home-mensal-valor">—</div>
-            <span class="home-kpi-periodo" id="home-mensal-periodo">Carregando...</span>
+
+          <div class="panel home-rotina">
+            <div class="panel-header">
+              <h3 class="panel-title">Atividades pendentes do dia</h3>
+              <span class="panel-subtitle" id="home-rotina-resumo"></span>
+            </div>
+            <ul class="home-rotina-lista" id="home-rotina-lista">
+              <li class="panel-subtitle">Carregando...</li>
+            </ul>
           </div>
         </div>
 
