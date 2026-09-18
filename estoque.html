@@ -174,8 +174,8 @@
             <span>CONTROLE DE ESTOQUE</span>
           </div>
           <div class="title-row">
-            <div class="estoque-titulo">
-              <h1>Insumos da Rede</h1>
+            <h1>Insumos da Rede</h1>
+            <div class="estoque-topo-direita">
               <div class="loja-select" id="estoque-loja-select">
                 <button type="button" class="loja-select-trigger" id="estoque-loja-trigger">
                   <i data-lucide="store"></i>
@@ -207,62 +207,62 @@
                   </button>
                 </div>
               </div>
-            </div>
-            <div class="page-acoes-topo" id="estoque-acoes-admin" style="display:none;">
-              <div class="acoes-menu" id="estoque-acoes-menu">
-                <button type="button" class="btn-secondary acoes-menu-trigger" id="estoque-acoes-trigger">
-                  <i data-lucide="sliders-horizontal"></i>
-                  Mais ações
-                  <i data-lucide="chevron-down" class="loja-select-chevron"></i>
-                </button>
-                <div class="acoes-menu-lista" id="estoque-acoes-menu-lista">
-                  <span class="acoes-menu-grupo-titulo">Catálogo de insumos</span>
-                  <button type="button" class="acoes-menu-item" id="btn-novo-insumo">
-                    <i data-lucide="plus"></i>
-                    <span class="acoes-menu-item-texto">
-                      <span class="acoes-menu-item-titulo">Novo insumo</span>
-                      <small>Cadastra um insumo novo pra rede toda</small>
-                    </span>
+              <div class="page-acoes-topo" id="estoque-acoes-admin" style="display:none;">
+                <div class="acoes-menu" id="estoque-acoes-menu">
+                  <button type="button" class="btn-secondary acoes-menu-trigger" id="estoque-acoes-trigger">
+                    <i data-lucide="sliders-horizontal"></i>
+                    Mais ações
+                    <i data-lucide="chevron-down" class="loja-select-chevron"></i>
                   </button>
-                  <button type="button" class="acoes-menu-item" id="btn-importar-insumos">
-                    <i data-lucide="upload"></i>
-                    <span class="acoes-menu-item-texto">
-                      <span class="acoes-menu-item-titulo">Importar insumos</span>
-                      <small>Cola uma lista de nomes novos de uma vez</small>
-                    </span>
-                  </button>
-                  <button type="button" class="acoes-menu-item" id="btn-insumos-loja" style="display:none;">
-                    <i data-lucide="list-checks"></i>
-                    <span class="acoes-menu-item-texto">
-                      <span class="acoes-menu-item-titulo">Insumos da loja</span>
-                      <small>Escolhe quais insumos essa loja usa</small>
-                    </span>
-                  </button>
-                  <span class="acoes-menu-grupo-titulo">Atualizar números em lote</span>
-                  <button type="button" class="acoes-menu-item" id="btn-atualizar-estoque-lote" style="display:none;">
-                    <i data-lucide="clipboard-list"></i>
-                    <span class="acoes-menu-item-texto">
-                      <span class="acoes-menu-item-titulo">Atualizar estoque em lote</span>
-                      <small>Cola uma contagem física ou de outro sistema</small>
-                    </span>
-                  </button>
-                  <button type="button" class="acoes-menu-item" id="btn-ajuste-lote" style="display:none;">
-                    <i data-lucide="table"></i>
-                    <span class="acoes-menu-item-texto">
-                      <span class="acoes-menu-item-titulo">Ajustar quantidade ideal em lote</span>
-                      <small>Corrige o mínimo calculado, insumo por insumo</small>
-                    </span>
-                  </button>
-                  <button type="button" class="acoes-menu-item" id="btn-copiar-ideal" style="display:none;">
-                    <i data-lucide="copy"></i>
-                    <span class="acoes-menu-item-texto">
-                      <span class="acoes-menu-item-titulo">Copiar de outra loja</span>
-                      <small>Usa o ajuste de outra loja como ponto de partida</small>
-                    </span>
-                  </button>
+                  <div class="acoes-menu-lista" id="estoque-acoes-menu-lista">
+                    <span class="acoes-menu-grupo-titulo">Catálogo de insumos</span>
+                    <button type="button" class="acoes-menu-item" id="btn-novo-insumo">
+                      <i data-lucide="plus"></i>
+                      <span class="acoes-menu-item-texto">
+                        <span class="acoes-menu-item-titulo">Novo insumo</span>
+                        <small>Cadastra um insumo novo pra rede toda</small>
+                      </span>
+                    </button>
+                    <button type="button" class="acoes-menu-item" id="btn-importar-insumos">
+                      <i data-lucide="upload"></i>
+                      <span class="acoes-menu-item-texto">
+                        <span class="acoes-menu-item-titulo">Importar insumos</span>
+                        <small>Cola uma lista de nomes novos de uma vez</small>
+                      </span>
+                    </button>
+                    <button type="button" class="acoes-menu-item" id="btn-insumos-loja" style="display:none;">
+                      <i data-lucide="list-checks"></i>
+                      <span class="acoes-menu-item-texto">
+                        <span class="acoes-menu-item-titulo">Insumos da loja</span>
+                        <small>Escolhe quais insumos essa loja usa</small>
+                      </span>
+                    </button>
+                    <span class="acoes-menu-grupo-titulo">Atualizar números em lote</span>
+                    <button type="button" class="acoes-menu-item" id="btn-atualizar-estoque-lote" style="display:none;">
+                      <i data-lucide="clipboard-list"></i>
+                      <span class="acoes-menu-item-texto">
+                        <span class="acoes-menu-item-titulo">Atualizar estoque em lote</span>
+                        <small>Cola uma contagem física ou de outro sistema</small>
+                      </span>
+                    </button>
+                    <button type="button" class="acoes-menu-item" id="btn-ajuste-lote" style="display:none;">
+                      <i data-lucide="table"></i>
+                      <span class="acoes-menu-item-texto">
+                        <span class="acoes-menu-item-titulo">Ajustar quantidade ideal em lote</span>
+                        <small>Corrige o mínimo calculado, insumo por insumo</small>
+                      </span>
+                    </button>
+                    <button type="button" class="acoes-menu-item" id="btn-copiar-ideal" style="display:none;">
+                      <i data-lucide="copy"></i>
+                      <span class="acoes-menu-item-texto">
+                        <span class="acoes-menu-item-titulo">Copiar de outra loja</span>
+                        <small>Usa o ajuste de outra loja como ponto de partida</small>
+                      </span>
+                    </button>
+                  </div>
                 </div>
+                <button class="btn-registrar-entrada" id="btn-registrar-entrada">Registrar entrada</button>
               </div>
-              <button class="btn-registrar-entrada" id="btn-registrar-entrada">Registrar entrada</button>
             </div>
           </div>
         </div>

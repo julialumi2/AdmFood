@@ -564,18 +564,22 @@
   letter-spacing: -0.02em;
 }
 
-/* CABEÇALHO: título + loja numa linha, ações à direita */
-.estoque-titulo {
+/* CABEÇALHO: título à esquerda; loja, "Mais ações" e "Registrar entrada"
+   à direita (a loja do lado das ações, pedido dela em 18/09). A loja fica
+   fora do bloco de ações porque todo perfil usa o seletor; as ações são só
+   da gestão. */
+.estoque-topo-direita {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-3);
 }
 
-.estoque-titulo .loja-select { margin-bottom: 0; }
+.estoque-topo-direita .loja-select { margin-bottom: 0; }
 
-.estoque-titulo .loja-select-trigger {
-  padding: 6px 12px;
+.estoque-topo-direita .loja-select-trigger {
+  height: 40px;
+  padding: 0 14px;
   font-size: 0.8125rem;
 }
 
