@@ -153,3 +153,56 @@
   background-color: var(--info);
   border-radius: 999px;
 }
+
+/* Por que cada produto está sem CMV (card #39) */
+.curva-pendencias {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: 0.85rem;
+}
+
+.curva-pendencias-topo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.curva-pendencias-bloco h4 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.curva-pendencias-bloco ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.curva-pendencias-bloco summary {
+  cursor: pointer;
+}
+
+.curva-pendencias-bloco details > span {
+  display: block;
+  margin: 4px 0 2px 14px;
+  line-height: 1.4;
+}
+
+.curva-pendencias-conta {
+  margin-left: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--danger-texto);
+}

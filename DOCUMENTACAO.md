@@ -2553,6 +2553,26 @@ só as três formas de uma venda virar consumo: produto casado direto,
 combo decomposto e complemento escolhido (seção 6.15) — baixa de estoque
 e consumo médio usam a mesma definição de "quanto saiu".
 
+**Por que o produto está sem CMV** (card #39, 2026-09-18). A Curva ABC só
+dizia "falta preço de algum insumo da receita", e achar qual era exigia
+abrir ficha por ficha. `_anotar_motivos_sem_cmv` passou a anotar em cada
+produto sem CMV o motivo, na ordem em que o cálculo trava: `precoVenda`
+(sem preço na lista de preços do cardápio — o custo existe, mas a
+porcentagem não fecha; é o caso dos adicionais do Artesanos), `semFicha`,
+`insumoSemCusto` (com os nomes) e `complementoSemCusto` (a receita fecha,
+mas mais de 20% dos complementos vendidos junto não têm custo — a regra do
+"monte o seu" derruba o CMV). `_ranking_pendencias_cmv` junta tudo em
+"o que destrava mais": cada insumo ou complemento sem custo com a lista de
+produtos que ele trava. A tela mostra isso num bloco acima das listas e no
+hover da etiqueta "sem CMV" da tabela.
+
+Diagnóstico de produção no dia (últimos 30 dias): 67 de 125 produtos
+vendidos sem CMV — Tradiças travadas pelo Pão de dog M (preço trazido da
+VMarket, R$ 1,25 da Gaioto, e o Hamb. Select 110g, R$ 28/kg), Açaí pelos
+adesivos, pelo leite composto, pela colher super longa e pela lata de 250
+ml (fora da VMarket, que o Açaí não usava), e Artesanos pelos adicionais sem
+preço de venda. Teste: `teste_motivos_cmv.py` no scratchpad (10 checagens).
+
 ### 6.13 Vendas Semanais (CMV, %CMV e veredito por semana)
 
 Tela `vendas-semanais.html` (Insights → Vendas Semanais), redesenhada em

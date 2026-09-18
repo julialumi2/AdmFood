@@ -3700,6 +3700,79 @@ _CANAL_VENDA_PARA_PRECO = {
 }
 
 
+def _anotar_motivos_sem_cmv(loja, itens, custos_ficha, custos_manuais, complementos_vendidos):
+    """Diz em cada produto sem CMV o que falta (card #39 dela, 2026-09-18).
+
+    Antes a tela só dizia "falta preço de algum insumo", e achar qual era
+    abrir ficha por ficha. Os motivos, na ordem em que o cálculo trava:
+    - precoVenda: o produto não tem preço na lista de preços do cardápio,
+      então não dá pra fazer a porcentagem (os adicionais do Artesanos);
+    - semFicha: não tem receita cadastrada nessa loja;
+    - insumoSemCusto: algum insumo da receita não tem custo (ou quantidade);
+    - complementoSemCusto: a receita fecha, mas mais de 20% dos complementos
+      vendidos junto (adicional escolhido no pedido) não têm custo — a regra
+      de `curva_abc_cardapio` derruba o CMV nesse caso."""
+    precos = _mapa_preco_insumo()
+    with conexao() as conn:
+        ficha = {}
+        for linha in conn.execute(
+            "SELECT item_id, insumo_id, quantidade FROM ficha_tecnica WHERE loja = ?", (loja,)
+        ).fetchall():
+            ficha.setdefault(linha["item_id"], []).append(linha)
+        nomes_insumo = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM insumo").fetchall()}
+        nomes_item = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()}
+
+    complementos_por_produto = {}
+    for linha in complementos_vendidos:
+        complementos_por_produto.setdefault(linha["produto_id"], []).append(linha)
+
+    for item in itens.values():
+        if item.get("cmvPercent") is not None:
+            continue
+        item_id = item["itemCardapioId"]
+        motivos = []
+        if not item.get("precoMedio"):
+            motivos.append({"tipo": "precoVenda", "nomes": []})
+        if item.get("custoUnitario") is None and (item_id, loja) not in custos_manuais:
+            linhas = ficha.get(item_id) or []
+            if not linhas:
+                motivos.append({"tipo": "semFicha", "nomes": []})
+            else:
+                faltando = sorted({
+                    nomes_insumo.get(l["insumo_id"], f"#{l['insumo_id']}")
+                    for l in linhas
+                    if precos.get(l["insumo_id"]) is None or l["quantidade"] is None
+                })
+                if faltando:
+                    motivos.append({"tipo": "insumoSemCusto", "nomes": faltando})
+                else:
+                    complementos = sorted({
+                        nomes_item.get(l["complemento_id"], f"#{l['complemento_id']}")
+                        for l in complementos_por_produto.get(item_id, [])
+                        if custos_ficha.get(l["complemento_id"]) is None
+                    })
+                    if complementos:
+                        motivos.append({"tipo": "complementoSemCusto", "nomes": complementos})
+        item["motivosSemCmv"] = motivos
+
+
+def _ranking_pendencias_cmv(itens):
+    """O que destrava mais produtos: cada insumo ou complemento sem custo,
+    com a lista de produtos que ele trava, do que trava mais pro que trava
+    menos."""
+    travados = {}
+    for item in itens:
+        for motivo in item.get("motivosSemCmv") or []:
+            for nome in motivo["nomes"]:
+                travados.setdefault((motivo["tipo"], nome), set()).add(item["nome"])
+    ranking = [
+        {"tipo": tipo, "nome": nome, "produtos": sorted(produtos)}
+        for (tipo, nome), produtos in travados.items()
+    ]
+    ranking.sort(key=lambda r: (-len(r["produtos"]), r["nome"]))
+    return ranking
+
+
 def curva_abc_cardapio(loja, dias=30):
     """Etapa 10 do motor de compra — cruza volume vendido × margem gerada ×
     CMV real de cada produto do cardápio, pra orientar decisão de cardápio
@@ -3821,6 +3894,7 @@ def curva_abc_cardapio(loja, dias=30):
             item["cmvPercent"] = round((custo / precoMedio) * 100, 1)
             item["margem"] = round(item["receita"] - custo * item["volume"], 2)
 
+    _anotar_motivos_sem_cmv(loja, itens, custos_ficha, custos_manuais, complementos_vendidos)
     lista = sorted(itens.values(), key=lambda i: -i["volume"])
     com_margem = [i for i in lista if i["margem"] is not None]
 
@@ -3874,6 +3948,7 @@ def curva_abc_cardapio(loja, dias=30):
         "totalMargem": round(sum(i["margem"] for i in com_margem), 2) if com_margem else 0,
         "vendasNaoCasadas": nao_casadas["vendas"],
         "produtosNaoCasados": nao_casadas["produtos"],
+        "pendenciasCmv": _ranking_pendencias_cmv(lista),
     }
 
 

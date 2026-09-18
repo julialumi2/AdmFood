@@ -10142,6 +10142,76 @@ function _curvaCheckProtegidoHTML(item) {
   return `<input type="checkbox" class="curva-check-protegido" data-item-id="${item.itemCardapioId}" ${item.protegido ? 'checked' : ''} title="Nunca sugerir corte desse produto">`;
 }
 
+// --- POR QUE O PRODUTO ESTÁ SEM CMV (card #39, 18/09) ---
+// Antes a tela dizia só "falta preço de algum insumo"; achar qual era abrir
+// ficha por ficha. Agora o servidor manda o motivo de cada produto e o que
+// destrava mais produtos de uma vez.
+const ROTULO_MOTIVO_CMV = {
+  precoVenda: 'sem preço de venda no cardápio',
+  semFicha: 'sem ficha técnica nessa loja',
+  insumoSemCusto: 'insumo sem custo',
+  complementoSemCusto: 'complemento vendido junto sem custo',
+};
+
+function _textoMotivosSemCmv(motivos) {
+  return motivos.map((m) => (m.nomes.length
+    ? `${ROTULO_MOTIVO_CMV[m.tipo] || m.tipo}: ${m.nomes.join(', ')}`
+    : ROTULO_MOTIVO_CMV[m.tipo] || m.tipo)).join(' · ');
+}
+
+function _renderPendenciasCmv(d) {
+  const alvo = document.getElementById('curva-pendencias');
+  if (!alvo) return;
+  const semCmv = d.itens.filter((i) => i.margem === null);
+  if (!semCmv.length) {
+    alvo.style.display = 'none';
+    return;
+  }
+  const ranking = (d.pendenciasCmv || []).filter((r) => r.tipo === 'insumoSemCusto' || r.tipo === 'complementoSemCusto');
+  const semPrecoVenda = semCmv.filter((i) => (i.motivosSemCmv || []).some((m) => m.tipo === 'precoVenda'));
+  const semFicha = semCmv.filter((i) => (i.motivosSemCmv || []).some((m) => m.tipo === 'semFicha'));
+
+  const blocoRanking = ranking.length ? `
+    <div class="curva-pendencias-bloco">
+      <h4>O que destrava mais</h4>
+      <ul>
+        ${ranking.map((r) => `
+          <li>
+            <details>
+              <summary>
+                <strong>${escaparHtml(r.nome)}</strong>
+                <span class="text-muted">— ${escaparHtml(ROTULO_MOTIVO_CMV[r.tipo])}</span>
+                <span class="curva-pendencias-conta">trava ${r.produtos.length} ${r.produtos.length === 1 ? 'produto' : 'produtos'}</span>
+              </summary>
+              <span class="text-muted">${escaparHtml(r.produtos.join(', '))}</span>
+            </details>
+          </li>
+        `).join('')}
+      </ul>
+    </div>` : '';
+
+  const blocoPreco = semPrecoVenda.length ? `
+    <div class="curva-pendencias-bloco">
+      <h4>Sem preço de venda (${semPrecoVenda.length})</h4>
+      <p class="text-muted">O custo está calculado, mas o produto não tem preço na lista de preços do Cardápio, então a porcentagem não fecha: ${escaparHtml(semPrecoVenda.map((i) => i.nome).join(', '))}.</p>
+    </div>` : '';
+
+  const blocoFicha = semFicha.length ? `
+    <div class="curva-pendencias-bloco">
+      <h4>Sem ficha técnica (${semFicha.length})</h4>
+      <p class="text-muted">${escaparHtml(semFicha.map((i) => i.nome).join(', '))}.</p>
+    </div>` : '';
+
+  alvo.innerHTML = `
+    <div class="curva-pendencias-topo">
+      <strong>Por que ${semCmv.length} ${semCmv.length === 1 ? 'produto está' : 'produtos estão'} sem CMV</strong>
+      <span class="text-muted">Preencha o custo no cadastro do insumo (Insumos → editar) ou a ficha do complemento (Cardápio → Complementos).</span>
+    </div>
+    ${blocoRanking}${blocoPreco}${blocoFicha}
+  `;
+  alvo.style.display = '';
+}
+
 function renderCurvaAbc() {
   const d = curvaAbcDados;
   if (!d) return;
@@ -10153,10 +10223,11 @@ function renderCurvaAbc() {
     partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em Configurações → Integrações do Estoque.`);
   }
   if (semCmv) {
-    partes.push(`${semCmv} produto(s) aparecem sem CMV: falta preço de algum insumo da receita (ou a receita não está cadastrada), então a margem não dá pra calcular.`);
+    partes.push(`${semCmv} produto(s) aparecem sem CMV — o motivo de cada um está logo abaixo.`);
   }
   aviso.innerHTML = partes.join(' ');
   aviso.style.display = partes.length ? '' : 'none';
+  _renderPendenciasCmv(d);
 
   document.getElementById('curva-tabela-subtitulo').textContent =
     `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos · R$ ${_formatarMoedaBR(d.totalReceita)} de receita`;
@@ -10194,7 +10265,7 @@ function renderCurvaAbc() {
         <td><span class="curva-num">R$ ${_formatarMoedaBR(i.receita)}</span></td>
         <td>${_curvaCmvHTML(i)}</td>
         <td>${_curvaMargemHTML(i)}</td>
-        <td><span class="curva-tag ${classe}">${texto}</span></td>
+        <td><span class="curva-tag ${classe}" ${i.motivosSemCmv && i.motivosSemCmv.length ? `title="${escaparHtml(_textoMotivosSemCmv(i.motivosSemCmv))}"` : ''}>${texto}</span></td>
         <td>${_curvaCheckProtegidoHTML(i)}</td>
       </tr>
     `;
