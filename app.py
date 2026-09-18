@@ -396,6 +396,25 @@ def _exigir_equipe():
     return _exigir_papeis(*PAPEIS)
 
 
+# Tempo que a requisição passa DENTRO do sistema, e qual processo atendeu.
+# Em produção a primeira chamada depois de uma pausa estava levando ~40 s e
+# as seguintes 0,0 s (18/09); com isso dá pra saber se o tempo é gasto no
+# código ou na fila antes dele — e se é sempre no processo que roda o
+# agendador. Registrado antes do _exigir_login pra medir desde o começo.
+@app.before_request
+def _marcar_inicio_da_requisicao():
+    g.inicio_requisicao = time.perf_counter()
+
+
+@app.after_request
+def _informar_tempo_da_requisicao(resposta):
+    inicio = getattr(g, 'inicio_requisicao', None)
+    if inicio is not None:
+        resposta.headers['X-Tempo-Servidor-Ms'] = f"{(time.perf_counter() - inicio) * 1000:.0f}"
+    resposta.headers['X-Processo'] = f"{os.getpid()}{'-agenda' if globals().get('_ESTE_WORKER_AGENDA') else ''}"
+    return resposta
+
+
 @app.before_request
 def _exigir_login():
     caminho = request.path
