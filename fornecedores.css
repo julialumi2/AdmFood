@@ -21,6 +21,14 @@
 
 .fornecedores-titulo .panel-subtitle { margin: 0; }
 
+/* Mesma fonte do "Insumos da Rede" e da saudação da Home (pedido dela, 18/09). */
+.fornecedores-titulo h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
 .fornecedores-acoes {
   display: flex;
   align-items: center;
