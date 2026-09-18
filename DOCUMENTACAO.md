@@ -2573,6 +2573,14 @@ adesivos, pelo leite composto, pela colher super longa e pela lata de 250
 ml (fora da VMarket, que o Açaí não usava), e Artesanos pelos adicionais sem
 preço de venda. Teste: `teste_motivos_cmv.py` no scratchpad (10 checagens).
 
+**Canal sem preço usa o preço do balcão** (2026-09-18). Os adicionais do
+Artesanos ganharam preço só no Cardápio Web (lista que a Julia mandou do
+editor de complementos), mas parte das vendas é pelo iFood. A receita de
+cada venda usa o preço do canal dela; sem preço naquele canal, a venda
+entrava com receita zero, o preço médio despencava e o CMV explodia (Adc
+Bacon com 98,8%, Adc Alface com 133%). Agora, sem preço no canal, vale o do
+Cardápio Web e, sem ele, o de qualquer outro canal.
+
 ### 6.13 Vendas Semanais (CMV, %CMV e veredito por semana)
 
 Tela `vendas-semanais.html` (Insights → Vendas Semanais), redesenhada em

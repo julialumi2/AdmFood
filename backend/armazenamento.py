@@ -3861,6 +3861,15 @@ def curva_abc_cardapio(loja, dias=30):
         })
         item["volume"] += venda["quantidade"]
         preco = produto.get(_CANAL_VENDA_PARA_PRECO.get(venda["canal"], "cardapioWeb"))
+        if preco is None:
+            # Canal sem preço na lista (o iFood dos adicionais do Artesanos, 18/09):
+            # usa o do balcão e, sem ele, qualquer outro. Contar a venda com
+            # receita zero derrubava o preço médio e fazia o CMV explodir
+            # (Adc Bacon aparecia com 98,8%).
+            preco = next(
+                (produto.get(c) for c in ("cardapioWeb", "ifood", "food99", "beefood") if produto.get(c) is not None),
+                None,
+            )
         if preco is not None:
             item["receita"] += venda["quantidade"] * preco
 
