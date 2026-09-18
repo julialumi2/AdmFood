@@ -1,6 +1,8 @@
 # Credenciais e chaves do Google (se houver no futuro)
 credentials.json
 *.json
+# ...menos o manifest da extensão do WhatsApp, que é código
+!extensao-whatsapp/manifest.json
 
 # Ambientes virtuais e arquivos do Python
 __pycache__/
@@ -26,3 +28,7 @@ notas_fiscais/
 .vscode/
 # Backups que o botão "Atualizar dados pelas planilhas" grava ao lado do banco
 backups/
+
+# Pacote da extensão (gerado a cada versão) e cópia do ícone pro painel da loja
+extensao-whatsapp/publicacao/*.zip
+extensao-whatsapp/publicacao/icone-128.png
