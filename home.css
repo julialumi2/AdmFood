@@ -1,0 +1,240 @@
+/* Home nova (2026-09-18, pedido da Julia). O quadro da rede fica igual; o
+   cartão "Diário" saiu (repetia o quadro) e deu lugar ao estoque crítico; a
+   lista de sincronização por loja virou um ponto no botão Sincronizar; e o
+   painel ao lado do ranking passou a ser de gestão: Curva A da rede, custos
+   em alta e atalhos. Cor de alerta só aqui: vermelho no estoque, laranja na
+   margem. Fica fora do style.css de propósito. */
+
+/* Texto só pra leitor de tela (o status do botão Sincronizar). */
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* SINCRONIZAR: ponto de status no canto do ícone — cinza enquanto confere,
+   verde com todas as lojas em dia, vermelho com alguma atrasada. */
+.home-sync-icone {
+  position: relative;
+  display: inline-flex;
+}
+
+.home-sync-ponto {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-faint);
+  box-shadow: 0 0 0 2px var(--card-bg);
+}
+
+.home-sync-ponto.ok { background-color: var(--success); }
+.home-sync-ponto.erro { background-color: var(--danger); }
+
+/* A resposta do Sincronizar aparece logo abaixo do cabeçalho. */
+.pagina-home .sync-resultado { margin-top: calc(-1 * var(--space-2)); }
+
+/* O gráfico da rede fica mais baixo: sete pontos não precisam de 260 px. */
+.pagina-home .home-charts-row .chart-body { height: 200px; }
+
+/* CARTÃO DE ESTOQUE CRÍTICO */
+.home-card-estoque .home-kpi-rotulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-card-estoque .home-kpi-rotulo svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+}
+
+.home-card-estoque.tem-alerta .home-kpi-rotulo svg,
+.home-card-estoque.tem-alerta .home-kpi-valor { color: var(--danger-texto); }
+
+.home-estoque-lojas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.home-estoque-lojas:empty { display: none; }
+
+.home-estoque-lojas a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background-color: var(--danger-soft);
+  color: var(--danger-texto);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-estoque-lojas a:hover { text-decoration: underline; }
+
+.home-estoque-lojas a:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+/* PAINEL DE GESTÃO OPERACIONAL */
+.home-gestao-bloco + .home-gestao-bloco {
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--space-4);
+}
+
+.home-gestao-bloco-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.home-gestao-bloco-topo h4 {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.home-gestao-bloco-topo a {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--home-destaque);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.home-gestao-bloco-topo a:hover { text-decoration: underline; }
+
+.home-curva-lista,
+.home-alertas-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Curva A: mesma posição numerada do ranking de lojas, ao lado. */
+.home-curva-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.home-curva-item:first-child .ranking-posicao {
+  background-color: var(--home-destaque-suave);
+  color: var(--home-destaque);
+}
+
+.home-curva-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-curva-nome {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-curva-detalhe {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-curva-margem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-curva-margem strong {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.home-curva-margem span {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+
+/* Custos em alta: laranja, a cor de atenção da margem. */
+.home-alerta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.home-alerta-icone {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background-color: var(--warning-soft);
+  color: var(--warning-texto);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-alerta-icone svg {
+  width: 14px;
+  height: 14px;
+}
+
+.home-alerta-texto {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8125rem;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-alerta-pct { color: var(--warning-texto); }
+
+.home-alerta-detalhe {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Atalhos no pé do painel: os mesmos botões do cabeçalho, menores. */
+.home-atalhos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-color);
+}
+
+.home-atalhos .quick-action-btn { height: 32px; }

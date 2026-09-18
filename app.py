@@ -157,6 +157,7 @@ from backend.armazenamento import (
     rodar_backup_diario,
     registrar_acao,
     historico_precos_insumo,
+    alertas_de_custo_na_margem,
     variacoes_de_preco,
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
@@ -1170,6 +1171,67 @@ def api_excluir_usuario(usuario_id):
 # servidor, só a cópia que a pessoa baixa e guarda fora daqui.
 
 NOME_DE_BACKUP = re.compile(r"^admfood-\d{4}-\d{2}-\d{2}\.db$")
+
+
+# Bloco de gestão da Home (2026-09-18, pedido dela): o card de faturamento
+# de ontem repetia o banner, e a lista de sincronização ocupava meia tela pra
+# dizer "em dia". No lugar: estoque crítico, a Curva A da rede e as altas de
+# custo que comem margem. Tudo dos últimos 30 dias e só das lojas que a
+# pessoa enxerga.
+DIAS_DA_HOME = 30
+
+
+@app.route('/api/home/gestao', methods=['GET'])
+def api_home_gestao():
+    erro_acesso = _exigir_gestao()
+    if erro_acesso:
+        return erro_acesso
+    lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
+
+    # Mesma regra dos cartões de Insumos (zerado ou abaixo do mínimo), loja
+    # por loja: somar a rede esconderia a loja zerada atrás da que tem sobra.
+    criticos = {loja: {"loja": loja, "criticos": 0, "zerados": 0} for loja in lojas}
+    for linha in listar_insumos():
+        contagem = criticos.get(linha["loja"])
+        if not contagem or linha["eh_mistura"] or not linha["aplica"]:
+            continue
+        if _status_estoque(linha["quantidade_atual"], linha["estoque_minimo"]) == "critico":
+            contagem["criticos"] += 1
+            if linha["quantidade_atual"] <= 0:
+                contagem["zerados"] += 1
+
+    # Curva A da rede: o mesmo produto nas duas Tradiças soma numa linha só.
+    produtos = {}
+    for loja in lojas:
+        for item in curva_abc_cardapio(loja, DIAS_DA_HOME)["itens"]:
+            if item["curva"] != "A":
+                continue
+            produto = produtos.setdefault(item["nome"], {
+                "nome": item["nome"], "lojas": [], "margem": 0.0, "receita": 0.0, "volume": 0.0,
+            })
+            produto["lojas"].append(loja)
+            produto["margem"] += item["margem"]
+            produto["receita"] += item["receita"]
+            produto["volume"] += item["volume"]
+    curva_a = sorted(produtos.values(), key=lambda p: -p["margem"])[:3]
+    for produto in curva_a:
+        produto["cmvPercent"] = (
+            round((produto["receita"] - produto["margem"]) / produto["receita"] * 100, 1)
+            if produto["receita"] else None
+        )
+        for campo in ("margem", "receita", "volume"):
+            produto[campo] = round(produto[campo], 2)
+
+    return jsonify({
+        "dias": DIAS_DA_HOME,
+        "estoqueCritico": {
+            "total": sum(c["criticos"] for c in criticos.values()),
+            "zerados": sum(c["zerados"] for c in criticos.values()),
+            "porLoja": list(criticos.values()),
+        },
+        "curvaA": curva_a,
+        "custosEmAlta": alertas_de_custo_na_margem(lojas, DIAS_DA_HOME),
+    })
 
 
 @app.route('/api/precos/variacoes', methods=['GET'])

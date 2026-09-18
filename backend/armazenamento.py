@@ -6581,6 +6581,89 @@ def variacoes_de_preco(dias=90):
     return saida
 
 
+# Alta de custo que pesa na margem (Home, 2026-09-18): o insumo que ficou
+# mais caro no período, cruzado com as fichas técnicas. "Subiu 12%" sozinho
+# não diz se importa; "a margem do hambúrguer caiu 1,7 ponto" diz.
+ALTA_MINIMA_PARA_ALERTA_PCT = 5
+PONTOS_MINIMOS_PARA_ALERTA = 0.1
+
+
+def alertas_de_custo_na_margem(lojas, dias=30, limite=3):
+    """Os insumos que subiram no período e, pra cada um, o produto em que a
+    alta mais come margem (em pontos percentuais do preço de venda), do que
+    mais come pro que menos. Preço marcado como suspeito (unidade trocada),
+    produto sem preço de venda e alta que mexe menos de 0,1 ponto ficam de
+    fora. `margemAntes`/`margemAgora` só vêm quando o produto tem custo."""
+    altas = {
+        v["insumoId"]: v for v in variacoes_de_preco(dias)
+        if v["variacaoPct"] >= ALTA_MINIMA_PARA_ALERTA_PCT and not v["suspeito"]
+    }
+    if not altas:
+        return []
+    with conexao() as conn:
+        fichas = conn.execute(
+            f"""
+            SELECT item_id, insumo_id, loja, quantidade FROM ficha_tecnica
+            WHERE quantidade > 0 AND insumo_id IN ({','.join('?' * len(altas))})
+            """,
+            list(altas),
+        ).fetchall()
+
+    precos_insumo = _mapa_preco_insumo()
+    custos_manuais = mapa_custos_item_cardapio()
+    por_insumo = {}
+    for loja in lojas:
+        linhas = [f for f in fichas if f["loja"] == loja]
+        if not linhas:
+            continue
+        produtos = {p["itemCardapioId"]: p for p in listar_produtos_por_loja(loja) if p["itemCardapioId"]}
+        custos = _custo_por_item_da_ficha(loja, precos_insumo)
+        for linha in linhas:
+            produto = produtos.get(linha["item_id"])
+            if not produto:
+                continue
+            preco_venda = next(
+                (produto[c] for c in ("cardapioWeb", "ifood", "food99", "beefood") if produto.get(c)), None
+            )
+            if not preco_venda:
+                continue
+            alta = altas[linha["insumo_id"]]
+            custo_a_mais = linha["quantidade"] * (alta["precoAgora"] - alta["precoAntes"])
+            custo = custos_manuais.get((linha["item_id"], loja))
+            if custo is None:
+                custo = custos.get(linha["item_id"])
+            candidato = {
+                "produto": produto["nome"],
+                "loja": loja,
+                "pontosDeMargem": round(custo_a_mais / preco_venda * 100, 1),
+                "custoAMais": round(custo_a_mais, 2),
+                "margemAntes": round((preco_venda - custo + custo_a_mais) / preco_venda * 100, 1) if custo is not None else None,
+                "margemAgora": round((preco_venda - custo) / preco_venda * 100, 1) if custo is not None else None,
+            }
+            registro = por_insumo.setdefault(linha["insumo_id"], {"maior": None, "produtos": set()})
+            registro["produtos"].add(produto["nome"])
+            if registro["maior"] is None or candidato["pontosDeMargem"] > registro["maior"]["pontosDeMargem"]:
+                registro["maior"] = candidato
+
+    saida = []
+    for insumo_id, registro in por_insumo.items():
+        if registro["maior"]["pontosDeMargem"] < PONTOS_MINIMOS_PARA_ALERTA:
+            continue
+        alta = altas[insumo_id]
+        saida.append({
+            "insumoId": insumo_id,
+            "insumo": alta["nome"],
+            "unidade": alta["unidade"],
+            "variacaoPct": alta["variacaoPct"],
+            "precoAntes": alta["precoAntes"],
+            "precoAgora": alta["precoAgora"],
+            **registro["maior"],
+            "outrosProdutos": len(registro["produtos"]) - 1,
+        })
+    saida.sort(key=lambda a: -a["pontosDeMargem"])
+    return saida[:limite]
+
+
 # --- REGISTRO DE AÇÕES (quem fez o quê) -------------------------------------
 #
 # Só recebimento e algumas telas guardavam o nome de quem fez. Com mais gente

@@ -53,7 +53,7 @@ inicializa o que é relevante pra ela.
 
 | Arquivo | Tela |
 |---|---|
-| `index.html` | Resumo (Home) — faturamento da rede, gráfico diário, insights automáticos |
+| `index.html` | Resumo (Home) — faturamento da rede, estoque crítico, gráficos, ranking e gestão (Curva A, custos em alta, atalhos) |
 | `estoque.html` | Estoque — controle nativo de insumos por loja, sem depender de terceiro (ver seção 6.4) |
 | `fornecedores.html` | Fornecedores — diretório da rede, semente do módulo de Compras (ver seção 6.7) |
 | `cotacoes.html` | Cotações — comparação manual de preço por insumo entre fornecedores (ver seção 6.8) |
@@ -3194,6 +3194,7 @@ Todos em `app.py`, prefixo `/api`.
 - `GET /api/faturamento-mesmo-dia-semana?unidade=&dia=` — todas as ocorrências do mesmo dia da semana no mês (usado no relatório comparativo)
 - `GET /api/insights?inicio=&fim=&diaSemana=` — visão completa por período, com filtro opcional por dia da semana; retorna um bloco por loja + "geral"
 - `GET /api/insights-automaticos` — compara ontem contra a média dos 7 dias anteriores, destaca variações >8% (usado nos cards da Home)
+- `GET /api/home/gestao` — bloco de gestão da Home: estoque crítico por loja, top 3 da Curva A da rede e custos em alta que comem margem, últimos 30 dias (admin e gerente)
 
 **Configuração / Sincronização**
 - `GET /api/config/lojas` — status de cada loja (token mascarado, última sincronização)
@@ -3610,11 +3611,41 @@ sistema está pronto, falta o número):
   (`corDoCanal`: iFood rosa, 99Food âmbar, Cardápio Web azul, Presencial
   turquesa, Totem violeta); lojas em Mais Vendidos: Artesanos azul, Açaí
   violeta, Tradiça ZN âmbar, Simus turquesa.
-- **Home**: no topo, o título "Visão Geral" e as ações rápidas como
-  botões secundários; logo abaixo, o quadro "Visão geral da rede" com o
-  faturamento de ontem (chapa grafite com um brilho do vermelho da marca)
-  e a hora da atualização num selo dentro dele. O `style.css` guarda o
-  quadro e as cores próprias da Home (`body.pagina-home`).
+- **Home**: no topo, "Olá {primeiro nome}, seja bem-vindo(a)!" e as ações
+  rápidas como botões secundários; logo abaixo, o quadro "Visão geral da
+  rede" com o faturamento de ontem (chapa grafite com um brilho do vermelho
+  da marca) e a hora da atualização num selo dentro dele. O `style.css`
+  guarda o quadro e as cores próprias da Home (`body.pagina-home`); o que
+  entrou na reforma de 2026-09-18 está em `home.css` (ver abaixo).
+- **Home reformada (2026-09-18, pedido dela):** o quadro da rede ficou
+  intacto; o que mudou foi tirar repetição e abrir espaço pra compra e
+  estoque.
+  - O cartão "Diário" repetia o faturamento de ontem do quadro: virou
+    **Estoque crítico** — zerados ou abaixo do mínimo, contados loja por
+    loja com a regra dos cartões de Insumos (somar a rede esconderia a loja
+    zerada atrás da que tem sobra). Cada loja é um link pra
+    `estoque.html?loja=<loja>&nivel=critico`, que abre a tabela da loja já
+    filtrada. Semanal e Mensal continuam.
+  - A lista "Status de sincronização" virou um **ponto no ícone do
+    Sincronizar**: verde com todas as lojas em dia, vermelho com alguma
+    atrasada (o nome delas vai no texto do botão, no hover). A resposta do
+    botão aparece logo abaixo do cabeçalho.
+  - O gráfico da rede ficou mais baixo (200 px); canais continua ao lado
+    (60/40).
+  - No lugar da lista, o painel **Gestão operacional** (últimos 30 dias):
+    os 3 produtos da Curva A que mais deram margem na rede (o mesmo
+    produto nas duas Tradiças soma numa linha), os **custos em alta** — o
+    insumo que subiu 5% ou mais e o produto em que a alta mais come
+    margem, em pontos do preço de venda ("a margem do X caiu 1,7 ponto";
+    fica de fora preço suspeito de unidade trocada e alta que mexe menos
+    de 0,1 ponto) — e dois atalhos: "Lançar nota de compra"
+    (`pedidos.html?acao=compra-fora`) e "Nova ficha técnica"
+    (`cardapio.html?acao=novo-item`), que abrem o formulário direto.
+  - Tudo numa chamada: `GET /api/home/gestao` (admin e gerente, só as
+    lojas que a pessoa enxerga), com `alertas_de_custo_na_margem` em
+    `backend/armazenamento.py`. Cor de alerta só nesses blocos: vermelho no
+    estoque, laranja na margem. Teste: `teste_home_gestao.py` no scratchpad
+    (14 verificações).
 - **Cabeçalho de vidro** (`.top-header`, todas as telas): barra flutuante
   a 12px das bordas, meio transparente (`--header-vidro`), com
   `backdrop-filter` desfocando o que passa por baixo, fio de borda e

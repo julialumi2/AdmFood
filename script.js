@@ -15,8 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
 
-  // 1.1 USUÁRIO LOGADO (nome/iniciais na sidebar de todas as telas do painel)
-  carregarUsuarioLogado();
+  // 1.1 USUÁRIO LOGADO (nome/iniciais na sidebar de todas as telas do painel).
+  // A promessa fica guardada pra quem precisa do nome antes de agir (os
+  // atalhos da Home que abrem um formulário já preenchido).
+  window.usuarioPronto = carregarUsuarioLogado();
 
   // 2. TOGGLE MODO NOTURNO (a tela de Configurações tem 2 interruptores na
   // mesma página — cabeçalho + painel de Aparência — mantidos sincronizados)
@@ -110,9 +112,14 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarCanalRedeHome();
   }
 
-  // 4.06 STATUS DE SINCRONIZAÇÃO POR LOJA (Home)
-  if (document.getElementById('home-sync-status')) {
+  // 4.06 STATUS DE SINCRONIZAÇÃO (Home): um ponto no botão Sincronizar
+  if (document.getElementById('home-sync-indicador')) {
     carregarStatusSincronizacaoHome();
+  }
+
+  // 4.07 GESTÃO OPERACIONAL (Home): estoque crítico, Curva A e custos em alta
+  if (document.getElementById('home-curva-a')) {
+    carregarGestaoHome();
   }
 
   // 4.08 ATUALIZAÇÃO AUTOMÁTICA DA HOME (quase em tempo real)
@@ -123,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
       carregarGraficoRede();
       carregarCanalRedeHome();
       carregarStatusSincronizacaoHome();
+      carregarGestaoHome();
       marcarAtualizadoAgora('home-atualizado-em');
     });
   }
@@ -136,6 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4.095 TELA DE CARDÁPIO (Preços + Ficha Técnica numa tela só desde 2026-09-09)
   if (document.getElementById('ficha-tecnica-conteudo')) {
     carregarFichaTecnicaAtual();
+    // Atalho "Nova ficha técnica" da Home.
+    if (new URLSearchParams(location.search).get('acao') === 'novo-item') abrirModalNovoItemCardapio();
     const inputArquivo = document.getElementById('cardapio-importar-arquivo');
     if (inputArquivo) inputArquivo.addEventListener('change', importarPlanilhaCardapio);
   }
@@ -235,7 +245,19 @@ document.addEventListener('DOMContentLoaded', () => {
       renderEstoqueTab();
     });
 
-    carregarInsumos();
+    // Link do cartão de estoque crítico da Home: ?loja=...&nivel=critico
+    // abre a loja com a tabela já filtrada e rola até ela.
+    const parametros = new URLSearchParams(location.search);
+    const lojaPedida = parametros.get('loja');
+    const nivelPedido = parametros.get('nivel');
+    if (lojaPedida) {
+      menu.querySelector(`.loja-select-item[data-tab="${CSS.escape(lojaPedida)}"]`)?.click();
+    }
+    if (ROTULO_FILTRO_ESTOQUE[nivelPedido]) estoqueFiltroStatus = nivelPedido;
+
+    carregarInsumos().then(() => {
+      if (ROTULO_FILTRO_ESTOQUE[nivelPedido]) document.getElementById('estoque-tabela-card')?.scrollIntoView({ block: 'start' });
+    });
     carregarLotesVencendo();
     carregarDatasEspeciais();
     carregarFornecedores();
@@ -347,6 +369,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4.0997 TELA DE PEDIDOS (admin)
   if (document.getElementById('pedidos-tabela-body')) {
     carregarPedidos();
+    // Atalho "Lançar nota de compra" da Home: espera o nome de quem está
+    // logado, que o formulário já traz preenchido como comprador.
+    if (new URLSearchParams(location.search).get('acao') === 'compra-fora') {
+      window.usuarioPronto.finally(() => abrirCompraFora());
+    }
   }
 
   // 4.0997b TELA DE RECEBIMENTOS (qualquer pessoa logada, não só admin)
@@ -7586,31 +7613,35 @@ function _badgeSincronizacao(dataStr) {
 }
 
 /**
- * Home: lista compacta de quando cada loja sincronizou pela última vez,
- * com aviso visual se alguma estiver atrasada (não sincronizou ontem/hoje).
+ * Home: ponto no botão Sincronizar — verde com todas as lojas em dia,
+ * vermelho com alguma atrasada (não sincronizou ontem/hoje) ou sem resposta.
+ * O nome de cada loja atrasada vai no texto do botão pra quem passa o mouse.
+ * Substituiu a lista de sincronização por loja (2026-09-18), que ocupava
+ * meio painel pra dizer "em dia" quase sempre.
  */
 async function carregarStatusSincronizacaoHome() {
-  const lista = document.getElementById('home-sync-status');
-  if (!lista) return;
-
-  lista.innerHTML = `<p class="panel-subtitle">Carregando...</p>`;
+  const ponto = document.getElementById('home-sync-indicador');
+  if (!ponto) return;
+  const botao = document.getElementById('btn-sincronizar-agora');
+  const marcar = (situacao, texto) => {
+    ponto.className = `home-sync-ponto ${situacao}`;
+    const oculto = document.getElementById('home-sync-texto');
+    if (oculto) oculto.textContent = ` — ${texto}`;
+    if (botao) botao.title = texto;
+  };
   try {
     const resposta = await fetch('/api/config/lojas');
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
-    const dados = await resposta.json();
-    const lojas = dados.lojas || [];
-
-    lista.innerHTML = lojas.length
-      ? lojas.map(loja => `
-          <div class="sync-status-item">
-            <span class="sync-status-nome">${loja.nome}</span>
-            <span class="sync-status-data">${_badgeSincronizacao(loja.ultimaSincronizacao)}</span>
-          </div>
-        `).join('')
-      : `<p class="panel-subtitle">Nenhuma loja cadastrada.</p>`;
+    const lojas = (await resposta.json()).lojas || [];
+    const atrasadas = lojas.filter((l) => !_sincronizacaoEmDia(l.ultimaSincronizacao));
+    if (!atrasadas.length) {
+      marcar('ok', 'Sincronizado: todas as lojas em dia');
+    } else {
+      marcar('erro', `${atrasadas.length === 1 ? 'Loja atrasada' : 'Lojas atrasadas'}: ${atrasadas.map((l) => l.nome).join(', ')}`);
+    }
   } catch (erro) {
     console.error('Falha ao carregar status de sincronização:', erro);
-    lista.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar o status.</p>`;
+    marcar('erro', 'Não foi possível conferir a sincronização');
   }
 }
 
@@ -7711,7 +7742,7 @@ async function sincronizarAgora(forcar) {
     }
 
     carregarConfigLojas();
-    if (document.getElementById('home-sync-status')) carregarStatusSincronizacaoHome();
+    if (document.getElementById('home-sync-indicador')) carregarStatusSincronizacaoHome();
   } catch (erro) {
     console.error('Falha ao sincronizar:', erro);
     if (resultadoElem) {
@@ -7741,8 +7772,6 @@ async function carregarDadosLojas() {
 
   if (!container) return;
 
-  container.innerHTML = `<p class="text-muted" style="padding: 12px;">Sincronizando com o Cardápio Web via Flask...</p>`;
-
   try {
     // dias=90 pra garantir que o mês passado inteiro sempre caiba na janela
     // buscada, mesmo no pior caso (hoje é o último dia de um mês longo).
@@ -7770,8 +7799,6 @@ async function carregarDadosLojas() {
     };
 
     const hoje = new Date();
-    const ontemDate = new Date(hoje);
-    ontemDate.setDate(hoje.getDate() - 1);
 
     // Semana passada (segunda a domingo) — a semana em andamento nunca
     // aparece aqui, só a última já fechada.
@@ -7793,23 +7820,13 @@ async function carregarDadosLojas() {
 
     const fmtCurto = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-    container.innerHTML = `
-      <div class="store-card">
-        <span class="home-kpi-rotulo">Diário</span>
-        <div class="home-kpi-valor">${_formatarMoedaBRL(dadosOntem.total_rede)}</div>
-        <span class="home-kpi-periodo">Ontem, ${fmtCurto(ontemDate)}</span>
-      </div>
-      <div class="store-card">
-        <span class="home-kpi-rotulo">Semanal</span>
-        <div class="home-kpi-valor">${_formatarMoedaBRL(totalSemanal)}</div>
-        <span class="home-kpi-periodo">Semana passada, ${fmtCurto(semanaPassadaInicio)} a ${fmtCurto(semanaPassadaFim)}</span>
-      </div>
-      <div class="store-card">
-        <span class="home-kpi-rotulo">Mensal</span>
-        <div class="home-kpi-valor">${_formatarMoedaBRL(totalMensal)}</div>
-        <span class="home-kpi-periodo">Mês passado, ${fmtCurto(mesPassadoInicio)} a ${fmtCurto(mesPassadoFim)}</span>
-      </div>
-    `;
+    // O faturamento de ontem está no quadro de cima; os cartões ficam com a
+    // semana e o mês passados (o primeiro é o estoque crítico, ver
+    // carregarGestaoHome).
+    document.getElementById('home-semanal-valor').textContent = _formatarMoedaBRL(totalSemanal);
+    document.getElementById('home-semanal-periodo').textContent = `Semana passada, ${fmtCurto(semanaPassadaInicio)} a ${fmtCurto(semanaPassadaFim)}`;
+    document.getElementById('home-mensal-valor').textContent = _formatarMoedaBRL(totalMensal);
+    document.getElementById('home-mensal-periodo').textContent = `Mês passado, ${fmtCurto(mesPassadoInicio)} a ${fmtCurto(mesPassadoFim)}`;
 
     renderRankingLojasHome(dadosOntem.lojas);
 
@@ -7820,7 +7837,9 @@ async function carregarDadosLojas() {
 
   } catch (error) {
     console.error('Falha ao conectar com o backend Flask:', error);
-    container.innerHTML = `<p style="color: var(--danger-texto); padding: 12px;">Não foi possível carregar o faturamento. Certifique-se de que o Flask está rodando.</p>`;
+    ['home-semanal-periodo', 'home-mensal-periodo'].forEach((id) => {
+      document.getElementById(id).textContent = 'Não foi possível carregar o faturamento.';
+    });
   }
 }
 
@@ -7858,6 +7877,103 @@ function renderRankingLojasHome(lojas) {
       </div>
     `;
   }).join('');
+}
+
+// --- HOME: GESTÃO OPERACIONAL (2026-09-18) ---
+// Estoque crítico no primeiro cartão, Curva A da rede e custos em alta no
+// painel ao lado do ranking. Uma chamada só (/api/home/gestao), dos últimos
+// 30 dias, respeitando a loja de quem é gerente de uma loja só.
+const NOME_CURTO_LOJA = {
+  'Hamburgueria Artesanos': 'Artesanos',
+  'Açaí Na Lata': 'Açaí',
+  'Tradiça ZN': 'ZN',
+  'Tradiça Simus': 'Simus',
+};
+
+function _nomeCurtoLoja(loja) {
+  return NOME_CURTO_LOJA[loja] || loja;
+}
+
+function _renderEstoqueCriticoHome(estoque) {
+  const card = document.getElementById('home-card-estoque');
+  if (!card) return;
+  const total = estoque.total || 0;
+  card.classList.toggle('tem-alerta', total > 0);
+  document.getElementById('home-estoque-total').textContent = total.toLocaleString('pt-BR');
+  document.getElementById('home-estoque-sub').textContent = total
+    ? `${total === 1 ? 'item zerado ou abaixo' : 'itens zerados ou abaixo'} do mínimo${estoque.zerados ? ` · ${estoque.zerados} ${estoque.zerados === 1 ? 'zerado' : 'zerados'}` : ''}`
+    : 'Nenhum insumo zerado ou abaixo do mínimo';
+  // Cada loja leva pra tabela dela já filtrada em "crítico".
+  document.getElementById('home-estoque-lojas').innerHTML = (estoque.porLoja || [])
+    .filter((l) => l.criticos > 0)
+    .map((l) => `
+      <a href="estoque.html?loja=${encodeURIComponent(l.loja)}&nivel=critico" title="${escaparHtml(l.loja)}: ${l.criticos} em nível crítico">
+        ${escaparHtml(_nomeCurtoLoja(l.loja))} <strong>${l.criticos}</strong>
+      </a>`).join('');
+}
+
+function _renderCurvaAHome(produtos) {
+  const lista = document.getElementById('home-curva-a');
+  if (!lista) return;
+  if (!produtos.length) {
+    lista.innerHTML = '<li class="panel-subtitle">Nenhum produto com CMV calculado entrou na Curva A no período.</li>';
+    return;
+  }
+  lista.innerHTML = produtos.map((p, i) => `
+    <li class="home-curva-item">
+      <span class="ranking-posicao">${i + 1}º</span>
+      <div class="home-curva-info">
+        <span class="home-curva-nome">${escaparHtml(p.nome)}</span>
+        <span class="home-curva-detalhe">${p.lojas.map(_nomeCurtoLoja).map(escaparHtml).join(' + ')}${p.cmvPercent != null ? ` · CMV ${String(p.cmvPercent).replace('.', ',')}%` : ''}</span>
+      </div>
+      <div class="home-curva-margem">
+        <strong>${_formatarMoedaBRL(p.margem)}</strong>
+        <span>de margem</span>
+      </div>
+    </li>`).join('');
+}
+
+function _renderCustosEmAltaHome(alertas) {
+  const lista = document.getElementById('home-custos-alta');
+  if (!lista) return;
+  if (!alertas.length) {
+    lista.innerHTML = '<li class="panel-subtitle">Nenhuma alta de insumo pesou na margem nos últimos 30 dias.</li>';
+    return;
+  }
+  const num = (v) => String(v).replace('.', ',');
+  lista.innerHTML = alertas.map((a) => {
+    const pontos = `${num(a.pontosDeMargem)} ${a.pontosDeMargem === 1 ? 'ponto' : 'pontos'}`;
+    const margens = a.margemAntes != null ? ` (${num(a.margemAntes)}% → ${num(a.margemAgora)}%)` : '';
+    const outros = a.outrosProdutos ? ` · e mais ${a.outrosProdutos} ${a.outrosProdutos === 1 ? 'produto' : 'produtos'}` : '';
+    return `
+      <li class="home-alerta-item">
+        <span class="home-alerta-icone" aria-hidden="true"><i data-lucide="trending-up"></i></span>
+        <div class="home-alerta-texto">
+          <span><strong>${escaparHtml(a.insumo)}</strong> subiu <strong class="home-alerta-pct">${num(a.variacaoPct)}%</strong>
+            · R$ ${_formatarPrecoUnitario(a.precoAntes)} → R$ ${_formatarPrecoUnitario(a.precoAgora)}/${escaparHtml(a.unidade)}</span>
+          <span class="home-alerta-detalhe">A margem do ${escaparHtml(a.produto)} (${escaparHtml(_nomeCurtoLoja(a.loja))}) caiu ${pontos}${margens}${outros}</span>
+        </div>
+      </li>`;
+  }).join('');
+}
+
+async function carregarGestaoHome() {
+  if (!document.getElementById('home-curva-a')) return;
+  try {
+    const resposta = await fetch('/api/home/gestao');
+    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    const dados = await resposta.json();
+    _renderEstoqueCriticoHome(dados.estoqueCritico || {});
+    _renderCurvaAHome(dados.curvaA || []);
+    _renderCustosEmAltaHome(dados.custosEmAlta || []);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (erro) {
+    console.error('Falha ao carregar a gestão da Home:', erro);
+    document.getElementById('home-estoque-sub').textContent = 'Não foi possível carregar o estoque.';
+    ['home-curva-a', 'home-custos-alta'].forEach((id) => {
+      document.getElementById(id).innerHTML = '<li class="panel-subtitle">Não foi possível carregar.</li>';
+    });
+  }
 }
 
 // --- LOGIN / LOGOUT ---
@@ -7946,6 +8062,8 @@ async function carregarUsuarioLogado() {
     elAvatar.forEach(el => { el.textContent = iniciais; });
 
     window.usuarioLogado = usuario;
+    const saudacao = document.getElementById('home-saudacao');
+    if (saudacao) saudacao.textContent = `Olá ${usuario.nome.split(' ')[0]}, seja bem-vindo(a)!`;
     _ajustarMenuAoPerfil();
     _travarNaLojaDoFuncionario();
     carregarContadoresMenuCompras();

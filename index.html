@@ -9,6 +9,7 @@
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="home.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -169,7 +170,7 @@
         <!-- CABEÇALHO DA PÁGINA: título e ações rápidas -->
         <div class="home-cabecalho">
           <div class="home-cabecalho-titulo">
-            <h1>Visão Geral</h1>
+            <h1 id="home-saudacao">Olá, seja bem-vindo(a)!</h1>
           </div>
 
           <div class="quick-actions">
@@ -182,8 +183,12 @@
               <span>Lançar venda presencial</span>
             </a>
             <button type="button" class="quick-action-btn" id="btn-sincronizar-agora">
-              <i data-lucide="refresh-cw"></i>
+              <span class="home-sync-icone">
+                <i data-lucide="refresh-cw"></i>
+                <span class="home-sync-ponto" id="home-sync-indicador"></span>
+              </span>
               <span>Sincronizar</span>
+              <span class="visualmente-oculto" id="home-sync-texto"></span>
             </button>
             <a href="configuracoes.html" class="quick-action-btn">
               <i data-lucide="settings"></i>
@@ -191,6 +196,9 @@
             </a>
           </div>
         </div>
+
+        <!-- Resposta do botão Sincronizar (some quando vazio) -->
+        <div class="sync-resultado" id="sync-resultado"></div>
 
         <!-- QUADRO DA REDE: faturamento de ontem em destaque -->
         <div class="hero-band">
@@ -204,14 +212,24 @@
           </div>
         </div>
 
-        <!-- SEÇÃO FATURAMENTO POR PERÍODO -->
-        <div class="section-header">
-          <h3>Faturamento por período</h3>
-        </div>
-
-        <!-- CARDS INJETADOS PELO JS -->
+        <!-- ESTOQUE CRÍTICO + SEMANA E MÊS PASSADOS (o dia de ontem já está no quadro acima) -->
         <div class="cards-grid" id="container-periodo">
-          <p class="text-muted" style="padding: 12px;">Sincronizando dados com o Cardápio Web...</p>
+          <div class="store-card home-card-estoque" id="home-card-estoque">
+            <span class="home-kpi-rotulo"><i data-lucide="alert-triangle"></i>Estoque crítico</span>
+            <div class="home-kpi-valor" id="home-estoque-total">—</div>
+            <span class="home-kpi-periodo" id="home-estoque-sub">Carregando...</span>
+            <div class="home-estoque-lojas" id="home-estoque-lojas"></div>
+          </div>
+          <div class="store-card">
+            <span class="home-kpi-rotulo">Semanal</span>
+            <div class="home-kpi-valor" id="home-semanal-valor">—</div>
+            <span class="home-kpi-periodo" id="home-semanal-periodo">Carregando...</span>
+          </div>
+          <div class="store-card">
+            <span class="home-kpi-rotulo">Mensal</span>
+            <div class="home-kpi-valor" id="home-mensal-valor">—</div>
+            <span class="home-kpi-periodo" id="home-mensal-periodo">Carregando...</span>
+          </div>
         </div>
 
         <!-- GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA -->
@@ -250,7 +268,7 @@
           </div>
         </div>
 
-        <!-- RANKING DE LOJAS + STATUS DE SINCRONIZAÇÃO -->
+        <!-- RANKING DE LOJAS + GESTÃO OPERACIONAL -->
         <div class="home-secondary-row">
           <div class="panel">
             <div class="panel-header">
@@ -262,14 +280,42 @@
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel home-gestao">
             <div class="panel-header">
-              <h3 class="panel-title">Status de sincronização</h3>
+              <h3 class="panel-title">Gestão operacional</h3>
+              <span class="panel-subtitle">Últimos 30 dias</span>
             </div>
-            <div class="sync-status-lista" id="home-sync-status">
-              <!-- Renderizado dinamicamente via JS -->
+
+            <section class="home-gestao-bloco" aria-labelledby="home-curva-titulo">
+              <div class="home-gestao-bloco-topo">
+                <h4 id="home-curva-titulo">Curva A da rede</h4>
+                <a href="curva-abc.html">Ver Curva ABC</a>
+              </div>
+              <ol class="home-curva-lista" id="home-curva-a">
+                <li class="panel-subtitle">Carregando...</li>
+              </ol>
+            </section>
+
+            <section class="home-gestao-bloco" aria-labelledby="home-custos-titulo">
+              <div class="home-gestao-bloco-topo">
+                <h4 id="home-custos-titulo">Custos em alta</h4>
+                <a href="precos.html">Ver evolução do preço</a>
+              </div>
+              <ul class="home-alertas-lista" id="home-custos-alta">
+                <li class="panel-subtitle">Carregando...</li>
+              </ul>
+            </section>
+
+            <div class="home-atalhos">
+              <a href="pedidos.html?acao=compra-fora" class="quick-action-btn" title="Compra feita por fora, com a nota fiscal">
+                <i data-lucide="receipt-text"></i>
+                <span>Lançar nota de compra</span>
+              </a>
+              <a href="cardapio.html?acao=novo-item" class="quick-action-btn">
+                <i data-lucide="file-plus-2"></i>
+                <span>Nova ficha técnica</span>
+              </a>
             </div>
-            <div class="sync-resultado" id="sync-resultado"></div>
           </div>
         </div>
 
