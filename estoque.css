@@ -556,14 +556,6 @@
 
 .pagina-estoque .page-content { gap: var(--space-4); }
 
-/* Título com a mesma fonte da saudação da Home (pedido dela, 18/09). */
-.pagina-estoque .title-row h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
-
 /* CABEÇALHO: título à esquerda; loja, "Mais ações" e "Registrar entrada"
    à direita (a loja do lado das ações, pedido dela em 18/09). A loja fica
    fora do bloco de ações porque todo perfil usa o seletor; as ações são só

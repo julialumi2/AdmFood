@@ -776,12 +776,16 @@ body {
   gap: var(--space-3);
 }
 
+/* Título de página: a mesma fonte da saudação da Home em todas as telas
+   (pedido dela, 2026-09-18). */
 .title-row h1,
-.dashboard-title-area h1 {
-  font-size: 1.65rem;
-  font-weight: 800;
+.dashboard-title-area h1,
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
   color: var(--text-dark);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .total-rede-pill {
@@ -830,12 +834,6 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: var(--space-4);
-}
-
-.page-title {
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--text-dark);
 }
 
 .action-controls {
