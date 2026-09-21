@@ -1,7 +1,6 @@
 /* Estilos específicos da tela de Pedidos — a base compartilhada (sidebar,
    cabeçalho, cards, tabelas, botões, badges) está em theme.css */
 
-#pedidos-lista-view,
 #pedido-detalhe-view {
   display: flex;
   flex-direction: column;
@@ -190,4 +189,353 @@
 
 @media (max-width: 640px) {
   .modal-compra-fora .form-group-row { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* ===========================================================================
+   LISTA DE PEDIDOS: redesenho de 21/09 (pedido dela). Topo enxuto, 4
+   indicadores de entrega, filtros numa linha só e a tabela mais densa. O
+   status junta o selo da situação com o trilho das 4 etapas do detalhe.
+   =========================================================================== */
+
+#pedidos-lista-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Cores da situação da entrega. "Pendente de envio" é tracejado: o pedido
+   ainda está com a gente, não com o fornecedor. */
+:root {
+  --entrega-enviado-bg: #FDEFD9;
+  --entrega-enviado: #8A4B0B;
+  --entrega-caminho-bg: #E0ECFF;
+  --entrega-caminho: #1D4ED8;
+  --entrega-recebido-bg: #E2F5EA;
+  --entrega-recebido: #11683F;
+  --entrega-atrasado-bg: #FDE6E3;
+  --entrega-atrasado: #A8231A;
+  --entrega-atrasado-borda: #F3C4BE;
+  --entrega-pendente: #B4530B;
+}
+
+body.dark-mode {
+  --entrega-enviado-bg: rgba(251, 146, 60, 0.14);
+  --entrega-enviado: #FDBA74;
+  --entrega-caminho-bg: rgba(96, 165, 250, 0.14);
+  --entrega-caminho: #93C5FD;
+  --entrega-recebido-bg: rgba(52, 211, 153, 0.12);
+  --entrega-recebido: #6EE7B7;
+  --entrega-atrasado-bg: rgba(249, 112, 102, 0.13);
+  --entrega-atrasado: #FCA5A5;
+  --entrega-atrasado-borda: rgba(249, 112, 102, 0.35);
+  --entrega-pendente: #FDBA74;
+}
+
+/* TOPO: título e apoio à esquerda, botões à direita */
+.pedidos-topo { align-items: flex-end; }
+
+.pedidos-titulo { display: flex; flex-direction: column; gap: 4px; }
+
+.pedidos-titulo .panel-subtitle { margin: 0; font-size: 0.8rem; }
+
+/* LINHA 1: indicadores de entrega. Os de contagem filtram a tabela. */
+.pedidos-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.pedidos-kpis .store-card {
+  padding: 12px 14px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pedidos-kpis .kpi-clicavel {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pedidos-kpis .kpi-clicavel:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .pedidos-kpis .store-card:not(.kpi-clicavel):hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-color);
+  }
+}
+
+.pedidos-kpis .kpi-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.pedidos-kpis .card-subtitle { font-size: 0.66rem; }
+
+.pedidos-kpis .metric-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.pedidos-kpis .store-value { font-size: 1.35rem; line-height: 1.2; }
+
+.pedidos-kpis .kpi-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pedidos-kpis .tem-entrega .metric-icon,
+.pedidos-kpis .tem-entrega .store-value { color: var(--entrega-caminho); }
+
+.pedidos-kpis .tem-atraso {
+  background-color: var(--entrega-atrasado-bg);
+  border-color: var(--entrega-atrasado-borda);
+}
+
+.pedidos-kpis .tem-atraso .card-subtitle,
+.pedidos-kpis .tem-atraso .metric-icon,
+.pedidos-kpis .tem-atraso .store-value,
+.pedidos-kpis .tem-atraso .kpi-sub { color: var(--entrega-atrasado); }
+
+/* Card clicado = filtro ligado na tabela */
+.pedidos-kpis .kpi-clicavel[aria-pressed="true"] {
+  border-color: var(--text-dark);
+  box-shadow: inset 0 0 0 1px var(--text-dark);
+}
+
+.pedidos-kpis .tem-atraso[aria-pressed="true"] {
+  border-color: var(--entrega-atrasado);
+  box-shadow: inset 0 0 0 1px var(--entrega-atrasado);
+}
+
+/* LINHA 2: filtros numa linha só, colados no topo da tabela */
+.pedidos-tabela-card { padding: 0; overflow: hidden; }
+
+.pedidos-filtros {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--surface-muted-border);
+}
+
+.pedidos-filtros .filtro-select { position: relative; display: inline-flex; }
+
+.pedidos-filtros .filtro-select select {
+  max-width: 230px;
+  padding: 7px 30px 7px 10px;
+  font-size: 0.82rem;
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-sm);
+}
+
+.pedidos-filtros .filtro-select select:focus-visible {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+.pedidos-filtros .filtro-select svg {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.pedidos-filtro-situacao {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px 5px 11px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: var(--text-dark);
+  color: var(--card-bg);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pedidos-filtro-situacao[hidden] { display: none; }
+
+.pedidos-filtro-situacao svg { width: 14px; height: 14px; }
+
+.pedidos-filtro-situacao:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+.pedidos-busca {
+  margin-left: auto;
+  flex: 0 1 300px;
+  max-width: none;
+  padding: 7px var(--space-3);
+}
+
+.pedidos-busca svg { width: 16px; height: 16px; }
+
+.pedidos-busca:focus-within { border-color: var(--info); }
+
+/* LINHA 3: tabela densa, pra ver mais pedidos sem rolar */
+.pedidos-tabela th,
+.pedidos-tabela td {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
+.pedidos-tabela th { white-space: nowrap; }
+
+.pedidos-tabela td { font-size: 0.84rem; font-variant-numeric: tabular-nums; }
+
+.pedidos-tabela th:first-child,
+.pedidos-tabela td:first-child { padding-left: var(--space-4); }
+
+.pedidos-tabela th:last-child,
+.pedidos-tabela td:last-child { padding-right: var(--space-4); }
+
+.pedidos-tabela .col-num,
+.pedidos-tabela .col-dinheiro { text-align: right; white-space: nowrap; }
+
+.pedidos-tabela td.pedidos-vazio {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.pedido-linha { cursor: pointer; }
+
+.pedido-fornecedor {
+  display: block;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.pedido-numero {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+
+.tag-loja {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pedido-origem {
+  min-width: 140px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.pedido-abaixo-minimo {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--warning-texto);
+}
+
+/* Status: selo da situação + trilho das 4 etapas (enviado, confirmado, a
+   caminho, recebido) e há quanto tempo o pedido foi pro fornecedor. */
+.status-pedido {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-pedido::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.status-pedido.enviado { background-color: var(--entrega-enviado-bg); color: var(--entrega-enviado); }
+
+.status-pedido.caminho { background-color: var(--entrega-caminho-bg); color: var(--entrega-caminho); }
+
+.status-pedido.recebido { background-color: var(--entrega-recebido-bg); color: var(--entrega-recebido); }
+
+.status-pedido.atrasado { background-color: var(--entrega-atrasado-bg); color: var(--entrega-atrasado); }
+
+.status-pedido.pendente { border: 1px dashed currentColor; color: var(--entrega-pendente); }
+
+.pedido-andamento {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pedido-trilho { display: inline-flex; gap: 2px; }
+
+.pedido-trilho span {
+  width: 9px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--surface-muted-border);
+}
+
+.pedido-trilho.enviado .feito { background-color: var(--entrega-enviado); }
+
+.pedido-trilho.caminho .feito { background-color: var(--entrega-caminho); }
+
+.pedido-trilho.recebido .feito { background-color: var(--entrega-recebido); }
+
+.pedido-trilho.atrasado .feito { background-color: var(--entrega-atrasado); }
+
+/* Ações à direita: a seta e a lixeira ficam sempre no mesmo lugar, e o
+   envio por WhatsApp (só pedido pendente) entra à esquerda delas. */
+.pedidos-tabela th:last-child { text-align: right; }
+
+.pedidos-tabela .acoes-linha { gap: 4px; justify-content: flex-end; }
+
+.pedidos-tabela .btn-acao-icone { width: 28px; height: 28px; }
+
+.pedidos-tabela .btn-acao-whatsapp { color: var(--success-texto); }
+
+@media (max-width: 900px) {
+  .pedidos-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .pedidos-filtros .filtro-select { flex: 1 1 140px; }
+  .pedidos-filtros .filtro-select select { width: 100%; max-width: none; }
+  .pedidos-busca { flex-basis: 100%; margin-left: 0; }
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdmFood - Pedidos</title>
+  <title>AdmFood - Pedidos de Compra</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
@@ -164,15 +164,15 @@
       <!-- PÁGINA DE PEDIDOS -->
       <div class="page-content">
 
-        <!-- VISÃO: LISTA DE PEDIDOS -->
+        <!-- VISÃO: LISTA DE PEDIDOS (redesenho de 21/09: topo enxuto, 4 indicadores
+             de entrega, filtros numa linha e a tabela densa) -->
         <div id="pedidos-lista-view">
           <div class="dashboard-title-area">
-            <div class="title-top">
-              <i data-lucide="package-check" class="icon-pin"></i>
-              <span>PEDIDO DE COMPRA</span>
-            </div>
-            <div class="title-row">
-              <h1>Pedidos</h1>
+            <div class="title-row pedidos-topo">
+              <div class="pedidos-titulo">
+                <h1>Pedidos de Compra</h1>
+                <p class="panel-subtitle">Acompanhe o status de envio e recebimento de insumos com seus fornecedores.</p>
+              </div>
               <div class="page-acoes-topo">
                 <button type="button" class="btn-secondary" id="btn-compra-fora">
                   <i data-lucide="receipt"></i>
@@ -186,33 +186,85 @@
             </div>
           </div>
 
-          <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
-            Nascem de uma cotação fechada com vencedor escolhido, ou direto pelo preço combinado com o fornecedor em "Novo pedido" — um pedido por fornecedor e por loja. Acompanhe aqui até a entrega chegar. O que foi comprado por fora (mercado, padaria, entrega combinada no WhatsApp) entra em "Lançar compra por fora", já como recebido.
-          </p>
-
-          <div class="chart-card">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Pedidos gerados</h3>
-                <p class="table-subtitle">Clique num pedido pra ver os itens e avançar a etapa de entrega. Pedido que ainda não foi recebido aparece em qualquer período.</p>
+          <!-- LINHA 1: indicadores de entrega; os de contagem filtram a tabela -->
+          <div class="pedidos-kpis">
+            <button type="button" class="store-card kpi-clicavel" data-situacao="aberto" aria-pressed="false" title="Mostrar só os pedidos em aberto">
+              <span class="kpi-topo">
+                <span class="card-subtitle">Pedidos em aberto</span>
+                <i data-lucide="package" class="metric-icon"></i>
+              </span>
+              <span class="store-value" id="pedidos-kpi-abertos">—</span>
+              <span class="kpi-sub" id="pedidos-kpi-abertos-sub"></span>
+            </button>
+            <div class="store-card">
+              <div class="kpi-topo">
+                <span class="card-subtitle">Valor comprado</span>
+                <i data-lucide="wallet" class="metric-icon"></i>
               </div>
-              <select id="pedidos-filtro-periodo" aria-label="Período">
-                <option value="30" selected>Últimos 30 dias</option>
-                <option value="90">Últimos 90 dias</option>
-                <option value="365">Últimos 12 meses</option>
-                <option value="">Tudo</option>
-              </select>
+              <span class="store-value" id="pedidos-kpi-valor">—</span>
+              <span class="kpi-sub" id="pedidos-kpi-valor-sub"></span>
+            </div>
+            <button type="button" class="store-card kpi-clicavel" data-situacao="hoje" aria-pressed="false">
+              <span class="kpi-topo">
+                <span class="card-subtitle">Entregas para hoje</span>
+                <i data-lucide="truck" class="metric-icon"></i>
+              </span>
+              <span class="store-value" id="pedidos-kpi-hoje">—</span>
+              <span class="kpi-sub" id="pedidos-kpi-hoje-sub"></span>
+            </button>
+            <button type="button" class="store-card kpi-clicavel" data-situacao="atrasado" aria-pressed="false" title="Mostrar só os pedidos atrasados">
+              <span class="kpi-topo">
+                <span class="card-subtitle">Pedidos atrasados</span>
+                <i data-lucide="alarm-clock" class="metric-icon"></i>
+              </span>
+              <span class="store-value" id="pedidos-kpi-atrasados">—</span>
+              <span class="kpi-sub" id="pedidos-kpi-atrasados-sub"></span>
+            </button>
+          </div>
+
+          <!-- LINHAS 2 e 3: filtros numa linha só, colados no topo da tabela -->
+          <div class="chart-card pedidos-tabela-card">
+            <div class="pedidos-filtros">
+              <span class="filtro-select">
+                <select id="pedidos-filtro-periodo" aria-label="Período" title="Pedido que ainda não chegou aparece em qualquer período">
+                  <option value="30" selected>Últimos 30 dias</option>
+                  <option value="90">Últimos 90 dias</option>
+                  <option value="365">Últimos 12 meses</option>
+                  <option value="">Tudo</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
+              </span>
+              <span class="filtro-select">
+                <select id="pedidos-filtro-loja" aria-label="Loja">
+                  <option value="">Todas as lojas</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
+              </span>
+              <span class="filtro-select">
+                <select id="pedidos-filtro-fornecedor" aria-label="Fornecedor">
+                  <option value="">Todos os fornecedores</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
+              </span>
+              <button type="button" class="pedidos-filtro-situacao" id="pedidos-filtro-situacao" hidden>
+                <span id="pedidos-filtro-situacao-texto"></span>
+                <i data-lucide="x"></i>
+              </button>
+              <div class="search-box pedidos-busca">
+                <i data-lucide="search"></i>
+                <input type="text" id="pedidos-filtro-busca" placeholder="Buscar pedido ou fornecedor..." aria-label="Buscar pedido ou fornecedor">
+              </div>
             </div>
 
             <div class="table-responsive">
-            <table>
+            <table class="pedidos-tabela">
               <thead>
                 <tr>
                   <th>Fornecedor</th>
                   <th>Loja</th>
-                  <th>Cotação</th>
-                  <th>Itens</th>
-                  <th>Valor</th>
+                  <th>Cotação / Origem</th>
+                  <th class="col-num">Itens</th>
+                  <th class="col-dinheiro">Valor</th>
                   <th>Status</th>
                   <th>Ação</th>
                 </tr>

@@ -3942,3 +3942,20 @@ homologado depois de gerar?" (Atualizar com os homologados + Ver
 cotação/pedidos), "Onde se configura" com o cadastro por loja, e o item
 Recebimentos no menu lateral, que faltava só nessa página. O texto do modal
 "Convidar fornecedores" também dizia que item sem fornecedor ia pra todos.
+
+### 6.33 Tela de Pedidos redesenhada (2026-09-21)
+
+Topo enxuto ("Pedidos de Compra" + uma linha de apoio, sem o sobretítulo e o
+parágrafo longo), 4 indicadores de entrega, filtros numa linha (período, loja,
+fornecedor, busca) e tabela densa. Indicadores: **Pedidos em aberto** (não
+recebidos; mostra quantos ainda falta enviar), **Valor comprado** (segue o
+período), **Entregas para hoje** (pedidos na etapa "A caminho": o sistema não
+guarda data de entrega combinada) e **Pedidos atrasados** (vermelho quando tem;
+mesma regra do menu e da Home: enviado há mais de `DIAS_ENTREGA_ATRASADA` dias,
+agora em `dias_esperando_entrega`, e o `/api/pedidos` manda `diasEsperando` e
+`atrasado` por pedido). Os três de contagem filtram a tabela. Status em selos:
+pendente de envio (tracejado), pedido enviado/confirmado (laranja), a caminho
+(azul), recebido (verde) e atrasado (vermelho), com o trilho das 4 etapas e há
+quanto tempo foi pro fornecedor. A linha toda abre o pedido; a lixeira cancela
+(ou exclui a compra por fora) e não aparece em pedido já recebido, porque
+excluir não desfaz o estoque que entrou no recebimento.

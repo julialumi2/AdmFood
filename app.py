@@ -179,6 +179,8 @@ from backend.armazenamento import (
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
     pendencias_compras,
+    dias_esperando_entrega,
+    DIAS_ENTREGA_ATRASADA,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
     marcar_pedidos_enviados_whatsapp,
@@ -3401,6 +3403,7 @@ def _montar_mensagens_whatsapp_pedidos(pedidos_criados):
 
 
 def _formatar_pedido_resumo(pedido):
+    dias = dias_esperando_entrega(pedido["status"], pedido["criado_em"], pedido.get("whatsapp_enviado_em"))
     return {
         "id": pedido["id"],
         "cotacaoId": pedido["cotacao_id"],
@@ -3423,6 +3426,8 @@ def _formatar_pedido_resumo(pedido):
         "numeroNf": pedido.get("numero_nf"),
         "valorNf": pedido.get("valor_nf"),
         "notaFiscalUrl": f"/api/pedidos/{pedido['id']}/nota-fiscal" if pedido.get("nota_fiscal_arquivo") else None,
+        "diasEsperando": dias,
+        "atrasado": dias is not None and dias > DIAS_ENTREGA_ATRASADA,
     }
 
 
@@ -3432,7 +3437,7 @@ def api_listar_pedidos():
     if erro_admin:
         return erro_admin
     pedidos = _so_da_minha_loja([_formatar_pedido_resumo(p) for p in listar_pedidos()])
-    return jsonify({"pedidos": pedidos, "estagios": ESTAGIOS_PEDIDO})
+    return jsonify({"pedidos": pedidos, "estagios": ESTAGIOS_PEDIDO, "diasEntregaAtrasada": DIAS_ENTREGA_ATRASADA})
 
 
 @app.route('/api/pedidos/<int:pedido_id>', methods=['GET'])

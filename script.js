@@ -5013,7 +5013,9 @@ async function carregarPedidos() {
     const dados = await resposta.json();
     pedidosLista = dados.pedidos || [];
     if (dados.estagios) pedidoEstagios = dados.estagios;
+    if (dados.diasEntregaAtrasada) pedidosDiasAtraso = dados.diasEntregaAtrasada;
     await carregarLinksWhatsAppPedidos(pedidosLista);
+    _preencherFiltrosPedidos();
     renderPedidosTabela();
     carregarContadoresMenuCompras();
   } catch (erro) {
@@ -5022,55 +5024,240 @@ async function carregarPedidos() {
   }
 }
 
+// Redesenho de 21/09 (pedido dela): 4 indicadores de entrega em cima,
+// filtros numa linha (período, loja, fornecedor, busca) e a tabela densa.
+// Os indicadores de contagem filtram a tabela; o status junta o selo da
+// situação com o trilho das 4 etapas que o detalhe do pedido mostra.
+let pedidosSituacaoFiltro = ''; // '' | 'aberto' | 'hoje' | 'atrasado'
+let pedidosDiasAtraso = 3; // vem do servidor (DIAS_ENTREGA_ATRASADA)
+
+// "Entregas para hoje" são os pedidos marcados como "A caminho": o sistema
+// não guarda data de entrega combinada.
+const PEDIDOS_SITUACAO = {
+  aberto: { rotulo: 'Em aberto', filtro: (p) => p.status !== 'recebido' },
+  hoje: { rotulo: 'A caminho', filtro: (p) => p.status === 'a_caminho' },
+  atrasado: { rotulo: 'Atrasados', filtro: (p) => p.atrasado },
+};
+
+function _qtdTexto(n, singular, plural) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+function _pedidosDaLojaEFornecedor() {
+  const loja = document.getElementById('pedidos-filtro-loja')?.value || '';
+  const fornecedor = document.getElementById('pedidos-filtro-fornecedor')?.value || '';
+  return pedidosLista.filter((p) => (!loja || p.loja === loja) && (!fornecedor || String(p.fornecedorId) === fornecedor));
+}
+
+function _preencherFiltrosPedidos() {
+  const selLoja = document.getElementById('pedidos-filtro-loja');
+  const selFornecedor = document.getElementById('pedidos-filtro-fornecedor');
+  if (!selLoja || !selFornecedor) return;
+  const ordemLoja = (loja) => {
+    const indice = LOJAS_ESTOQUE.indexOf(loja);
+    return indice < 0 ? 99 : indice;
+  };
+  const lojas = [...new Set(pedidosLista.map((p) => p.loja))]
+    .sort((a, b) => ordemLoja(a) - ordemLoja(b) || a.localeCompare(b, 'pt-BR'));
+  const lojaAtual = selLoja.value;
+  selLoja.innerHTML = `<option value="">Todas as lojas</option>${lojas.map((l) => `<option value="${escaparHtml(l)}">${escaparHtml(l)}</option>`).join('')}`;
+  selLoja.value = lojas.includes(lojaAtual) ? lojaAtual : '';
+  const fornecedores = new Map(pedidosLista.map((p) => [String(p.fornecedorId), p.fornecedorNome]));
+  const fornecedorAtual = selFornecedor.value;
+  selFornecedor.innerHTML = `<option value="">Todos os fornecedores</option>${[...fornecedores]
+    .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+    .map(([id, nome]) => `<option value="${id}">${escaparHtml(nome)}</option>`).join('')}`;
+  selFornecedor.value = fornecedores.has(fornecedorAtual) ? fornecedorAtual : '';
+}
+
+// Os cards seguem a loja e o fornecedor escolhidos; o valor comprado segue
+// também o período. Em aberto, a caminho e atrasado valem em qualquer
+// período, igual à tabela.
+function _renderKpisPedidos() {
+  const base = _pedidosDaLojaEFornecedor();
+  const abertos = base.filter(PEDIDOS_SITUACAO.aberto.filtro);
+  const paraEnviar = abertos.filter(_pedidoPendenteDeEnvio).length;
+  const aCaminho = base.filter(PEDIDOS_SITUACAO.hoje.filtro);
+  const atrasados = base.filter(PEDIDOS_SITUACAO.atrasado.filtro);
+  const periodo = document.getElementById('pedidos-filtro-periodo');
+  const inicio = _inicioDoPeriodo(periodo?.value);
+  const doPeriodo = base.filter((p) => !inicio || p.criadoEm.slice(0, 10) >= inicio);
+  const valor = doPeriodo.reduce((soma, p) => soma + (p.valorTotal || 0), 0);
+  const escrever = (id, texto) => {
+    const elemento = document.getElementById(id);
+    if (elemento) elemento.textContent = texto;
+  };
+
+  escrever('pedidos-kpi-abertos', abertos.length);
+  escrever('pedidos-kpi-abertos-sub', `${abertos.length - paraEnviar} aguardando entrega${paraEnviar ? ` · ${paraEnviar} pra enviar` : ''}`);
+
+  escrever('pedidos-kpi-valor', `R$ ${_formatarMoedaBR(valor)}`);
+  escrever('pedidos-kpi-valor-sub', `${inicio ? periodo.selectedOptions[0].textContent.toLowerCase() : 'desde o início'} · ${_qtdTexto(doPeriodo.length, 'pedido', 'pedidos')}`);
+
+  const nomesHoje = [...new Set(aCaminho.map((p) => p.fornecedorNome))];
+  escrever('pedidos-kpi-hoje', aCaminho.length);
+  escrever('pedidos-kpi-hoje-sub', nomesHoje.length ? nomesHoje.join(', ') : 'nenhum pedido a caminho');
+  const cardHoje = document.querySelector('.pedidos-kpis [data-situacao="hoje"]');
+  if (cardHoje) {
+    cardHoje.classList.toggle('tem-entrega', aCaminho.length > 0);
+    cardHoje.title = nomesHoje.length
+      ? `A caminho: ${nomesHoje.join(', ')}. Clique pra ver só esses.`
+      : 'Pedido marcado como "A caminho" aparece aqui.';
+  }
+
+  escrever('pedidos-kpi-atrasados', atrasados.length);
+  escrever('pedidos-kpi-atrasados-sub', atrasados.length ? `enviados há mais de ${pedidosDiasAtraso} dias` : 'nenhum atrasado');
+  document.querySelector('.pedidos-kpis [data-situacao="atrasado"]')?.classList.toggle('tem-atraso', atrasados.length > 0);
+
+  document.querySelectorAll('.pedidos-kpis [data-situacao]').forEach((card) => {
+    card.setAttribute('aria-pressed', String(card.dataset.situacao === pedidosSituacaoFiltro));
+  });
+}
+
+function _renderChipSituacaoPedidos() {
+  const chip = document.getElementById('pedidos-filtro-situacao');
+  if (!chip) return;
+  const situacao = PEDIDOS_SITUACAO[pedidosSituacaoFiltro];
+  chip.hidden = !situacao;
+  if (!situacao) return;
+  document.getElementById('pedidos-filtro-situacao-texto').textContent = situacao.rotulo;
+  chip.setAttribute('aria-label', `Tirar o filtro "${situacao.rotulo}"`);
+}
+
+function _limparFiltrosPedidos() {
+  pedidosSituacaoFiltro = '';
+  ['pedidos-filtro-loja', 'pedidos-filtro-fornecedor', 'pedidos-filtro-busca'].forEach((id) => {
+    const campo = document.getElementById(id);
+    if (campo) campo.value = '';
+  });
+  renderPedidosTabela();
+}
+
+function _haQuantoTempo(dias) {
+  if (dias === null || dias === undefined || dias <= 0) return 'hoje';
+  return dias === 1 ? 'há 1 dia' : `há ${dias} dias`;
+}
+
+// Situação que a lista mostra: o atraso ganha da etapa; pedido gerado e
+// ainda não enviado fica tracejado (está parado com a gente, não com o
+// fornecedor).
+function _situacaoPedido(p) {
+  const dataCurta = (iso) => _dataBR(iso).slice(0, 5);
+  if (_pedidoPendenteDeEnvio(p)) return { classe: 'pendente', rotulo: 'Pendente de envio', legenda: `gerado em ${dataCurta(p.criadoEm)}` };
+  if (p.status === 'recebido') return { classe: 'recebido', rotulo: 'Recebido', legenda: p.recebidoEm ? `em ${dataCurta(p.recebidoEm)}` : '' };
+  const enviado = `enviado ${_haQuantoTempo(p.diasEsperando)}`;
+  if (p.atrasado) return { classe: 'atrasado', rotulo: 'Atrasado', legenda: enviado };
+  if (p.status === 'a_caminho') return { classe: 'caminho', rotulo: 'A caminho', legenda: enviado };
+  return { classe: 'enviado', rotulo: p.status === 'confirmado' ? 'Confirmado' : 'Pedido enviado', legenda: enviado };
+}
+
+function _trilhoPedidoHTML(p, classe) {
+  const etapa = _pedidoPendenteDeEnvio(p) ? 0 : pedidoEstagios.indexOf(p.status) + 1;
+  const tracos = pedidoEstagios.map((_, i) => `<span${i < etapa ? ' class="feito"' : ''}></span>`).join('');
+  return `<span class="pedido-trilho ${classe}" aria-hidden="true">${tracos}</span>`;
+}
+
 function renderPedidosTabela() {
   const tbody = document.getElementById('pedidos-tabela-body');
   if (!tbody) return;
+  _renderKpisPedidos();
+  _renderChipSituacaoPedidos();
 
   if (!pedidosLista.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="panel-subtitle">Nenhum pedido gerado ainda — feche uma cotação com vencedor escolhido e clique em "Gerar pedidos".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="panel-subtitle pedidos-vazio">Nenhum pedido ainda. Eles nascem da requisição (fornecedor homologado) ou de uma cotação com vencedor, em "Gerar pedidos". Pra pedir direto pelo preço combinado, use "Novo pedido".</td></tr>`;
     return;
   }
 
   // Filtro de período (2026-09-17, com o histórico inteiro da VMarket): pedido
   // ainda não recebido fica sempre, é ele que conta nos números do menu.
   const inicio = _inicioDoPeriodo(document.getElementById('pedidos-filtro-periodo')?.value);
-  const lista = pedidosLista.filter((p) => p.status !== 'recebido' || !inicio || p.criadoEm.slice(0, 10) >= inicio);
+  const busca = _mvNormalizar(document.getElementById('pedidos-filtro-busca')?.value.trim());
+  const situacao = PEDIDOS_SITUACAO[pedidosSituacaoFiltro];
+  const lista = _pedidosDaLojaEFornecedor().filter((p) =>
+    (p.status !== 'recebido' || !inicio || p.criadoEm.slice(0, 10) >= inicio)
+    && (!situacao || situacao.filtro(p))
+    && (!busca || _mvNormalizar(`${p.fornecedorNome} ${p.cotacaoTitulo || ''} ${p.loja} ${p.id}`).includes(busca)));
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="panel-subtitle">Nenhum pedido nesse período. Escolha um período maior pra ver os mais antigos.</td></tr>`;
+    const temFiltro = situacao || busca
+      || document.getElementById('pedidos-filtro-loja')?.value || document.getElementById('pedidos-filtro-fornecedor')?.value;
+    tbody.innerHTML = temFiltro
+      ? '<tr><td colspan="7" class="panel-subtitle pedidos-vazio">Nenhum pedido com esses filtros. <button type="button" class="btn-limpar-filtro" data-acao="limpar-filtros-pedidos">Limpar filtros</button></td></tr>'
+      : '<tr><td colspan="7" class="panel-subtitle pedidos-vazio">Nenhum pedido nesse período. Escolha um período maior pra ver os mais antigos.</td></tr>';
+    tbody.querySelector('[data-acao="limpar-filtros-pedidos"]')?.addEventListener('click', _limparFiltrosPedidos);
     return;
   }
 
-  tbody.innerHTML = lista.map((p) => `
-    <tr>
-      <td class="font-bold">${escaparHtml(p.fornecedorNome)}</td>
-      <td>${escaparHtml(p.loja)}</td>
-      <td class="text-muted">${escaparHtml(p.cotacaoTitulo)}</td>
-      <td>${p.totalItens}</td>
-      <td>R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${p.abaixoDoMinimo ? ' <span class="badge-pill neu-orange" title="Abaixo do pedido mínimo do fornecedor">abaixo do mínimo</span>' : ''}</td>
+  const podeGerir = _possoGerir();
+  tbody.innerHTML = lista.map((p) => {
+    const s = _situacaoPedido(p);
+    // Pedido já recebido fica sem a lixeira: excluir não tira do estoque o
+    // que entrou no recebimento. Compra por fora tira (ver excluir_pedido).
+    const podeExcluir = podeGerir && (p.status !== 'recebido' || p.compraFora);
+    const acaoExcluir = p.compraFora ? 'Excluir compra' : 'Cancelar pedido';
+    return `
+    <tr class="pedido-linha" data-id="${p.id}">
       <td>
-        <span class="badge-pill ${_pedidoPendenteDeEnvio(p) ? 'neg' : STATUS_CLASSE_BADGE_PEDIDO[p.status]}">${_rotuloEstagioPedido(p, p.status)}</span>
-        ${p.status === 'recebido' && p.recebidoEm ? `<div class="text-muted" style="font-size:0.8em; margin-top:4px;">em ${_dataBR(p.recebidoEm)}</div>` : ''}
+        <span class="pedido-fornecedor">${escaparHtml(p.fornecedorNome)}</span>
+        <span class="pedido-numero">Pedido nº ${p.id}</span>
+      </td>
+      <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
+      <td class="pedido-origem">${escaparHtml(p.compraFora ? 'Compra por fora' : (p.cotacaoTitulo || '—'))}</td>
+      <td class="col-num">${_qtdTexto(p.totalItens, 'item', 'itens')}</td>
+      <td class="col-dinheiro">
+        <strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong>
+        ${p.abaixoDoMinimo && !p.compraFora ? '<span class="pedido-abaixo-minimo" title="Abaixo do pedido mínimo do fornecedor">abaixo do mínimo</span>' : ''}
+      </td>
+      <td>
+        <span class="status-pedido ${s.classe}">${s.rotulo}</span>
+        <span class="pedido-andamento">${_trilhoPedidoHTML(p, s.classe)}${s.legenda}</span>
       </td>
       <td class="col-acoes"><div class="acoes-linha">
         ${pedidosWhatsAppLinks[p.id] ? `
-          <a class="btn-acao-icone" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp" data-acao="enviar-pedido-whatsapp" data-id="${p.id}">
+          <a class="btn-acao-icone btn-acao-whatsapp" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp" aria-label="Enviar o pedido nº ${p.id} por WhatsApp" data-acao="enviar-pedido-whatsapp" data-id="${p.id}">
             <i data-lucide="send"></i>
           </a>
         ` : ''}
-        <button type="button" class="btn-acao-icone" data-acao="abrir-pedido" data-id="${p.id}" title="Ver itens e acompanhar entrega">
+        <button type="button" class="btn-acao-icone" data-acao="abrir-pedido" data-id="${p.id}" title="Ver itens e avançar a entrega" aria-label="Abrir o pedido nº ${p.id}">
           <i data-lucide="arrow-right"></i>
         </button>
+        ${podeExcluir ? `
+          <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-pedido" data-id="${p.id}" title="${acaoExcluir}" aria-label="${acaoExcluir} nº ${p.id}">
+            <i data-lucide="trash-2"></i>
+          </button>
+        ` : ''}
       </div></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
-  document.querySelectorAll('[data-acao="abrir-pedido"]').forEach(btn => {
+  tbody.querySelectorAll('[data-acao="abrir-pedido"]').forEach((btn) => {
     btn.addEventListener('click', () => abrirPedidoDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+
+  // A linha toda abre o pedido; os botões e o link da linha seguem com a
+  // ação deles.
+  tbody.querySelectorAll('.pedido-linha').forEach((linha) => {
+    linha.addEventListener('click', (evento) => {
+      if (evento.target.closest('a, button')) return;
+      abrirPedidoDetalhe(parseInt(linha.dataset.id, 10));
+    });
+  });
+
+  tbody.querySelectorAll('[data-acao="excluir-pedido"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const pedido = pedidosLista.find((p) => p.id === parseInt(btn.dataset.id, 10));
+      if (!pedido) return;
+      try {
+        if (await _cancelarPedido(pedido)) await carregarPedidos();
+      } catch (erro) {
+        console.error('Falha ao cancelar pedido:', erro);
+        alert(erro.message || 'Não foi possível cancelar esse pedido.');
+      }
+    });
   });
 
   // O link abre o WhatsApp numa aba nova (sem bloquear o clique); aqui só
   // marca o pedido como enviado e atualiza a lista.
-  document.querySelectorAll('[data-acao="enviar-pedido-whatsapp"]').forEach(link => {
+  tbody.querySelectorAll('[data-acao="enviar-pedido-whatsapp"]').forEach((link) => {
     link.addEventListener('click', async () => {
       await _marcarPedidoEnviadoWhatsApp(link.dataset.id);
       await carregarPedidos();
@@ -5215,7 +5402,20 @@ function renderPedidoDetalhe() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-document.getElementById('pedidos-filtro-periodo')?.addEventListener('change', renderPedidosTabela);
+['pedidos-filtro-periodo', 'pedidos-filtro-loja', 'pedidos-filtro-fornecedor'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', renderPedidosTabela);
+});
+document.getElementById('pedidos-filtro-busca')?.addEventListener('input', renderPedidosTabela);
+document.getElementById('pedidos-filtro-situacao')?.addEventListener('click', () => {
+  pedidosSituacaoFiltro = '';
+  renderPedidosTabela();
+});
+document.querySelectorAll('.pedidos-kpis [data-situacao]').forEach((card) => {
+  card.addEventListener('click', () => {
+    pedidosSituacaoFiltro = pedidosSituacaoFiltro === card.dataset.situacao ? '' : card.dataset.situacao;
+    renderPedidosTabela();
+  });
+});
 
 document.getElementById('btn-pedido-voltar')?.addEventListener('click', () => {
   document.getElementById('pedido-detalhe-view').style.display = 'none';
@@ -5246,17 +5446,23 @@ document.getElementById('btn-pedido-avancar')?.addEventListener('click', async (
   }
 });
 
-document.getElementById('btn-pedido-cancelar')?.addEventListener('click', async () => {
-  if (!pedidoDetalheAtual) return;
-  const p = pedidoDetalheAtual;
+// Cancelar (ou excluir, se for compra por fora): o mesmo pro botão do
+// detalhe e pra lixeira da lista.
+async function _cancelarPedido(p) {
   const pergunta = p.compraFora
     ? `Excluir a compra de "${p.fornecedorNome}" pra "${p.loja}"?${p.somouEstoque ? ' As quantidades saem do estoque da loja.' : ''}${p.notaFiscalUrl ? ' A nota anexada também é apagada.' : ''} Essa ação não pode ser desfeita.`
     : `Cancelar o pedido de "${p.fornecedorNome}" pra "${p.loja}"? Essa ação não pode ser desfeita — os insumos dele voltam a ficar disponíveis pra gerar um pedido novo a partir da mesma cotação.`;
-  if (!confirm(pergunta)) return;
+  if (!confirm(pergunta)) return false;
+  const resposta = await fetch(`/api/pedidos/${p.id}`, { method: 'DELETE' });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(dados.erro || 'falha ao cancelar');
+  return true;
+}
+
+document.getElementById('btn-pedido-cancelar')?.addEventListener('click', async () => {
+  if (!pedidoDetalheAtual) return;
   try {
-    const resposta = await fetch(`/api/pedidos/${p.id}`, { method: 'DELETE' });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao cancelar');
+    if (!(await _cancelarPedido(pedidoDetalheAtual))) return;
     document.getElementById('pedido-detalhe-view').style.display = 'none';
     document.getElementById('pedidos-lista-view').style.display = '';
     pedidoDetalheAtual = null;

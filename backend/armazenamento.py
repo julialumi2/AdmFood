@@ -5600,6 +5600,19 @@ DIAS_ENTREGA_ATRASADA = 3   # pedido enviado há mais que isso e não recebido
 DIAS_PENDENCIA_COMPRAS = 30  # contagem e cotação mais velhas que isso são abandono, não pendência
 
 
+def dias_esperando_entrega(status, criado_em, whatsapp_enviado_em, agora=None):
+    """Dias desde que o pedido foi pro fornecedor (envio pelo WhatsApp, ou a
+    criação se não passou por ele). None pra pedido recebido ou ainda não
+    enviado: esse está parado com a gente, não com o fornecedor. Passou de
+    DIAS_ENTREGA_ATRASADA, é entrega atrasada (menu, Home e Pedidos)."""
+    if status == "recebido" or (status == "enviado" and not whatsapp_enviado_em):
+        return None
+    try:
+        return ((agora or datetime.now()) - datetime.fromisoformat(whatsapp_enviado_em or criado_em)).days
+    except (TypeError, ValueError):
+        return 0
+
+
 def pendencias_compras():
     """Contagens por etapa: contagem que a loja não respondeu ou que espera
     aprovação (e quantas venceram o prazo), fornecedor convidado que não
@@ -5668,14 +5681,10 @@ def pendencias_compras():
 
     nao_enviados = atrasadas = no_prazo = 0
     for pedido in pedidos:
-        if pedido["status"] == "enviado" and not pedido["whatsapp_enviado_em"]:
+        dias = dias_esperando_entrega(pedido["status"], pedido["criado_em"], pedido["whatsapp_enviado_em"], agora)
+        if dias is None:
             nao_enviados += 1
-            continue
-        try:
-            dias = (agora - datetime.fromisoformat(pedido["whatsapp_enviado_em"] or pedido["criado_em"])).days
-        except (TypeError, ValueError):
-            dias = 0
-        if dias > DIAS_ENTREGA_ATRASADA:
+        elif dias > DIAS_ENTREGA_ATRASADA:
             atrasadas += 1
         else:
             no_prazo += 1
