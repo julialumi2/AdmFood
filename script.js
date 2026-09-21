@@ -4728,6 +4728,9 @@ function _renderTabelaComparacaoCotacao() {
         <td class="td-insumo-fixo">
           <span class="font-bold">${escaparHtml(linha.insumoNome)}</span>
           <span class="text-muted td-insumo-categoria">${escaparHtml(linha.categoria)}</span>
+          ${isAdmin && !catalogoCompleto
+            ? `<button type="button" class="btn-limpar-filtro btn-tirar-item-cotacao" data-acao="tirar-item-cotacao" data-insumo-id="${linha.insumoId}" data-nome="${escaparHtml(linha.insumoNome)}" title="Tirar esse item da cotação">tirar da cotação</button>`
+            : ''}
         </td>
         <td class="text-muted td-quantidade-fixa">${quantidadeCelula}</td>
         <td class="text-muted td-ultima-compra">${celulaUltimaCompra}</td>
@@ -4756,6 +4759,21 @@ function _renderTabelaComparacaoCotacao() {
         if (evento.target.closest('[data-acao="excluir-preco"]')) return;
         await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${td.dataset.id}/selecionar`, { method: 'PUT' });
         await recarregarCotacaoDetalhe();
+      });
+    });
+    // "tirar da cotação" (2026-09-21): item que ninguém vai cotar (ex.: a lata).
+    container.querySelectorAll('[data-acao="tirar-item-cotacao"]').forEach((btn) => {
+      btn.addEventListener('click', async (evento) => {
+        evento.stopPropagation();
+        if (!confirm(`Tirar "${btn.dataset.nome}" dessa cotação? Ele some dos links dos fornecedores e não entra nos pedidos dela.`)) return;
+        try {
+          const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/itens/${btn.dataset.insumoId}`, { method: 'DELETE' });
+          const dados = await resposta.json().catch(() => ({}));
+          if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível tirar o item.');
+          await abrirCotacaoDetalhe(cotacaoAtualId);
+        } catch (erro) {
+          alert(erro.message);
+        }
       });
     });
     container.querySelectorAll('[data-acao="excluir-preco"]').forEach(btn => {

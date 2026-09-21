@@ -148,6 +148,7 @@ from backend.armazenamento import (
     reaplicar_homologados_requisicao,
     motivo_para_nao_reaplicar,
     situacao_compra_requisicao,
+    tirar_item_da_cotacao,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
@@ -513,6 +514,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/requisicoes/conferencia/reaplicar-homologados'): 'Atualizou a compra com os homologados',
     ('POST', '/api/cotacoes'): 'Criou cotação',
     ('PUT', '/api/cotacoes/<int:cotacao_id>'): 'Editou a cotação',
+    ('DELETE', '/api/cotacoes/<int:cotacao_id>/itens/<int:insumo_id>'): 'Tirou um item da cotação',
     ('DELETE', '/api/cotacoes/<int:cotacao_id>'): 'Excluiu cotação',
     ('POST', '/api/cotacoes/<int:cotacao_id>/precos'): 'Lançou preço na cotação',
     ('PUT', '/api/cotacoes/<int:cotacao_id>/precos/<int:preco_id>/selecionar'): 'Escolheu o preço vencedor',
@@ -3089,6 +3091,19 @@ def api_selecionar_melhores_precos_cotacao(cotacao_id):
 
     total = selecionar_melhores_precos_cotacao(cotacao_id)
     return jsonify({"ok": True, "total": total})
+
+
+@app.route('/api/cotacoes/<int:cotacao_id>/itens/<int:insumo_id>', methods=['DELETE'])
+def api_tirar_item_da_cotacao(cotacao_id, insumo_id):
+    """Tira um item da cotação (ver tirar_item_da_cotacao)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    try:
+        tirar_item_da_cotacao(cotacao_id, insumo_id)
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    return jsonify({"ok": True})
 
 
 @app.route('/api/cotacoes/<int:cotacao_id>/itens/<int:insumo_id>', methods=['PUT'])

@@ -629,3 +629,5 @@
   .cotacoes-busca { flex-basis: 100%; }
   .cotacoes-contagem { margin-left: 0; }
 }
+
+.btn-tirar-item-cotacao { display: block; margin-top: 2px; padding: 0; font-size: 0.7rem; }

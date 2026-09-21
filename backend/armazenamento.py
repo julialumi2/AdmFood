@@ -6901,6 +6901,47 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
     }
 
 
+def tirar_item_da_cotacao(cotacao_id, insumo_id):
+    """Tira um insumo de uma cotação que ainda não virou pedido pra ele
+    (2026-09-21, pedido dela: a lata que ninguém cota). Some da cotação e dos
+    links de convite; o preço que alguém já mandou fica guardado, só deixa de
+    ser vencedor. Cotação de Requisição: o item fica com "comprar 0" na
+    conferência, pra não voltar no "Ver cotação/pedidos"."""
+    with conexao() as conn:
+        cotacao = conn.execute(
+            "SELECT requisicao_titulo, requisicao_prazo FROM cotacao WHERE id = ?", (cotacao_id,)
+        ).fetchone()
+        if not cotacao:
+            raise ValueError("Cotação não encontrada.")
+        if not conn.execute(
+            "SELECT 1 FROM cotacao_item WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id)
+        ).fetchone():
+            raise ValueError("Esse item não está nessa cotação.")
+        if conn.execute(
+            """
+            SELECT 1 FROM pedido_compra_item pi JOIN pedido_compra p ON p.id = pi.pedido_id
+            WHERE p.cotacao_id = ? AND pi.insumo_id = ?
+            """,
+            (cotacao_id, insumo_id),
+        ).fetchone():
+            raise ValueError("Esse item já virou pedido nessa cotação. Pra tirar, cancele o pedido antes, em Pedidos.")
+        conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
+        conn.execute("DELETE FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
+        conn.execute("UPDATE cotacao_preco SET selecionado = 0 WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
+        conn.execute(
+            "DELETE FROM cotacao_convite_item WHERE insumo_id = ? AND convite_id IN (SELECT id FROM cotacao_convite WHERE cotacao_id = ?)",
+            (insumo_id, cotacao_id),
+        )
+        if cotacao["requisicao_titulo"]:
+            conn.execute(
+                """
+                UPDATE contagem_item SET quantidade_compra = 0
+                WHERE insumo_id = ? AND contagem_id IN (SELECT id FROM contagem WHERE descricao = ? AND prazo_validade = ?)
+                """,
+                (insumo_id, cotacao["requisicao_titulo"], cotacao["requisicao_prazo"]),
+            )
+
+
 def listar_itens_cotacao(cotacao_id):
     """Quantidade total (soma das lojas) + quebra por loja de cada insumo
     de uma cotação gerada automaticamente — cotação lançada na mão (sem
