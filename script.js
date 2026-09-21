@@ -5028,14 +5028,15 @@ async function carregarPedidos() {
 // filtros numa linha (período, loja, fornecedor, busca) e a tabela densa.
 // Os indicadores de contagem filtram a tabela; o status junta o selo da
 // situação com o trilho das 4 etapas que o detalhe do pedido mostra.
-let pedidosSituacaoFiltro = ''; // '' | 'aberto' | 'hoje' | 'atrasado'
+let pedidosSituacaoFiltro = ''; // '' | 'aberto' | 'enviar' | 'atrasado'
 let pedidosDiasAtraso = 3; // vem do servidor (DIAS_ENTREGA_ATRASADA)
 
-// "Entregas para hoje" são os pedidos marcados como "A caminho": o sistema
-// não guarda data de entrega combinada.
+// "Falta enviar" entrou no lugar de "Entregas para hoje" (21/09): os
+// fornecedores não agendam no sistema, só avisam a compradora, então o card
+// dependia de alguém marcar "A caminho".
 const PEDIDOS_SITUACAO = {
   aberto: { rotulo: 'Em aberto', filtro: (p) => p.status !== 'recebido' },
-  hoje: { rotulo: 'A caminho', filtro: (p) => p.status === 'a_caminho' },
+  enviar: { rotulo: 'Falta enviar', filtro: (p) => _pedidoPendenteDeEnvio(p) },
   atrasado: { rotulo: 'Atrasados', filtro: (p) => p.atrasado },
 };
 
@@ -5071,13 +5072,12 @@ function _preencherFiltrosPedidos() {
 }
 
 // Os cards seguem a loja e o fornecedor escolhidos; o valor comprado segue
-// também o período. Em aberto, a caminho e atrasado valem em qualquer
+// também o período. Em aberto, falta enviar e atrasado valem em qualquer
 // período, igual à tabela.
 function _renderKpisPedidos() {
   const base = _pedidosDaLojaEFornecedor();
   const abertos = base.filter(PEDIDOS_SITUACAO.aberto.filtro);
-  const paraEnviar = abertos.filter(_pedidoPendenteDeEnvio).length;
-  const aCaminho = base.filter(PEDIDOS_SITUACAO.hoje.filtro);
+  const paraEnviar = base.filter(PEDIDOS_SITUACAO.enviar.filtro);
   const atrasados = base.filter(PEDIDOS_SITUACAO.atrasado.filtro);
   const periodo = document.getElementById('pedidos-filtro-periodo');
   const inicio = _inicioDoPeriodo(periodo?.value);
@@ -5089,20 +5089,20 @@ function _renderKpisPedidos() {
   };
 
   escrever('pedidos-kpi-abertos', abertos.length);
-  escrever('pedidos-kpi-abertos-sub', `${abertos.length - paraEnviar} aguardando entrega${paraEnviar ? ` · ${paraEnviar} pra enviar` : ''}`);
+  escrever('pedidos-kpi-abertos-sub', `${abertos.length - paraEnviar.length} aguardando entrega`);
 
   escrever('pedidos-kpi-valor', `R$ ${_formatarMoedaBR(valor)}`);
   escrever('pedidos-kpi-valor-sub', `${inicio ? periodo.selectedOptions[0].textContent.toLowerCase() : 'desde o início'} · ${_qtdTexto(doPeriodo.length, 'pedido', 'pedidos')}`);
 
-  const nomesHoje = [...new Set(aCaminho.map((p) => p.fornecedorNome))];
-  escrever('pedidos-kpi-hoje', aCaminho.length);
-  escrever('pedidos-kpi-hoje-sub', nomesHoje.length ? nomesHoje.join(', ') : 'nenhum pedido a caminho');
-  const cardHoje = document.querySelector('.pedidos-kpis [data-situacao="hoje"]');
-  if (cardHoje) {
-    cardHoje.classList.toggle('tem-entrega', aCaminho.length > 0);
-    cardHoje.title = nomesHoje.length
-      ? `A caminho: ${nomesHoje.join(', ')}. Clique pra ver só esses.`
-      : 'Pedido marcado como "A caminho" aparece aqui.';
+  const nomesParaEnviar = [...new Set(paraEnviar.map((p) => p.fornecedorNome))];
+  escrever('pedidos-kpi-enviar', paraEnviar.length);
+  escrever('pedidos-kpi-enviar-sub', nomesParaEnviar.length ? nomesParaEnviar.join(', ') : 'tudo enviado');
+  const cardEnviar = document.querySelector('.pedidos-kpis [data-situacao="enviar"]');
+  if (cardEnviar) {
+    cardEnviar.classList.toggle('tem-pendente', paraEnviar.length > 0);
+    cardEnviar.title = nomesParaEnviar.length
+      ? `Gerados e ainda não mandados pelo WhatsApp: ${nomesParaEnviar.join(', ')}. Clique pra ver só esses.`
+      : 'Pedido gerado que ainda não foi pro fornecedor pelo WhatsApp aparece aqui.';
   }
 
   escrever('pedidos-kpi-atrasados', atrasados.length);

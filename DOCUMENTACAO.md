@@ -3948,9 +3948,10 @@ Recebimentos no menu lateral, que faltava só nessa página. O texto do modal
 Topo enxuto ("Pedidos de Compra" + uma linha de apoio, sem o sobretítulo e o
 parágrafo longo), 4 indicadores de entrega, filtros numa linha (período, loja,
 fornecedor, busca) e tabela densa. Indicadores: **Pedidos em aberto** (não
-recebidos; mostra quantos ainda falta enviar), **Valor comprado** (segue o
-período), **Entregas para hoje** (pedidos na etapa "A caminho": o sistema não
-guarda data de entrega combinada) e **Pedidos atrasados** (vermelho quando tem;
+recebidos), **Valor comprado** (segue o período), **Falta enviar** (gerado e
+ainda não mandado pelo WhatsApp; entrou no lugar de "Entregas para hoje", que
+dependia de alguém marcar "A caminho", e os fornecedores só avisam a
+compradora) e **Pedidos atrasados** (vermelho quando tem;
 mesma regra do menu e da Home: enviado há mais de `DIAS_ENTREGA_ATRASADA` dias,
 agora em `dias_esperando_entrega`, e o `/api/pedidos` manda `diasEsperando` e
 `atrasado` por pedido). Os três de contagem filtram a tabela. Status em selos:

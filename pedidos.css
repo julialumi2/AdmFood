@@ -298,8 +298,14 @@ body.dark-mode {
   text-overflow: ellipsis;
 }
 
-.pedidos-kpis .tem-entrega .metric-icon,
-.pedidos-kpis .tem-entrega .store-value { color: var(--entrega-caminho); }
+/* Falta enviar: tracejado como o selo "Pendente de envio" */
+.pedidos-kpis .tem-pendente {
+  border-style: dashed;
+  border-color: var(--entrega-pendente);
+}
+
+.pedidos-kpis .tem-pendente .metric-icon,
+.pedidos-kpis .tem-pendente .store-value { color: var(--entrega-pendente); }
 
 .pedidos-kpis .tem-atraso {
   background-color: var(--entrega-atrasado-bg);
@@ -315,6 +321,11 @@ body.dark-mode {
 .pedidos-kpis .kpi-clicavel[aria-pressed="true"] {
   border-color: var(--text-dark);
   box-shadow: inset 0 0 0 1px var(--text-dark);
+}
+
+.pedidos-kpis .tem-pendente[aria-pressed="true"] {
+  border-color: var(--entrega-pendente);
+  box-shadow: inset 0 0 0 1px var(--entrega-pendente);
 }
 
 .pedidos-kpis .tem-atraso[aria-pressed="true"] {
