@@ -67,6 +67,10 @@
               <i data-lucide="package-check"></i>
               <span>Pedidos</span>
             </a>
+            <a href="recebimentos.html" class="menu-subitem">
+              <i data-lucide="clipboard-check"></i>
+              <span>Recebimentos</span>
+            </a>
             <a href="guia-compras.html" class="menu-subitem active" target="_blank" rel="noopener">
               <i data-lucide="compass"></i>
               <span>Guia</span>
@@ -171,28 +175,28 @@
         </div>
 
         <p class="guia-intro">
-          Seis etapas, cada uma com um dono e um lugar certo pra acontecer — da requisição que sai
-          do escritório até o insumo chegar de verdade no estoque da loja. <strong>Nada aqui é
-          automático demais</strong>: cada passagem de etapa é uma ação sua, e as que têm mais
-          risco de erro (cotação em duplicidade, pedido errado, etapa avançada sem querer) já têm
-          um jeito de desfazer.
+          A loja conta o estoque, você decide quanto comprar, o que tem fornecedor homologado sai
+          direto em pedido e <strong>só o resto passa por cotação</strong>. O estoque só sobe quando
+          alguém confirma a entrega em Recebimentos. E nenhuma mensagem vai pro fornecedor sem
+          você clicar em "Enviar por WhatsApp".
         </p>
 
         <div class="chart-card">
           <p class="panel-title" style="margin-bottom: var(--space-1);">O caminho, de ponta a ponta</p>
-          <div class="guia-mapa">
+          <div class="guia-mapa" style="margin-bottom: var(--space-2);">
             <div class="guia-mapa-no"><span class="num">1</span><span class="rotulo">Requisição</span></div>
             <span class="guia-mapa-seta">→</span>
             <div class="guia-mapa-no"><span class="num">2</span><span class="rotulo">Contagem</span></div>
             <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">3</span><span class="rotulo">Conferência</span></div>
+            <div class="guia-mapa-no"><span class="num">3</span><span class="rotulo">O que comprar</span></div>
             <span class="guia-mapa-seta">→</span>
             <div class="guia-mapa-no"><span class="num">4</span><span class="rotulo">Cotação</span></div>
             <span class="guia-mapa-seta">→</span>
             <div class="guia-mapa-no"><span class="num">5</span><span class="rotulo">Pedido</span></div>
             <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">6</span><span class="rotulo">Entrada</span></div>
+            <div class="guia-mapa-no"><span class="num">6</span><span class="rotulo">Recebimento</span></div>
           </div>
+          <p class="guia-mapa-atalho">Item com fornecedor homologado pula a cotação: sai da etapa 3 direto em pedido.</p>
         </div>
 
         <ol class="guia-etapas" style="margin-top: var(--space-8);">
@@ -202,19 +206,17 @@
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
                 <h3 class="guia-etapa-nome">Requisição</h3>
-                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você (admin)</span>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
               </div>
               <p class="guia-etapa-onde">Onde: <b>Compras → Requisições</b> → <span class="guia-btnref">Nova requisição</span></p>
               <p>
-                Você dá um título (ex: "Requisição semana 35"), define um prazo e marca quais
-                lojas entram nessa rodada — pode ser uma só ou as quatro juntas. Por trás, o
-                sistema abre uma Contagem separada pra cada loja marcada, mas te devolve um link
-                individual de preenchimento por loja, pronto pra mandar pro responsável de cada
-                unidade.
+                Dê um título (ex.: "Contagem 20/09"), um prazo e marque as lojas que entram. O
+                sistema abre uma contagem por loja, cada uma com o seu link, sem login, pra mandar
+                pra quem vai contar.
               </p>
               <p>
-                Cada link já mostra só os insumos daquela loja específica — quem recebe o link do
-                Açaí não perde tempo digitando quantidade de pão de hambúrguer.
+                Cada link mostra só os insumos daquela loja, os que têm a loja marcada em "Lojas que
+                usam esse insumo". Quem conta o Açaí não vê pão de hambúrguer.
               </p>
             </div>
           </li>
@@ -226,14 +228,12 @@
                 <h3 class="guia-etapa-nome">Contagem</h3>
                 <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px solid var(--border-color);">Funcionário da loja</span>
               </div>
-              <p class="guia-etapa-onde">Onde: o link enviado — sem precisar de login</p>
+              <p class="guia-etapa-onde">Onde: o link que você mandou, sem login</p>
               <p>
-                A pessoa da loja abre o link e preenche a quantidade que tem em estoque agora,
-                insumo por insumo — igual o preenchimento que já é feito na VMarket. A "quantidade
-                ideal" calculada aparece do lado, como referência, mas quem decide o número real é
-                sempre quem está contando.
+                A pessoa abre o link e digita quanto tem agora de cada insumo. Quem decide o número
+                é quem está contando.
               </p>
-              <p>Item com estoque zerado também deve ser preenchido com 0 — deixar em branco impede que o déficit seja calculado.</p>
+              <p>Acabou o insumo? Digita 0. Em branco, o sistema não sabe quanto falta.</p>
             </div>
           </li>
 
@@ -241,28 +241,37 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">3</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Conferência</h3>
-                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você (admin)</span>
+                <h3 class="guia-etapa-nome">O que comprar</h3>
+                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
               </div>
               <p class="guia-etapa-onde">Onde: <b>Compras → Requisições</b> → abrir a requisição</p>
               <p>
-                Aqui entram todas as lojas participantes somadas: pra cada insumo, o sistema mostra
-                o déficit (ideal menos preenchido), sempre arredondado pra cima. As lojas nunca são
-                somadas artificialmente pra "ajudar" a bater o mínimo de um fornecedor — a quebra
-                por loja continua guardada por baixo, pra montar a compra certa depois.
+                Primeiro confira e aprove cada loja: abra a loja pelo ícone na linha dela e clique em
+                <span class="guia-btnref">Aprovar e conferir a compra</span>, ou aprove tudo de uma vez
+                em <span class="guia-btnref">Aprovar todas as lojas</span>. Aprovar troca o estoque da
+                loja pelo que foi contado.
               </p>
               <p>
-                Número parecendo errado? Dá pra corrigir a quantidade ideal na hora, insumo por
-                insumo, em <span class="guia-btnref">Ajustar em lote</span> pra loja inteira, ou
-                colando uma lista pronta — útil quando você já tem a sugestão de outro sistema. Só
-                depois que todas as lojas aprovarem (uma por uma ou em
-                <span class="guia-btnref">Aprovar todas</span>) o botão de gerar cotação libera.
+                Com todas aprovadas, a tabela <b>O que comprar</b> mostra cada insumo com um campo por
+                loja, já com a sugestão do sistema: o que falta pra chegar na quantidade ideal. Mude o
+                que quiser. <b>0 tira o item da compra</b>, e <span class="guia-btnref">usar sugestão</span>
+                volta pro número do sistema. Campo amarelo é insumo sem estoque mínimo naquela loja:
+                digite a quantidade e o sistema pergunta se guarda como mínimo pra próxima vez.
+              </p>
+              <p>
+                A coluna <b>Vai pra</b> mostra o destino de cada item:
+                <span class="destino-compra pedido">Pedido · fornecedor</span> quando a loja tem
+                fornecedor homologado com preço combinado, e
+                <span class="destino-compra cotacao">Cotação</span> quando não tem.
+              </p>
+              <p>
+                Tudo certo? Clique em <span class="guia-btnref">Gerar cotação</span>. O que está como
+                Pedido vai direto pra Pedidos, um por fornecedor e por loja, e o resto vira uma cotação.
               </p>
               <div class="guia-seguranca">
                 <span class="guia-seguranca-marca">↺</span>
-                <p>Clicar duas vezes em <span class="guia-btnref">Gerar cotação</span> não cria
-                duplicata — o sistema reconhece que aquela requisição já virou cotação e te leva
-                direto pra ela.</p>
+                <p>Não duplica: depois de gerado, o botão vira <span class="guia-btnref">Ver cotação/pedidos</span>
+                e só abre o que já existe. As quantidades ficam travadas a partir daí.</p>
               </div>
             </div>
           </li>
@@ -275,26 +284,33 @@
                 <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
                 <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px dashed var(--border-color);">Fornecedores</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Compras → Cotações</b></p>
+              <p class="guia-etapa-onde">Onde: <b>Compras → Cotações</b> → abrir a cotação</p>
               <p>
-                A cotação já nasce com a quantidade total de cada insumo calculada. Você manda o
-                link pros fornecedores cadastrados, cada um preenche o preço que cobra, e você
-                escolhe o vencedor insumo por insumo — pode ser um fornecedor diferente por item,
-                sem problema nenhum.
+                Só entra aqui o que não tem homologado. Clique em
+                <span class="guia-btnref">Convidar fornecedores por WhatsApp</span> e marque quem vai
+                cotar (já vem marcado quem tem a loja em "Lojas que compram dele"). A prévia mostra o
+                que vai no link de cada um: só os itens que ele cota na loja do item, os marcados em
+                "Fornecedores que cotam esse insumo". Desmarque o que não quer mandar pra ele e clique
+                em <span class="guia-btnref">Gerar convites</span>.
               </p>
               <p>
-                Duas formas de registrar o preço: <span class="guia-btnref">Lançar preço recebido</span>
-                pra digitar na mão um preço que já te passaram por telefone/WhatsApp, ou
-                <span class="guia-btnref">Convidar fornecedores</span> pra gerar um link de
-                preenchimento sem login. Esse convite vai pra <b>todo fornecedor ativo</b> de uma
-                vez — não dá pra escolher só um — e cada fornecedor decide, dentro do próprio link,
-                quais insumos vende. O botão só <b>gera os links</b>, não manda mensagem sozinho;
-                cabe a você copiar e enviar pra quem quiser.
+                Depois, na tabela de convites, clique em <span class="guia-btnref">Enviar por WhatsApp</span>
+                em cada fornecedor. Quando ele responde o link, os preços aparecem sozinhos na cotação.
+                Preço que chegou por telefone ou mensagem entra em <span class="guia-btnref">Lançar preço</span>.
+              </p>
+              <p>
+                Item que ninguém cota aparece no aviso amarelo <b>Sem fornecedor marcado</b> e não vai
+                em link nenhum. Você decide: marca quem cota em Insumos (na aba da loja), lança o preço
+                à mão ou clica em <span class="guia-btnref">tirar da cotação</span>, embaixo do nome do item.
+              </p>
+              <p>
+                Pra escolher o vencedor, clique no preço. Pode ser um fornecedor diferente em cada item.
+                Depois, <span class="guia-btnref">Gerar pedidos</span>: item sem vencedor fica de fora e
+                dá pra gerar depois.
               </p>
               <div class="guia-seguranca">
                 <span class="guia-seguranca-marca">↺</span>
-                <p>Nada fecha sozinho: até você marcar o vencedor de um insumo, dá pra editar preço
-                e trocar fornecedor à vontade.</p>
+                <p>Até gerar os pedidos, dá pra trocar o vencedor e corrigir preço à vontade.</p>
               </div>
             </div>
           </li>
@@ -308,17 +324,20 @@
               </div>
               <p class="guia-etapa-onde">Onde: <b>Compras → Pedidos</b></p>
               <p>
-                Com os vencedores marcados, <span class="guia-btnref">Gerar pedidos</span> cria um
-                pedido por fornecedor <em>e</em> por loja — nunca a cotação inteira de uma vez,
-                porque o pedido mínimo de cada fornecedor vale por loja, não pela rede somada. Cada
-                pedido caminha por quatro etapas: Enviado → Confirmado → A caminho → Recebido.
+                Aqui chegam os pedidos diretos dos homologados e os que saíram da cotação, um por
+                fornecedor e por loja, porque o pedido mínimo de cada fornecedor vale por loja.
+              </p>
+              <p>
+                Abra o pedido e clique em <span class="guia-btnref">Enviar por WhatsApp</span>: abre a
+                conversa com a mensagem pronta e um link pro fornecedor confirmar. Quando ele confirma,
+                o pedido passa sozinho pra <b>Confirmado pelo fornecedor</b>. As etapas são Pedido
+                enviado → Confirmado pelo fornecedor → A caminho → Recebido.
               </p>
               <div class="guia-seguranca">
                 <span class="guia-seguranca-marca">↺</span>
-                <p>Avançou sem querer? <span class="guia-btnref">Voltar etapa</span> desfaz um
-                passo. Pedido pro fornecedor errado, ou duplicado?
-                <span class="guia-btnref">Cancelar pedido</span> apaga ele e libera esses insumos
-                pra entrar num próximo "Gerar pedidos" — sem passo extra.</p>
+                <p>Avançou sem querer? <span class="guia-btnref">Voltar etapa</span> desfaz um passo.
+                Pedido errado ou duplicado? <span class="guia-btnref">Cancelar pedido</span> apaga ele,
+                e os itens voltam a poder ser gerados.</p>
               </div>
             </div>
           </li>
@@ -327,66 +346,104 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">6</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Entrada em estoque</h3>
-                <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
+                <h3 class="guia-etapa-nome">Recebimento</h3>
+                <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px solid var(--border-color);">Quem recebe a entrega</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Estoque</b> → <span class="guia-btnref">Registrar entrada</span></p>
+              <p class="guia-etapa-onde">Onde: <b>Compras → Recebimentos</b></p>
               <p>
-                Chegar em "Recebido" no pedido <strong>não</strong> atualiza o estoque sozinho — de
-                propósito, porque o que chega pode não bater exatamente com o que foi pedido. Você
-                confirma a quantidade real e distribui entre as lojas em "Registrar entrada". É
-                esse número que vira a base da próxima Contagem, fechando o ciclo.
+                Chegou a entrega: busque o pedido e clique em
+                <span class="guia-btnref">Confirmar recebimento</span>. Digite quem recebeu e a data,
+                confira a quantidade e o preço de cada item (chegou diferente? corrija ali) e o valor
+                da nota fiscal. A foto ou o PDF da nota é opcional: dá pra anexar depois, na tela do
+                pedido.
               </p>
+              <p>É essa confirmação que faz o estoque subir e o pedido virar <b>Recebido</b>.</p>
+              <div class="guia-seguranca">
+                <span class="guia-seguranca-marca">!</span>
+                <p>Não lance a mesma entrega de novo em Insumos (Atualizar estoque em lote): o
+                estoque subiria duas vezes.</p>
+              </div>
             </div>
           </li>
 
         </ol>
 
-        <h2 class="guia-secao-titulo">Ferramentas de apoio</h2>
-        <p class="guia-secao-sub">Não são etapas do fluxo — são o que mantém os números certos por trás dele.</p>
+        <h2 class="guia-secao-titulo">Mudou um homologado depois de gerar?</h2>
+        <p class="guia-secao-sub">Pra quando alguém acerta fornecedor ou preço combinado com a requisição já gerada, sem refazer a contagem.</p>
+
+        <div class="guia-passos">
+          <ol>
+            <li>Acerte o insumo em <b>Insumos</b>, na aba da loja: fornecedor homologado e preço combinado.</li>
+            <li>Abra a requisição e clique em <span class="guia-btnref">Atualizar com os homologados</span>.
+            Só a tabela muda: a coluna Vai pra mostra <span class="destino-compra pedido">Vai virar pedido · fornecedor</span>
+            ou <span class="destino-compra cotacao">Vai pra cotação</span>. Nada é gravado ainda.</li>
+            <li>Clique em <span class="guia-btnref">Ver cotação/pedidos</span> pra aplicar. O item que ganhou
+            homologado vira pedido (ou entra no pedido ainda não enviado do mesmo fornecedor) e sai da
+            cotação, com os preços que já chegaram guardados. O item que perdeu o homologado entra na
+            cotação e nos links ainda abertos de quem cota ele.</li>
+          </ol>
+          <p class="guia-passos-nota">Não vale pra requisição que veio da VMarket nem com a cotação já fechada.</p>
+        </div>
+
+        <h2 class="guia-secao-titulo">Onde se configura</h2>
+        <p class="guia-secao-sub">Não são etapas: é o cadastro que decide pra onde cada item vai.</p>
 
         <div class="guia-ferramentas">
           <div class="guia-ferramenta-linha">
             <div>
-              <div class="guia-ferramenta-nome">Insumos da loja</div>
-              <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
+              <div class="guia-ferramenta-nome">Fornecedores que cotam e homologado</div>
+              <span class="guia-ferramenta-local">Insumos → aba da loja → editar o insumo</span>
             </div>
-            <div class="guia-ferramenta-desc">Decide quais insumos entram no link de Requisição de cada loja — pra ninguém preencher o que não usa.</div>
+            <div class="guia-ferramenta-desc">Valem só pra loja da aba: mudar no Açaí não mexe nas outras lojas. Com homologado e preço combinado (dentro do "Vale até"), o item sai direto em pedido; sem isso, vai pra cotação, e o link de cada fornecedor leva só o que está marcado pra ele. Na Visão geral esses campos não aparecem: escolha a loja antes.</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
-              <div class="guia-ferramenta-nome">Importar insumos</div>
-              <span class="guia-ferramenta-local">Estoque</span>
+              <div class="guia-ferramenta-nome">Filtro "Sem fornecedor"</div>
+              <span class="guia-ferramenta-local">Insumos</span>
             </div>
-            <div class="guia-ferramenta-desc">Cadastra vários insumos novos de uma vez, já associados à loja certa — pra quando chega um catálogo inteiro de fora (ex: VMarket).</div>
+            <div class="guia-ferramenta-desc">Lista os insumos que ninguém cota. São eles que aparecem como "Sem fornecedor marcado" na cotação.</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
-              <div class="guia-ferramenta-nome">Atualizar estoque em lote + colar lista</div>
-              <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
+              <div class="guia-ferramenta-nome">Lojas que compram dele</div>
+              <span class="guia-ferramenta-local">Compras → Fornecedores → editar</span>
             </div>
-            <div class="guia-ferramenta-desc">Atualiza a quantidade atual (e o estoque mínimo, se quiser) de vários insumos de uma vez — pra importar contagem física ou relatório de outro sistema.</div>
+            <div class="guia-ferramenta-desc">O fornecedor já vem marcado quando você convida pra uma cotação dessas lojas.</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
-              <div class="guia-ferramenta-nome">Ajustar em lote + colar lista</div>
-              <span class="guia-ferramenta-local">Estoque → aba de uma loja</span>
+              <div class="guia-ferramenta-nome">Novo insumo</div>
+              <span class="guia-ferramenta-local">Insumos → Mais ações</span>
             </div>
-            <div class="guia-ferramenta-desc">Corrige a "quantidade ideal" de vários insumos de uma vez, sobrescrevendo o estoque mínimo pra esse cálculo — inclusive colando uma lista pronta de outro sistema. O botão "Remover todos os ajustes desta loja", dentro do mesmo modal, desfaz tudo de uma vez e volta pro cálculo automático.</div>
+            <div class="guia-ferramenta-desc">Pergunta em quais lojas o insumo é usado. Ele só aparece na aba e no link de contagem dessas lojas.</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
-              <div class="guia-ferramenta-nome">Ficha técnica + colar lista</div>
-              <span class="guia-ferramenta-local">Cardápio → Ficha Técnica</span>
+              <div class="guia-ferramenta-nome">Estoque mínimo e quantidade ideal</div>
+              <span class="guia-ferramenta-local">Insumos → Mais ações</span>
             </div>
-            <div class="guia-ferramenta-desc">Define quais insumos cada prato usa e em que quantidade — alimenta o "Consumo médio/dia" mostrado no Estoque como referência. Não decide mais a "quantidade ideal" (isso hoje vem do estoque mínimo, ver pergunta abaixo).</div>
+            <div class="guia-ferramenta-desc">"Atualizar estoque em lote" acerta o mínimo de vários insumos de uma vez; "Ajustar quantidade ideal em lote" usa outro número no lugar do mínimo, só pra compra. É daqui que sai a sugestão.</div>
           </div>
           <div class="guia-ferramenta-linha">
             <div>
-              <div class="guia-ferramenta-nome">Zona de perigo</div>
-              <span class="guia-ferramenta-local">Configurações</span>
+              <div class="guia-ferramenta-nome">Datas especiais</div>
+              <span class="guia-ferramenta-local">Insumos → aba Datas especiais</span>
             </div>
-            <div class="guia-ferramenta-desc">Apaga todo o histórico de requisição/cotação de uma vez — exige digitar "APAGAR" pra confirmar. Só pra limpar teste, nunca automático.</div>
+            <div class="guia-ferramenta-desc">Feriado ou evento: multiplica a quantidade ideal no período, e a sugestão de compra cresce junto.</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Novo pedido</div>
+              <span class="guia-ferramenta-local">Compras → Pedidos</span>
+            </div>
+            <div class="guia-ferramenta-desc">Pedido direto pro fornecedor homologado, pelo preço combinado, sem requisição. Só nas lojas em que ele é homologado.</div>
+          </div>
+          <div class="guia-ferramenta-linha">
+            <div>
+              <div class="guia-ferramenta-nome">Lançar compra por fora</div>
+              <span class="guia-ferramenta-local">Compras → Pedidos</span>
+            </div>
+            <div class="guia-ferramenta-desc">Mercado, padaria ou compra combinada direto no WhatsApp: já entra como recebida, sem etapas de entrega.</div>
           </div>
         </div>
 
@@ -394,24 +451,28 @@
 
         <ul class="guia-faq" style="margin-bottom: var(--space-8);">
           <li>
-            <p class="guia-faq-p">Uma loja não respondeu a tempo — travo tudo?</p>
-            <p class="guia-faq-r">A Conferência mostra exatamente quais lojas ainda faltam. Gerar cotação exige todas aprovadas, mas nada te impede de aprovar as que já responderam e esperar o resto.</p>
+            <p class="guia-faq-p">Por que um item foi direto pra pedido e outro pra cotação?</p>
+            <p class="guia-faq-r">Depende do cadastro na loja. Com fornecedor homologado e preço combinado válido, vira pedido; sem isso, vai pra cotação. O mesmo insumo pode ir em pedido numa loja e em cotação em outra.</p>
           </li>
           <li>
-            <p class="guia-faq-p">Posso cotar as quatro lojas juntas mesmo elas sendo diferentes?</p>
-            <p class="guia-faq-r">Sim — é assim que já funciona hoje, porque fornecedor não preenche quatro cotações separadas na prática. Cota-se junto, e o pedido depois é combinado pra entregar separado por loja.</p>
+            <p class="guia-faq-p">O fornecedor recebeu item que não vende, ou não recebeu um que vende?</p>
+            <p class="guia-faq-r">O link leva o que está marcado pra ele em "Fornecedores que cotam esse insumo", na loja do item. Corrija em Insumos; na hora de convidar, a prévia ainda deixa desmarcar item por item. Fornecedor que não está marcado em insumo nenhum recebe a cotação inteira.</p>
           </li>
           <li>
-            <p class="guia-faq-p">E se eu errar uma etapa do pedido?</p>
-            <p class="guia-faq-r">"Voltar etapa" desfaz um passo; "Cancelar pedido" apaga o pedido inteiro e devolve os insumos dele pra próxima leva de "Gerar pedidos".</p>
+            <p class="guia-faq-p">Preciso comprar um item, mas não sei de quem.</p>
+            <p class="guia-faq-r">Deixe na cotação. Quando achar o fornecedor, lance o preço à mão em "Lançar preço", ou marque ele em Insumos e convide pra cotação.</p>
           </li>
           <li>
-            <p class="guia-faq-p">Preciso ter medo de clicar duas vezes em algum botão importante?</p>
-            <p class="guia-faq-r">Não em "Gerar cotação" — ele é protegido contra duplicidade. As ações realmente irreversíveis (como a Zona de Perigo) pedem confirmação por texto antes de deixar continuar.</p>
+            <p class="guia-faq-p">Os preços que o fornecedor manda ficam guardados?</p>
+            <p class="guia-faq-r">Sim, ficam na cotação. Mesmo quando um item sai dela, o preço continua guardado; só deixa de ser o vencedor.</p>
           </li>
           <li>
-            <p class="guia-faq-p">De onde vem a "quantidade ideal" mostrada na tela?</p>
-            <p class="guia-faq-r">Hoje é sempre o estoque mínimo cadastrado do insumo naquela loja, a não ser que exista um ajuste manual (esse ganha do mínimo). Antes era calculada pelo consumo médio × Ficha Técnica, mas isso ficava em branco pra quase todo insumo enquanto a Ficha Técnica não estivesse completa — por isso a troca. "Gerar cotação" trava esse número no momento em que é clicado; gerar de novo numa requisição antiga não recalcula, só reabre a cotação que já existe.</p>
+            <p class="guia-faq-p">Uma loja não contou a tempo. Travo tudo?</p>
+            <p class="guia-faq-r">A requisição mostra quais lojas faltam. Pra gerar, todas precisam estar aprovadas: aprove as que já contaram e espere o resto.</p>
+          </li>
+          <li>
+            <p class="guia-faq-p">De onde vem a sugestão de compra?</p>
+            <p class="guia-faq-r">É a quantidade ideal menos o que foi contado, arredondada pra cima na embalagem de compra. A quantidade ideal é o estoque mínimo do insumo na loja (multiplicado, se tiver data especial no período), ou o ajuste manual, se existir. Sem mínimo, o campo fica amarelo e a decisão é sua.</p>
           </li>
         </ul>
 

@@ -1900,8 +1900,8 @@ function _atualizarOpcoesCategoriaEstoque(linhas) {
 }
 
 // Card #41: insumo que ninguém cota, nem pelo cadastro nem pelo histórico — a
-// coluna Fornecedores vazia. É o que o link de cotação manda pra todos os
-// fornecedores; com o filtro dá pra ir um a um ligando quem fornece. O número
+// coluna Fornecedores vazia. Desde 2026-09-21 esse item não vai em link de
+// cotação nenhum; com o filtro dá pra ir um a um ligando quem fornece. O número
 // é da loja e categoria da tela. Só aparece junto com a coluna (admin e
 // gerente, depois que a lista de fornecedores chegou).
 function _atualizarOpcoesFornecedorEstoque(linhas, disponivel) {

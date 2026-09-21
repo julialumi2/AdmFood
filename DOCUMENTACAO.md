@@ -3930,3 +3930,15 @@ o que quiser; o link leva exatamente o que ficou marcado (`POST
 [insumoIds]}; só vale item da cotação, lista vazia = sem convite). Vale só
 pra esse convite — o cadastro de "Fornecedores que cotam" não muda. A
 prévia passou a mandar `itens` (ids) por fornecedor e `itensDaCotacao`.
+
+### 6.32 Guia de Compras reescrito (2026-09-21)
+
+`guia-compras.html` descrevia o fluxo antigo (convite pra todo fornecedor,
+entrada pelo Estoque → "Registrar entrada", que hoje somaria o estoque duas
+vezes). Agora segue o fluxo atual: Requisição → Contagem → O que comprar
+(coluna "Vai pra") → Cotação só do que não tem homologado → Pedido (envio por
+WhatsApp e confirmação pelo link) → Recebimentos. Ganhou a seção "Mudou um
+homologado depois de gerar?" (Atualizar com os homologados + Ver
+cotação/pedidos), "Onde se configura" com o cadastro por loja, e o item
+Recebimentos no menu lateral, que faltava só nessa página. O texto do modal
+"Convidar fornecedores" também dizia que item sem fornecedor ia pra todos.
