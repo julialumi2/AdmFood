@@ -152,3 +152,5 @@
 .destino-compra.pedido { background-color: var(--info-soft); color: var(--info); }
 
 .destino-compra.cotacao { background-color: var(--surface-muted); color: var(--text-muted); }
+
+.destino-compra.feito { background-color: var(--success-soft); color: var(--success-texto); }

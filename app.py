@@ -143,6 +143,7 @@ from backend.armazenamento import (
     fornecedor_homologado_por_insumo,
     reaplicar_homologados_requisicao,
     motivo_para_nao_reaplicar,
+    situacao_compra_requisicao,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
@@ -4047,6 +4048,15 @@ def api_conferencia_requisicao():
     resposta['jaGerada'] = requisicao_ja_gerada(titulo, prazo_validade)
     # "Atualizar com os homologados" só em compra em andamento.
     resposta['podeAtualizarHomologados'] = resposta['jaGerada'] and motivo_para_nao_reaplicar(titulo, prazo_validade) is None
+    # Requisição já gerada: onde cada item está e pra onde vai no próximo
+    # "Ver cotação/pedidos" (homologado que mudou vira pedido só ali).
+    resposta['pendentes'] = 0
+    if resposta['podeAtualizarHomologados'] and resposta['totalmenteAprovada']:
+        situacao = situacao_compra_requisicao(titulo, prazo_validade)
+        for item in itens:
+            for loja in item['lojas']:
+                loja['situacao'] = situacao.get((item['insumoId'], loja['loja']))
+        resposta['pendentes'] = sum(1 for s in situacao.values() if s['tipo'] in ('vaiPraPedido', 'vaiPraCotacao'))
     return jsonify(resposta)
 
 

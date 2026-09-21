@@ -5670,6 +5670,19 @@ function _totalCompraHTML(item) {
 }
 
 function _destinoCompraHTML(item) {
+  // Requisição já gerada: onde o item está e o que muda no "Ver cotação/pedidos".
+  if (requisicaoConferenciaAtual?.jaGerada && (item.lojas || []).some((l) => l.situacao)) {
+    const rotulos = new Map();
+    item.lojas.forEach((l) => {
+      const s = l.situacao;
+      if (!s) return;
+      if (s.tipo === 'pedido') rotulos.set(`p${s.pedidoId}`, `<span class="destino-compra feito" title="Já está nesse pedido">Pedido nº ${s.pedidoId} · ${escaparHtml(s.fornecedor)}</span>`);
+      else if (s.tipo === 'vaiPraPedido') rotulos.set(`v${s.fornecedor}`, `<span class="destino-compra pedido" title="Ganhou fornecedor homologado: vira pedido quando você clicar em Ver cotação/pedidos">Vai virar pedido · ${escaparHtml(s.fornecedor)}</span>`);
+      else if (s.tipo === 'cotacao') rotulos.set('c', '<span class="destino-compra cotacao">Na cotação</span>');
+      else rotulos.set('vc', '<span class="destino-compra cotacao" title="Entra na cotação quando você clicar em Ver cotação/pedidos">Vai pra cotação</span>');
+    });
+    return [...rotulos.values()].join('<br>');
+  }
   const total = (item.lojas || []).reduce((soma, l) => soma + (l.comprar || 0), 0);
   if (total <= 0) return '<span class="text-muted">—</span>';
   return item.fornecedorHomologado
@@ -5681,7 +5694,9 @@ function _atualizarResumoCompraConferencia(r) {
   const resumo = document.getElementById('requisicao-conferencia-itens-resumo');
   if (!resumo) return;
   if (r.jaGerada) {
-    resumo.textContent = 'Essa requisição já virou cotação/pedido, então as quantidades ficaram travadas. Clique em "Ver cotação/pedidos" pra abrir.';
+    resumo.textContent = r.pendentes
+      ? `Essa requisição já virou cotação/pedido. ${r.pendentes} item(ns) mudaram de destino (veja "Vai pra"): isso é aplicado quando você clicar em "Ver cotação/pedidos".`
+      : 'Essa requisição já virou cotação/pedido, então as quantidades ficaram travadas. Clique em "Ver cotação/pedidos" pra abrir.';
     return;
   }
   const vaoPraCompra = r.itens.filter((i) => i.lojas.some((l) => l.comprar > 0));
@@ -5902,8 +5917,32 @@ function _avisoInsumosSemIdeal(insumosSemIdeal) {
 document.getElementById('btn-requisicao-reaplicar-homologados')?.addEventListener('click', async () => {
   const r = requisicaoConferenciaAtual;
   if (!r) return;
-  if (!confirm('Atualizar a compra dessa requisição com os fornecedores homologados de agora?\n\nO que tiver fornecedor homologado vira pedido direto pra ele e sai da cotação. O que já está em pedido não duplica. O resto continua na cotação, com os preços que os fornecedores já mandaram.')) return;
-  try {
+  // Só atualiza a tabela (pedido dela, 2026-09-21): o pedido sai no "Ver
+  // cotação/pedidos".
+  await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+  const atual = requisicaoConferenciaAtual;
+  alert(atual?.pendentes
+    ? `Tabela atualizada. ${atual.pendentes} item(ns) mudaram de destino — veja a coluna "Vai pra". Os pedidos saem quando você clicar em "Ver cotação/pedidos".`
+    : 'Tabela atualizada. Nada mudou de destino.');
+});
+
+// "Ver cotação/pedidos" numa requisição já gerada com item que mudou de
+// destino (homologado configurado depois): confirma, grava e abre Pedidos.
+async function _aplicarMudancasDaRequisicao(r) {
+  const pedidos = new Map();
+  const cotacao = new Set();
+  r.itens.forEach((item) => item.lojas.forEach((l) => {
+    if (l.situacao?.tipo === 'vaiPraPedido') {
+      pedidos.set(l.situacao.fornecedor, [...(pedidos.get(l.situacao.fornecedor) || []), item.nome]);
+    } else if (l.situacao?.tipo === 'vaiPraCotacao') {
+      cotacao.add(item.nome);
+    }
+  }));
+  const partes = [];
+  if (pedidos.size) partes.push(`Vão sair em pedido:\n${[...pedidos].map(([f, nomes]) => `• ${f}: ${[...new Set(nomes)].join(', ')}`).join('\n')}`);
+  if (cotacao.size) partes.push(`Vão pra cotação: ${[...cotacao].join(', ')}.`);
+  if (!confirm(`${partes.join('\n\n')}\n\nConfirmar?`)) return false;
+  {
     const resposta = await fetch('/api/requisicoes/conferencia/reaplicar-homologados', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5919,16 +5958,23 @@ document.getElementById('btn-requisicao-reaplicar-homologados')?.addEventListene
     if (dados.saiuDaCotacao.length) partes.push(`Saíram da cotação: ${dados.saiuDaCotacao.join(', ')}.`);
     if (dados.entrouNaCotacao.length) partes.push(`Entraram na cotação: ${dados.entrouNaCotacao.join(', ')}. Foram pros links ainda abertos de quem vende; se ninguém for cotar, lance o preço à mão em "Lançar preço".`);
     alert(partes.length ? `Pronto!\n\n${partes.join('\n\n')}` : 'Nada mudou: a compra já está de acordo com os homologados de agora.');
-    await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
-  } catch (erro) {
-    console.error('Falha ao atualizar com os homologados:', erro);
-    alert(erro.message);
+    window.location.href = dados.pedidos.length ? 'pedidos.html' : _destinoResultadoRequisicao({ cotacaoId: dados.cotacaoId });
+    return true;
   }
-});
+}
 
 document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
   const r = requisicaoConferenciaAtual;
   if (!r || !r.totalmenteAprovada) return;
+  if (r.jaGerada && r.pendentes) {
+    try {
+      await _aplicarMudancasDaRequisicao(r);
+    } catch (erro) {
+      console.error('Falha ao aplicar as mudanças da requisição:', erro);
+      alert(erro.message || 'Não foi possível gerar os pedidos.');
+    }
+    return;
+  }
   if (!r.jaGerada) {
     const semDecisao = r.itens.reduce((n, i) => n + i.lojas.filter((l) => l.ideal === null && !l.editado && !l.minimoGuardado).length, 0);
     const aviso = semDecisao ? `\n\nAtenção: ${semDecisao} campo(s) em amarelo (sem estoque mínimo) estão sem quantidade; esses itens não entram por essas lojas.` : '';

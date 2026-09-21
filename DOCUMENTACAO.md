@@ -3875,3 +3875,12 @@ sem ele; gerente só cria pra loja dele). Na edição as lojas continuam em
 "Insumos da loja". Na aba do Açaí (`LOJAS_SO_HOMOLOGADO` em script.js), a
 coluna Fornecedores mostra só o fornecedor homologado, e o filtro vira "Sem
 homologado".
+
+**Mudança no mesmo dia (pedido dela):** "Atualizar com os homologados" não
+cria mais pedido — só recarrega "O que comprar", e na requisição já gerada a
+coluna "Vai pra" mostra onde cada item está ("Pedido nº X · fornecedor", "Na
+cotação") e o que mudou ("Vai virar pedido · fornecedor", "Vai pra cotação";
+`situacao_compra_requisicao`, montada por `_plano_reaplicacao` sem gravar).
+Os pedidos saem no "Ver cotação/pedidos": com mudança pendente, ele lista o
+que vai sair, pede confirmação, grava (`reaplicar_homologados_requisicao`) e
+abre Pedidos.
