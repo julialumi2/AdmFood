@@ -2925,10 +2925,18 @@ def atualizar_estoque_loja(insumo_id, loja, campos):
     colunas = ", ".join(f"{campo} = ?" for campo in campos)
     valores = list(campos.values()) + [insumo_id, loja]
     with conexao() as conn:
-        conn.execute(
+        cursor = conn.execute(
             f"UPDATE estoque_insumo SET {colunas} WHERE insumo_id = ? AND loja = ?",
             valores,
         )
+        if cursor.rowcount == 0:
+            # Insumo marcado pra loja em "Insumos da loja" ainda não tem linha
+            # de estoque (2026-09-21): cria, senão o que foi digitado some
+            # sem aviso.
+            conn.execute(
+                "INSERT INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) VALUES (?, ?, ?, ?, ?)",
+                (insumo_id, loja, campos.get("quantidade_atual", 0), campos.get("estoque_minimo", 0), campos["atualizado_em"]),
+            )
 
 
 def distribuir_entrada_insumo(insumo_id, distribuicao, validade=None):
@@ -6417,7 +6425,7 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
             # (2026-09-21): 0 tira o item, e item sem mínimo entra se a
             # compradora digitou quanto comprar.
             if item['quantidadeIdeal'] is None and item.get('quantidadeCompra') is None:
-                sem_ideal[item['insumoId']] = item['nome']
+                sem_ideal[(item['insumoId'], contagem['loja'])] = item['nome']
                 continue
             deficit = quantidade_a_comprar(item)
             if deficit <= 0:
@@ -6430,7 +6438,9 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
             })
             info['porLoja'][contagem['loja']] = deficit
 
-    insumos_sem_ideal = [{"insumoId": insumo_id, "nome": nome} for insumo_id, nome in sem_ideal.items()]
+    # Por loja: o mesmo insumo pode ter ficado de fora numa loja e entrado
+    # pela outra.
+    insumos_sem_ideal = [{"insumoId": insumo_id, "loja": loja, "nome": nome} for (insumo_id, loja), nome in sem_ideal.items()]
 
     if not deficits:
         return {"cotacaoId": None, "pedidosDiretos": [], "insumosSemIdeal": insumos_sem_ideal}
@@ -6581,9 +6591,16 @@ def aprovar_contagem(contagem_id):
             (contagem_id,),
         ).fetchall()
         for item in itens:
+            # Cria a linha de estoque se o insumo ainda não tinha uma na loja
+            # (marcado só em "Insumos da loja"), em vez de perder a contagem.
             conn.execute(
-                "UPDATE estoque_insumo SET quantidade_atual = ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
-                (item["quantidade_preenchida"], agora, item["insumo_id"], contagem["loja"]),
+                """
+                INSERT INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em)
+                VALUES (?, ?, ?, 0, ?)
+                ON CONFLICT (insumo_id, loja) DO UPDATE SET
+                    quantidade_atual = excluded.quantidade_atual, atualizado_em = excluded.atualizado_em
+                """,
+                (item["insumo_id"], contagem["loja"], item["quantidade_preenchida"], agora),
             )
         conn.execute(
             "UPDATE contagem SET status = 'aprovada', aprovada_em = ? WHERE id = ?",

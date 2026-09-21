@@ -5284,14 +5284,18 @@ function renderContagemDetalhe() {
   tbody.innerHTML = c.itens.map((item) => {
     const preenchido = item.quantidadePreenchida;
     const ideal = item.quantidadeIdeal;
-    const deficit = (preenchido !== null && ideal !== null) ? arredondarQuantidadeCompra(ideal - preenchido, item.fatorConversaoCompra) : null;
+    // Decidido na conferência ("O que comprar") ganha da conta do sistema.
+    const decidido = item.quantidadeCompra !== null && item.quantidadeCompra !== undefined;
+    const deficit = decidido
+      ? item.quantidadeCompra
+      : ((preenchido !== null && ideal !== null) ? arredondarQuantidadeCompra(ideal - preenchido, item.fatorConversaoCompra) : null);
     return `
       <tr>
         <td class="font-bold">${escaparHtml(item.nome)}</td>
         <td class="text-muted">${escaparHtml(item.categoria)}</td>
         <td>${preenchido === null ? '<span class="text-muted">não preenchido</span>' : `${_formatarQuantidade(preenchido, item.unidadeMedida)}`}</td>
         <td>${ideal === null ? '<span class="text-muted">—</span>' : `${_formatarQuantidade(ideal, item.unidadeMedida)}`}${item.quantidadeIdealAjustada ? ' <span class="badge-pill neu-orange" title="Ajustado manualmente">ajustado</span>' : ''}</td>
-        <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${_formatarQuantidade(deficit, item.unidadeMedida)}</span>` : '—')}</td>
+        <td>${deficit === null ? '<span class="text-muted">—</span>' : (deficit > 0 ? `<span class="badge-pill neg">comprar ${_formatarQuantidade(deficit, item.unidadeMedida)}</span>` : '—')}${decidido ? ' <span class="badge-pill neu-orange" title="Quantidade decidida em O que comprar, na conferência da requisição">conferência</span>' : ''}</td>
         ${isAdmin ? `
           <td class="col-acoes"><div class="acoes-linha">
             <button type="button" class="btn-acao-icone" data-acao="ajustar-ideal" data-insumo-id="${item.insumoId}" title="Ajustar quantidade ideal">
@@ -5608,13 +5612,13 @@ const _numeroBR = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFrac
 // No campo, sem ponto de milhar ("1000", "7,5"), pra editar sem confusão.
 const _numeroCampo = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2, useGrouping: false });
 
-// "7,5" e "7.5" = 7,5; "1.000" e "1.000,5" = mil (ponto de milhar só quando
-// vem em grupos de 3 ou junto com vírgula). Vazio = 0; NaN se não for número.
+// "7,5" e "7.5" = 7,5 (o ponto do teclado numérico é decimal: "0.250" é
+// 0,25, nunca 250). Com vírgula, os pontos são de milhar ("1.000,5").
+// Vazio = 0; NaN se não for número.
 function _lerNumeroBR(texto) {
   const limpo = String(texto).trim().replace(/\s/g, '');
   if (!limpo) return 0;
   if (limpo.includes(',')) return Number(limpo.replace(/\./g, '').replace(',', '.'));
-  if (/^\d{1,3}(\.\d{3})+$/.test(limpo)) return Number(limpo.replace(/\./g, ''));
   return Number(limpo);
 }
 
@@ -5633,7 +5637,7 @@ function _referenciaCompra(item, l) {
 
 function _botaoSugestaoHTML(item, l, bloqueado) {
   if (bloqueado || !l.editado || l.sugestao === null || l.comprar === l.sugestao) return '';
-  return `<button type="button" class="comprar-sugestao" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">usar sugestão (${_formatarQuantidade(l.sugestao, item.unidadeMedida)})</button>`;
+  return `<button type="button" class="comprar-sugestao" tabindex="-1" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">usar sugestão (${_formatarQuantidade(l.sugestao, item.unidadeMedida)})</button>`;
 }
 
 function _celulaCompraHTML(item, l, bloqueado) {
@@ -5760,6 +5764,12 @@ async function _salvarCompraConferencia(input) {
     input.value = _valorCampoCompra(l);
     return;
   }
+  const referencia = Math.max(l.ideal || 0, l.sugestao || 0, l.contado || 0);
+  if (referencia > 0 && quantidade > referencia * 10
+    && !confirm(`Comprar ${_numeroBR(quantidade)} ${item.unidadeMedida || ''} de "${item.nome}" em ${l.loja}? É bem mais que o normal pra esse item (${_numeroBR(referencia)}).`)) {
+    input.value = _valorCampoCompra(l);
+    return;
+  }
   try {
     await _gravarCompraConferencia(contagemId, insumoId, quantidade);
   } catch (erro) {
@@ -5875,7 +5885,7 @@ function _destinoResultadoRequisicao(dados) {
 // descobrindo bem depois que aquele insumo nunca entrou num pedido.
 function _avisoInsumosSemIdeal(insumosSemIdeal) {
   if (!insumosSemIdeal || !insumosSemIdeal.length) return '';
-  const nomes = insumosSemIdeal.map((i) => i.nome).join(', ');
+  const nomes = insumosSemIdeal.map((i) => (i.loja ? `${i.nome} (${i.loja})` : i.nome)).join(', ');
   return `\n\nAtenção: ${insumosSemIdeal.length} insumo(s) ficaram de fora por não terem estoque mínimo nem quantidade digitada em "O que comprar": ${nomes}.`;
 }
 
@@ -5883,8 +5893,8 @@ document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click
   const r = requisicaoConferenciaAtual;
   if (!r || !r.totalmenteAprovada) return;
   if (!r.jaGerada) {
-    const semDecisao = r.itens.filter((i) => i.lojas.some((l) => l.ideal === null && !l.editado && !l.minimoGuardado)).length;
-    const aviso = semDecisao ? `\n\nAtenção: ${semDecisao} item(ns) sem estoque mínimo, em amarelo, estão sem quantidade e não entram.` : '';
+    const semDecisao = r.itens.reduce((n, i) => n + i.lojas.filter((l) => l.ideal === null && !l.editado && !l.minimoGuardado).length, 0);
+    const aviso = semDecisao ? `\n\nAtenção: ${semDecisao} campo(s) em amarelo (sem estoque mínimo) estão sem quantidade; esses itens não entram por essas lojas.` : '';
     if (!confirm(`Gerar a compra com as quantidades de "O que comprar"? O que está como "Pedido" sai direto pro fornecedor homologado; o que está como "Cotação" vai pra cotação, que ainda dá pra editar antes de mandar pros fornecedores.${aviso}`)) return;
   }
   try {
