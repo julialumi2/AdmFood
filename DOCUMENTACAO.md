@@ -3813,3 +3813,33 @@ sistema está pronto, falta o número):
   dias (em 2026-09-10 um vínculo de teste fazia 266 vendas do Tasty Bacon
   contarem como BIG ART). Testar em cópia (`DATABASE_PATH` apontando pra
   um arquivo temporário).
+
+### 6.27 Quanto comprar, decidido na Conferência (2026-09-21)
+
+Pedido dela: "item com estoque suficiente, ou sem estoque mínimo, não entra"
+era perigoso — dava pra um produto que devia ir pra Compack sumir da compra
+sem ninguém ver. Agora a tabela da Conferência da requisição virou **"O que
+comprar"**: uma coluna por loja com um campo por item, já preenchido com a
+sugestão do sistema (ideal − contado, pra cima na embalagem; 0 quando tem
+estoque). A compradora muda o que quiser: 0 tira o item, qualquer número
+coloca. Item sem estoque mínimo aparece em amarelo com o campo vazio; se ela
+digitar uma quantidade, o sistema pergunta (uma vez por item) se quer guardar
+um mínimo pra loja, sugerindo contado + comprado. A coluna **"Vai pra"** diz
+antes de gerar se o item sai em pedido direto pro fornecedor homologado
+("Pedido · Compack") ou vai pra cotação.
+
+O número digitado fica em `contagem_item.quantidade_compra` (NULL = sugestão;
+`PUT /api/requisicoes/conferencia/comprar` com `{contagemId, insumoId,
+quantidade}`, null volta pra sugestão; 409 depois que a requisição virou
+cotação/pedido, porque gerar de novo só reabre o que existe).
+`gerar_cotacao_do_deficit` usa `quantidade_a_comprar` (digitado ganha da
+sugestão; sem mínimo e sem nada digitado continua no aviso de "sem ideal").
+`GET /api/requisicoes/conferencia` passou a mandar, por item, `lojas`
+(contado, ideal, sugestão, comprar, editado), `comprarTotal` e
+`fornecedorHomologado`, e `jaGerada` na requisição.
+
+Mudou também o botão da contagem de cada loja: era "Fazer Cotação/Pedido" e
+gerava tudo sozinho quando a última loja era aprovada; agora é "Aprovar e
+conferir a compra" (ou "Conferir a compra", já aprovada) e leva pra
+Conferência, de onde sai a cotação/pedido. Depois de gerada, o botão da
+Conferência vira "Ver cotação/pedidos".

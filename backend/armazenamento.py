@@ -958,6 +958,11 @@ def inicializar_banco():
             )
             """
         )
+        colunas_contagem_item = {c["name"] for c in conn.execute("PRAGMA table_info(contagem_item)").fetchall()}
+        if "quantidade_compra" not in colunas_contagem_item:
+            # Quanto comprar, decidido na Conferência (2026-09-21): NULL = a
+            # sugestão do sistema (ideal − contado); 0 = fica fora da compra.
+            conn.execute("ALTER TABLE contagem_item ADD COLUMN quantidade_compra REAL")
         # Histórico trazido da VMarket (2026-09-16, a rede está saindo de lá):
         # o id de origem fica em cada registro importado, pra carga poder
         # rodar de novo sem duplicar. Ver importar_da_vmarket.
@@ -6240,7 +6245,7 @@ def listar_itens_contagem(contagem_id, loja):
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT ci.insumo_id, ci.quantidade_preenchida,
+            SELECT ci.insumo_id, ci.quantidade_preenchida, ci.quantidade_compra,
                    i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
                    i.fator_conversao_compra, i.unidade_compra
             FROM contagem_item ci
@@ -6268,11 +6273,67 @@ def listar_itens_contagem(contagem_id, loja):
             "quantidadePreenchida": linha["quantidade_preenchida"],
             "quantidadeIdeal": quantidade_ideal,
             "quantidadeIdealAjustada": ajustada,
+            "quantidadeCompra": linha["quantidade_compra"],
             "fatorConversaoCompra": linha["fator_conversao_compra"],
             "unidadeCompra": linha["unidade_compra"],
             "custoUnitario": (custos.get(linha["insumo_id"]) or {}).get("valor"),
         })
     return itens
+
+
+def sugestao_de_compra(item):
+    """Quanto o sistema sugere comprar de um item de contagem: ideal −
+    contado, pra cima na embalagem. None quando não tem quantidade ideal
+    (insumo sem estoque mínimo na loja)."""
+    if item['quantidadeIdeal'] is None:
+        return None
+    atual = item['quantidadePreenchida'] if item['quantidadePreenchida'] is not None else 0
+    return arredondar_quantidade_compra(item['quantidadeIdeal'] - atual, item.get('fatorConversaoCompra'))
+
+
+def quantidade_a_comprar(item):
+    """A quantidade que vale na compra: a que a compradora digitou na
+    Conferência, se digitou (0 tira o item); senão a sugestão do sistema
+    (sem estoque mínimo e sem nada digitado = não compra)."""
+    if item.get('quantidadeCompra') is not None:
+        return item['quantidadeCompra']
+    return sugestao_de_compra(item) or 0
+
+
+def definir_quantidade_compra(contagem_id, insumo_id, quantidade):
+    """Grava quanto comprar de um item de uma contagem (None volta pra
+    sugestão do sistema). Devolve False se o item não está na contagem."""
+    with conexao() as conn:
+        cursor = conn.execute(
+            "UPDATE contagem_item SET quantidade_compra = ? WHERE contagem_id = ? AND insumo_id = ?",
+            (quantidade, contagem_id, insumo_id),
+        )
+        return cursor.rowcount > 0
+
+
+def requisicao_ja_gerada(titulo, prazo_validade):
+    """Se a requisição já virou cotação ou pedido direto — depois disso as
+    quantidades ficam travadas (gerar de novo só reabre o que existe)."""
+    with conexao() as conn:
+        cotacao = conn.execute(
+            "SELECT 1 FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? LIMIT 1",
+            (titulo, prazo_validade),
+        ).fetchone()
+        pedido = conn.execute(
+            "SELECT 1 FROM pedido_compra WHERE requisicao_titulo = ? AND requisicao_prazo = ? LIMIT 1",
+            (titulo, prazo_validade),
+        ).fetchone()
+    return bool(cotacao or pedido)
+
+
+def fornecedor_homologado_por_insumo():
+    """{insumo_id: nome do fornecedor} de quem vai direto em pedido (mesma
+    regra de _homologados_validos), pra Conferência mostrar o destino de
+    cada item antes de gerar."""
+    with conexao() as conn:
+        homologados = _homologados_validos(conn)
+        nomes = {linha["id"]: linha["nome"] for linha in conn.execute("SELECT id, nome FROM fornecedor")}
+    return {insumo_id: nomes.get(h["fornecedor_id"], "") for insumo_id, h in homologados.items()}
 
 
 def arredondar_quantidade_compra(deficit, fator_conversao_compra=None):
@@ -6352,11 +6413,13 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     sem_ideal = {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
-            if item['quantidadeIdeal'] is None:
+            # A quantidade decidida na Conferência ganha da sugestão
+            # (2026-09-21): 0 tira o item, e item sem mínimo entra se a
+            # compradora digitou quanto comprar.
+            if item['quantidadeIdeal'] is None and item.get('quantidadeCompra') is None:
                 sem_ideal[item['insumoId']] = item['nome']
                 continue
-            atual = item['quantidadePreenchida'] if item['quantidadePreenchida'] is not None else 0
-            deficit = arredondar_quantidade_compra(item['quantidadeIdeal'] - atual, item.get('fatorConversaoCompra'))
+            deficit = quantidade_a_comprar(item)
             if deficit <= 0:
                 continue
             info = deficits.setdefault(item['insumoId'], {

@@ -294,21 +294,13 @@
           <div class="chart-card">
             <div class="table-header-row">
               <div>
-                <h3 class="table-title">Déficit somado (todas as lojas)</h3>
-                <p class="table-subtitle">Preenchido e quantidade ideal somados através das lojas participantes — base pra virar cotação</p>
+                <h3 class="table-title">O que comprar</h3>
+                <p class="table-subtitle" id="requisicao-conferencia-itens-resumo">Cada loja já vem com a sugestão do sistema. Mude o que quiser: 0 tira o item da compra.</p>
               </div>
             </div>
             <div class="table-responsive">
-            <table class="inventory-table">
-              <thead>
-                <tr>
-                  <th>Insumo</th>
-                  <th>Categoria</th>
-                  <th>Preenchido (soma)</th>
-                  <th>Qtd. ideal (soma)</th>
-                  <th>Déficit</th>
-                </tr>
-              </thead>
+            <table class="inventory-table conferencia-compra-tabela">
+              <thead id="requisicao-conferencia-itens-head"></thead>
               <tbody id="requisicao-conferencia-itens-body">
                 <!-- Renderizado dinamicamente via JS -->
               </tbody>
@@ -329,7 +321,7 @@
               <h1 id="contagem-detalhe-titulo">—</h1>
               <div class="page-acoes-topo" id="contagem-detalhe-acoes-admin" style="display:none;">
                 <button type="button" class="btn-secondary" id="btn-contagem-reabrir" style="border-color: var(--danger); color: var(--danger); display:none;">Reabrir pra corrigir</button>
-                <button type="button" class="btn-primary" id="btn-contagem-aprovar">Fazer Cotação/Pedido</button>
+                <button type="button" class="btn-primary" id="btn-contagem-aprovar">Aprovar e conferir a compra</button>
               </div>
             </div>
           </div>

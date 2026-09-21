@@ -1,5 +1,6 @@
 import io
 import json
+import math
 import os
 import re
 import tempfile
@@ -135,6 +136,11 @@ from backend.armazenamento import (
     excluir_data_especial,
     listar_datas_especiais,
     gerar_cotacao_do_deficit,
+    sugestao_de_compra,
+    quantidade_a_comprar,
+    definir_quantidade_compra,
+    requisicao_ja_gerada,
+    fornecedor_homologado_por_insumo,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
@@ -496,6 +502,7 @@ DESCRICAO_DA_ACAO = {
     ('DELETE', '/api/requisicoes'): 'Excluiu uma requisição',
     ('POST', '/api/requisicoes/conferencia/aprovar'): 'Aprovou a conferência da requisição',
     ('POST', '/api/requisicoes/conferencia/gerar-cotacao'): 'Gerou a cotação a partir da requisição',
+    ('PUT', '/api/requisicoes/conferencia/comprar'): 'Mudou quanto comprar na conferência',
     ('POST', '/api/cotacoes'): 'Criou cotação',
     ('PUT', '/api/cotacoes/<int:cotacao_id>'): 'Editou a cotação',
     ('DELETE', '/api/cotacoes/<int:cotacao_id>'): 'Excluiu cotação',
@@ -3958,6 +3965,18 @@ def api_conferencia_requisicao():
                 "idealTotal": 0.0,
                 "temIdeal": False,
                 "algumAjustado": False,
+                "lojas": [],
+            })
+            # Por loja, o que a compradora vê e decide em "O que comprar"
+            # (2026-09-21): sugestão do sistema e a quantidade que vale.
+            agregado['lojas'].append({
+                "loja": contagem['loja'],
+                "contagemId": contagem['id'],
+                "contado": item['quantidadePreenchida'],
+                "ideal": item['quantidadeIdeal'],
+                "sugestao": sugestao_de_compra(item),
+                "comprar": quantidade_a_comprar(item),
+                "editado": item.get('quantidadeCompra') is not None,
             })
             if item['quantidadePreenchida'] is not None:
                 agregado['preenchidoTotal'] += item['quantidadePreenchida']
@@ -3968,6 +3987,7 @@ def api_conferencia_requisicao():
                 agregado['algumAjustado'] = True
 
     classe_por_insumo = mapa_curva_abc_insumos()
+    homologado_de = fornecedor_homologado_por_insumo()
     itens = []
     for agregado in agregados.values():
         deficit = arredondar_quantidade_compra(
@@ -3985,12 +4005,57 @@ def api_conferencia_requisicao():
             # Curva A concentra o custo — o documento pede revisão manual
             # nesses antes de aprovar; o resto pode passar direto.
             "curvaAbc": classe_por_insumo.get(agregado['insumoId']),
+            "lojas": agregado['lojas'],
+            "comprarTotal": round(sum(loja['comprar'] for loja in agregado['lojas']), 2),
+            # Pra onde vai ao gerar: pedido direto pro homologado ou cotação.
+            "fornecedorHomologado": homologado_de.get(agregado['insumoId']),
         })
-    itens.sort(key=lambda i: (i['deficit'] is None, -(i['deficit'] or 0), i['nome']))
+
+    # O que vai pra compra primeiro; depois quem está sem mínimo esperando
+    # decisão; por último o que tem estoque. Dentro, por categoria e nome.
+    def _ordem(item):
+        if item['comprarTotal'] > 0:
+            grupo_item = 0
+        elif any(loja['ideal'] is None and not loja['editado'] for loja in item['lojas']):
+            grupo_item = 1
+        else:
+            grupo_item = 2
+        return (grupo_item, item['categoria'] or '', item['nome'])
+
+    itens.sort(key=_ordem)
 
     resposta = _formatar_requisicao_resumo(grupo)
     resposta['itens'] = itens
+    resposta['jaGerada'] = requisicao_ja_gerada(titulo, prazo_validade)
     return jsonify(resposta)
+
+
+@app.route('/api/requisicoes/conferencia/comprar', methods=['PUT'])
+def api_definir_quantidade_compra():
+    """Quanto comprar de um item numa loja, decidido na Conferência:
+    {contagemId, insumoId, quantidade} — quantidade null volta pra sugestão
+    do sistema, 0 tira o item da compra."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        contagem_id = int(dados.get('contagemId'))
+        insumo_id = int(dados.get('insumoId'))
+        quantidade = dados.get('quantidade')
+        quantidade = None if quantidade is None else float(quantidade)
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Quantidade inválida."}), 400
+    if quantidade is not None and (not math.isfinite(quantidade) or quantidade < 0):
+        return jsonify({"erro": "A quantidade tem que ser 0 ou mais."}), 400
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+    if requisicao_ja_gerada(contagem['descricao'], contagem['prazo_validade']):
+        return jsonify({"erro": "Essa requisição já virou cotação/pedido: as quantidades não mudam mais."}), 409
+    if not definir_quantidade_compra(contagem_id, insumo_id, quantidade):
+        return jsonify({"erro": "Esse item não está nessa contagem."}), 404
+    return jsonify({"ok": True})
 
 
 @app.route('/api/requisicoes/conferencia/aprovar', methods=['POST'])

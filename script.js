@@ -5273,7 +5273,7 @@ function renderContagemDetalhe() {
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovar) {
     btnAprovar.disabled = c.status === 'aberta';
-    btnAprovar.textContent = c.status === 'aprovada' ? 'Ver Cotação/Pedido' : 'Fazer Cotação/Pedido';
+    btnAprovar.textContent = c.status === 'aprovada' ? 'Conferir a compra' : 'Aprovar e conferir a compra';
   }
   if (btnReabrir) btnReabrir.style.display = (isAdmin && c.status !== 'aberta') ? '' : 'none';
 
@@ -5379,7 +5379,7 @@ document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => 
 document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async () => {
   if (!contagemDetalheAtual) return;
   const jaAprovada = contagemDetalheAtual.status === 'aprovada';
-  if (!jaAprovada && !confirm('Aprovar essa loja? As quantidades preenchidas vão substituir o estoque atual dela. Se for a última loja pendente da requisição, a cotação já é gerada em seguida.')) return;
+  if (!jaAprovada && !confirm('Aprovar essa loja? As quantidades preenchidas vão substituir o estoque atual dela. Com todas as lojas aprovadas, você confere quanto comprar de cada item antes de gerar a cotação.')) return;
   try {
     if (!jaAprovada) {
       const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
@@ -5387,28 +5387,24 @@ document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async
       if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
     }
 
+    // A compra não sai mais direto daqui (2026-09-21): com todas as lojas
+    // aprovadas, a compradora confere e muda o que quiser em "O que comprar",
+    // na conferência da requisição, e é de lá que sai a cotação/pedido.
     const titulo = contagemDetalheAtual.descricao;
     const prazoValidade = contagemDetalheAtual.prazoValidade;
-    const conferencia = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`).then(r => r.json());
-
-    if (conferencia.totalmenteAprovada) {
-      const gerarResposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titulo, prazoValidade }),
-      });
-      const gerarDados = await gerarResposta.json();
-      if (gerarResposta.ok) {
-        if (!jaAprovada) alert(`Todas as lojas aprovadas: ${_textoResultadoRequisicao(gerarDados)}.` + _avisoInsumosSemIdeal(gerarDados.insumosSemIdeal));
-        window.location.href = _destinoResultadoRequisicao(gerarDados);
-        return;
-      }
-      alert(gerarDados.erro || (jaAprovada ? 'Não foi possível abrir a cotação dessa requisição.' : 'Loja aprovada, mas não foi possível gerar a cotação.'));
-    } else if (!jaAprovada) {
-      const faltam = conferencia.totalLojas - conferencia.lojasAprovadas;
-      alert(`Loja aprovada! Ainda falta${faltam > 1 ? 'm' : ''} ${faltam} loja${faltam > 1 ? 's' : ''} aprovar antes de gerar a cotação.`);
+    if (jaAprovada) {
+      await abrirConferenciaRequisicao(titulo, prazoValidade);
+      return;
     }
-    if (!jaAprovada) await abrirContagemDetalhe(contagemDetalheAtual.id);
+    const conferencia = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`).then(r => r.json());
+    if (conferencia.totalmenteAprovada) {
+      alert('Todas as lojas aprovadas! Agora confira em "O que comprar" quanto comprar de cada item e clique em "Gerar cotação".');
+      await abrirConferenciaRequisicao(titulo, prazoValidade);
+      return;
+    }
+    const faltam = conferencia.totalLojas - conferencia.lojasAprovadas;
+    alert(`Loja aprovada! Ainda falta${faltam > 1 ? 'm' : ''} ${faltam} loja${faltam > 1 ? 's' : ''} aprovar antes de conferir a compra.`);
+    await abrirContagemDetalhe(contagemDetalheAtual.id);
   } catch (erro) {
     console.error('Falha ao aprovar requisição:', erro);
     alert(erro.message || 'Não foi possível aprovar essa requisição.');
@@ -5559,7 +5555,10 @@ function renderConferenciaRequisicao() {
   const btnGerarCotacao = document.getElementById('btn-requisicao-gerar-cotacao');
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovarTodas) btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
-  if (btnGerarCotacao) btnGerarCotacao.disabled = !r.totalmenteAprovada;
+  if (btnGerarCotacao) {
+    btnGerarCotacao.disabled = !r.totalmenteAprovada;
+    btnGerarCotacao.innerHTML = `<i data-lucide="file-text"></i> ${r.jaGerada ? 'Ver cotação/pedidos' : 'Gerar cotação'}`;
+  }
 
   const aviso = document.getElementById('requisicao-conferencia-aviso');
   if (!r.prontaParaConferencia) {
@@ -5593,20 +5592,241 @@ function renderConferenciaRequisicao() {
     btn.addEventListener('click', () => abrirContagemDetalhe(parseInt(btn.dataset.id, 10)));
   });
 
-  const itensBody = document.getElementById('requisicao-conferencia-itens-body');
-  itensBody.innerHTML = r.itens.map((item) => `
-    <tr>
-      <td class="font-bold">${escaparHtml(item.nome)}${item.curvaAbc === 'A'
-        ? ' <span class="badge-pill neu-orange" title="Curva A: esse insumo concentra boa parte do gasto de compra — confira antes de aprovar">conferir</span>'
-        : ''}</td>
-      <td class="text-muted">${escaparHtml(item.categoria)}</td>
-      <td>${_formatarQuantidade(item.preenchidoTotal, item.unidadeMedida)}</td>
-      <td>${item.idealTotal === null ? '<span class="text-muted">—</span>' : `${_formatarQuantidade(item.idealTotal, item.unidadeMedida)}`}${item.idealAjustado ? ' <span class="badge-pill neu-orange" title="Alguma loja tem ajuste manual">ajustado</span>' : ''}</td>
-      <td>${item.deficit === null ? '<span class="text-muted">—</span>' : (item.deficit > 0 ? `<span class="badge-pill neg">comprar ${_formatarQuantidade(item.deficit, item.unidadeMedida)}</span>` : '—')}</td>
-    </tr>
-  `).join('');
+  _renderCompraConferencia(r);
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// --- "O que comprar" na Conferência (2026-09-21, pedido dela) ---
+// Cada loja traz a sugestão do sistema (o que falta pro ideal, pra cima na
+// embalagem) e a compradora muda o que quiser: 0 tira o item, qualquer
+// número coloca, até item sem estoque mínimo. "Gerar cotação" usa exatamente
+// esses números. "Vai pra" mostra antes se sai em pedido direto pro
+// homologado ou se vai pra cotação — nada some sem ela ver.
+const minimosJaPerguntados = new Set();
+const _numeroBR = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+// No campo, sem ponto de milhar ("1000", "7,5"), pra editar sem confusão.
+const _numeroCampo = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2, useGrouping: false });
+
+// "7,5" e "7.5" = 7,5; "1.000" e "1.000,5" = mil (ponto de milhar só quando
+// vem em grupos de 3 ou junto com vírgula). Vazio = 0; NaN se não for número.
+function _lerNumeroBR(texto) {
+  const limpo = String(texto).trim().replace(/\s/g, '');
+  if (!limpo) return 0;
+  if (limpo.includes(',')) return Number(limpo.replace(/\./g, '').replace(',', '.'));
+  if (/^\d{1,3}(\.\d{3})+$/.test(limpo)) return Number(limpo.replace(/\./g, ''));
+  return Number(limpo);
+}
+
+function _valorCampoCompra(l) {
+  if (l.ideal === null && !l.editado && !l.minimoGuardado) return '';
+  return _numeroCampo(l.comprar);
+}
+
+function _referenciaCompra(item, l) {
+  const unidade = item.unidadeMedida;
+  const contado = l.contado === null ? 'não contou' : `contou ${_formatarQuantidade(l.contado, unidade)}`;
+  if (l.minimoGuardado) return `${contado} · mínimo ${_formatarQuantidade(l.minimoGuardado, unidade)} guardado`;
+  if (l.ideal === null) return `${contado} · sem estoque mínimo`;
+  return `${contado} · ideal ${_formatarQuantidade(l.ideal, unidade)}`;
+}
+
+function _botaoSugestaoHTML(item, l, bloqueado) {
+  if (bloqueado || !l.editado || l.sugestao === null || l.comprar === l.sugestao) return '';
+  return `<button type="button" class="comprar-sugestao" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">usar sugestão (${_formatarQuantidade(l.sugestao, item.unidadeMedida)})</button>`;
+}
+
+function _celulaCompraHTML(item, l, bloqueado) {
+  const semMinimo = l.ideal === null && !l.minimoGuardado;
+  return `
+    <div class="comprar-cel${semMinimo ? ' sem-minimo' : ''}${l.editado ? ' editado' : ''}" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">
+      <label class="comprar-campo">
+        <input type="text" inputmode="decimal" class="comprar-input" value="${_valorCampoCompra(l)}" placeholder="${semMinimo ? 'quanto?' : '0'}"
+          data-contagem="${l.contagemId}" data-insumo="${item.insumoId}" ${bloqueado ? 'disabled' : ''}
+          aria-label="Comprar ${escaparHtml(item.nome)} para ${escaparHtml(l.loja)}">
+        <span>${escaparHtml(item.unidadeMedida || '')}</span>
+      </label>
+      <span class="comprar-ref">${escaparHtml(_referenciaCompra(item, l))}</span>
+      <span class="comprar-acoes">${_botaoSugestaoHTML(item, l, bloqueado)}</span>
+    </div>`;
+}
+
+function _totalCompraHTML(item) {
+  const total = Math.round((item.lojas || []).reduce((soma, l) => soma + (l.comprar || 0), 0) * 100) / 100;
+  return total > 0
+    ? `<span class="badge-pill neg">${_formatarQuantidade(total, item.unidadeMedida)}</span>`
+    : '<span class="text-muted">não compra</span>';
+}
+
+function _destinoCompraHTML(item) {
+  const total = (item.lojas || []).reduce((soma, l) => soma + (l.comprar || 0), 0);
+  if (total <= 0) return '<span class="text-muted">—</span>';
+  return item.fornecedorHomologado
+    ? `<span class="destino-compra pedido" title="Fornecedor homologado com preço combinado: sai direto em pedido, sem cotação">Pedido · ${escaparHtml(item.fornecedorHomologado)}</span>`
+    : '<span class="destino-compra cotacao">Cotação</span>';
+}
+
+function _atualizarResumoCompraConferencia(r) {
+  const resumo = document.getElementById('requisicao-conferencia-itens-resumo');
+  if (!resumo) return;
+  if (r.jaGerada) {
+    resumo.textContent = 'Essa requisição já virou cotação/pedido, então as quantidades ficaram travadas. Clique em "Ver cotação/pedidos" pra abrir.';
+    return;
+  }
+  const vaoPraCompra = r.itens.filter((i) => i.lojas.some((l) => l.comprar > 0));
+  const emPedido = vaoPraCompra.filter((i) => i.fornecedorHomologado).length;
+  const semDecisao = r.itens.filter((i) => i.lojas.some((l) => l.ideal === null && !l.editado && !l.minimoGuardado)).length;
+  const partes = [`${vaoPraCompra.length} ${vaoPraCompra.length === 1 ? 'item vai' : 'itens vão'} pra compra (${emPedido} em pedido direto, ${vaoPraCompra.length - emPedido} pra cotação)`];
+  if (semDecisao) partes.push(`${semDecisao} sem estoque mínimo, em amarelo, esperando você decidir`);
+  resumo.textContent = `${partes.join(' · ')}. Cada loja já vem com a sugestão do sistema; mude o que quiser, 0 tira o item.`;
+}
+
+function _renderCompraConferencia(r) {
+  const head = document.getElementById('requisicao-conferencia-itens-head');
+  const body = document.getElementById('requisicao-conferencia-itens-body');
+  if (!head || !body) return;
+  const lojas = r.contagens.map((c) => c.loja);
+  const bloqueado = !!r.jaGerada;
+  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th>${escaparHtml(loja)}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Vai pra</th></tr>`;
+  body.innerHTML = r.itens.map((item) => {
+    const porLoja = Object.fromEntries((item.lojas || []).map((l) => [l.loja, l]));
+    return `
+      <tr data-insumo="${item.insumoId}">
+        <td class="conferencia-insumo">
+          <span class="font-bold">${escaparHtml(item.nome)}</span>${item.curvaAbc === 'A'
+            ? ' <span class="badge-pill neu-orange" title="Curva A: esse insumo concentra boa parte do gasto de compra — confira antes de gerar">conferir</span>'
+            : ''}
+          <span class="conferencia-categoria">${escaparHtml(item.categoria || '')}</span>
+        </td>
+        ${lojas.map((loja) => `<td>${porLoja[loja] ? _celulaCompraHTML(item, porLoja[loja], bloqueado) : '<span class="text-muted">—</span>'}</td>`).join('')}
+        <td class="col-total-compra" data-total-insumo="${item.insumoId}">${_totalCompraHTML(item)}</td>
+        <td class="col-destino-compra" data-destino-insumo="${item.insumoId}">${_destinoCompraHTML(item)}</td>
+      </tr>`;
+  }).join('');
+  _atualizarResumoCompraConferencia(r);
+  body.querySelectorAll('.comprar-input').forEach((input) => {
+    input.addEventListener('change', () => _salvarCompraConferencia(input));
+  });
+  body.querySelectorAll('.comprar-sugestao').forEach((botao) => {
+    botao.addEventListener('click', () => _voltarSugestaoConferencia(botao));
+  });
+}
+
+function _compraDaConferencia(contagemId, insumoId) {
+  const item = requisicaoConferenciaAtual?.itens.find((i) => i.insumoId === insumoId);
+  const l = item?.lojas.find((x) => x.contagemId === contagemId);
+  return { item, l };
+}
+
+// Atualiza só a célula mexida (e o total da linha): recriar a tabela tiraria
+// o foco do próximo campo, e a Ket vai de campo em campo no Tab.
+function _atualizarCelulaCompra(item, l) {
+  const celula = document.querySelector(`.comprar-cel[data-contagem="${l.contagemId}"][data-insumo="${item.insumoId}"]`);
+  if (celula) {
+    celula.classList.toggle('editado', l.editado);
+    celula.classList.toggle('sem-minimo', l.ideal === null && !l.minimoGuardado);
+    const input = celula.querySelector('.comprar-input');
+    if (document.activeElement !== input) input.value = _valorCampoCompra(l);
+    celula.querySelector('.comprar-ref').textContent = _referenciaCompra(item, l);
+    const acoes = celula.querySelector('.comprar-acoes');
+    acoes.innerHTML = _botaoSugestaoHTML(item, l, false);
+    acoes.querySelector('.comprar-sugestao')?.addEventListener('click', (evento) => _voltarSugestaoConferencia(evento.currentTarget));
+  }
+  const total = document.querySelector(`[data-total-insumo="${item.insumoId}"]`);
+  if (total) total.innerHTML = _totalCompraHTML(item);
+  const destino = document.querySelector(`[data-destino-insumo="${item.insumoId}"]`);
+  if (destino) destino.innerHTML = _destinoCompraHTML(item);
+  _atualizarResumoCompraConferencia(requisicaoConferenciaAtual);
+}
+
+async function _gravarCompraConferencia(contagemId, insumoId, quantidade) {
+  const resposta = await fetch('/api/requisicoes/conferencia/comprar', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contagemId, insumoId, quantidade }),
+  });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a quantidade.');
+}
+
+async function _salvarCompraConferencia(input) {
+  const contagemId = parseInt(input.dataset.contagem, 10);
+  const insumoId = parseInt(input.dataset.insumo, 10);
+  const { item, l } = _compraDaConferencia(contagemId, insumoId);
+  if (!item || !l) return;
+  const quantidade = _lerNumeroBR(input.value);
+  if (!Number.isFinite(quantidade) || quantidade < 0) {
+    alert('Digite uma quantidade de 0 pra cima.');
+    input.value = _valorCampoCompra(l);
+    return;
+  }
+  try {
+    await _gravarCompraConferencia(contagemId, insumoId, quantidade);
+  } catch (erro) {
+    alert(erro.message);
+    input.value = _valorCampoCompra(l);
+    return;
+  }
+  l.comprar = quantidade;
+  l.editado = true;
+  input.value = _valorCampoCompra(l);
+  _atualizarCelulaCompra(item, l);
+  if (l.ideal === null && !l.minimoGuardado && quantidade > 0) {
+    await _perguntarMinimoConferencia(item, l);
+    _atualizarCelulaCompra(item, l);
+  }
+}
+
+async function _voltarSugestaoConferencia(botao) {
+  const contagemId = parseInt(botao.dataset.contagem, 10);
+  const insumoId = parseInt(botao.dataset.insumo, 10);
+  const { item, l } = _compraDaConferencia(contagemId, insumoId);
+  if (!item || !l) return;
+  try {
+    await _gravarCompraConferencia(contagemId, insumoId, null);
+  } catch (erro) {
+    alert(erro.message);
+    return;
+  }
+  l.editado = false;
+  l.comprar = l.sugestao ?? 0;
+  _atualizarCelulaCompra(item, l);
+}
+
+// Item sem estoque mínimo que ganhou quantidade: oferece guardar um mínimo
+// pra loja (uma vez por item), sugerindo contado + comprado — o nível que
+// ela quis ter. Assim os itens sem mínimo vão se acertando a cada compra.
+async function _perguntarMinimoConferencia(item, l) {
+  const chave = `${l.loja}|${item.insumoId}`;
+  if (minimosJaPerguntados.has(chave)) return;
+  minimosJaPerguntados.add(chave);
+  const contado = l.contado || 0;
+  const sugerido = Math.round((contado + l.comprar) * 100) / 100;
+  const resposta = prompt(
+    `"${item.nome}" não tem estoque mínimo em ${l.loja}.\n\n`
+    + 'Quer guardar um mínimo? Assim ele já entra na sugestão das próximas contagens.\n'
+    + `Sugestão: ${_numeroBR(sugerido)} (${_numeroBR(contado)} contados + ${_numeroBR(l.comprar)} que você vai comprar).\n\n`
+    + 'Deixe o número que quiser e clique em OK, ou em Cancelar pra não guardar.',
+    _numeroCampo(sugerido),
+  );
+  if (resposta === null) return;
+  const minimo = _lerNumeroBR(resposta);
+  if (!Number.isFinite(minimo) || minimo <= 0) {
+    alert('O mínimo não foi guardado: digite um número maior que 0.');
+    return;
+  }
+  try {
+    const respostaMinimo = await fetch(`/api/insumos/${item.insumoId}/estoque/${encodeURIComponent(l.loja)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estoqueMinimo: minimo }),
+    });
+    const dados = await respostaMinimo.json().catch(() => ({}));
+    if (!respostaMinimo.ok) throw new Error(dados.erro || 'Não foi possível guardar o mínimo.');
+    l.minimoGuardado = minimo;
+  } catch (erro) {
+    alert(erro.message);
+  }
 }
 
 document.getElementById('btn-requisicao-voltar')?.addEventListener('click', () => {
@@ -5656,13 +5876,17 @@ function _destinoResultadoRequisicao(dados) {
 function _avisoInsumosSemIdeal(insumosSemIdeal) {
   if (!insumosSemIdeal || !insumosSemIdeal.length) return '';
   const nomes = insumosSemIdeal.map((i) => i.nome).join(', ');
-  return `\n\nAtenção: ${insumosSemIdeal.length} insumo(s) ficaram de fora da cotação por ainda não terem quantidade ideal calculável (Ficha Técnica incompleta ou sem venda registrada): ${nomes}. Ajusta a quantidade ideal na mão pra esses insumos entrarem numa próxima cotação.`;
+  return `\n\nAtenção: ${insumosSemIdeal.length} insumo(s) ficaram de fora por não terem estoque mínimo nem quantidade digitada em "O que comprar": ${nomes}.`;
 }
 
 document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
   const r = requisicaoConferenciaAtual;
   if (!r || !r.totalmenteAprovada) return;
-  if (!confirm('Gerar a compra dessa requisição? O que tem fornecedor homologado sai direto em pedido pra ele; o resto vai pra cotação, que ainda dá pra editar antes de mandar pros fornecedores.')) return;
+  if (!r.jaGerada) {
+    const semDecisao = r.itens.filter((i) => i.lojas.some((l) => l.ideal === null && !l.editado && !l.minimoGuardado)).length;
+    const aviso = semDecisao ? `\n\nAtenção: ${semDecisao} item(ns) sem estoque mínimo, em amarelo, estão sem quantidade e não entram.` : '';
+    if (!confirm(`Gerar a compra com as quantidades de "O que comprar"? O que está como "Pedido" sai direto pro fornecedor homologado; o que está como "Cotação" vai pra cotação, que ainda dá pra editar antes de mandar pros fornecedores.${aviso}`)) return;
+  }
   try {
     const resposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
       method: 'POST',
