@@ -5560,7 +5560,7 @@ function renderConferenciaRequisicao() {
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovarTodas) btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
   const btnReaplicar = document.getElementById('btn-requisicao-reaplicar-homologados');
-  if (btnReaplicar) btnReaplicar.style.display = r.jaGerada ? '' : 'none';
+  if (btnReaplicar) btnReaplicar.style.display = r.podeAtualizarHomologados ? '' : 'none';
   if (btnGerarCotacao) {
     btnGerarCotacao.disabled = !r.totalmenteAprovada;
     btnGerarCotacao.innerHTML = `<i data-lucide="file-text"></i> ${r.jaGerada ? 'Ver cotação/pedidos' : 'Gerar cotação'}`;
@@ -5908,11 +5908,12 @@ document.getElementById('btn-requisicao-reaplicar-homologados')?.addEventListene
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível atualizar a compra.');
     const partes = [];
     if (dados.pedidos.length) {
-      partes.push(`Pedidos criados (envie pelo WhatsApp em Pedidos):\n${dados.pedidos.map((p) => `• ${p.fornecedor}: ${p.itens.join(', ')}`).join('\n')}`);
+      const linhas = dados.pedidos.map((p) => `• ${p.novo ? `Pedido novo nº ${p.id}` : `Entrou no pedido nº ${p.id}`} — ${p.fornecedor} (${p.loja}): ${p.itens.join(', ')}`);
+      partes.push(`Pedidos (envie pelo WhatsApp em Pedidos):\n${linhas.join('\n')}`);
     }
     if (dados.saiuDaCotacao.length) partes.push(`Saíram da cotação: ${dados.saiuDaCotacao.join(', ')}.`);
-    if (dados.entrouNaCotacao.length) partes.push(`Entraram na cotação (convide quem vende): ${dados.entrouNaCotacao.join(', ')}.`);
-    alert(partes.length ? `Pronto!\n\n${partes.join('\n\n')}` : 'Nada mudou: nenhum item da compra ganhou fornecedor homologado desde que ela foi gerada.');
+    if (dados.entrouNaCotacao.length) partes.push(`Entraram na cotação: ${dados.entrouNaCotacao.join(', ')}. Foram pros links ainda abertos de quem vende; se ninguém for cotar, lance o preço à mão em "Lançar preço".`);
+    alert(partes.length ? `Pronto!\n\n${partes.join('\n\n')}` : 'Nada mudou: a compra já está de acordo com os homologados de agora.');
     await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
   } catch (erro) {
     console.error('Falha ao atualizar com os homologados:', erro);

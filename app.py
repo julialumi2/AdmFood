@@ -142,6 +142,7 @@ from backend.armazenamento import (
     requisicao_ja_gerada,
     fornecedor_homologado_por_insumo,
     reaplicar_homologados_requisicao,
+    motivo_para_nao_reaplicar,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
@@ -3195,6 +3196,10 @@ def api_responder_convite_cotacao(token):
     except (TypeError, ValueError):
         return jsonify({"erro": "Preço inválido."}), 400
 
+    # Só o que está no convite dele: um item que saiu da cotação depois que a
+    # página abriu ("Atualizar com os homologados") não volta por aqui.
+    no_convite = {item["insumo_id"] for item in convite["itens"]}
+    precos = {insumo_id: preco for insumo_id, preco in precos.items() if insumo_id in no_convite}
     responder_convite_cotacao(token, precos)
     return jsonify({"ok": True})
 
@@ -4029,6 +4034,8 @@ def api_conferencia_requisicao():
     resposta = _formatar_requisicao_resumo(grupo)
     resposta['itens'] = itens
     resposta['jaGerada'] = requisicao_ja_gerada(titulo, prazo_validade)
+    # "Atualizar com os homologados" só em compra em andamento.
+    resposta['podeAtualizarHomologados'] = resposta['jaGerada'] and motivo_para_nao_reaplicar(titulo, prazo_validade) is None
     return jsonify(resposta)
 
 

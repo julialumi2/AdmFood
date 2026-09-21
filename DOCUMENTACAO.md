@@ -3854,3 +3854,12 @@ dele); o resto fica ou entra na cotação. `POST
 /api/requisicoes/conferencia/reaplicar-homologados` com `{titulo,
 prazoValidade}` → `reaplicar_homologados_requisicao`, que devolve os pedidos
 criados (fornecedor e itens), o que saiu e o que entrou na cotação.
+
+Ajustes da revisão (mesmo dia): o botão só aparece em compra em andamento
+(nem semana da VMarket nem cotação fechada — `motivo_para_nao_reaplicar`); o
+item que sai da cotação vai pro pedido com a quantidade travada nela; o preço
+que o fornecedor já mandou fica guardado (só deixa de ser vencedor); item que
+entra na cotação vai pros convites ainda abertos de quem vende; pedido ainda
+não enviado do mesmo fornecedor e loja ganha os itens novos em vez de nascer
+outro; o link do fornecedor só grava preço dos itens do convite dele; e o
+"Gerar pedidos" da cotação passou a olhar "já pedido" por insumo e loja.

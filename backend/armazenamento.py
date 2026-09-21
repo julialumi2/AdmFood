@@ -4865,11 +4865,14 @@ def gerar_pedidos_de_cotacao(cotacao_id):
             "SELECT insumo_id, loja, quantidade FROM cotacao_item_loja WHERE cotacao_id = ?",
             (cotacao_id,),
         ).fetchall()
+        # Por insumo E loja (2026-09-21): uma loja que entrou depois na cotação
+        # ("Atualizar com os homologados") ainda pode virar pedido mesmo que
+        # outra loja já tenha pedido desse insumo.
         insumos_ja_pedidos = {
-            linha["insumo_id"]
+            (linha["insumo_id"], linha["loja"])
             for linha in conn.execute(
                 """
-                SELECT DISTINCT pi.insumo_id
+                SELECT DISTINCT pi.insumo_id, pc.loja
                 FROM pedido_compra_item pi
                 JOIN pedido_compra pc ON pc.id = pi.pedido_id
                 WHERE pc.cotacao_id = ?
@@ -4882,7 +4885,7 @@ def gerar_pedidos_de_cotacao(cotacao_id):
     insumos_com_quantidade = set()
     for linha in linhas_loja:
         insumos_com_quantidade.add(linha['insumo_id'])
-        if linha['insumo_id'] in insumos_ja_pedidos:
+        if (linha['insumo_id'], linha['loja']) in insumos_ja_pedidos:
             continue
         vencedor = vencedores.get(linha['insumo_id'])
         if not vencedor:
@@ -6478,19 +6481,48 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     return {"cotacaoId": cotacao_id, "pedidosDiretos": pedidos_diretos, "insumosSemIdeal": insumos_sem_ideal}
 
 
+def motivo_para_nao_reaplicar(titulo, prazo_validade):
+    """Por que o "Atualizar com os homologados" não vale pra essa requisição
+    (None = pode). Só serve pra compra em andamento: semana trazida da
+    VMarket ou cotação já fechada é histórico, e refazer ali pediria de novo
+    o que já chegou (revisão de 21/09)."""
+    with conexao() as conn:
+        if conn.execute(
+            "SELECT 1 FROM contagem WHERE descricao = ? AND prazo_validade = ? AND id_vmarket IS NOT NULL LIMIT 1",
+            (titulo, prazo_validade),
+        ).fetchone():
+            return "Essa requisição veio da VMarket: é histórico, não dá pra refazer a compra."
+        cotacoes = conn.execute(
+            "SELECT status, id_vmarket FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND pedido_direto = 0",
+            (titulo, prazo_validade),
+        ).fetchall()
+    if any(c["id_vmarket"] for c in cotacoes):
+        return "Essa requisição veio da VMarket: é histórico, não dá pra refazer a compra."
+    if any(c["status"] != "aberta" for c in cotacoes):
+        return "A cotação dessa requisição já foi fechada. Reabra a cotação antes, se ainda for comprar."
+    return None
+
+
 def reaplicar_homologados_requisicao(titulo, prazo_validade):
     """Refaz a compra de uma requisição já gerada com os homologados de agora
     (2026-09-21, caso da Contagem 20/09 do Açaí: os homologados foram
     acertados depois de gerar, e a cotação já tinha preço de fornecedor).
-    Pra cada item da compra (a quantidade que vale na Conferência):
+    Pra cada item da compra:
     - já está em algum pedido dessa requisição (direto ou gerado da cotação):
       fica como está, não duplica;
     - tem fornecedor homologado com preço valendo: vira pedido direto e sai da
-      cotação (junto com o preço e o convite desse item, pra não sair em dobro);
-    - senão: fica na cotação (entra nela se não estava; cria a cotação se a
-      requisição não tinha).
-    Os preços que os fornecedores já mandaram pros itens que continuam na
-    cotação ficam onde estão. Rodar de novo sem mudar nada não faz nada."""
+      cotação. A quantidade é a que está travada na cotação; se o item não
+      estava nela (pedido apagado), a da Conferência. O preço que fornecedor
+      já mandou pra ele fica guardado (histórico, custo, evolução do preço),
+      só deixa de ser vencedor; e ele sai do link de quem foi convidado;
+    - senão: fica na cotação (entra nela se não estava, e vai pros convites
+      ainda abertos de quem vende o insumo — ou de todos, se ninguém vende).
+    Pedido ainda não enviado do mesmo fornecedor pra mesma loja nessa
+    requisição ganha os itens novos em vez de nascer outro pedido. Rodar de
+    novo sem mudar nada não faz nada."""
+    motivo = motivo_para_nao_reaplicar(titulo, prazo_validade)
+    if motivo:
+        raise ValueError(motivo)
     grupo = next(
         (r for r in listar_requisicoes() if r['titulo'] == titulo and r['prazo_validade'] == prazo_validade),
         None,
@@ -6503,10 +6535,10 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
     compra, nomes = {}, {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
+            nomes[item['insumoId']] = item['nome']
             quantidade = quantidade_a_comprar(item)
             if quantidade > 0:
                 compra[(item['insumoId'], contagem['loja'])] = quantidade
-                nomes[item['insumoId']] = item['nome']
 
     agora = datetime.now().isoformat()
     with conexao() as conn:
@@ -6526,12 +6558,16 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                 (titulo, prazo_validade, cotacao_id if cotacao_id is not None else -1),
             )
         }
-        na_cotacao = set()
+        travado = {}
         if cotacao_id is not None:
-            na_cotacao = {
-                (l["insumo_id"], l["loja"])
-                for l in conn.execute("SELECT insumo_id, loja FROM cotacao_item_loja WHERE cotacao_id = ?", (cotacao_id,))
+            travado = {
+                (l["insumo_id"], l["loja"]): l["quantidade"]
+                for l in conn.execute("SELECT insumo_id, loja, quantidade FROM cotacao_item_loja WHERE cotacao_id = ?", (cotacao_id,))
             }
+        # O que já estava na cotação vale com a quantidade travada nela.
+        for chave, quantidade in travado.items():
+            compra[chave] = quantidade
+            nomes.setdefault(chave[0], str(chave[0]))
         homologados = _homologados_validos(conn)
         nome_fornecedor = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM fornecedor")}
 
@@ -6541,24 +6577,46 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                 continue
             if insumo_id in homologados:
                 diretos[(homologados[insumo_id]["fornecedor_id"], loja, insumo_id)] = quantidade
-            elif (insumo_id, loja) not in na_cotacao:
+            elif (insumo_id, loja) not in travado:
                 entrar[(insumo_id, loja)] = quantidade
 
-        pedidos = []
-        if diretos:
-            pedidos = _gravar_pedidos_diretos(
-                conn, diretos, {i: h["preco"] for i, h in homologados.items()}, (titulo, prazo_validade)
+        # Pedido do mesmo fornecedor e loja, dessa requisição, ainda não
+        # enviado: os itens novos entram nele (uma mensagem só pro fornecedor).
+        abertos = {
+            (l["fornecedor_id"], l["loja"]): l["id"]
+            for l in conn.execute(
+                """
+                SELECT id, fornecedor_id, loja FROM pedido_compra
+                WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND status = 'enviado' AND whatsapp_enviado_em IS NULL
+                ORDER BY id
+                """,
+                (titulo, prazo_validade),
             )
+        }
+        precos = {i: h["preco"] for i, h in homologados.items()}
+        acrescentados, novos = {}, {}
+        for (fornecedor_id, loja, insumo_id), quantidade in diretos.items():
+            pedido_id = abertos.get((fornecedor_id, loja))
+            if pedido_id:
+                conn.execute(
+                    "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
+                    (pedido_id, insumo_id, quantidade, precos[insumo_id]),
+                )
+                conn.execute("UPDATE pedido_compra SET atualizado_em = ? WHERE id = ?", (agora, pedido_id))
+                acrescentados.setdefault((pedido_id, fornecedor_id, loja), []).append(insumo_id)
+            else:
+                novos[(fornecedor_id, loja, insumo_id)] = quantidade
+        criados = _gravar_pedidos_diretos(conn, novos, precos, (titulo, prazo_validade)) if novos else []
 
-        saiu = set()
+        mexidos = set()
         if cotacao_id is not None:
             for (_fornecedor, loja, insumo_id) in diretos:
-                if (insumo_id, loja) in na_cotacao:
+                if (insumo_id, loja) in travado:
                     conn.execute(
                         "DELETE FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ? AND loja = ?",
                         (cotacao_id, insumo_id, loja),
                     )
-                    saiu.add(insumo_id)
+                    mexidos.add(insumo_id)
 
         if entrar:
             if cotacao_id is None:
@@ -6566,6 +6624,10 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                     "INSERT INTO cotacao (titulo, status, criado_em, requisicao_titulo, requisicao_prazo) VALUES (?, 'aberta', ?, ?, ?)",
                     (titulo, agora, titulo, prazo_validade),
                 ).lastrowid
+            convites_abertos = conn.execute(
+                "SELECT id, fornecedor_id FROM cotacao_convite WHERE cotacao_id = ? AND status = 'aberta'",
+                (cotacao_id,),
+            ).fetchall()
             for (insumo_id, loja), quantidade in entrar.items():
                 conn.execute(
                     """
@@ -6574,10 +6636,23 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                     """,
                     (cotacao_id, insumo_id, loja, quantidade),
                 )
+                quem_vende = {
+                    l["fornecedor_id"]
+                    for l in conn.execute("SELECT fornecedor_id FROM insumo_fornecedor WHERE insumo_id = ?", (insumo_id,))
+                }
+                for convite in convites_abertos:
+                    if not quem_vende or convite["fornecedor_id"] in quem_vende:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO cotacao_convite_item (convite_id, insumo_id) VALUES (?, ?)",
+                            (convite["id"], insumo_id),
+                        )
+            mexidos |= {i for (i, _loja) in entrar}
 
-        # Total de cada insumo mexido = soma das lojas que sobraram; sem loja
-        # nenhuma, o insumo sai da cotação inteiro (preço e convite juntos).
-        for insumo_id in saiu | {i for (i, _loja) in entrar}:
+        # Total de cada insumo mexido = soma das lojas que sobraram. Sem loja
+        # nenhuma, o insumo sai da cotação: o preço fica guardado mas deixa de
+        # ser vencedor, e ele sai do link de quem foi convidado.
+        saiu = []
+        for insumo_id in mexidos:
             soma = conn.execute(
                 "SELECT COUNT(*) AS n, COALESCE(SUM(quantidade), 0) AS total FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ?",
                 (cotacao_id, insumo_id),
@@ -6592,21 +6667,27 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                 )
             else:
                 conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
-                conn.execute("DELETE FROM cotacao_preco WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
+                conn.execute("UPDATE cotacao_preco SET selecionado = 0 WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
                 conn.execute(
                     "DELETE FROM cotacao_convite_item WHERE insumo_id = ? AND convite_id IN (SELECT id FROM cotacao_convite WHERE cotacao_id = ?)",
                     (insumo_id, cotacao_id),
                 )
+                saiu.append(insumo_id)
 
-    itens_por_pedido = {}
-    for (fornecedor_id, loja, insumo_id) in diretos:
-        itens_por_pedido.setdefault((fornecedor_id, loja), []).append(nomes[insumo_id])
+    itens_criados = {}
+    for (fornecedor_id, loja, insumo_id) in novos:
+        itens_criados.setdefault((fornecedor_id, loja), []).append(insumo_id)
+    pedidos = [
+        {"id": p["id"], "fornecedor": nome_fornecedor.get(p["fornecedorId"], ""), "loja": p["loja"], "novo": True,
+         "itens": sorted(nomes[i] for i in itens_criados.get((p["fornecedorId"], p["loja"]), []))}
+        for p in criados
+    ] + [
+        {"id": pedido_id, "fornecedor": nome_fornecedor.get(fornecedor_id, ""), "loja": loja, "novo": False,
+         "itens": sorted(nomes[i] for i in insumos)}
+        for (pedido_id, fornecedor_id, loja), insumos in acrescentados.items()
+    ]
     return {
-        "pedidos": [
-            {"id": p["id"], "fornecedor": nome_fornecedor.get(p["fornecedorId"], ""), "loja": p["loja"],
-             "itens": sorted(itens_por_pedido.get((p["fornecedorId"], p["loja"]), []))}
-            for p in pedidos
-        ],
+        "pedidos": pedidos,
         "saiuDaCotacao": sorted(nomes[i] for i in saiu),
         "entrouNaCotacao": sorted({nomes[i] for (i, _loja) in entrar}),
         "cotacaoId": cotacao_id,
