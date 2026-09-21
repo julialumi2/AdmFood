@@ -4326,10 +4326,14 @@ def listar_cotacoes():
     "maior preço por insumo" e "quantidade por insumo" vêm de tabelas
     diferentes e a junção em SQL puro exigiria subquery correlacionada por
     linha — mais simples e fácil de testar assim, e o volume de dados é
-    pequeno (poucas centenas de linhas no máximo)."""
+    pequeno (poucas centenas de linhas no máximo).
+
+    Também devolve quem mandou preço e os totais de convites, pros
+    indicadores do topo da tela (redesenho de 21/09), e o `id_vmarket` pra
+    etiqueta de origem."""
     with conexao() as conn:
         cotacoes = conn.execute(
-            "SELECT id, titulo, status, criado_em, requisicao_titulo FROM cotacao WHERE pedido_direto = 0 "
+            "SELECT id, titulo, status, criado_em, requisicao_titulo, id_vmarket FROM cotacao WHERE pedido_direto = 0 "
             "ORDER BY criado_em DESC"
         ).fetchall()
         precos = conn.execute(
@@ -4367,7 +4371,8 @@ def listar_cotacoes():
             por_insumo.setdefault(p["insumo_id"], []).append(p)
 
         total_insumos = len(por_insumo)
-        total_fornecedores = len({p["fornecedor_id"] for p in linhas_preco})
+        fornecedor_ids = sorted({p["fornecedor_id"] for p in linhas_preco})
+        total_fornecedores = len(fornecedor_ids)
         insumos_comprados = 0
         valor_pedido = 0.0
         economia = 0.0
@@ -4398,10 +4403,14 @@ def listar_cotacoes():
             "status": cotacao["status"],
             "criado_em": cotacao["criado_em"],
             "requisicao_titulo": cotacao["requisicao_titulo"],
+            "id_vmarket": cotacao["id_vmarket"],
             "total_insumos": total_insumos,
             "total_fornecedores": total_fornecedores,
+            "fornecedor_ids": fornecedor_ids,
             "insumos_comprados": insumos_comprados,
             "percentual_respostas": percentual_respostas,
+            "convites_total": convite_info["total"] if convite_info else 0,
+            "convites_respondidos": convite_info["respondidos"] if convite_info else 0,
             "valor_pedido": round(valor_pedido, 2),
             "economia": round(economia, 2),
             "total_pedidos": pedidos_por_cotacao.get(cotacao["id"], 0),

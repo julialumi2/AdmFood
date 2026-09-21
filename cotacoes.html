@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -164,30 +165,14 @@
       <!-- PÁGINA DE COTAÇÕES -->
       <div class="page-content">
 
-        <!-- NAVEGAÇÃO DE ABAS -->
-        <div class="tabs-bar" id="cotacoes-tabs-bar">
-          <button type="button" class="tab-btn active" data-tab="cotacoes">
-            <i data-lucide="list-checks"></i>
-            <span>Cotações</span>
-          </button>
-          <button type="button" class="tab-btn" data-tab="compras">
-            <i data-lucide="history"></i>
-            <span>Compras</span>
-          </button>
-        </div>
-
-        <!-- ABA: COTAÇÕES -->
-        <div id="cotacoes-painel-cotacoes">
-
-        <!-- VISÃO: LISTA DE COTAÇÕES -->
-        <div id="cotacoes-lista-view">
-          <div class="dashboard-title-area">
-            <div class="title-top">
-              <i data-lucide="list-checks" class="icon-pin"></i>
-              <span>COTAÇÃO DE INSUMO COM FORNECEDOR</span>
-            </div>
-            <div class="title-row">
-              <h1>Cotações</h1>
+        <!-- TOPO: título e "Nova cotação" (some com uma cotação aberta); abas logo abaixo -->
+        <div class="cotacoes-cabecalho">
+          <div class="dashboard-title-area" id="cotacoes-topo">
+            <div class="title-row cotacoes-topo">
+              <div class="cotacoes-titulo">
+                <h1>Cotações</h1>
+                <p class="panel-subtitle">Registro e comparação de preços de fornecedores por insumo.</p>
+              </div>
               <div class="page-acoes-topo" id="cotacoes-acoes-admin" style="display:none;">
                 <button type="button" class="btn-registrar-entrada" id="btn-nova-cotacao">
                   <i data-lucide="plus"></i>
@@ -197,54 +182,132 @@
             </div>
           </div>
 
-          <p class="panel-subtitle" style="margin-top: var(--space-2);">
-            Registro manual do preço que cada fornecedor passou — sem coleta automática ainda. Compare e marque o vencedor por insumo.
-          </p>
+          <div class="tabs-bar" id="cotacoes-tabs-bar">
+            <button type="button" class="tab-btn active" data-tab="cotacoes">
+              <i data-lucide="list-checks"></i>
+              <span>Cotações</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="compras">
+              <i data-lucide="history"></i>
+              <span>Compras</span>
+            </button>
+          </div>
+        </div>
 
-          <div class="chart-card">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Cotações registradas</h3>
-                <p class="table-subtitle">Clique numa cotação pra ver/editar os preços</p>
+        <!-- ABA: COTAÇÕES -->
+        <div id="cotacoes-painel-cotacoes">
+
+        <!-- VISÃO: LISTA DE COTAÇÕES -->
+        <div id="cotacoes-lista-view">
+
+          <!-- ECONOMIA ACUMULADA (60%) E 4 INDICADORES (40%) -->
+          <div class="cotacoes-inteligencia">
+            <section class="chart-card economia-card" aria-labelledby="economia-titulo">
+              <div class="economia-topo">
+                <div class="economia-resumo">
+                  <h2 class="economia-rotulo" id="economia-titulo">Economia acumulada</h2>
+                  <strong class="economia-total" id="economia-total">R$ 0,00</strong>
+                  <span class="economia-legenda" id="economia-legenda">Carregando...</span>
+                </div>
+                <div class="periodo-segmentado" id="economia-periodo" role="group" aria-label="Período do gráfico">
+                  <button type="button" data-periodo="semanas" aria-pressed="false">12 semanas</button>
+                  <button type="button" data-periodo="6m" class="active" aria-pressed="true">6 meses</button>
+                  <button type="button" data-periodo="12m" aria-pressed="false">12 meses</button>
+                </div>
+              </div>
+              <div class="economia-grafico">
+                <canvas id="economia-grafico" role="img" aria-label="Economia acumulada com as cotações, período a período"></canvas>
+                <p class="economia-vazio" id="economia-vazio" style="display:none;">
+                  Nenhuma economia nesse período. Ela entra quando uma cotação com dois ou mais preços pro mesmo insumo tem o vencedor escolhido e é fechada.
+                </p>
+              </div>
+            </section>
+
+            <div class="cotacoes-kpis">
+              <button type="button" class="store-card kpi-clicavel" id="cotacoes-kpi-abertas-card" title="Mostrar só as cotações abertas">
+                <span class="kpi-topo">
+                  <span class="card-subtitle">Cotações abertas</span>
+                  <i data-lucide="folder-open" class="metric-icon"></i>
+                </span>
+                <span class="store-value" id="cotacoes-kpi-abertas">—</span>
+                <span class="kpi-sub" id="cotacoes-kpi-abertas-sub"></span>
+              </button>
+              <div class="store-card">
+                <div class="kpi-topo">
+                  <span class="card-subtitle">Economia do mês</span>
+                  <i data-lucide="piggy-bank" class="metric-icon icon-green"></i>
+                </div>
+                <span class="store-value valor-economia" id="cotacoes-kpi-economia-mes">—</span>
+                <span class="kpi-sub" id="cotacoes-kpi-economia-mes-sub"></span>
+              </div>
+              <div class="store-card">
+                <div class="kpi-topo">
+                  <span class="card-subtitle">Fornecedores participantes</span>
+                  <i data-lucide="users" class="metric-icon"></i>
+                </div>
+                <span class="store-value" id="cotacoes-kpi-fornecedores">—</span>
+                <span class="kpi-sub">com preço nos últimos 30 dias</span>
+              </div>
+              <div class="store-card">
+                <div class="kpi-topo">
+                  <span class="card-subtitle">Taxa de resposta média</span>
+                  <i data-lucide="message-circle" class="metric-icon"></i>
+                </div>
+                <span class="store-value" id="cotacoes-kpi-resposta">—</span>
+                <span class="kpi-sub" id="cotacoes-kpi-resposta-sub"></span>
               </div>
             </div>
+          </div>
 
-            <div class="cotacoes-filtros-row">
-              <div class="form-group">
+          <!-- FILTROS NUMA LINHA SÓ, EM CIMA DA TABELA -->
+          <div class="chart-card cotacoes-tabela-card">
+            <div class="cotacoes-filtros">
+              <div class="filtro-inline">
                 <label for="cotacoes-filtro-mostrar">Mostrar</label>
-                <select id="cotacoes-filtro-mostrar">
-                  <option value="">Todos</option>
-                  <option value="aberta">Apenas abertas</option>
-                  <option value="fechada">Apenas fechadas</option>
-                </select>
+                <span class="filtro-select">
+                  <select id="cotacoes-filtro-mostrar">
+                    <option value="">Todos</option>
+                    <option value="aberta">Apenas abertas</option>
+                    <option value="fechada">Apenas fechadas</option>
+                  </select>
+                  <i data-lucide="chevron-down"></i>
+                </span>
               </div>
-              <div class="form-group">
+              <div class="filtro-inline">
                 <label for="cotacoes-filtro-tipo">Tipo</label>
-                <select id="cotacoes-filtro-tipo">
-                  <option value="">Todas</option>
-                  <option value="manual">Manual</option>
-                  <option value="requisicao">Requisição</option>
-                </select>
+                <span class="filtro-select">
+                  <select id="cotacoes-filtro-tipo">
+                    <option value="">Todas</option>
+                    <option value="manual">Manual</option>
+                    <option value="requisicao">Requisição</option>
+                    <option value="vmarket">VMarket</option>
+                  </select>
+                  <i data-lucide="chevron-down"></i>
+                </span>
               </div>
-              <div class="form-group">
-                <label for="cotacoes-filtro-busca">Busca</label>
-                <input type="text" id="cotacoes-filtro-busca" placeholder="Nome ou nº da cotação...">
+              <div class="search-box cotacoes-busca">
+                <i data-lucide="search"></i>
+                <input type="text" id="cotacoes-filtro-busca" placeholder="Nome ou nº da cotação..." aria-label="Buscar cotação pelo nome ou número">
               </div>
-              <div class="form-group">
+              <div class="filtro-inline">
                 <label for="cotacoes-filtro-dias">Dias</label>
-                <select id="cotacoes-filtro-dias">
-                  <option value="7">Últimos 7</option>
-                  <option value="15">Últimos 15</option>
-                  <option value="30" selected>Últimos 30</option>
-                  <option value="90">Últimos 90</option>
-                  <option value="365">Últimos 365</option>
-                  <option value="">Todos</option>
-                </select>
+                <span class="filtro-select">
+                  <select id="cotacoes-filtro-dias">
+                    <option value="7">Últimos 7</option>
+                    <option value="15">Últimos 15</option>
+                    <option value="30" selected>Últimos 30</option>
+                    <option value="90">Últimos 90</option>
+                    <option value="365">Últimos 365</option>
+                    <option value="">Todos</option>
+                  </select>
+                  <i data-lucide="chevron-down"></i>
+                </span>
               </div>
+              <span class="cotacoes-contagem" id="cotacoes-contagem" aria-live="polite"></span>
             </div>
 
             <div class="table-responsive">
-            <table>
+            <table class="cotacoes-tabela">
               <thead>
                 <tr>
                   <th>Nº</th>
@@ -254,8 +317,8 @@
                   <th>Empresas</th>
                   <th>Status</th>
                   <th>Data de Inclusão</th>
-                  <th>Economia</th>
-                  <th>Valor Pedido</th>
+                  <th class="col-dinheiro">Economia</th>
+                  <th class="col-dinheiro">Valor Pedido</th>
                   <th id="cotacoes-th-acoes" style="display:none;">Ações</th>
                 </tr>
               </thead>
@@ -373,29 +436,21 @@
 
         <!-- ABA: COMPRAS (histórico de cotações fechadas) -->
         <div id="cotacoes-painel-compras" style="display:none;">
-          <div class="dashboard-title-area">
-            <div class="title-top">
-              <i data-lucide="history" class="icon-pin"></i>
-              <span>HISTÓRICO DE COTAÇÕES FECHADAS</span>
-            </div>
-            <div class="title-row">
-              <h1>Compras</h1>
-            </div>
-          </div>
-
-          <p class="panel-subtitle" style="margin-top: -8px;">
-            O preço vencedor de cada insumo em cada rodada de cotação já fechada — um registro do que foi decidido, sem depender do acompanhamento de entrega dos Pedidos.
-          </p>
-
-          <div class="cotacoes-filtros-row">
-            <div class="form-group" style="max-width: 240px;">
+          <div class="compras-intro">
+            <p class="panel-subtitle">
+              O preço vencedor de cada insumo em cada rodada de cotação já fechada — um registro do que foi decidido, sem depender do acompanhamento de entrega dos Pedidos.
+            </p>
+            <div class="filtro-inline">
               <label for="compras-filtro-dias">Dias</label>
-              <select id="compras-filtro-dias">
-                <option value="30" selected>Últimos 30</option>
-                <option value="90">Últimos 90</option>
-                <option value="365">Últimos 365</option>
-                <option value="">Todos</option>
-              </select>
+              <span class="filtro-select">
+                <select id="compras-filtro-dias">
+                  <option value="30" selected>Últimos 30</option>
+                  <option value="90">Últimos 90</option>
+                  <option value="365">Últimos 365</option>
+                  <option value="">Todos</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
+              </span>
             </div>
           </div>
 

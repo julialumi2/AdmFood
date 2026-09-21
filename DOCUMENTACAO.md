@@ -1213,6 +1213,26 @@ na tela de Cotações, com botão "Copiar link" por fornecedor), `GET
 autenticação, mesma exceção de `/api/contagens/token/` em
 `_exigir_login`).
 
+**Redesenho da lista (2026-09-21, pedido dela).** Topo enxuto: só o título
+"Cotações", a frase de apoio e o "+ Nova cotação" à direita, com as abas
+Cotações/Compras logo abaixo (a aba Compras perdeu o título próprio); o
+topo some enquanto uma cotação está aberta. Embaixo, lado a lado (60/40), o
+gráfico de **economia acumulada** (12 semanas de terça a segunda, 6 ou 12
+meses) e quatro indicadores: cotações abertas (o clique filtra a tabela),
+economia do mês, fornecedores participantes e taxa de resposta média — os
+dois últimos olhando os últimos 30 dias. A economia é a mesma coluna
+"Economia" da tabela (maior preço comparável menos o vencedor, vezes a
+quantidade) e só conta cotação fechada ou que já gerou pedido, quando a
+compra está decidida. A taxa de resposta é ponderada pelos convites
+(respondidos ÷ enviados), não a média das porcentagens. `GET /api/cotacoes`
+passou a devolver `origem` (`vmarket` com `id_vmarket`, `requisicao` com
+`requisicao_titulo`, senão `manual`), `fornecedorIds` (quem mandou preço) e
+`convitesTotal`/`convitesRespondidos`; o filtro Tipo ganhou "VMarket" e
+"Requisição" deixou de incluir as importadas. Na tabela: etiqueta de origem
+embaixo do título (que também abre a cotação), barra de respostas verde a
+partir de 60%, "Produtos / Comprados" na ordem do cabeçalho (antes saía
+invertido), economia maior que zero em verde e valores alinhados à direita.
+
 ### 6.9 Contagem de estoque por link + Requisição (núcleo do fluxo Compras)
 
 Tela `contagens.html` — VMarket-style: gera um **link sem login** (token

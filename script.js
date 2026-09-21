@@ -364,14 +364,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('cotacoes-painel-cotacoes').style.display = btn.dataset.tab === 'cotacoes' ? '' : 'none';
-        document.getElementById('cotacoes-painel-compras').style.display = btn.dataset.tab === 'compras' ? '' : 'none';
-        if (btn.dataset.tab === 'compras') carregarHistoricoCompras();
+      btn.addEventListener('click', () => _mostrarAbaCotacoes(btn.dataset.tab));
+    });
+
+    document.querySelectorAll('#economia-periodo button').forEach((botao) => {
+      botao.addEventListener('click', () => {
+        periodoEconomiaCotacoes = botao.dataset.periodo;
+        document.querySelectorAll('#economia-periodo button').forEach((b) => {
+          b.classList.toggle('active', b === botao);
+          b.setAttribute('aria-pressed', b === botao ? 'true' : 'false');
+        });
+        _renderEconomiaCotacoes();
       });
     });
+
+    // Card "Cotações abertas": mostra na tabela todas as abertas, de qualquer data.
+    document.getElementById('cotacoes-kpi-abertas-card')?.addEventListener('click', () => {
+      document.getElementById('cotacoes-filtro-mostrar').value = 'aberta';
+      document.getElementById('cotacoes-filtro-dias').value = '';
+      renderCotacoesLista();
+      const semAnimacao = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      document.querySelector('.cotacoes-tabela-card')?.scrollIntoView({ behavior: semAnimacao ? 'auto' : 'smooth', block: 'start' });
+    });
+
+    // O gráfico pega as cores do tema na hora de desenhar: redesenha ao trocar.
+    document.getElementById('theme-toggle-checkbox')?.addEventListener('change', () => _renderEconomiaCotacoes());
   }
 
   // 4.0995 TELA DE CONTAGENS (admin)
@@ -3544,7 +3561,11 @@ document.getElementById('form-fornecedor')?.addEventListener('submit', async (ev
 
 // --- COTAÇÕES (RFQ manual, fase 2 do módulo de Compras) ---
 const STATUS_LABEL_COTACAO = { aberta: 'Aberta', fechada: 'Fechada' };
-const STATUS_CLASSE_BADGE_COTACAO = { aberta: 'pos', fechada: 'neu-orange' };
+const ORIGEM_LABEL_COTACAO = { vmarket: 'VMarket', requisicao: 'Requisição', manual: 'Manual' };
+// Barra de respostas verde a partir de 60% dos convites respondidos; abaixo, laranja.
+const RESPOSTAS_AVANCADAS_PCT = 60;
+// Fornecedores participantes e taxa de resposta olham a mesma janela.
+const DIAS_INDICADORES_COTACOES = 30;
 
 let cotacoesLista = [];
 let cotacaoAtualId = null;
@@ -3558,9 +3579,11 @@ async function carregarCotacoes() {
     const dados = await resposta.json();
     cotacoesLista = dados.cotacoes || [];
     renderCotacoesLista();
+    _renderIndicadoresCotacoes();
+    _renderEconomiaCotacoes();
   } catch (erro) {
     console.error('Falha ao carregar cotações:', erro);
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="color:var(--danger-texto);">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
   }
 }
 
@@ -3579,9 +3602,9 @@ function renderCotacoesLista() {
   if (acoesTopo) acoesTopo.style.display = isAdmin ? '' : 'none';
 
   // Filtros estilo VMarket (print da Julia, 2026-09-04): Mostrar
-  // (aberta/fechada), Tipo (manual × veio de Requisição), Busca (nome ou
-  // nº) e Dias (criada nos últimos N) — tudo client-side, mesma lista já
-  // carregada, sem rota nova.
+  // (aberta/fechada), Tipo (de onde veio: à mão, Requisição ou VMarket),
+  // Busca (nome ou nº) e Dias (criada nos últimos N) — tudo client-side,
+  // mesma lista já carregada, sem rota nova.
   const filtroMostrar = document.getElementById('cotacoes-filtro-mostrar')?.value || '';
   const filtroTipo = document.getElementById('cotacoes-filtro-tipo')?.value || '';
   const filtroBusca = (document.getElementById('cotacoes-filtro-busca')?.value || '').trim().toLowerCase();
@@ -3590,8 +3613,7 @@ function renderCotacoesLista() {
   const agora = new Date();
   const lista = cotacoesLista.filter((c) => {
     if (filtroMostrar && c.status !== filtroMostrar) return false;
-    if (filtroTipo === 'manual' && !c.manual) return false;
-    if (filtroTipo === 'requisicao' && c.manual) return false;
+    if (filtroTipo && c.origem !== filtroTipo) return false;
     if (filtroBusca && !c.titulo.toLowerCase().includes(filtroBusca) && String(c.id) !== filtroBusca) return false;
     if (filtroDias) {
       const dias = (agora - new Date(c.criadoEm)) / (1000 * 60 * 60 * 24);
@@ -3599,6 +3621,9 @@ function renderCotacoesLista() {
     }
     return true;
   });
+
+  const contagem = document.getElementById('cotacoes-contagem');
+  if (contagem) contagem.textContent = `${lista.length} ${lista.length === 1 ? 'cotação' : 'cotações'}`;
 
   const colspan = 9 + (isAdmin ? 1 : 0);
   if (!lista.length) {
@@ -3610,18 +3635,27 @@ function renderCotacoesLista() {
     const respostas = c.percentualRespostas;
     const celulaRespostas = respostas === null
       ? '<span class="text-muted">—</span>'
-      : `<div class="progress-container"><div class="progress-bar ${respostas >= 70 ? 'bar-green' : respostas >= 30 ? 'bar-orange' : 'bar-red'}" style="width:${respostas}%"></div></div><span class="text-muted" style="font-size:0.8em;">${respostas}%</span>`;
+      : `<div class="respostas-cel" title="${c.convitesRespondidos} de ${c.convitesTotal} convites respondidos">
+          <span class="respostas-barra"><span class="${respostas >= RESPOSTAS_AVANCADAS_PCT ? 'avancada' : 'baixa'}" style="width:${respostas}%"></span></span>
+          <span class="respostas-pct">${respostas}%</span>
+        </div>`;
+    const titulo = escaparHtml(c.titulo);
     return `
     <tr>
-      <td class="text-muted">${c.id}</td>
-      <td class="font-bold">${escaparHtml(c.titulo)}</td>
+      <td class="cotacao-numero">${c.id}</td>
+      <td class="cotacao-titulo-cel">
+        ${isAdmin
+          ? `<button type="button" class="cotacao-titulo-link" data-acao="abrir-cotacao" data-id="${c.id}" title="Ver/editar preços">${titulo}</button>`
+          : `<span class="cotacao-titulo">${titulo}</span>`}
+        <span class="tag-origem">${ORIGEM_LABEL_COTACAO[c.origem] || 'Manual'}</span>
+      </td>
       <td>${celulaRespostas}</td>
-      <td>${c.insumosComprados} / ${c.totalInsumos}</td>
+      <td class="cotacao-fracao">${c.totalInsumos}<span class="barra-fracao">/</span>${c.insumosComprados}</td>
       <td>${c.totalFornecedores}</td>
-      <td><span class="badge-pill ${STATUS_CLASSE_BADGE_COTACAO[c.status]}">${STATUS_LABEL_COTACAO[c.status]}</span></td>
+      <td><span class="badge-pill status-cotacao-${c.status}">${STATUS_LABEL_COTACAO[c.status]}</span></td>
       <td class="text-muted">${new Date(c.criadoEm).toLocaleDateString('pt-BR')}</td>
-      <td>R$ ${_formatarMoedaCompacta(c.economia)}</td>
-      <td>R$ ${_formatarMoedaCompacta(c.valorPedido)}</td>
+      <td class="col-dinheiro ${c.economia > 0 ? 'economia-positiva' : 'text-muted'}">R$ ${_formatarMoedaCompacta(c.economia)}</td>
+      <td class="col-dinheiro font-bold">R$ ${_formatarMoedaCompacta(c.valorPedido)}</td>
       ${isAdmin ? `
         <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="abrir-cotacao" data-id="${c.id}" title="Ver/editar preços">
@@ -3631,7 +3665,7 @@ function renderCotacoesLista() {
             ? `<button type="button" class="btn-acao-icone btn-acao-bloqueado" data-acao="cotacao-com-pedidos" aria-disabled="true" title="Essa cotação tem ${c.totalPedidos} pedido${c.totalPedidos > 1 ? 's' : ''}. Pra excluir, cancele os pedidos antes na tela de Pedidos.">
                 <i data-lucide="trash-2"></i>
               </button>`
-            : `<button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-cotacao" data-id="${c.id}" data-titulo="${escaparHtml(c.titulo)}" title="Excluir cotação">
+            : `<button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-cotacao" data-id="${c.id}" data-titulo="${titulo}" title="Excluir cotação">
                 <i data-lucide="trash-2"></i>
               </button>`}
         </div></td>
@@ -3663,6 +3697,203 @@ function renderCotacoesLista() {
   });
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _mostrarAbaCotacoes(aba) {
+  document.querySelectorAll('#cotacoes-tabs-bar .tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === aba));
+  document.getElementById('cotacoes-painel-cotacoes').style.display = aba === 'cotacoes' ? '' : 'none';
+  document.getElementById('cotacoes-painel-compras').style.display = aba === 'compras' ? '' : 'none';
+  if (aba === 'compras') carregarHistoricoCompras();
+}
+
+// A economia só vale quando a compra está decidida: cotação fechada ou que
+// já gerou pedido. Aberta sem pedido ainda pode trocar de vencedor.
+function _cotacaoDecidida(c) {
+  return c.status === 'fechada' || c.totalPedidos > 0;
+}
+
+// Os 4 cards do topo. Não seguem os filtros da tabela: abertas é o estado de
+// agora, economia é do mês corrente e os outros dois, dos últimos 30 dias.
+function _renderIndicadoresCotacoes() {
+  const escrever = (id, texto) => {
+    const elemento = document.getElementById(id);
+    if (elemento) elemento.textContent = texto;
+  };
+  const agora = new Date();
+
+  const abertas = cotacoesLista.filter((c) => c.status === 'aberta');
+  const semResposta = abertas.reduce((soma, c) => soma + (c.convitesTotal - c.convitesRespondidos), 0);
+  escrever('cotacoes-kpi-abertas', String(abertas.length));
+  let subAbertas = 'nenhuma em andamento';
+  if (abertas.length && semResposta) {
+    subAbertas = `${semResposta} ${semResposta === 1 ? 'convite sem resposta' : 'convites sem resposta'}`;
+  } else if (abertas.length) {
+    subAbertas = abertas.length === 1 ? 'ativa agora' : 'ativas agora';
+  }
+  escrever('cotacoes-kpi-abertas-sub', subAbertas);
+
+  const inicioDoMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  const doMes = cotacoesLista.filter((c) => _cotacaoDecidida(c) && new Date(c.criadoEm) >= inicioDoMes);
+  const economiaDoMes = doMes.reduce((soma, c) => soma + (c.economia || 0), 0);
+  escrever('cotacoes-kpi-economia-mes', `R$ ${_formatarMoedaCompacta(economiaDoMes)}`);
+  const nomeDoMes = agora.toLocaleDateString('pt-BR', { month: 'long' });
+  escrever('cotacoes-kpi-economia-mes-sub', `em ${nomeDoMes} · ${doMes.length} ${doMes.length === 1 ? 'cotação' : 'cotações'}`);
+
+  const corte = new Date(agora.getTime() - DIAS_INDICADORES_COTACOES * 86400000);
+  const recentes = cotacoesLista.filter((c) => new Date(c.criadoEm) >= corte);
+  const participantes = new Set(recentes.flatMap((c) => c.fornecedorIds || [])).size;
+  const valorParticipantes = document.getElementById('cotacoes-kpi-fornecedores');
+  if (valorParticipantes) {
+    valorParticipantes.innerHTML = `${participantes} <small>${participantes === 1 ? 'parceiro' : 'parceiros'}</small>`;
+  }
+
+  // Ponderada pelos convites (respondidos ÷ enviados), não a média das
+  // porcentagens: cotação com 2 convites não pesa igual a uma com 10.
+  const convites = recentes.reduce((total, c) => ({
+    enviados: total.enviados + (c.convitesTotal || 0),
+    respondidos: total.respondidos + (c.convitesRespondidos || 0),
+  }), { enviados: 0, respondidos: 0 });
+  escrever('cotacoes-kpi-resposta', convites.enviados ? `${Math.round((100 * convites.respondidos) / convites.enviados)}%` : '—');
+  escrever('cotacoes-kpi-resposta-sub', convites.enviados
+    ? `${convites.respondidos} de ${convites.enviados} convites · ${DIAS_INDICADORES_COTACOES} dias`
+    : `sem convites nos últimos ${DIAS_INDICADORES_COTACOES} dias`);
+}
+
+// Gráfico "Economia acumulada": soma, período a período, a mesma Economia
+// da tabela (maior preço comparável menos o vencedor, vezes a quantidade)
+// das cotações decididas.
+const PERIODOS_ECONOMIA_COTACOES = {
+  semanas: { quantidade: 12, tipo: 'semana', legenda: 'nas últimas 12 semanas' },
+  '6m': { quantidade: 6, tipo: 'mes', legenda: 'nos últimos 6 meses' },
+  '12m': { quantidade: 12, tipo: 'mes', legenda: 'nos últimos 12 meses' },
+};
+let periodoEconomiaCotacoes = '6m';
+let economiaGraficoInstance = null;
+
+// Do mais antigo pro atual. Semana de terça a segunda, como nas Vendas Semanais.
+function _periodosEconomiaCotacoes(chave) {
+  const { quantidade, tipo } = PERIODOS_ECONOMIA_COTACOES[chave];
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const diaMes = (data) => data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const periodos = [];
+  for (let i = quantidade - 1; i >= 0; i -= 1) {
+    if (tipo === 'mes') {
+      const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      periodos.push({
+        inicio,
+        fim: new Date(hoje.getFullYear(), hoje.getMonth() - i + 1, 1),
+        rotulo: inicio.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+        titulo: inicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      });
+    } else {
+      const inicio = new Date(hoje);
+      inicio.setDate(hoje.getDate() - ((hoje.getDay() + 5) % 7) - 7 * i);
+      const fim = new Date(inicio);
+      fim.setDate(inicio.getDate() + 7);
+      const segunda = new Date(fim);
+      segunda.setDate(fim.getDate() - 1);
+      periodos.push({ inicio, fim, rotulo: diaMes(inicio), titulo: `Semana de ${diaMes(inicio)} a ${diaMes(segunda)}` });
+    }
+  }
+  return periodos;
+}
+
+// "#047857" + 0.2 → "rgba(4, 120, 87, 0.2)", pro degradê embaixo da linha.
+function _corComTransparencia(cor, alfa) {
+  const hex = cor.replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return cor;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${alfa})`;
+}
+
+function _renderEconomiaCotacoes() {
+  const canvas = document.getElementById('economia-grafico');
+  if (!canvas) return;
+  const periodos = _periodosEconomiaCotacoes(periodoEconomiaCotacoes);
+  const porPeriodo = periodos.map(() => 0);
+  let cotacoesComEconomia = 0;
+  cotacoesLista.forEach((c) => {
+    if (!_cotacaoDecidida(c) || !(c.economia > 0)) return;
+    const criada = new Date(c.criadoEm);
+    const indice = periodos.findIndex((p) => criada >= p.inicio && criada < p.fim);
+    if (indice === -1) return;
+    porPeriodo[indice] += c.economia;
+    cotacoesComEconomia += 1;
+  });
+  let soma = 0;
+  const acumulado = porPeriodo.map((valor) => (soma += valor));
+
+  const { legenda } = PERIODOS_ECONOMIA_COTACOES[periodoEconomiaCotacoes];
+  document.getElementById('economia-total').textContent = `R$ ${_formatarMoedaCompacta(soma)}`;
+  document.getElementById('economia-legenda').textContent = cotacoesComEconomia
+    ? `${legenda}, em ${cotacoesComEconomia} ${cotacoesComEconomia === 1 ? 'cotação' : 'cotações'}`
+    : legenda;
+  document.getElementById('economia-vazio').style.display = soma ? 'none' : '';
+
+  if (economiaGraficoInstance) {
+    economiaGraficoInstance.destroy();
+    economiaGraficoInstance = null;
+  }
+  if (!soma || typeof Chart === 'undefined') return;
+
+  const estilo = getComputedStyle(document.body);
+  const corLinha = estilo.getPropertyValue('--success-texto').trim() || '#047857';
+  const corTexto = estilo.getPropertyValue('--text-muted').trim() || '#52525B';
+  const corGrade = estilo.getPropertyValue('--border-color').trim() || '#E6DDCC';
+  const fundoCartao = estilo.getPropertyValue('--card-bg').trim() || '#FFFFFF';
+  const contexto = canvas.getContext('2d');
+  const degrade = contexto.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight || 190);
+  degrade.addColorStop(0, _corComTransparencia(corLinha, 0.24));
+  degrade.addColorStop(1, _corComTransparencia(corLinha, 0));
+  const ultimo = acumulado.length - 1;
+
+  economiaGraficoInstance = new Chart(contexto, {
+    type: 'line',
+    data: {
+      labels: periodos.map((p) => p.rotulo),
+      datasets: [{
+        label: 'Economia acumulada',
+        data: acumulado,
+        borderColor: corLinha,
+        backgroundColor: degrade,
+        fill: 'origin',
+        tension: 0.35,
+        borderWidth: 2.5,
+        pointRadius: acumulado.map((_, i) => (i === ultimo ? 4.5 : 0)),
+        pointHoverRadius: 5,
+        pointBackgroundColor: corLinha,
+        pointBorderColor: fundoCartao,
+        pointBorderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          displayColors: false,
+          callbacks: {
+            title: (itens) => periodos[itens[0].dataIndex].titulo,
+            label: (item) => `Acumulado: R$ ${_formatarMoedaCompacta(item.raw)}`,
+            afterLabel: (item) => `No período: R$ ${_formatarMoedaCompacta(porPeriodo[item.dataIndex])}`,
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: corTexto, font: { size: 11 } } },
+        y: {
+          beginAtZero: true,
+          border: { display: false },
+          grid: { color: corGrade },
+          ticks: { color: corTexto, font: { size: 11 }, maxTicksLimit: 5, callback: (valor) => _mvMoedaCurta(valor) },
+        },
+      },
+    },
+  });
 }
 
 document.getElementById('cotacoes-filtro-mostrar')?.addEventListener('change', renderCotacoesLista);
@@ -3705,6 +3936,7 @@ document.getElementById('form-nova-cotacao')?.addEventListener('submit', async (
 document.getElementById('btn-cotacao-voltar')?.addEventListener('click', async () => {
   document.getElementById('cotacoes-detalhe-view').style.display = 'none';
   document.getElementById('cotacoes-lista-view').style.display = '';
+  document.getElementById('cotacoes-topo').style.display = '';
   cotacaoAtualId = null;
   await carregarCotacoes();
 });
@@ -3780,6 +4012,10 @@ function renderHistoricoCompras() {
 
 async function abrirCotacaoDetalhe(cotacaoId) {
   cotacaoAtualId = cotacaoId;
+  // Pode vir da aba Compras ("Nova cotação"); o detalhe tem título e ações
+  // próprios, então o topo da lista some.
+  _mostrarAbaCotacoes('cotacoes');
+  document.getElementById('cotacoes-topo').style.display = 'none';
   const buscaComparacao = document.getElementById('cotacao-comparacao-busca');
   if (buscaComparacao) buscaComparacao.value = '';
   document.getElementById('cotacoes-lista-view').style.display = 'none';

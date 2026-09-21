@@ -2853,6 +2853,14 @@ def _formatar_cotacao(linha):
         # Sem Requisição por trás — cotação manual, catálogo completo (ver
         # seção 6.8 da documentação).
         "manual": linha["requisicao_titulo"] is None,
+        # De onde veio (etiqueta embaixo do título e filtro Tipo): importada
+        # da VMarket, gerada por uma Requisição ou criada à mão.
+        "origem": "vmarket" if linha["id_vmarket"] else ("requisicao" if linha["requisicao_titulo"] else "manual"),
+        # Indicadores do topo da tela (fornecedores participantes e taxa de
+        # resposta dos últimos 30 dias), calculados no navegador.
+        "fornecedorIds": linha["fornecedor_ids"],
+        "convitesTotal": linha["convites_total"],
+        "convitesRespondidos": linha["convites_respondidos"],
     }
 
 

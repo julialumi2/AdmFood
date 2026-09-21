@@ -14,20 +14,6 @@
   gap: var(--space-6);
 }
 
-/* Filtros da lista de Cotações (Mostrar/Tipo/Busca/Dias), estilo VMarket —
-   print da Julia, 2026-09-04. */
-.cotacoes-filtros-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.cotacoes-filtros-row .form-group {
-  min-width: 160px;
-  flex: 1 1 160px;
-}
-
 /* Grid comparativa de preços (insumo x fornecedor), estilo planilha —
    substituiu os cards por insumo em 2026-09. */
 .tabela-comparacao-cotacao {
@@ -265,4 +251,381 @@
 .convites-envio-whatsapp svg {
   width: 15px;
   height: 15px;
+}
+
+/* ===========================================================================
+   REDESENHO DE 21/09 (pedido dela): topo enxuto com as abas logo abaixo,
+   economia acumulada e 4 indicadores lado a lado (60/40), filtros numa linha
+   só em cima da tabela e a tabela mais densa.
+   =========================================================================== */
+
+.cotacoes-cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cotacoes-topo { align-items: flex-end; }
+
+.cotacoes-titulo { display: flex; flex-direction: column; gap: 4px; }
+
+.cotacoes-titulo .panel-subtitle { margin: 0; font-size: 0.8rem; }
+
+#cotacoes-lista-view { gap: var(--space-4); }
+
+/* LINHA 1: economia acumulada (60%) + indicadores (40%) */
+.cotacoes-inteligencia {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+}
+
+.economia-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.economia-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.economia-resumo { display: flex; flex-direction: column; gap: 2px; }
+
+.economia-rotulo {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.economia-total {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--success-texto);
+  font-variant-numeric: tabular-nums;
+}
+
+.economia-legenda { font-size: 0.75rem; color: var(--text-muted); }
+
+.periodo-segmentado {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-pill);
+}
+
+.periodo-segmentado button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.periodo-segmentado button:hover { color: var(--text-dark); }
+
+.periodo-segmentado button.active {
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.periodo-segmentado button:focus-visible,
+.cotacoes-kpis .kpi-clicavel:focus-visible,
+.cotacao-titulo-link:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+.economia-grafico {
+  position: relative;
+  height: 190px;
+}
+
+.economia-vazio {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-6);
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background-color: var(--surface-muted);
+  border-radius: var(--radius-md);
+}
+
+.cotacoes-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: var(--space-3);
+}
+
+.cotacoes-kpis .store-card {
+  padding: 12px 14px;
+  gap: 2px;
+  min-width: 0;
+  justify-content: center;
+}
+
+/* Só o card das abertas é clicável (filtra a tabela): os outros não sobem
+   no hover, pra não parecer botão. */
+.cotacoes-kpis .kpi-clicavel {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .cotacoes-kpis .store-card:not(.kpi-clicavel):hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-color);
+  }
+}
+
+.cotacoes-kpis .kpi-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cotacoes-kpis .card-subtitle { font-size: 0.66rem; }
+
+.cotacoes-kpis .metric-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.cotacoes-kpis .metric-icon.icon-green { color: var(--success-texto); }
+
+.cotacoes-kpis .store-value { font-size: 1.35rem; line-height: 1.2; }
+
+.cotacoes-kpis .store-value.valor-economia { color: var(--success-texto); }
+
+.cotacoes-kpis .store-value small {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+.cotacoes-kpis .kpi-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* LINHA 2: filtros numa linha só, colados no topo da tabela */
+.cotacoes-tabela-card { padding: 0; overflow: hidden; }
+
+.cotacoes-filtros {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--surface-muted-border);
+}
+
+.filtro-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.filtro-inline label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.filtro-select { position: relative; display: inline-flex; }
+
+.filtro-select select {
+  padding: 7px 30px 7px 10px;
+  font-size: 0.82rem;
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-sm);
+}
+
+.filtro-select select:focus-visible {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+.filtro-select svg {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.cotacoes-busca {
+  flex: 1 1 220px;
+  max-width: none;
+  padding: 7px var(--space-3);
+}
+
+.cotacoes-busca svg { width: 16px; height: 16px; }
+
+.cotacoes-busca:focus-within { border-color: var(--info); }
+
+.cotacoes-contagem {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* LINHA 3: tabela */
+.cotacoes-tabela th,
+.cotacoes-tabela td {
+  padding: 9px 10px;
+  vertical-align: middle;
+}
+
+.cotacoes-tabela th { white-space: nowrap; }
+
+.cotacoes-tabela td { font-variant-numeric: tabular-nums; }
+
+.cotacoes-tabela th:first-child,
+.cotacoes-tabela td:first-child { padding-left: var(--space-4); }
+
+.cotacoes-tabela th:last-child,
+.cotacoes-tabela td:last-child { padding-right: var(--space-4); }
+
+.cotacoes-tabela .col-dinheiro { text-align: right; white-space: nowrap; }
+
+.cotacao-numero { color: var(--text-muted); font-size: 0.8rem; }
+
+.cotacao-titulo-cel { min-width: 190px; }
+
+.cotacao-titulo,
+.cotacao-titulo-link {
+  display: block;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.cotacao-titulo-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cotacao-titulo-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+.tag-origem {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.respostas-cel { display: flex; align-items: center; gap: 8px; }
+
+.respostas-barra {
+  width: 56px;
+  height: 6px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface-muted-border);
+}
+
+.respostas-barra span { display: block; height: 100%; border-radius: inherit; }
+
+.respostas-barra .baixa { background-color: var(--warning); }
+
+.respostas-barra .avancada { background-color: var(--success); }
+
+.respostas-pct { min-width: 30px; font-size: 0.75rem; color: var(--text-muted); }
+
+.cotacao-fracao { white-space: nowrap; }
+
+.cotacao-fracao .barra-fracao { margin: 0 4px; color: var(--text-faint); }
+
+.cotacoes-tabela .badge-pill { padding: 3px 9px; font-size: 0.72rem; }
+
+.badge-pill.status-cotacao-aberta { background-color: var(--success-soft); color: var(--success-texto); }
+
+.badge-pill.status-cotacao-aberta::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.badge-pill.status-cotacao-fechada { background-color: var(--surface-muted); color: var(--text-muted); }
+
+.economia-positiva { color: var(--success-texto); font-weight: 600; }
+
+.cotacoes-tabela .acoes-linha { gap: 4px; }
+
+.cotacoes-tabela .btn-acao-icone { width: 28px; height: 28px; }
+
+/* Aba Compras: a frase e o filtro de dias numa linha */
+.compras-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.compras-intro .panel-subtitle { max-width: 70ch; margin: 0; }
+
+@media (max-width: 1100px) {
+  .cotacoes-inteligencia { grid-template-columns: minmax(0, 1fr); }
+  .cotacoes-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto; }
+}
+
+@media (max-width: 720px) {
+  .cotacoes-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cotacoes-busca { flex-basis: 100%; }
+  .cotacoes-contagem { margin-left: 0; }
 }
