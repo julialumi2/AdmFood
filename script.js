@@ -4151,9 +4151,16 @@ let lojasCotacaoAtual = [];
 // (Fornecedores → "Lojas que compram dele") já vem marcado, o resto fica
 // desmarcado embaixo. Sem ninguém marcado pra essas lojas, marca todo
 // fornecedor ativo — o jeito de antes (pedido da Julia, 2026-09-11).
+// Itens marcados no link de cada fornecedor (2026-09-21): começa com os que
+// ele cota e a compradora tira ou põe. Zera a cada vez que o modal abre.
+let selecaoItensConvite = new Map();
+let conviteFornecedoresAbertos = new Set();
+
 async function renderListaConvidarFornecedores() {
   const lista = document.getElementById('convidar-fornecedores-lista');
   if (!lista) return;
+  selecaoItensConvite = new Map();
+  conviteFornecedoresAbertos = new Set();
   lista.innerHTML = '<p class="panel-subtitle">Carregando...</p>';
   try {
     const resposta = await fetch('/api/fornecedores');
@@ -4213,9 +4220,13 @@ function renderPreviaConvite() {
     document.querySelectorAll('#convidar-fornecedores-lista input:checked')
   ).map((caixa) => parseInt(caixa.value, 10)));
   const escolhidos = previaConviteDados.fornecedores.filter((f) => marcados.has(f.fornecedorId));
-  const receberao = escolhidos.filter((f) => f.insumos.length && !f.jaTemConvite);
-  const semItens = escolhidos.filter((f) => !f.insumos.length);
   const jaTem = escolhidos.filter((f) => f.jaTemConvite);
+  const editaveis = escolhidos.filter((f) => !f.jaTemConvite);
+  editaveis.forEach((f) => {
+    if (!selecaoItensConvite.has(f.fornecedorId)) selecaoItensConvite.set(f.fornecedorId, new Set(f.itens || []));
+  });
+  const receberao = editaveis.filter((f) => selecaoItensConvite.get(f.fornecedorId).size);
+  const todosItens = previaConviteDados.itensDaCotacao || [];
 
   if (!escolhidos.length) {
     alvo.innerHTML = '<p class="panel-subtitle">Marque um fornecedor pra ver o que vai no link dele.</p>';
@@ -4228,19 +4239,55 @@ function renderPreviaConvite() {
       ${receberao.length} de ${escolhidos.length} marcados recebem link, de ${previaConviteDados.insumosDaCotacao} insumos na cotação.
       ${orfaos.length ? `<br><strong>Sem fornecedor marcado, não ${orfaos.length === 1 ? 'vai' : 'vão'} em nenhum link:</strong> ${escaparHtml(orfaos.join(', '))}. Marque quem cota em Insumos (na loja), lance o preço à mão ou convide um fornecedor novo.` : ''}
     </p>
+    <p class="panel-subtitle convite-previa-dica">Abra cada fornecedor pra marcar ou desmarcar o que vai no link dele. Vale só pra esse convite.</p>
     <ul class="convite-previa-lista">
-      ${receberao.map((f) => `
+      ${editaveis.map((f) => {
+        const padrao = new Set(f.itens || []);
+        const marcadosDele = selecaoItensConvite.get(f.fornecedorId);
+        const caixa = (item) => `
+          <label class="convite-item">
+            <input type="checkbox" data-convite-fornecedor="${f.fornecedorId}" value="${item.id}" ${marcadosDele.has(item.id) ? 'checked' : ''}>
+            <span>${escaparHtml(item.nome)}</span>
+          </label>`;
+        const dele = todosItens.filter((item) => padrao.has(item.id));
+        const outros = todosItens.filter((item) => !padrao.has(item.id));
+        return `
         <li>
-          <details>
-            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — ${f.insumos.length} ${f.insumos.length === 1 ? 'item' : 'itens'}${f.recebeTudo ? ' (a cotação inteira: ainda não é ligado a nenhum insumo)' : ''}</summary>
-            <span class="text-muted">${escaparHtml(f.insumos.join(', '))}</span>
+          <details data-convite-detalhe="${f.fornecedorId}" ${conviteFornecedoresAbertos.has(f.fornecedorId) ? 'open' : ''}>
+            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — <span data-convite-contagem="${f.fornecedorId}">${_textoContagemConvite(marcadosDele.size)}</span>${f.recebeTudo ? ' (ainda não cota nada: vai a cotação inteira)' : ''}</summary>
+            <div class="convite-itens">
+              ${dele.length ? dele.map(caixa).join('') : '<span class="text-muted">Não cota nenhum item dessa cotação.</span>'}
+              ${outros.length ? `<span class="convite-itens-outros">Outros itens da cotação</span>${outros.map(caixa).join('')}` : ''}
+            </div>
           </details>
-        </li>
-      `).join('')}
+        </li>`;
+      }).join('')}
       ${jaTem.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — já tem convite nessa cotação</li>`).join('')}
-      ${semItens.map((f) => `<li class="text-muted">${escaparHtml(f.fornecedorNome)} — é ligado a outros insumos, nenhum dessa cotação; fica de fora</li>`).join('')}
     </ul>
   `;
+  alvo.querySelectorAll('[data-convite-detalhe]').forEach((detalhe) => {
+    detalhe.addEventListener('toggle', () => {
+      const id = parseInt(detalhe.dataset.conviteDetalhe, 10);
+      if (detalhe.open) conviteFornecedoresAbertos.add(id);
+      else conviteFornecedoresAbertos.delete(id);
+    });
+  });
+  alvo.querySelectorAll('[data-convite-fornecedor]').forEach((caixa) => {
+    caixa.addEventListener('change', () => {
+      const id = parseInt(caixa.dataset.conviteFornecedor, 10);
+      const conjunto = selecaoItensConvite.get(id);
+      if (caixa.checked) conjunto.add(parseInt(caixa.value, 10));
+      else conjunto.delete(parseInt(caixa.value, 10));
+      // Redesenha pra atualizar os totais, mantendo aberto quem estava aberto.
+      conviteFornecedoresAbertos.add(id);
+      renderPreviaConvite();
+    });
+  });
+}
+
+function _textoContagemConvite(n) {
+  if (!n) return 'nenhum item marcado (fica sem convite)';
+  return `${n} ${n === 1 ? 'item' : 'itens'} no link`;
 }
 
 // Sem API oficial do WhatsApp Business ainda (pendência separada, travada
@@ -4490,11 +4537,16 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
     alert('Marque pelo menos um fornecedor.');
     return;
   }
+  // O que ficou marcado no link de cada um (2026-09-21).
+  const itensPorFornecedor = {};
+  fornecedorIds.forEach((id) => {
+    if (selecaoItensConvite.has(id)) itensPorFornecedor[id] = [...selecaoItensConvite.get(id)];
+  });
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prazoValidade, fornecedorIds }),
+      body: JSON.stringify({ prazoValidade, fornecedorIds, itensPorFornecedor }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar convites');

@@ -641,3 +641,35 @@
 }
 
 .cotacao-sem-fornecedor-aviso[hidden] { display: none; }
+
+/* Itens de cada fornecedor no convite (2026-09-21) */
+.convite-previa-dica { margin-top: var(--space-2); }
+
+.convite-itens {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-2) 0 var(--space-2) var(--space-4);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.convite-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-dark);
+  cursor: pointer;
+}
+
+.convite-item input { width: auto; }
+
+.convite-itens-outros {
+  margin-top: var(--space-2);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}

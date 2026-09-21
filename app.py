@@ -3188,8 +3188,18 @@ def api_criar_convites_cotacao(cotacao_id):
             return jsonify({"erro": "Lista de fornecedores inválida."}), 400
         if not fornecedor_ids:
             return jsonify({"erro": "Marque pelo menos um fornecedor."}), 400
+    # O que vai no link de cada um, marcado na tela (2026-09-21).
+    itens_por_fornecedor = None
+    if dados.get('itensPorFornecedor') is not None:
+        try:
+            itens_por_fornecedor = {
+                int(fornecedor): [int(i) for i in (itens or [])]
+                for fornecedor, itens in dict(dados['itensPorFornecedor']).items()
+            }
+        except (TypeError, ValueError):
+            return jsonify({"erro": "Lista de itens por fornecedor inválida."}), 400
 
-    resultado = criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids)
+    resultado = criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids, itens_por_fornecedor)
     if not resultado["convites"]:
         if resultado["fornecedoresSemItens"]:
             nomes = ", ".join(resultado["fornecedoresSemItens"])

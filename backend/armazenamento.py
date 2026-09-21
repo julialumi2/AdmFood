@@ -4831,16 +4831,20 @@ def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
             "jaTemConvite": fornecedor["id"] in com_convite,
             "recebeTudo": fornecedor["id"] not in ligados,
             "insumos": sorted(nomes.get(i, f"#{i}") for i in itens),
+            # ids do que vai por padrão, pras caixinhas da tela (2026-09-21)
+            "itens": [i for i in itens if i in nomes],
         })
     saida.sort(key=lambda f: (-len(f["insumos"]), f["fornecedorNome"]))
     return {
         "fornecedores": saida,
         "orfaos": sorted(nomes.get(i, f"#{i}") for i in orfaos),
         "insumosDaCotacao": len(por_insumo),
+        # todos os itens da cotação, pra incluir um a mais num fornecedor
+        "itensDaCotacao": sorted(({"id": i, "nome": n} for i, n in nomes.items()), key=lambda x: x["nome"]),
     }
 
 
-def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
+def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None, itens_por_fornecedor=None):
     """Manda o link de preenchimento pros fornecedores ativos escolhidos na
     tela (`fornecedor_ids`; None = todo fornecedor ativo).
 
@@ -4854,6 +4858,11 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
     a outros insumos, mas a nenhum dessa cotação, não recebe convite — link
     vazio não serve pra nada. Quem já tem convite nessa cotação não recebe
     outro (evita resetar o token de quem está respondendo).
+
+    `itens_por_fornecedor` ({fornecedor_id: [insumo_id, ...]}, 2026-09-21):
+    a compradora marca na tela o que vai no link de cada um — ganha da regra
+    acima, só pra esse convite (o cadastro não muda). Só vale item que está
+    na cotação; lista vazia = esse fornecedor fica sem convite.
     """
     por_insumo, orfaos, fornecedores, ligados = _quem_cota_o_que(cotacao_id, fornecedor_ids)
     if not por_insumo:
@@ -4871,7 +4880,14 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None):
         for fornecedor in fornecedores:
             if fornecedor["id"] in existentes:
                 continue
-            insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados)
+            if itens_por_fornecedor is not None and fornecedor["id"] in itens_por_fornecedor:
+                vistos = set()
+                insumo_ids = [
+                    i for i in itens_por_fornecedor[fornecedor["id"]]
+                    if i in por_insumo and not (i in vistos or vistos.add(i))
+                ]
+            else:
+                insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados)
             if not insumo_ids:
                 sem_itens.append(fornecedor["nome"])
                 continue

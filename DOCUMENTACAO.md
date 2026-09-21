@@ -3919,3 +3919,14 @@ prévia, pra compradora decidir: marcar quem cota em Insumos, lançar o preço �
 mão ou convidar um fornecedor novo (fornecedor que ainda não cota nada
 continua recebendo a cotação inteira). O "Atualizar com os homologados"
 também só põe item novo no convite aberto de quem cota ele.
+
+### 6.31 Escolher o que vai no link de cada fornecedor (2026-09-21)
+
+No "Convidar fornecedores por WhatsApp", cada fornecedor marcado abre uma
+lista com caixinhas: vêm marcados os itens que ele cota (a regra de sempre)
+e, embaixo, "Outros itens da cotação", desmarcados. A compradora tira ou põe
+o que quiser; o link leva exatamente o que ficou marcado (`POST
+/api/cotacoes/<id>/convites` com `itensPorFornecedor` {fornecedorId:
+[insumoIds]}; só vale item da cotação, lista vazia = sem convite). Vale só
+pra esse convite — o cadastro de "Fornecedores que cotam" não muda. A
+prévia passou a mandar `itens` (ids) por fornecedor e `itensDaCotacao`.
