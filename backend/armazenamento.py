@@ -5266,7 +5266,7 @@ def listar_pedidos_pendentes_recebimento():
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT pc.id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em,
+            SELECT pc.id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.whatsapp_enviado_em,
                    f.nome AS fornecedor_nome,
                    COUNT(pi.insumo_id) AS total_itens,
                    COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS valor_total,
@@ -5280,7 +5280,60 @@ def listar_pedidos_pendentes_recebimento():
             ORDER BY pc.criado_em DESC
             """
         ).fetchall()
-        return [dict(linha) for linha in linhas]
+        pedidos = [dict(linha) for linha in linhas]
+        _anexar_itens_do_pedido(conn, pedidos)
+        return pedidos
+
+
+def listar_pedidos_recebidos(desde):
+    """Pedidos recebidos de `desde` ('AAAA-MM-DD') pra cá: o histórico da
+    tela Recebimentos e o "Recebidos hoje" (2026-09-21). Compra por fora
+    entra (já nasce recebida)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pc.id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.whatsapp_enviado_em,
+                   pc.recebido_em, pc.recebido_por, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo,
+                   pc.divergencia_nf,
+                   f.nome AS fornecedor_nome,
+                   COUNT(pi.insumo_id) AS total_itens,
+                   COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS valor_total
+            FROM pedido_compra pc
+            JOIN fornecedor f ON f.id = pc.fornecedor_id
+            LEFT JOIN pedido_compra_item pi ON pi.pedido_id = pc.id
+            WHERE pc.status = 'recebido' AND pc.recebido_em >= ?
+            GROUP BY pc.id
+            ORDER BY pc.recebido_em DESC, pc.id DESC
+            """,
+            (desde,),
+        ).fetchall()
+        pedidos = [dict(linha) for linha in linhas]
+        _anexar_itens_do_pedido(conn, pedidos)
+        return pedidos
+
+
+def _anexar_itens_do_pedido(conn, pedidos):
+    """Põe em cada pedido a lista `itens` (nome, quantidade, unidade): a tela
+    de Recebimentos mostra "Coca-Cola, Fanta e +5" e abre a lista inteira na
+    linha, sem outra chamada."""
+    por_id = {pedido["id"]: pedido for pedido in pedidos}
+    for pedido in pedidos:
+        pedido["itens"] = []
+    ids = list(por_id)
+    for inicio in range(0, len(ids), 500):
+        lote = ids[inicio:inicio + 500]
+        for linha in conn.execute(
+            f"""
+            SELECT pi.pedido_id, i.nome, pi.quantidade, i.unidade_medida
+            FROM pedido_compra_item pi JOIN insumo i ON i.id = pi.insumo_id
+            WHERE pi.pedido_id IN ({",".join("?" * len(lote))})
+            ORDER BY i.nome COLLATE NOCASE
+            """,
+            lote,
+        ).fetchall():
+            por_id[linha["pedido_id"]]["itens"].append(
+                {"nome": linha["nome"], "quantidade": linha["quantidade"], "unidadeMedida": linha["unidade_medida"]}
+            )
 
 
 def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento=None, numero_nf=None):

@@ -550,3 +550,194 @@ body.dark-mode {
   .pedidos-filtros .filtro-select select { width: 100%; max-width: none; }
   .pedidos-busca { flex-basis: 100%; margin-left: 0; }
 }
+
+/* ===========================================================================
+   RECEBIMENTOS: redesenho de 21/09 (pedido dela). Usa os mesmos blocos da
+   lista de Pedidos (topo, cards, filtros, tabela densa) e soma o seletor
+   Aguardando/Histórico e a lista de itens que abre na linha.
+   =========================================================================== */
+
+.recebimentos-pagina { gap: var(--space-4); }
+
+.recebimentos-modo {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+}
+
+.recebimentos-modo button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.recebimentos-modo button svg { width: 15px; height: 15px; }
+
+.recebimentos-modo button:hover { color: var(--text-dark); }
+
+.recebimentos-modo button.active {
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.recebimentos-modo button:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+/* A busca ocupa o resto da linha */
+.recebimentos-busca { flex: 1 1 280px; }
+
+.receb-linha { cursor: pointer; }
+
+.receb-data { display: block; white-space: nowrap; }
+
+.receb-atraso,
+.receb-nao-enviado,
+.receb-por,
+.receb-nf-diferente {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.receb-atraso { font-weight: 700; color: var(--entrega-atrasado); }
+
+.receb-nao-enviado { color: var(--entrega-pendente); }
+
+.receb-por { color: var(--text-faint); }
+
+.receb-nf-diferente { font-weight: 600; color: var(--warning-texto); }
+
+/* Itens: quantos são e os 2 primeiros; o resto abre na linha */
+.receb-itens {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  max-width: 280px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.receb-itens-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.receb-itens-total svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+
+.receb-itens[aria-expanded="true"] .receb-itens-total svg { transform: rotate(180deg); }
+
+.receb-itens-previa {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.receb-itens:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pedidos-tabela td.col-acao-receb { text-align: right; white-space: nowrap; }
+
+.col-acao-receb .acoes-linha { justify-content: flex-end; }
+
+/* Romaneio: a lista de itens aberta embaixo do pedido, com pontilhado
+   ligando o item à quantidade, pra conferir enquanto descarrega. */
+.receb-linha.aberta td { border-bottom-color: transparent; }
+
+.pedidos-tabela .receb-itens-linha td { padding: 0 var(--space-4) var(--space-3); }
+
+.receb-itens-linha:hover { background-color: transparent; }
+
+.receb-romaneio {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+}
+
+.receb-romaneio-titulo {
+  margin: 0 0 var(--space-2);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.receb-romaneio-lista {
+  columns: 240px;
+  column-gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.receb-romaneio-lista li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  break-inside: avoid;
+  font-size: 0.8rem;
+}
+
+.receb-romaneio-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dark);
+}
+
+.receb-romaneio-pontos {
+  flex: 1 1 12px;
+  min-width: 12px;
+  border-bottom: 1px dotted var(--border-strong);
+  transform: translateY(-3px);
+}
+
+.receb-romaneio-qtd {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receb-itens-total svg { transition: none; }
+}

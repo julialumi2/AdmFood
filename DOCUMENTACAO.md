@@ -3960,3 +3960,18 @@ pendente de envio (tracejado), pedido enviado/confirmado (laranja), a caminho
 quanto tempo foi pro fornecedor. A linha toda abre o pedido; a lixeira cancela
 (ou exclui a compra por fora) e não aparece em pedido já recebido, porque
 excluir não desfaz o estoque que entrou no recebimento.
+
+### 6.34 Tela de Recebimentos redesenhada (2026-09-21)
+
+Mesmo padrão de Pedidos (6.33): topo enxuto com o seletor **Aguardando /
+Histórico de recebidos**, 4 indicadores (Aguardando recebimento, Valor a
+receber, Recebidos hoje, Entregas atrasadas, esse em vermelho quando tem; os
+três de contagem viram atalho: fila, histórico de hoje, só atrasadas),
+filtros numa linha (loja, período, busca) e tabela densa. A coluna Itens
+mostra quantos são e os 2 primeiros ("Coca-Cola, Fanta Laranja e +5"); clique
+na linha abre a lista inteira com as quantidades embaixo do pedido, pra
+conferir na descarga. Como os fornecedores não agendam entrega no sistema, o
+período é pela data do pedido (no histórico, pela data do recebimento).
+`/api/recebimentos` passou a mandar `itens`, `atrasado`, `diasEsperando` e
+`pendenteDeEnvio`; `/api/recebimentos/recebidos?dias=N` (novo,
+`listar_pedidos_recebidos`) traz o que chegou nos últimos N dias.

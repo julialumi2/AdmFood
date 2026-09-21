@@ -179,6 +179,7 @@ from backend.armazenamento import (
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
     pendencias_compras,
+    listar_pedidos_recebidos,
     dias_esperando_entrega,
     DIAS_ENTREGA_ATRASADA,
     buscar_fornecedor_por_id,
@@ -3618,6 +3619,8 @@ def api_confirmar_pedidos_por_token(token):
 # a equipe usa, além do admin) ---------------------------------------------
 
 def _formatar_recebimento_resumo(pedido):
+    dias = dias_esperando_entrega(pedido["status"], pedido["criado_em"], pedido.get("whatsapp_enviado_em"))
+    itens = pedido.get("itens") or []
     return {
         "id": pedido["id"],
         "fornecedorId": pedido["fornecedor_id"],
@@ -3627,14 +3630,37 @@ def _formatar_recebimento_resumo(pedido):
         "criadoEm": pedido["criado_em"],
         "totalItens": pedido["total_itens"],
         "valorTotal": round(pedido["valor_total"], 2),
-        "itensNomes": pedido["itens_nomes"] or "",
+        "itensNomes": pedido.get("itens_nomes") or ", ".join(item["nome"] for item in itens),
+        "itens": itens,
+        "pendenteDeEnvio": pedido["status"] == "enviado" and not pedido.get("whatsapp_enviado_em"),
+        "diasEsperando": dias,
+        "atrasado": dias is not None and dias > DIAS_ENTREGA_ATRASADA,
+        "recebidoEm": pedido.get("recebido_em"),
+        "recebidoPor": pedido.get("recebido_por"),
+        "compraFora": bool(pedido.get("compra_fora")),
+        "numeroNf": pedido.get("numero_nf"),
+        "divergenciaNf": bool(pedido.get("divergencia_nf")),
+        "temNotaFiscal": bool(pedido.get("nota_fiscal_arquivo")),
     }
 
 
 @app.route('/api/recebimentos', methods=['GET'])
 def api_listar_recebimentos():
     recebimentos = _so_da_minha_loja([_formatar_recebimento_resumo(p) for p in listar_pedidos_pendentes_recebimento()])
-    return jsonify({"pedidos": recebimentos})
+    return jsonify({"pedidos": recebimentos, "diasEntregaAtrasada": DIAS_ENTREGA_ATRASADA})
+
+
+@app.route('/api/recebimentos/recebidos', methods=['GET'])
+def api_listar_recebidos():
+    """Histórico da tela Recebimentos: o que chegou nos últimos `dias` dias
+    (padrão 30), hoje incluso."""
+    try:
+        dias = min(max(int(request.args.get('dias', 30)), 1), 365)
+    except (TypeError, ValueError):
+        dias = 30
+    desde = (date.today() - timedelta(days=dias - 1)).isoformat()
+    recebidos = _so_da_minha_loja([_formatar_recebimento_resumo(p) for p in listar_pedidos_recebidos(desde)])
+    return jsonify({"pedidos": recebidos, "desde": desde})
 
 
 @app.route('/api/recebimentos/<int:pedido_id>', methods=['GET'])

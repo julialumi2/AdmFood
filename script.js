@@ -7620,10 +7620,17 @@ async function carregarRecebimentos() {
   const tbody = document.getElementById('recebimentos-tabela-body');
   if (!tbody) return;
   try {
-    const resposta = await fetch('/api/recebimentos');
+    const [resposta, respostaRecebidos] = await Promise.all([
+      fetch('/api/recebimentos'),
+      fetch('/api/recebimentos/recebidos?dias=30'),
+    ]);
     if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
     const dados = await resposta.json();
     recebimentosLista = dados.pedidos || [];
+    if (dados.diasEntregaAtrasada) pedidosDiasAtraso = dados.diasEntregaAtrasada;
+    recebidosLista = respostaRecebidos.ok ? ((await respostaRecebidos.json()).pedidos || []) : [];
+    _preencherFiltroLojaRecebimentos();
+    if (!document.getElementById('recebimentos-filtro-periodo')?.options.length) _prepararPeriodoRecebimentos();
     renderRecebimentosTabela();
     carregarContadoresMenuCompras();
   } catch (erro) {
@@ -7632,45 +7639,298 @@ async function carregarRecebimentos() {
   }
 }
 
+// Redesenho de 21/09 (pedido dela): 4 indicadores do dia, filtros numa
+// linha, os itens resumidos ("Coca-Cola, Fanta e +5") que abrem na própria
+// linha e o histórico de recebidos no mesmo lugar. Os fornecedores não
+// agendam entrega no sistema, então o período é pela data do pedido (ou do
+// recebimento, no histórico).
+let recebidosLista = []; // recebidos nos últimos 30 dias (histórico e "Recebidos hoje")
+let recebimentosModo = 'aguardando'; // 'aguardando' | 'recebidos'
+let recebimentosSoAtrasados = false;
+const recebimentosAbertos = new Set(); // pedidos com a lista de itens aberta
+
+const PERIODOS_RECEBIMENTO = {
+  aguardando: {
+    rotulo: 'Data do pedido',
+    padrao: '',
+    opcoes: [['', 'Qualquer data'], ['1', 'Pedidos de hoje'], ['7', 'Últimos 7 dias'], ['30', 'Últimos 30 dias']],
+  },
+  recebidos: {
+    rotulo: 'Data do recebimento',
+    padrao: '7',
+    opcoes: [['1', 'Recebidos hoje'], ['7', 'Últimos 7 dias'], ['30', 'Últimos 30 dias']],
+  },
+};
+
+function _prepararPeriodoRecebimentos(valor) {
+  const select = document.getElementById('recebimentos-filtro-periodo');
+  if (!select) return;
+  const periodo = PERIODOS_RECEBIMENTO[recebimentosModo];
+  select.innerHTML = periodo.opcoes.map(([v, texto]) => `<option value="${v}">${texto}</option>`).join('');
+  select.value = valor ?? periodo.padrao;
+  select.setAttribute('aria-label', periodo.rotulo);
+}
+
+function _preencherFiltroLojaRecebimentos() {
+  const select = document.getElementById('recebimentos-filtro-loja');
+  if (!select) return;
+  const ordemLoja = (loja) => {
+    const indice = LOJAS_ESTOQUE.indexOf(loja);
+    return indice < 0 ? 99 : indice;
+  };
+  const lojas = [...new Set([...recebimentosLista, ...recebidosLista].map((p) => p.loja))]
+    .sort((a, b) => ordemLoja(a) - ordemLoja(b) || a.localeCompare(b, 'pt-BR'));
+  const atual = select.value;
+  select.innerHTML = `<option value="">Todas as lojas</option>${lojas.map((l) => `<option value="${escaparHtml(l)}">${escaparHtml(l)}</option>`).join('')}`;
+  select.value = lojas.includes(atual) ? atual : '';
+}
+
+function _mudarModoRecebimentos(modo, periodo) {
+  recebimentosModo = modo;
+  recebimentosSoAtrasados = false;
+  recebimentosAbertos.clear();
+  _prepararPeriodoRecebimentos(periodo);
+  renderRecebimentosTabela();
+}
+
+// Os cards seguem a loja escolhida (não o período nem a busca).
+function _renderKpisRecebimentos() {
+  const loja = document.getElementById('recebimentos-filtro-loja')?.value || '';
+  const daLoja = (lista) => lista.filter((p) => !loja || p.loja === loja);
+  const aguardando = daLoja(recebimentosLista);
+  const hoje = _hojeLocalISO();
+  const recebidosHoje = daLoja(recebidosLista).filter((p) => (p.recebidoEm || '').slice(0, 10) === hoje);
+  const atrasados = aguardando.filter((p) => p.atrasado);
+  const soma = (lista) => lista.reduce((total, p) => total + (p.valorTotal || 0), 0);
+  const escrever = (id, texto) => {
+    const elemento = document.getElementById(id);
+    if (elemento) elemento.textContent = texto;
+  };
+
+  escrever('receb-kpi-aguardando', aguardando.length);
+  escrever('receb-kpi-valor', `R$ ${_formatarMoedaBR(soma(aguardando))}`);
+  escrever('receb-kpi-hoje', recebidosHoje.length);
+  escrever('receb-kpi-hoje-sub', recebidosHoje.length ? `R$ ${_formatarMoedaBR(soma(recebidosHoje))} conferidos` : 'nenhuma entrega ainda');
+  escrever('receb-kpi-atrasados', atrasados.length);
+  escrever('receb-kpi-atrasados-sub', atrasados.length ? `enviadas há mais de ${pedidosDiasAtraso} dias` : 'nenhuma atrasada');
+  document.querySelector('.pedidos-kpis [data-kpi="atrasados"]')?.classList.toggle('tem-atraso', atrasados.length > 0);
+
+  const periodo = document.getElementById('recebimentos-filtro-periodo')?.value;
+  const pressionado = {
+    hoje: recebimentosModo === 'recebidos' && periodo === '1',
+    atrasados: recebimentosModo === 'aguardando' && recebimentosSoAtrasados,
+  };
+  document.querySelectorAll('.pedidos-kpis [data-kpi]').forEach((card) => {
+    card.setAttribute('aria-pressed', String(!!pressionado[card.dataset.kpi]));
+  });
+  document.querySelectorAll('.recebimentos-modo [data-modo]').forEach((botao) => {
+    const ativo = botao.dataset.modo === recebimentosModo;
+    botao.classList.toggle('active', ativo);
+    botao.setAttribute('aria-pressed', String(ativo));
+  });
+  const chip = document.getElementById('recebimentos-filtro-atraso');
+  if (chip) chip.hidden = !pressionado.atrasados;
+}
+
+function _recebimentosVisiveis() {
+  const historico = recebimentosModo === 'recebidos';
+  const loja = document.getElementById('recebimentos-filtro-loja')?.value || '';
+  const inicio = _inicioDoPeriodo(document.getElementById('recebimentos-filtro-periodo')?.value);
+  const termo = _mvNormalizar((document.getElementById('recebimentos-busca')?.value || '').trim());
+  return (historico ? recebidosLista : recebimentosLista).filter((p) => {
+    const data = (historico ? p.recebidoEm : p.criadoEm) || '';
+    if (loja && p.loja !== loja) return false;
+    if (inicio && data.slice(0, 10) < inicio) return false;
+    if (!historico && recebimentosSoAtrasados && !p.atrasado) return false;
+    if (!termo) return true;
+    return _mvNormalizar([
+      p.fornecedorNome, p.loja, _dataBR(data), p.itensNomes, p.id, p.recebidoPor,
+      String(p.valorTotal), _formatarMoedaBR(p.valorTotal),
+    ].join(' ')).includes(termo);
+  });
+}
+
+// "Coca-Cola, Fanta Laranja e +5": os 2 primeiros e quantos faltam.
+function _itensResumoTexto(p) {
+  const nomes = (p.itens || []).map((item) => item.nome);
+  if (!nomes.length) return p.itensNomes || '';
+  if (nomes.length <= 2) return nomes.join(' e ');
+  return `${nomes.slice(0, 2).join(', ')} e +${nomes.length - 2}`;
+}
+
+function _itensCelulaRecebimentoHTML(p, aberto) {
+  const total = p.totalItens || (p.itens || []).length;
+  return `
+    <button type="button" class="receb-itens" data-acao="abrir-itens" data-id="${p.id}" aria-expanded="${aberto}" title="${escaparHtml(p.itensNomes || '')}">
+      <span class="receb-itens-total">${_qtdTexto(total, 'item', 'itens')}<i data-lucide="chevron-down"></i></span>
+      <span class="receb-itens-previa">${escaparHtml(_itensResumoTexto(p))}</span>
+    </button>`;
+}
+
+function _romaneioRecebimentoHTML(p) {
+  const itens = p.itens || [];
+  return `
+    <tr class="receb-itens-linha">
+      <td colspan="6">
+        <div class="receb-romaneio">
+          <p class="receb-romaneio-titulo">${recebimentosModo === 'recebidos' ? 'O que chegou' : 'Confira na descarga'} · ${_qtdTexto(itens.length, 'item', 'itens')}</p>
+          <ul class="receb-romaneio-lista">
+            ${itens.map((item) => `
+              <li>
+                <span class="receb-romaneio-nome" title="${escaparHtml(item.nome)}">${escaparHtml(item.nome)}</span>
+                <span class="receb-romaneio-pontos" aria-hidden="true"></span>
+                <span class="receb-romaneio-qtd">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</span>
+              </li>`).join('')}
+          </ul>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function _linhaAguardandoHTML(p, aberto) {
+  return `
+    <tr class="receb-linha${aberto ? ' aberta' : ''}" data-id="${p.id}">
+      <td>
+        <span class="pedido-fornecedor">${escaparHtml(p.fornecedorNome)}</span>
+        <span class="pedido-numero">Pedido nº ${p.id}</span>
+      </td>
+      <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
+      <td>
+        <span class="receb-data">${_dataBR(p.criadoEm)}</span>
+        ${p.atrasado ? `<span class="receb-atraso">enviado ${_haQuantoTempo(p.diasEsperando)}</span>` : ''}
+        ${p.pendenteDeEnvio ? '<span class="receb-nao-enviado">ainda não enviado</span>' : ''}
+      </td>
+      <td>${_itensCelulaRecebimentoHTML(p, aberto)}</td>
+      <td class="col-dinheiro"><strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong></td>
+      <td class="col-acao-receb">
+        <button type="button" class="btn-primary-sm" data-acao="confirmar-recebimento" data-id="${p.id}">Confirmar recebimento</button>
+      </td>
+    </tr>`;
+}
+
+function _linhaRecebidoHTML(p, aberto, podeVerNota) {
+  return `
+    <tr class="receb-linha${aberto ? ' aberta' : ''}" data-id="${p.id}">
+      <td>
+        <span class="pedido-fornecedor">${escaparHtml(p.fornecedorNome)}</span>
+        <span class="pedido-numero">${p.compraFora ? 'Compra por fora' : `Pedido nº ${p.id}`}</span>
+      </td>
+      <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
+      <td>
+        <span class="receb-data">${_dataBR(p.recebidoEm)}</span>
+        ${p.recebidoPor ? `<span class="receb-por">por ${escaparHtml(p.recebidoPor)}</span>` : ''}
+      </td>
+      <td>${_itensCelulaRecebimentoHTML(p, aberto)}</td>
+      <td class="col-dinheiro">
+        <strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong>
+        ${p.divergenciaNf ? '<span class="receb-nf-diferente" title="O valor da nota não bateu com o dos itens">nota com valor diferente</span>' : ''}
+      </td>
+      <td class="col-acao-receb"><div class="acoes-linha">
+        ${p.numeroNf ? `<span class="text-muted">NF ${escaparHtml(p.numeroNf)}</span>` : ''}
+        ${p.temNotaFiscal && podeVerNota ? `
+          <a class="btn-acao-icone" href="/api/pedidos/${p.id}/nota-fiscal" target="_blank" rel="noopener" title="Ver nota fiscal" aria-label="Ver a nota fiscal do pedido nº ${p.id}">
+            <i data-lucide="file-text"></i>
+          </a>` : ''}
+        ${!p.numeroNf && !(p.temNotaFiscal && podeVerNota) ? '<span class="text-muted">—</span>' : ''}
+      </div></td>
+    </tr>`;
+}
+
 function renderRecebimentosTabela() {
   const tbody = document.getElementById('recebimentos-tabela-body');
   if (!tbody) return;
+  _renderKpisRecebimentos();
 
-  const termo = (document.getElementById('recebimentos-busca')?.value || '').trim().toLowerCase();
-  const linhas = recebimentosLista.filter((p) => {
-    if (!termo) return true;
-    return (
-      p.fornecedorNome.toLowerCase().includes(termo) ||
-      p.loja.toLowerCase().includes(termo) ||
-      _dataBR(p.criadoEm).includes(termo) ||
-      (p.itensNomes || '').toLowerCase().includes(termo) ||
-      String(p.valorTotal).includes(termo) ||
-      _formatarMoedaBR(p.valorTotal).includes(termo)
-    );
-  });
+  const historico = recebimentosModo === 'recebidos';
+  const head = document.getElementById('recebimentos-tabela-head');
+  if (head) {
+    head.innerHTML = `<tr><th>Fornecedor</th><th>Loja</th><th>${historico ? 'Recebido em' : 'Pedido em'}</th><th>Itens</th><th class="col-dinheiro">Valor</th><th>${historico ? 'Nota fiscal' : 'Ação'}</th></tr>`;
+  }
 
+  const linhas = _recebimentosVisiveis();
   if (!linhas.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle">${recebimentosLista.length ? 'Nenhum pedido bate com essa busca.' : 'Nenhum pedido aguardando recebimento.'}</td></tr>`;
+    const fonte = historico ? recebidosLista : recebimentosLista;
+    const temFiltro = recebimentosSoAtrasados || document.getElementById('recebimentos-busca')?.value.trim()
+      || document.getElementById('recebimentos-filtro-loja')?.value;
+    let mensagem;
+    if (fonte.length && temFiltro) {
+      mensagem = 'Nenhum pedido com esses filtros. <button type="button" class="btn-limpar-filtro" data-acao="limpar-filtros-recebimentos">Limpar filtros</button>';
+    } else if (historico) {
+      mensagem = 'Nada recebido nesse período.';
+    } else if (fonte.length) {
+      mensagem = 'Nenhum pedido feito nesse período. Escolha "Qualquer data" pra ver todos.';
+    } else {
+      mensagem = 'Nenhum pedido aguardando recebimento. Quando um pedido é gerado, ele aparece aqui até alguém confirmar que chegou.';
+    }
+    tbody.innerHTML = `<tr><td colspan="6" class="panel-subtitle pedidos-vazio">${mensagem}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = linhas.map((p) => `
-    <tr>
-      <td class="font-bold">${escaparHtml(p.fornecedorNome)}</td>
-      <td>${escaparHtml(p.loja)}</td>
-      <td class="text-muted">${_dataBR(p.criadoEm)}</td>
-      <td class="text-muted">${escaparHtml(p.itensNomes || '—')}</td>
-      <td class="font-bold">R$ ${_formatarMoedaBR(p.valorTotal)}</td>
-      <td>
-        <button type="button" class="btn-primary-sm" data-acao="confirmar-recebimento" data-id="${p.id}">Confirmar recebimento</button>
-      </td>
-    </tr>
-  `).join('');
+  const podeVerNota = _possoGerir();
+  tbody.innerHTML = linhas.map((p) => {
+    const aberto = recebimentosAbertos.has(p.id);
+    const linha = historico ? _linhaRecebidoHTML(p, aberto, podeVerNota) : _linhaAguardandoHTML(p, aberto);
+    return linha + (aberto ? _romaneioRecebimentoHTML(p) : '');
+  }).join('');
 
-  tbody.querySelectorAll('[data-acao="confirmar-recebimento"]').forEach((btn) => {
-    btn.addEventListener('click', () => abrirModalRecebimento(parseInt(btn.dataset.id, 10)));
-  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+// Clique na linha (ou em "N itens") abre e fecha a lista de itens; o botão
+// de confirmar e os links seguem com a ação deles.
+document.getElementById('recebimentos-tabela-body')?.addEventListener('click', (evento) => {
+  const confirmar = evento.target.closest('[data-acao="confirmar-recebimento"]');
+  if (confirmar) {
+    abrirModalRecebimento(parseInt(confirmar.dataset.id, 10));
+    return;
+  }
+  if (evento.target.closest('[data-acao="limpar-filtros-recebimentos"]')) {
+    recebimentosSoAtrasados = false;
+    document.getElementById('recebimentos-busca').value = '';
+    document.getElementById('recebimentos-filtro-loja').value = '';
+    renderRecebimentosTabela();
+    return;
+  }
+  const botaoItens = evento.target.closest('[data-acao="abrir-itens"]');
+  if (!botaoItens && evento.target.closest('a, button')) return;
+  const linha = evento.target.closest('.receb-linha');
+  if (!linha) return;
+  const id = parseInt(linha.dataset.id, 10);
+  if (recebimentosAbertos.has(id)) recebimentosAbertos.delete(id);
+  else recebimentosAbertos.add(id);
+  renderRecebimentosTabela();
+  document.querySelector(`.receb-linha[data-id="${id}"] [data-acao="abrir-itens"]`)?.focus();
+});
+
+['recebimentos-filtro-loja', 'recebimentos-filtro-periodo'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', renderRecebimentosTabela);
+});
+
+document.querySelectorAll('.recebimentos-modo [data-modo]').forEach((botao) => {
+  botao.addEventListener('click', () => {
+    if (botao.dataset.modo !== recebimentosModo) _mudarModoRecebimentos(botao.dataset.modo);
+  });
+});
+
+document.querySelectorAll('.pedidos-kpis [data-kpi]').forEach((card) => {
+  card.addEventListener('click', () => {
+    if (card.dataset.kpi === 'hoje') {
+      _mudarModoRecebimentos('recebidos', '1');
+    } else if (card.dataset.kpi === 'atrasados') {
+      const ligar = !(recebimentosModo === 'aguardando' && recebimentosSoAtrasados);
+      if (recebimentosModo !== 'aguardando') _mudarModoRecebimentos('aguardando');
+      recebimentosSoAtrasados = ligar;
+      renderRecebimentosTabela();
+    } else {
+      _mudarModoRecebimentos('aguardando');
+    }
+  });
+});
+
+document.getElementById('recebimentos-filtro-atraso')?.addEventListener('click', () => {
+  recebimentosSoAtrasados = false;
+  renderRecebimentosTabela();
+});
 
 document.getElementById('recebimentos-busca')?.addEventListener('input', renderRecebimentosTabela);
 

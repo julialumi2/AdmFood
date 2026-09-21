@@ -161,48 +161,89 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE RECEBIMENTOS -->
-      <div class="page-content">
+      <!-- PÁGINA DE RECEBIMENTOS (redesenho de 21/09: topo enxuto com o histórico,
+           4 indicadores do dia, filtros numa linha e a tabela densa com os itens
+           que abrem na própria linha) -->
+      <div class="page-content recebimentos-pagina">
 
         <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="clipboard-check" class="icon-pin"></i>
-            <span>CONFERÊNCIA DE ENTREGA</span>
-          </div>
-          <div class="title-row">
-            <h1>Recebimentos</h1>
+          <div class="title-row pedidos-topo">
+            <div class="pedidos-titulo">
+              <h1>Recebimentos</h1>
+              <p class="panel-subtitle">Busque o pedido que chegou, confirme quem recebeu e confira as quantidades e a Nota Fiscal para atualizar o estoque.</p>
+            </div>
+            <div class="recebimentos-modo" role="group" aria-label="O que mostrar">
+              <button type="button" data-modo="aguardando" class="active" aria-pressed="true">Aguardando</button>
+              <button type="button" data-modo="recebidos" aria-pressed="false">
+                <i data-lucide="history"></i>
+                Histórico de recebidos
+              </button>
+            </div>
           </div>
         </div>
 
-        <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
-          Busque o pedido que chegou, confirme quem recebeu e confira se a quantidade e a Nota Fiscal batem — isso já atualiza o estoque de verdade.
-        </p>
-
-        <div class="chart-card">
-          <div class="table-header-row">
-            <div>
-              <h3 class="table-title">Pedidos aguardando recebimento</h3>
-              <p class="table-subtitle">Busque por fornecedor, valor ou produto</p>
+        <!-- LINHA 1: indicadores do dia -->
+        <div class="pedidos-kpis">
+          <button type="button" class="store-card kpi-clicavel" data-kpi="aguardando" aria-pressed="false" title="Mostrar os pedidos aguardando recebimento">
+            <span class="kpi-topo">
+              <span class="card-subtitle">Aguardando recebimento</span>
+              <i data-lucide="package-open" class="metric-icon"></i>
+            </span>
+            <span class="store-value" id="receb-kpi-aguardando">—</span>
+            <span class="kpi-sub">pedidos na fila pra conferir</span>
+          </button>
+          <div class="store-card">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Valor a receber</span>
+              <i data-lucide="wallet" class="metric-icon"></i>
             </div>
+            <span class="store-value" id="receb-kpi-valor">—</span>
+            <span class="kpi-sub">em mercadoria aguardando conferência</span>
+          </div>
+          <button type="button" class="store-card kpi-clicavel" data-kpi="hoje" aria-pressed="false" title="Ver o que foi recebido hoje">
+            <span class="kpi-topo">
+              <span class="card-subtitle">Recebidos hoje</span>
+              <i data-lucide="clipboard-check" class="metric-icon"></i>
+            </span>
+            <span class="store-value" id="receb-kpi-hoje">—</span>
+            <span class="kpi-sub" id="receb-kpi-hoje-sub"></span>
+          </button>
+          <button type="button" class="store-card kpi-clicavel" data-kpi="atrasados" aria-pressed="false" title="Mostrar só as entregas atrasadas">
+            <span class="kpi-topo">
+              <span class="card-subtitle">Entregas atrasadas</span>
+              <i data-lucide="alarm-clock" class="metric-icon"></i>
+            </span>
+            <span class="store-value" id="receb-kpi-atrasados">—</span>
+            <span class="kpi-sub" id="receb-kpi-atrasados-sub"></span>
+          </button>
+        </div>
 
-            <div class="search-box">
+        <!-- LINHAS 2 e 3: filtros numa linha só, colados no topo da tabela -->
+        <div class="chart-card pedidos-tabela-card">
+          <div class="pedidos-filtros">
+            <span class="filtro-select">
+              <select id="recebimentos-filtro-loja" aria-label="Loja">
+                <option value="">Todas as lojas</option>
+              </select>
+              <i data-lucide="chevron-down"></i>
+            </span>
+            <span class="filtro-select">
+              <select id="recebimentos-filtro-periodo" aria-label="Data do pedido"></select>
+              <i data-lucide="chevron-down"></i>
+            </span>
+            <button type="button" class="pedidos-filtro-situacao" id="recebimentos-filtro-atraso" aria-label="Tirar o filtro de atrasadas" hidden>
+              <span>Atrasadas</span>
+              <i data-lucide="x"></i>
+            </button>
+            <div class="search-box pedidos-busca recebimentos-busca">
               <i data-lucide="search"></i>
-              <input type="text" placeholder="Buscar pedido..." id="recebimentos-busca">
+              <input type="text" placeholder="Buscar pedido, fornecedor ou produto..." id="recebimentos-busca" aria-label="Buscar pedido, fornecedor ou produto">
             </div>
           </div>
 
           <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>Fornecedor</th>
-                <th>Loja</th>
-                <th>Pedido em</th>
-                <th>Itens</th>
-                <th>Valor</th>
-                <th>Ação</th>
-              </tr>
-            </thead>
+          <table class="pedidos-tabela recebimentos-tabela">
+            <thead id="recebimentos-tabela-head"></thead>
             <tbody id="recebimentos-tabela-body">
               <!-- Renderizado dinamicamente via JS -->
             </tbody>
