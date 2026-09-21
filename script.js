@@ -4111,8 +4111,35 @@ async function carregarConvitesCotacao() {
     const dados = await resposta.json();
     lojasCotacaoAtual = dados.lojas || [];
     renderConvitesCotacao(dados.convites || []);
+    _avisarItensSemFornecedor();
   } catch (erro) {
     console.error('Falha ao carregar convites:', erro);
+  }
+}
+
+// Itens que ninguém cota não vão em link nenhum (2026-09-21): a cotação avisa
+// quais são, pra compradora decidir.
+async function _avisarItensSemFornecedor() {
+  const card = document.getElementById('cotacao-convites-card');
+  if (!card || !cotacaoAtualId) return;
+  let aviso = document.getElementById('cotacao-sem-fornecedor-aviso');
+  if (!aviso) {
+    aviso = document.createElement('p');
+    aviso.id = 'cotacao-sem-fornecedor-aviso';
+    aviso.className = 'panel-subtitle cotacao-sem-fornecedor-aviso';
+    card.querySelector('.table-header-row')?.after(aviso);
+  }
+  aviso.hidden = true;
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites/previa`);
+    if (!resposta.ok) return;
+    const orfaos = (await resposta.json()).orfaos || [];
+    aviso.hidden = !orfaos.length;
+    aviso.innerHTML = orfaos.length
+      ? `<strong>Sem fornecedor marcado (não vão em nenhum link):</strong> ${escaparHtml(orfaos.join(', '))}. Marque quem cota em Insumos, lance o preço à mão ou convide um fornecedor novo.`
+      : '';
+  } catch (erro) {
+    console.error('Falha ao ver itens sem fornecedor:', erro);
   }
 }
 
@@ -4199,7 +4226,7 @@ function renderPreviaConvite() {
   alvo.innerHTML = `
     <p class="panel-subtitle">
       ${receberao.length} de ${escolhidos.length} marcados recebem link, de ${previaConviteDados.insumosDaCotacao} insumos na cotação.
-      ${orfaos.length ? `${orfaos.length} sem fornecedor definido ${orfaos.length === 1 ? 'vai' : 'vão'} pra todos.` : ''}
+      ${orfaos.length ? `<br><strong>Sem fornecedor marcado, não ${orfaos.length === 1 ? 'vai' : 'vão'} em nenhum link:</strong> ${escaparHtml(orfaos.join(', '))}. Marque quem cota em Insumos (na loja), lance o preço à mão ou convide um fornecedor novo.` : ''}
     </p>
     <ul class="convite-previa-lista">
       ${receberao.map((f) => `

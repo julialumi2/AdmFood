@@ -4786,15 +4786,16 @@ def _quem_cota_o_que(cotacao_id, fornecedor_ids=None):
 
 
 def _itens_do_fornecedor(fornecedor_id, por_insumo, orfaos, ligados):
-    """Os insumos dele + os que ninguém cota. Fornecedor que ainda não é
-    ligado a insumo nenhum (novo, ou de teste) recebe a cotação inteira —
-    pedido dela em 2026-09-18: antes ele ficava sem convite ("Nenhum insumo
-    dessa cotação é fornecido por..."). Depois que ele responder, o histórico
-    liga ele aos insumos que cotou, e as próximas cotações vêm só com esses."""
+    """Os insumos dele. Item que ninguém cota (órfão) não vai pra ninguém
+    sozinho desde 2026-09-21 — pedido dela: o link do Guilherme Nunes levou
+    adesivo, luva e sacolinha, e a lata ia pra PXT. A compradora vê o aviso
+    "sem fornecedor" na cotação e decide (marca quem cota, lança o preço ou
+    convida alguém novo). Fornecedor que ainda não é ligado a insumo nenhum
+    (novo, ou de teste) continua recebendo a cotação inteira — pedido dela em
+    2026-09-18; depois que ele responde, o histórico liga ele aos insumos."""
     if fornecedor_id not in ligados:
         return list(por_insumo)
-    dele = [i for i, forns in por_insumo.items() if fornecedor_id in forns]
-    return dele + [i for i in orfaos if i not in dele]
+    return [i for i, forns in por_insumo.items() if fornecedor_id in forns]
 
 
 def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
@@ -6851,7 +6852,7 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                     )
                 }
                 for convite in convites_abertos:
-                    if not quem_vende or convite["fornecedor_id"] in quem_vende:
+                    if convite["fornecedor_id"] in quem_vende:
                         conn.execute(
                             "INSERT OR IGNORE INTO cotacao_convite_item (convite_id, insumo_id) VALUES (?, ?)",
                             (convite["id"], insumo_id),

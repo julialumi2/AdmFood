@@ -3907,3 +3907,15 @@ coluna por loja; "não homologado nessa loja"), a coluna "Vai pra" e o
 "Atualizar com os homologados". No convite da cotação, cada item vai pra
 quem cota o insumo nas lojas daquele item (histórico continua geral, só
 quando ninguém está marcado).
+
+### 6.30 Item sem fornecedor não vai em link nenhum (2026-09-21)
+
+Antes, item que ninguém cota (sem fornecedor marcado na loja nem histórico)
+ia pro link de todo fornecedor convidado — o do Guilherme Nunes levou
+adesivo, luva e sacolinha, e a lata ia pra PXT. Agora `_itens_do_fornecedor`
+manda pra cada um só o que ele cota; o item órfão fica na cotação com o aviso
+"Sem fornecedor marcado (não vão em nenhum link)" no cartão de convites e na
+prévia, pra compradora decidir: marcar quem cota em Insumos, lançar o preço à
+mão ou convidar um fornecedor novo (fornecedor que ainda não cota nada
+continua recebendo a cotação inteira). O "Atualizar com os homologados"
+também só põe item novo no convite aberto de quem cota ele.
