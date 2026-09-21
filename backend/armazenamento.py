@@ -986,6 +986,54 @@ def inicializar_banco():
         ):
             if coluna not in colunas_insumo:
                 conn.execute(f"ALTER TABLE insumo ADD COLUMN {coluna} {tipo}")
+        # Fornecedores que cotam e fornecedor homologado POR LOJA (2026-09-21,
+        # pedido dela: mudar numa loja não pode mexer nas outras). As colunas
+        # de homologado do insumo e insumo_fornecedor viram legado; na
+        # primeira vez, o que estava lá é copiado pra cada loja que usa o
+        # insumo — nada muda na prática no dia da troca.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS insumo_loja_fornecedor (
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                PRIMARY KEY (insumo_id, loja, fornecedor_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS insumo_loja_homologado (
+                insumo_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                preco REAL,
+                validade TEXT,
+                PRIMARY KEY (insumo_id, loja)
+            )
+            """
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS migracao_feita (nome TEXT PRIMARY KEY, feita_em TEXT NOT NULL)")
+        if not conn.execute("SELECT 1 FROM migracao_feita WHERE nome = 'fornecedores_por_loja'").fetchone():
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO insumo_loja_fornecedor (insumo_id, loja, fornecedor_id)
+                SELECT f.insumo_id, il.loja, f.fornecedor_id
+                FROM insumo_fornecedor f JOIN insumo_loja il ON il.insumo_id = f.insumo_id
+                """
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO insumo_loja_homologado (insumo_id, loja, fornecedor_id, preco, validade)
+                SELECT i.id, il.loja, i.fornecedor_homologado_id, i.preco_homologado, i.validade_preco_homologado
+                FROM insumo i JOIN insumo_loja il ON il.insumo_id = i.id
+                WHERE i.fornecedor_homologado_id IS NOT NULL
+                """
+            )
+            conn.execute(
+                "INSERT INTO migracao_feita (nome, feita_em) VALUES ('fornecedores_por_loja', ?)",
+                (datetime.now().isoformat(),),
+            )
         # Pedido direto que nasceu de uma Requisição guarda de qual (título +
         # prazo), pra "Fazer Cotação/Pedido" não gerar de novo nem ficar órfão
         # quando a requisição é excluída.
@@ -2795,6 +2843,9 @@ def excluir_insumo(insumo_id):
         conn.execute("DELETE FROM estoque_insumo WHERE insumo_id = ?", (insumo_id,))
         conn.execute("DELETE FROM lote_insumo WHERE insumo_id = ?", (insumo_id,))
         conn.execute("DELETE FROM insumo_loja WHERE insumo_id = ?", (insumo_id,))
+        conn.execute("DELETE FROM insumo_loja_fornecedor WHERE insumo_id = ?", (insumo_id,))
+        conn.execute("DELETE FROM insumo_loja_homologado WHERE insumo_id = ?", (insumo_id,))
+        conn.execute("DELETE FROM insumo_fornecedor WHERE insumo_id = ?", (insumo_id,))
         conn.execute("DELETE FROM insumo WHERE id = ?", (insumo_id,))
 
 
@@ -2877,6 +2928,22 @@ def mesclar_insumo(origem_id, destino_id, fator, loja):
             conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (destino_id, loja_ficha))
         conn.execute(f"DELETE FROM estoque_insumo WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
         conn.execute(f"DELETE FROM insumo_loja WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
+        # Fornecedores e homologado da origem nessas lojas vão pro destino
+        # (sem passar por cima do que o destino já tinha).
+        conn.execute(
+            f"INSERT OR IGNORE INTO insumo_loja_fornecedor (insumo_id, loja, fornecedor_id) "
+            f"SELECT ?, loja, fornecedor_id FROM insumo_loja_fornecedor WHERE insumo_id = ? AND loja IN ({marcadores})",
+            (destino_id, origem_id, *lojas),
+        )
+        conn.execute(
+            f"INSERT OR IGNORE INTO insumo_loja_homologado (insumo_id, loja, fornecedor_id, preco, validade) "
+            f"SELECT ?, loja, fornecedor_id, preco, validade FROM insumo_loja_homologado WHERE insumo_id = ? AND loja IN ({marcadores})",
+            (destino_id, origem_id, *lojas),
+        )
+        conn.execute(f"DELETE FROM insumo_loja_fornecedor WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
+        conn.execute(f"DELETE FROM insumo_loja_homologado WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
+        _sincronizar_fornecedores_legado(conn, destino_id)
+        _sincronizar_fornecedores_legado(conn, origem_id)
         conn.execute(f"DELETE FROM ajuste_quantidade_ideal WHERE insumo_id = ? AND loja IN ({marcadores})", (origem_id, *lojas))
 
         custo_levado = None
@@ -4219,17 +4286,83 @@ def atualizar_fornecedor(fornecedor_id, campos):
         conn.execute(f"UPDATE fornecedor SET {colunas} WHERE id = ?", valores)
 
 
-def definir_fornecedores_insumo(insumo_id, fornecedor_ids):
-    """Substitui a lista inteira de fornecedores que cotam esse insumo
-    (mesmo padrão de definir_ficha_tecnica — sempre manda a lista toda,
-    substitui em vez de fazer diff)."""
+def lojas_do_insumo(insumo_id):
     with conexao() as conn:
-        conn.execute("DELETE FROM insumo_fornecedor WHERE insumo_id = ?", (insumo_id,))
-        for fornecedor_id in fornecedor_ids:
+        return [
+            linha["loja"]
+            for linha in conn.execute("SELECT loja FROM insumo_loja WHERE insumo_id = ? ORDER BY loja", (insumo_id,))
+        ]
+
+
+def _sincronizar_fornecedores_legado(conn, insumo_id):
+    """insumo_fornecedor (legado) = a união das lojas, pra quem ainda lê a
+    tabela antiga."""
+    conn.execute("DELETE FROM insumo_fornecedor WHERE insumo_id = ?", (insumo_id,))
+    conn.execute(
+        "INSERT OR IGNORE INTO insumo_fornecedor (insumo_id, fornecedor_id) "
+        "SELECT DISTINCT insumo_id, fornecedor_id FROM insumo_loja_fornecedor WHERE insumo_id = ?",
+        (insumo_id,),
+    )
+
+
+def definir_fornecedores_insumo(insumo_id, fornecedor_ids, lojas=None):
+    """Substitui a lista de fornecedores que cotam esse insumo NAS LOJAS
+    dadas (por loja desde 2026-09-21; sem `lojas`, em todas que usam o
+    insumo). Sempre manda a lista toda, substitui em vez de fazer diff."""
+    lojas = lojas if lojas is not None else lojas_do_insumo(insumo_id)
+    with conexao() as conn:
+        for loja in lojas:
+            conn.execute("DELETE FROM insumo_loja_fornecedor WHERE insumo_id = ? AND loja = ?", (insumo_id, loja))
+            for fornecedor_id in fornecedor_ids:
+                conn.execute(
+                    "INSERT OR IGNORE INTO insumo_loja_fornecedor (insumo_id, loja, fornecedor_id) VALUES (?, ?, ?)",
+                    (insumo_id, loja, fornecedor_id),
+                )
+        _sincronizar_fornecedores_legado(conn, insumo_id)
+
+
+def definir_homologado_insumo(insumo_id, lojas, fornecedor_id, preco=None, validade=None):
+    """Fornecedor homologado, preço combinado e validade NAS LOJAS dadas (por
+    loja desde 2026-09-21). Sem fornecedor, tira o homologado dessas lojas.
+    O homologado entra também nos fornecedores que cotam, na mesma loja."""
+    with conexao() as conn:
+        for loja in lojas:
+            if fornecedor_id is None:
+                conn.execute("DELETE FROM insumo_loja_homologado WHERE insumo_id = ? AND loja = ?", (insumo_id, loja))
+                continue
             conn.execute(
-                "INSERT INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
-                (insumo_id, fornecedor_id),
+                """
+                INSERT INTO insumo_loja_homologado (insumo_id, loja, fornecedor_id, preco, validade) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (insumo_id, loja) DO UPDATE SET
+                    fornecedor_id = excluded.fornecedor_id, preco = excluded.preco, validade = excluded.validade
+                """,
+                (insumo_id, loja, fornecedor_id, preco, validade),
             )
+            conn.execute(
+                "INSERT OR IGNORE INTO insumo_loja_fornecedor (insumo_id, loja, fornecedor_id) VALUES (?, ?, ?)",
+                (insumo_id, loja, fornecedor_id),
+            )
+        _sincronizar_fornecedores_legado(conn, insumo_id)
+
+
+def mapa_insumo_loja_fornecedores():
+    """{(insumo_id, loja): [fornecedor_id, ...]} — quem cota, por loja."""
+    with conexao() as conn:
+        linhas = conn.execute("SELECT insumo_id, loja, fornecedor_id FROM insumo_loja_fornecedor").fetchall()
+    mapa = {}
+    for linha in linhas:
+        mapa.setdefault((linha["insumo_id"], linha["loja"]), []).append(linha["fornecedor_id"])
+    return mapa
+
+
+def mapa_homologado_por_loja():
+    """{(insumo_id, loja): {fornecedor_id, preco, validade}} — vencido ou não."""
+    with conexao() as conn:
+        linhas = conn.execute("SELECT insumo_id, loja, fornecedor_id, preco, validade FROM insumo_loja_homologado").fetchall()
+    return {
+        (linha["insumo_id"], linha["loja"]): {"fornecedor_id": linha["fornecedor_id"], "preco": linha["preco"], "validade": linha["validade"]}
+        for linha in linhas
+    }
 
 
 def mapa_fornecedores_do_historico():
@@ -4260,10 +4393,10 @@ def mapa_fornecedores_do_historico():
 
 
 def mapa_insumo_fornecedores():
-    """{insumo_id: [fornecedor_id, ...]} pra todo mundo de uma vez — evita
-    N+1 ao formatar a lista inteira de insumos."""
+    """{insumo_id: [fornecedor_id, ...]} — a união das lojas (quem cota o
+    insumo em alguma loja), pra todo mundo de uma vez."""
     with conexao() as conn:
-        linhas = conn.execute("SELECT insumo_id, fornecedor_id FROM insumo_fornecedor").fetchall()
+        linhas = conn.execute("SELECT DISTINCT insumo_id, fornecedor_id FROM insumo_loja_fornecedor").fetchall()
     mapa = {}
     for linha in linhas:
         mapa.setdefault(linha["insumo_id"], []).append(linha["fornecedor_id"])
@@ -4593,9 +4726,16 @@ def _insumos_da_cotacao_por_fornecedor(cotacao_id):
     convidado pelo histórico. O histórico (quem já cotou ou já vendeu) só
     entra nos insumos que ninguém marcou ainda. Sem os dois, o insumo é órfão
     e vai pra todo mundo."""
-    cadastro = mapa_insumo_fornecedores()
+    # Por loja (2026-09-21): vale quem cota o insumo nas lojas daquele item
+    # nesta cotação; cotação sem loja (feita à mão), qualquer loja.
+    por_loja = {}
+    for (insumo_id, loja), fornecedores in mapa_insumo_loja_fornecedores().items():
+        por_loja.setdefault(insumo_id, {})[loja] = set(fornecedores)
     historico = mapa_fornecedores_do_historico()
     with conexao() as conn:
+        lojas_do_item = {}
+        for linha in conn.execute("SELECT insumo_id, loja FROM cotacao_item_loja WHERE cotacao_id = ?", (cotacao_id,)):
+            lojas_do_item.setdefault(linha["insumo_id"], set()).add(linha["loja"])
         # JOIN com insumo de propósito: insumo excluído depois da cotação deixa
         # a linha em cotacao_item pra trás (achado em produção, 17/09 — a
         # cotação 20 tinha o insumo 201, que não existe mais). Sem isso o item
@@ -4611,10 +4751,13 @@ def _insumos_da_cotacao_por_fornecedor(cotacao_id):
                 (cotacao_id,),
             ).fetchall()
         ]
-    return {
-        insumo_id: set(cadastro.get(insumo_id) or historico.get(insumo_id) or [])
-        for insumo_id in insumo_ids
-    }
+    resultado = {}
+    for insumo_id in insumo_ids:
+        lojas_insumo = por_loja.get(insumo_id, {})
+        lojas = lojas_do_item.get(insumo_id) or set(lojas_insumo)
+        cadastro = set().union(*(lojas_insumo.get(loja, set()) for loja in lojas)) if lojas else set()
+        resultado[insumo_id] = cadastro or set(historico.get(insumo_id) or [])
+    return resultado
 
 
 def _fornecedores_ligados_a_algum_insumo():
@@ -5206,39 +5349,44 @@ TITULO_COTACAO_PEDIDOS_DIRETOS = "Pedidos diretos (preço homologado)"
 
 
 def _homologados_validos(conn, fornecedor_id=None):
-    """{insumo_id: {fornecedor_id, preco, nome}} dos insumos com fornecedor
-    homologado ativo e preço combinado valendo hoje (validade em branco ou
-    de hoje em diante). Com `fornecedor_id`, só os desse fornecedor."""
+    """{(insumo_id, loja): {fornecedor_id, preco, nome}} de cada insumo/loja
+    com fornecedor homologado ativo e preço combinado valendo hoje (validade
+    em branco ou de hoje em diante). Por loja desde 2026-09-21. Com
+    `fornecedor_id`, só os desse fornecedor."""
     parametros = [datetime.now().date().isoformat()]
     filtro = ""
     if fornecedor_id is not None:
-        filtro = "AND i.fornecedor_homologado_id = ?"
+        filtro = "AND h.fornecedor_id = ?"
         parametros.append(fornecedor_id)
     linhas = conn.execute(
         f"""
-        SELECT i.id, i.nome, i.fornecedor_homologado_id, i.preco_homologado
-        FROM insumo i
-        JOIN fornecedor f ON f.id = i.fornecedor_homologado_id AND f.ativo = 1
-        WHERE i.preco_homologado > 0
-          AND (i.validade_preco_homologado IS NULL OR i.validade_preco_homologado >= ?)
+        SELECT h.insumo_id, h.loja, h.fornecedor_id, h.preco, i.nome
+        FROM insumo_loja_homologado h
+        JOIN insumo i ON i.id = h.insumo_id
+        JOIN fornecedor f ON f.id = h.fornecedor_id AND f.ativo = 1
+        WHERE h.preco > 0
+          AND (h.validade IS NULL OR h.validade >= ?)
           {filtro}
         """,
         parametros,
     ).fetchall()
     return {
-        linha["id"]: {"fornecedor_id": linha["fornecedor_homologado_id"], "preco": linha["preco_homologado"], "nome": linha["nome"]}
+        (linha["insumo_id"], linha["loja"]): {"fornecedor_id": linha["fornecedor_id"], "preco": linha["preco"], "nome": linha["nome"]}
         for linha in linhas
     }
 
 
-def vincular_insumo_fornecedor(insumo_id, fornecedor_id):
-    """Garante o insumo na lista de fornecedores que cotam ele — o
-    homologado entra mesmo se não estiver marcado na tela."""
+def vincular_insumo_fornecedor(insumo_id, fornecedor_id, lojas=None):
+    """Garante o fornecedor entre os que cotam o insumo nas lojas dadas (sem
+    `lojas`, em todas que usam o insumo)."""
+    lojas = lojas if lojas is not None else lojas_do_insumo(insumo_id)
     with conexao() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
-            (insumo_id, fornecedor_id),
-        )
+        for loja in lojas:
+            conn.execute(
+                "INSERT OR IGNORE INTO insumo_loja_fornecedor (insumo_id, loja, fornecedor_id) VALUES (?, ?, ?)",
+                (insumo_id, loja, fornecedor_id),
+            )
+        _sincronizar_fornecedores_legado(conn, insumo_id)
 
 
 def _cotacao_oculta(conn, titulo):
@@ -5264,7 +5412,7 @@ def _cotacao_dos_pedidos_diretos(conn):
 
 def _gravar_pedidos_diretos(conn, quantidades, precos, requisicao=None):
     """`quantidades`: {(fornecedor_id, loja, insumo_id): quantidade};
-    `precos`: {insumo_id: preço homologado}. Um pedido por fornecedor × loja,
+    `precos`: {(insumo_id, loja): preço homologado}. Um pedido por fornecedor × loja,
     e os do mesmo fornecedor dividem o token — um WhatsApp só, "feito em
     conjunto", como no "Gerar pedidos" da cotação. Nasce 'enviado' sem
     WhatsApp: em Pedidos aparece pendente de envio. O insumo passa a valer
@@ -5290,7 +5438,7 @@ def _gravar_pedidos_diretos(conn, quantidades, precos, requisicao=None):
             ).lastrowid
         conn.execute(
             "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
-            (pedidos[chave], insumo_id, quantidade, precos[insumo_id]),
+            (pedidos[chave], insumo_id, quantidade, precos[(insumo_id, loja)]),
         )
         conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, loja))
         conn.execute(
@@ -5323,12 +5471,12 @@ def criar_pedidos_diretos(fornecedor_id, itens):
         if not conn.execute("SELECT 1 FROM fornecedor WHERE id = ?", (fornecedor_id,)).fetchone():
             raise ValueError("Fornecedor não encontrado.")
         validos = _homologados_validos(conn, fornecedor_id)
-        for _, _, insumo_id in quantidades:
-            if insumo_id not in validos:
+        for _, loja, insumo_id in quantidades:
+            if (insumo_id, loja) not in validos:
                 linha = conn.execute("SELECT nome FROM insumo WHERE id = ?", (insumo_id,)).fetchone()
                 nome = linha["nome"] if linha else "Um dos insumos"
-                raise ValueError(f"{nome} não tem preço homologado valendo com esse fornecedor.")
-        return _gravar_pedidos_diretos(conn, quantidades, {insumo_id: v["preco"] for insumo_id, v in validos.items()})
+                raise ValueError(f"{nome} não tem preço homologado valendo com esse fornecedor em {loja}.")
+        return _gravar_pedidos_diretos(conn, quantidades, {chave: v["preco"] for chave, v in validos.items()})
 
 
 # --- COMPRA FEITA POR FORA (2026-09-17) ---------------------------------------
@@ -5685,6 +5833,20 @@ def _importar_preco_homologado_vmarket(conn, preco, valida, resumo):
     conn.execute(
         "UPDATE insumo SET fornecedor_homologado_id = ?, preco_homologado = ?, validade_preco_homologado = ? WHERE id = ?",
         (fornecedor_id, valor, preco.get("validade") or None, insumo_id),
+    )
+    conn.execute(
+        """
+        INSERT INTO insumo_loja_homologado (insumo_id, loja, fornecedor_id, preco, validade)
+        SELECT insumo_id, loja, ?, ?, ? FROM insumo_loja WHERE insumo_id = ?
+        ON CONFLICT (insumo_id, loja) DO UPDATE SET
+            fornecedor_id = excluded.fornecedor_id, preco = excluded.preco, validade = excluded.validade
+        """,
+        (fornecedor_id, valor, preco.get("validade") or None, insumo_id),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO insumo_loja_fornecedor (insumo_id, loja, fornecedor_id) "
+        "SELECT insumo_id, loja, ? FROM insumo_loja WHERE insumo_id = ?",
+        (fornecedor_id, insumo_id),
     )
     conn.execute(
         "INSERT OR IGNORE INTO insumo_fornecedor (insumo_id, fornecedor_id) VALUES (?, ?)",
@@ -6338,13 +6500,13 @@ def requisicao_ja_gerada(titulo, prazo_validade):
 
 
 def fornecedor_homologado_por_insumo():
-    """{insumo_id: nome do fornecedor} de quem vai direto em pedido (mesma
+    """{(insumo_id, loja): nome do fornecedor} de quem vai direto em pedido (mesma
     regra de _homologados_validos), pra Conferência mostrar o destino de
     cada item antes de gerar."""
     with conexao() as conn:
         homologados = _homologados_validos(conn)
         nomes = {linha["id"]: linha["nome"] for linha in conn.execute("SELECT id, nome FROM fornecedor")}
-    return {insumo_id: nomes.get(h["fornecedor_id"], "") for insumo_id, h in homologados.items()}
+    return {chave: nomes.get(h["fornecedor_id"], "") for chave, h in homologados.items()}
 
 
 def arredondar_quantidade_compra(deficit, fator_conversao_compra=None):
@@ -6451,17 +6613,23 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     with conexao() as conn:
         homologados = _homologados_validos(conn)
         quantidades_diretas = {
-            (homologados[insumo_id]["fornecedor_id"], loja, insumo_id): quantidade
-            for insumo_id, info in deficits.items() if insumo_id in homologados
-            for loja, quantidade in info['porLoja'].items()
+            (homologados[(insumo_id, loja)]["fornecedor_id"], loja, insumo_id): quantidade
+            for insumo_id, info in deficits.items()
+            for loja, quantidade in info['porLoja'].items() if (insumo_id, loja) in homologados
         }
         pedidos_diretos = []
         if quantidades_diretas:
-            precos = {insumo_id: h["preco"] for insumo_id, h in homologados.items()}
+            precos = {chave: h["preco"] for chave, h in homologados.items()}
             pedidos_diretos = [
                 p["id"] for p in _gravar_pedidos_diretos(conn, quantidades_diretas, precos, (titulo, prazo_validade))
             ]
-    para_cotar = {insumo_id: info for insumo_id, info in deficits.items() if insumo_id not in homologados}
+    # Por loja: a loja em que o insumo tem homologado vai em pedido; as
+    # outras lojas do mesmo insumo vão pra cotação.
+    para_cotar = {}
+    for insumo_id, info in deficits.items():
+        lojas_cotacao = {loja: q for loja, q in info['porLoja'].items() if (insumo_id, loja) not in homologados}
+        if lojas_cotacao:
+            para_cotar[insumo_id] = {**info, 'porLoja': lojas_cotacao}
     if not para_cotar:
         return {"cotacaoId": None, "pedidosDiretos": pedidos_diretos, "insumosSemIdeal": insumos_sem_ideal}
 
@@ -6563,8 +6731,8 @@ def _plano_reaplicacao(conn, titulo, prazo_validade, compra):
     for (insumo_id, loja), quantidade in tudo.items():
         if (insumo_id, loja) in em_pedido:
             continue
-        if insumo_id in homologados:
-            diretos[(homologados[insumo_id]["fornecedor_id"], loja, insumo_id)] = quantidade
+        if (insumo_id, loja) in homologados:
+            diretos[(homologados[(insumo_id, loja)]["fornecedor_id"], loja, insumo_id)] = quantidade
         elif (insumo_id, loja) not in travado:
             entrar[(insumo_id, loja)] = quantidade
     return {
@@ -6633,14 +6801,14 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                 (titulo, prazo_validade),
             )
         }
-        precos = {i: h["preco"] for i, h in homologados.items()}
+        precos = {chave: h["preco"] for chave, h in homologados.items()}
         acrescentados, novos = {}, {}
         for (fornecedor_id, loja, insumo_id), quantidade in diretos.items():
             pedido_id = abertos.get((fornecedor_id, loja))
             if pedido_id:
                 conn.execute(
                     "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)",
-                    (pedido_id, insumo_id, quantidade, precos[insumo_id]),
+                    (pedido_id, insumo_id, quantidade, precos[(insumo_id, loja)]),
                 )
                 conn.execute("UPDATE pedido_compra SET atualizado_em = ? WHERE id = ?", (agora, pedido_id))
                 acrescentados.setdefault((pedido_id, fornecedor_id, loja), []).append(insumo_id)
@@ -6678,7 +6846,9 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
                 )
                 quem_vende = {
                     l["fornecedor_id"]
-                    for l in conn.execute("SELECT fornecedor_id FROM insumo_fornecedor WHERE insumo_id = ?", (insumo_id,))
+                    for l in conn.execute(
+                        "SELECT fornecedor_id FROM insumo_loja_fornecedor WHERE insumo_id = ? AND loja = ?", (insumo_id, loja)
+                    )
                 }
                 for convite in convites_abertos:
                     if not quem_vende or convite["fornecedor_id"] in quem_vende:

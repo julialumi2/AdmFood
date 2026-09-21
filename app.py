@@ -141,6 +141,10 @@ from backend.armazenamento import (
     definir_quantidade_compra,
     requisicao_ja_gerada,
     fornecedor_homologado_por_insumo,
+    definir_homologado_insumo,
+    lojas_do_insumo,
+    mapa_insumo_loja_fornecedores,
+    mapa_homologado_por_loja,
     reaplicar_homologados_requisicao,
     motivo_para_nao_reaplicar,
     situacao_compra_requisicao,
@@ -1793,6 +1797,9 @@ def _formatar_insumos(linhas, com_custo=False):
     # o que a tela de editar insumo grava (ver mapa_fornecedores_do_historico).
     mapa_historico = mapa_fornecedores_do_historico()
     custos_em_uso = custo_em_uso_por_insumo() if com_custo else {}
+    # Por loja desde 2026-09-21: quem cota e o homologado de cada loja.
+    fornecedores_por_loja = mapa_insumo_loja_fornecedores()
+    homologado_por_loja = mapa_homologado_por_loja() if com_custo else {}
     por_insumo = {}
     for linha in linhas:
         insumo = por_insumo.setdefault(linha['insumo_id'], {
@@ -1819,17 +1826,35 @@ def _formatar_insumos(linhas, com_custo=False):
             # (pode ser uma cotação, a última compra ou a receita da mistura).
             insumo["custoReferencia"] = linha['custo_referencia']
             insumo["custoEmUso"] = custos_em_uso.get(linha['insumo_id'])
-            # Fornecedor homologado: vai direto em pedido na Requisição.
-            insumo["fornecedorHomologadoId"] = linha['fornecedor_homologado_id']
-            insumo["precoHomologado"] = linha['preco_homologado']
-            insumo["validadePrecoHomologado"] = linha['validade_preco_homologado']
+            # Homologado geral: só quando é o mesmo em todas as lojas que têm
+            # (preenchido depois do loop, a partir de porLoja).
+            insumo["fornecedorHomologadoId"] = None
+            insumo["precoHomologado"] = None
+            insumo["validadePrecoHomologado"] = None
         insumo["porLoja"][linha['loja']] = {
             "quantidadeAtual": linha['quantidade_atual'],
             "estoqueMinimo": linha['estoque_minimo'],
             "status": _status_estoque(linha['quantidade_atual'], linha['estoque_minimo']),
             "atualizadoEm": linha['atualizado_em'],
             "aplica": bool(linha['aplica']),
+            "fornecedorIds": fornecedores_por_loja.get((linha['insumo_id'], linha['loja']), []),
         }
+        if com_custo:
+            homologado = homologado_por_loja.get((linha['insumo_id'], linha['loja'])) or {}
+            insumo["porLoja"][linha['loja']].update({
+                "fornecedorHomologadoId": homologado.get("fornecedor_id"),
+                "precoHomologado": homologado.get("preco"),
+                "validadePrecoHomologado": homologado.get("validade"),
+            })
+    if com_custo:
+        for insumo in por_insumo.values():
+            distintos = {
+                (p["fornecedorHomologadoId"], p["precoHomologado"], p["validadePrecoHomologado"])
+                for p in insumo["porLoja"].values() if p.get("fornecedorHomologadoId")
+            }
+            if len(distintos) == 1:
+                (insumo["fornecedorHomologadoId"], insumo["precoHomologado"],
+                 insumo["validadePrecoHomologado"]) = next(iter(distintos))
     return list(por_insumo.values())
 
 
@@ -2007,6 +2032,8 @@ def api_criar_insumo():
         if erro:
             return jsonify({"erro": erro}), 400
         campos.update(campos_extra)
+    # Homologado é por loja (2026-09-21): sai das colunas do insumo.
+    homologado = {k: campos.pop(k) for k in ('fornecedor_homologado_id', 'preco_homologado', 'validade_preco_homologado') if k in campos}
 
     # Só nas lojas marcadas no cadastro (2026-09-21): antes entrava em todas e
     # aparecia na aba e na contagem de loja que nem usa o insumo.
@@ -2023,9 +2050,10 @@ def api_criar_insumo():
     atualizar_insumo(insumo_id, campos)
     fornecedor_ids = dados.get('fornecedorIds')
     if fornecedor_ids is not None:
-        definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids])
-    if campos.get('fornecedor_homologado_id'):
-        vincular_insumo_fornecedor(insumo_id, campos['fornecedor_homologado_id'])
+        definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids], lojas)
+    if homologado.get('fornecedor_homologado_id'):
+        definir_homologado_insumo(insumo_id, lojas, homologado['fornecedor_homologado_id'],
+                                  homologado.get('preco_homologado'), homologado.get('validade_preco_homologado'))
 
     return jsonify({"id": insumo_id})
 
@@ -2120,18 +2148,28 @@ def api_atualizar_insumo(insumo_id):
         if erro:
             return jsonify({"erro": erro}), 400
         campos.update(campos_extra)
-
-    atualizar_insumo(insumo_id, campos)
-
+    # Fornecedores que cotam e homologado são por loja (2026-09-21): com
+    # `loja`, muda só nela; sem, em todas as lojas que usam o insumo.
+    homologado = {k: campos.pop(k) for k in ('fornecedor_homologado_id', 'preco_homologado', 'validade_preco_homologado') if k in campos}
+    loja_alvo = dados.get('loja')
+    if loja_alvo is not None and loja_alvo not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    if loja_alvo and not _loja_visivel(loja_alvo):
+        return jsonify({"erro": "Essa loja não é a sua."}), 403
+    fornecedor_ids = None
     if 'fornecedorIds' in dados:
         try:
             fornecedor_ids = [int(f) for f in (dados['fornecedorIds'] or [])]
         except (TypeError, ValueError):
             return jsonify({"erro": "Lista de fornecedores inválida."}), 400
-        definir_fornecedores_insumo(insumo_id, fornecedor_ids)
+    lojas_alvo = [loja_alvo] if loja_alvo else lojas_do_insumo(insumo_id)
 
-    if campos.get('fornecedor_homologado_id'):
-        vincular_insumo_fornecedor(insumo_id, campos['fornecedor_homologado_id'])
+    atualizar_insumo(insumo_id, campos)
+    if fornecedor_ids is not None:
+        definir_fornecedores_insumo(insumo_id, fornecedor_ids, lojas_alvo)
+    if homologado:
+        definir_homologado_insumo(insumo_id, lojas_alvo, homologado['fornecedor_homologado_id'],
+                                  homologado.get('preco_homologado'), homologado.get('validade_preco_homologado'))
 
     return jsonify({"ok": True})
 
@@ -3971,6 +4009,7 @@ def api_conferencia_requisicao():
     if not grupo:
         return jsonify({"erro": "Requisição não encontrada."}), 404
 
+    homologado_de = fornecedor_homologado_por_insumo()
     agregados = {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
@@ -3989,6 +4028,7 @@ def api_conferencia_requisicao():
             # Por loja, o que a compradora vê e decide em "O que comprar"
             # (2026-09-21): sugestão do sistema e a quantidade que vale.
             agregado['lojas'].append({
+                "fornecedorHomologado": homologado_de.get((item['insumoId'], contagem['loja'])),
                 "loja": contagem['loja'],
                 "contagemId": contagem['id'],
                 "contado": item['quantidadePreenchida'],
@@ -4006,7 +4046,6 @@ def api_conferencia_requisicao():
                 agregado['algumAjustado'] = True
 
     classe_por_insumo = mapa_curva_abc_insumos()
-    homologado_de = fornecedor_homologado_por_insumo()
     itens = []
     for agregado in agregados.values():
         deficit = arredondar_quantidade_compra(
@@ -4026,8 +4065,9 @@ def api_conferencia_requisicao():
             "curvaAbc": classe_por_insumo.get(agregado['insumoId']),
             "lojas": agregado['lojas'],
             "comprarTotal": round(sum(loja['comprar'] for loja in agregado['lojas']), 2),
-            # Pra onde vai ao gerar: pedido direto pro homologado ou cotação.
-            "fornecedorHomologado": homologado_de.get(agregado['insumoId']),
+            # Pra onde vai ao gerar (o de cada loja está em lojas[]): o primeiro
+            # homologado entre as lojas, pra quem ainda lê no nível do item.
+            "fornecedorHomologado": next((l['fornecedorHomologado'] for l in agregado['lojas'] if l['fornecedorHomologado']), None),
         })
 
     # O que vai pra compra primeiro; depois quem está sem mínimo esperando

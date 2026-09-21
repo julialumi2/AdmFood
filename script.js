@@ -1653,16 +1653,21 @@ const LOJAS_SO_HOMOLOGADO = ['Açaí Na Lata'];
 
 function _fornecedoresDoInsumo(insumo) {
   if (!fornecedoresPorId) return [];
-  const doCadastro = new Set(insumo.fornecedorIds || []);
-  const todos = [...doCadastro, ...(insumo.fornecedoresDoHistorico || [])];
+  // Por loja desde 2026-09-21: na aba de uma loja, os que cotam e o
+  // homologado DELA; na Visão geral, os de todas as lojas.
+  const naLoja = LOJAS_ESTOQUE.includes(estoqueTabAtual) ? insumo.porLoja?.[estoqueTabAtual] : null;
+  const homologadosIds = new Set(naLoja
+    ? [naLoja.fornecedorHomologadoId].filter(Boolean)
+    : Object.values(insumo.porLoja || {}).map((p) => p.fornecedorHomologadoId).filter(Boolean));
+  const doCadastro = new Set([...(naLoja ? (naLoja.fornecedorIds || []) : (insumo.fornecedorIds || [])), ...homologadosIds]);
+  const todos = [...doCadastro, ...(insumo.fornecedoresDoHistorico || []).filter((id) => !doCadastro.has(id))];
   const nomes = todos
     .map((id) => ({ id, nome: fornecedoresPorId.get(id)?.nome, soHistorico: !doCadastro.has(id) }))
     .filter((f) => f.nome);
-  const homologadoId = insumo.fornecedorHomologadoId || null;
-  const homologado = nomes.filter((f) => f.id === homologadoId);
-  const resto = nomes.filter((f) => f.id !== homologadoId)
+  const homologado = nomes.filter((f) => homologadosIds.has(f.id));
+  const resto = nomes.filter((f) => !homologadosIds.has(f.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  const lista = [...homologado, ...resto].map((f) => ({ ...f, homologado: f.id === homologadoId }));
+  const lista = [...homologado, ...resto].map((f) => ({ ...f, homologado: homologadosIds.has(f.id) }));
   return LOJAS_SO_HOMOLOGADO.includes(estoqueTabAtual) ? lista.filter((f) => f.homologado) : lista;
 }
 
@@ -5683,11 +5688,18 @@ function _destinoCompraHTML(item) {
     });
     return [...rotulos.values()].join('<br>');
   }
-  const total = (item.lojas || []).reduce((soma, l) => soma + (l.comprar || 0), 0);
-  if (total <= 0) return '<span class="text-muted">—</span>';
-  return item.fornecedorHomologado
-    ? `<span class="destino-compra pedido" title="Fornecedor homologado com preço combinado: sai direto em pedido, sem cotação">Pedido · ${escaparHtml(item.fornecedorHomologado)}</span>`
-    : '<span class="destino-compra cotacao">Cotação</span>';
+  // Por loja: cada loja pode ter homologado diferente (ou nenhum).
+  const lojasCompra = (item.lojas || []).filter((l) => l.comprar > 0);
+  if (!lojasCompra.length) return '<span class="text-muted">—</span>';
+  const rotulos = new Map();
+  lojasCompra.forEach((l) => {
+    if (l.fornecedorHomologado) {
+      rotulos.set(`p${l.fornecedorHomologado}`, `<span class="destino-compra pedido" title="Fornecedor homologado com preço combinado nessa loja: sai direto em pedido, sem cotação">Pedido · ${escaparHtml(l.fornecedorHomologado)}</span>`);
+    } else {
+      rotulos.set('c', '<span class="destino-compra cotacao">Cotação</span>');
+    }
+  });
+  return [...rotulos.values()].join('<br>');
 }
 
 function _atualizarResumoCompraConferencia(r) {
@@ -5700,7 +5712,7 @@ function _atualizarResumoCompraConferencia(r) {
     return;
   }
   const vaoPraCompra = r.itens.filter((i) => i.lojas.some((l) => l.comprar > 0));
-  const emPedido = vaoPraCompra.filter((i) => i.fornecedorHomologado).length;
+  const emPedido = vaoPraCompra.filter((i) => i.lojas.every((l) => !(l.comprar > 0) || l.fornecedorHomologado)).length;
   const semDecisao = r.itens.filter((i) => i.lojas.some((l) => l.ideal === null && !l.editado && !l.minimoGuardado)).length;
   const partes = [`${vaoPraCompra.length} ${vaoPraCompra.length === 1 ? 'item vai' : 'itens vão'} pra compra (${emPedido} em pedido direto, ${vaoPraCompra.length - emPedido} pra cotação)`];
   if (semDecisao) partes.push(`${semDecisao} sem estoque mínimo, em amarelo, esperando você decidir`);
@@ -6570,8 +6582,23 @@ function abrirModalNovoInsumo(insumo) {
   const emUso = document.getElementById('novo-insumo-custo-em-uso');
   emUso.textContent = insumo ? _textoCustoEmUso(insumo) : '';
   emUso.hidden = !insumo;
-  _renderChecklistFornecedores(insumo ? insumo.fornecedorIds : []);
-  _renderFornecedorHomologado(insumo);
+  // Fornecedores que cotam e homologado são por loja (2026-09-21): na edição,
+  // valem pra loja da aba aberta; na Visão geral não dá pra editar aqui.
+  const lojaDaAba = LOJAS_ESTOQUE.includes(estoqueTabAtual) ? estoqueTabAtual : null;
+  const avisoLoja = document.getElementById('novo-insumo-aviso-loja');
+  const blocoFornecedores = document.getElementById('novo-insumo-bloco-fornecedores');
+  const naLoja = insumo && lojaDaAba ? (insumo.porLoja?.[lojaDaAba] || {}) : null;
+  if (insumo && !lojaDaAba) {
+    blocoFornecedores.style.display = 'none';
+    avisoLoja.style.display = '';
+    avisoLoja.textContent = 'Fornecedores e homologado são de cada loja: escolha a loja no seletor de cima pra mudar.';
+  } else {
+    blocoFornecedores.style.display = '';
+    avisoLoja.style.display = insumo ? '' : 'none';
+    avisoLoja.textContent = insumo ? `Fornecedores e homologado abaixo valem só pra ${lojaDaAba}.` : '';
+  }
+  _renderChecklistFornecedores(naLoja ? naLoja.fornecedorIds : []);
+  _renderFornecedorHomologado(naLoja ? { ...insumo, ...naLoja } : null);
   document.getElementById('modal-novo-insumo').style.display = 'flex';
 }
 
@@ -6637,6 +6664,17 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     precoHomologado: precoHomologadoDigitado === '' ? '' : parseFloat(precoHomologadoDigitado) / _escalaDeCusto(unidadeMedida).fator,
     validadePrecoHomologado: document.getElementById('novo-insumo-validade-homologado').value,
   };
+  if (insumoId) {
+    // Edição: fornecedores e homologado só da loja da aba (na Visão geral nem vão).
+    if (LOJAS_ESTOQUE.includes(estoqueTabAtual)) {
+      corpo.loja = estoqueTabAtual;
+    } else {
+      delete corpo.fornecedorIds;
+      delete corpo.fornecedorHomologadoId;
+      delete corpo.precoHomologado;
+      delete corpo.validadePrecoHomologado;
+    }
+  }
   if (!insumoId) {
     corpo.lojas = Array.from(document.querySelectorAll('input[name="novo-insumo-loja"]:checked')).map((el) => el.value);
     if (!corpo.lojas.length) {
@@ -7497,10 +7535,17 @@ function _formatarPrecoUnitario(valor) {
   return Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
-// Mesma regra do servidor (_homologados_validos): fornecedor, preço e validade em branco ou de hoje em diante.
-function _homologadoValido(insumo) {
-  return !!insumo.fornecedorHomologadoId && insumo.precoHomologado > 0
-    && (!insumo.validadePrecoHomologado || insumo.validadePrecoHomologado >= _hojeLocalISO());
+// Mesma regra do servidor (_homologados_validos): fornecedor, preço e validade
+// em branco ou de hoje em diante — por loja desde 2026-09-21.
+function _homologadoValidoNaLoja(insumo, loja, fornecedorId) {
+  const p = insumo.porLoja?.[loja];
+  return !!p && !!p.fornecedorHomologadoId && p.precoHomologado > 0
+    && (!fornecedorId || p.fornecedorHomologadoId === fornecedorId)
+    && (!p.validadePrecoHomologado || p.validadePrecoHomologado >= _hojeLocalISO());
+}
+
+function _lojasHomologadasDoFornecedor(insumo, fornecedorId) {
+  return LOJAS_ESTOQUE.filter((loja) => _homologadoValidoNaLoja(insumo, loja, fornecedorId));
 }
 
 async function _carregarInsumosParaPreco(forcar = false) {
@@ -7561,8 +7606,9 @@ async function abrirNovoPedidoDireto() {
     const [respostaFornecedores] = await Promise.all([fetch('/api/fornecedores'), _carregarInsumosParaPreco(true)]);
     fornecedoresPedidoDireto = (await respostaFornecedores.json()).fornecedores || [];
     const itensPorFornecedor = new Map();
-    insumosParaPreco.filter(_homologadoValido).forEach((insumo) => {
-      itensPorFornecedor.set(insumo.fornecedorHomologadoId, (itensPorFornecedor.get(insumo.fornecedorHomologadoId) || 0) + 1);
+    insumosParaPreco.forEach((insumo) => {
+      const deQuem = new Set(LOJAS_ESTOQUE.filter((loja) => _homologadoValidoNaLoja(insumo, loja)).map((loja) => insumo.porLoja[loja].fornecedorHomologadoId));
+      deQuem.forEach((id) => itensPorFornecedor.set(id, (itensPorFornecedor.get(id) || 0) + 1));
     });
     const opcoes = fornecedoresPedidoDireto
       .filter((f) => f.ativo && itensPorFornecedor.has(f.id))
@@ -7601,9 +7647,9 @@ function renderPedidoDireto() {
     return;
   }
   const doFornecedor = insumosParaPreco
-    .filter((i) => i.fornecedorHomologadoId === pedidoDiretoFornecedorId)
+    .filter((i) => Object.values(i.porLoja || {}).some((p) => p.fornecedorHomologadoId === pedidoDiretoFornecedorId))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  const itens = doFornecedor.filter(_homologadoValido);
+  const itens = doFornecedor.filter((i) => _lojasHomologadasDoFornecedor(i, pedidoDiretoFornecedorId).length);
   const vencidos = doFornecedor.length - itens.length;
   const lojas = _lojasPedidoDireto();
   // Re-render (abrir outras lojas) não pode apagar o que já foi digitado.
@@ -7619,22 +7665,28 @@ function renderPedidoDireto() {
     `<tr><th>Insumo</th><th>Preço</th>${lojas.map((l) => `<th>${escaparHtml(LOJA_CURTA[l] || l)}</th>`).join('')}</tr>`;
 
   document.getElementById('pedido-direto-itens').innerHTML = itens.map((insumo) => {
+    const lojasDele = _lojasHomologadasDoFornecedor(insumo, pedidoDiretoFornecedorId);
+    const precos = [...new Set(lojasDele.map((loja) => insumo.porLoja[loja].precoHomologado))];
     const colunas = lojas.map((loja) => {
       const estoque = insumo.porLoja?.[loja];
+      if (!lojasDele.includes(loja)) {
+        return '<td><span class="pedido-direto-estoque">não homologado nessa loja</span></td>';
+      }
+      const precoLoja = insumo.porLoja[loja].precoHomologado;
       const info = estoque && estoque.aplica
         ? `tem ${_formatarQuantidade(estoque.quantidadeAtual, insumo.unidadeMedida)} · mín ${_formatarQuantidade(estoque.estoqueMinimo, insumo.unidadeMedida)}`
         : 'não usa hoje';
       const valor = digitado[`${insumo.id}|${loja}`] || '';
       return `
         <td>
-          <input type="number" min="0" step="any" value="${escaparHtml(valor)}" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" data-preco="${insumo.precoHomologado}" aria-label="${escaparHtml(insumo.nome)}, ${escaparHtml(loja)}">
+          <input type="number" min="0" step="any" value="${escaparHtml(valor)}" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" data-preco="${precoLoja}" aria-label="${escaparHtml(insumo.nome)}, ${escaparHtml(loja)}">
           <span class="pedido-direto-estoque">${info}</span>
         </td>`;
     }).join('');
     return `
       <tr>
         <td class="font-bold">${escaparHtml(insumo.nome)}</td>
-        <td class="preco-combinado-valor">R$ ${_formatarPrecoUnitario(insumo.precoHomologado)}<span class="pedido-direto-estoque">por ${escaparHtml(insumo.unidadeMedida)}</span></td>
+        <td class="preco-combinado-valor">${precos.length === 1 ? `R$ ${_formatarPrecoUnitario(precos[0])}` : 'varia por loja'}<span class="pedido-direto-estoque">por ${escaparHtml(insumo.unidadeMedida)}</span></td>
         ${colunas}
       </tr>`;
   }).join('');

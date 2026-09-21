@@ -3884,3 +3884,26 @@ cotação") e o que mudou ("Vai virar pedido · fornecedor", "Vai pra cotação"
 Os pedidos saem no "Ver cotação/pedidos": com mudança pendente, ele lista o
 que vai sair, pede confirmação, grava (`reaplicar_homologados_requisicao`) e
 abre Pedidos.
+
+### 6.29 Fornecedores que cotam e homologado por loja (2026-09-21)
+
+Pedido dela: mudar uma loja não pode mexer nas outras. Os dois cadastros
+passaram a ser por loja: `insumo_loja_fornecedor` (quem cota o insumo naquela
+loja) e `insumo_loja_homologado` (fornecedor, preço combinado e validade
+naquela loja). Na primeira subida, `migracao_feita('fornecedores_por_loja')`
+copia o que estava em `insumo_fornecedor` e nas colunas de homologado do
+insumo pra cada loja que usa o insumo — nada muda no dia da troca. As
+colunas antigas ficam como legado (`insumo_fornecedor` vira a união das
+lojas, pra quem ainda lê).
+
+Em Insumos, com uma loja escolhida, o cadastro do insumo mostra e grava os
+fornecedores e o homologado DAQUELA loja (`PUT /api/insumos/<id>` com
+`loja`); na Visão geral esses campos somem, com aviso pra escolher a loja.
+Insumo novo leva fornecedores e homologado pras lojas marcadas.
+`_homologados_validos` devolve por (insumo, loja), e tudo que decide pedido
+direto usa a loja do item: gerar a cotação (a loja com homologado vai em
+pedido, as outras do mesmo insumo vão pra cotação), "Novo pedido" (preço e
+coluna por loja; "não homologado nessa loja"), a coluna "Vai pra" e o
+"Atualizar com os homologados". No convite da cotação, cada item vai pra
+quem cota o insumo nas lojas daquele item (histórico continua geral, só
+quando ninguém está marcado).
