@@ -2007,7 +2007,18 @@ def api_criar_insumo():
             return jsonify({"erro": erro}), 400
         campos.update(campos_extra)
 
-    insumo_id = criar_insumo(nome, categoria, unidade_medida, list(LOJAS.keys()))
+    # Só nas lojas marcadas no cadastro (2026-09-21): antes entrava em todas e
+    # aparecia na aba e na contagem de loja que nem usa o insumo.
+    lojas = dados.get('lojas')
+    if lojas is None:
+        lojas = list(LOJAS.keys())
+    elif not isinstance(lojas, list) or not lojas or any(loja not in LOJAS for loja in lojas):
+        return jsonify({"erro": "Marque pelo menos uma loja que usa esse insumo."}), 400
+    lojas = [loja for loja in lojas if _loja_visivel(loja)]
+    if not lojas:
+        return jsonify({"erro": "Essa loja não é a sua."}), 403
+
+    insumo_id = criar_insumo(nome, categoria, unidade_medida, lojas)
     atualizar_insumo(insumo_id, campos)
     fornecedor_ids = dados.get('fornecedorIds')
     if fornecedor_ids is not None:

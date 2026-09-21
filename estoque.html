@@ -789,9 +789,13 @@
           <p class="panel-subtitle" id="novo-insumo-homologado-ajuda" style="display:none; margin-top: calc(-1 * var(--space-2)); margin-bottom: var(--space-3);">
             Na Requisição, esse insumo vira pedido direto pra esse fornecedor, sem passar por cotação. Validade em branco vale até alguém mudar.
           </p>
-          <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
-            Cadastra pra rede toda — depois é só distribuir a quantidade recebida entre as lojas em "Registrar entrada".
-          </p>
+          <!-- Lojas (2026-09-21): antes o insumo novo entrava em todas as lojas
+               e aparecia onde não era usado (ex.: alface no Açaí). -->
+          <div class="form-group" id="novo-insumo-lojas-grupo">
+            <label>Lojas que usam esse insumo</label>
+            <div class="checklist-fornecedores" id="novo-insumo-lojas"></div>
+            <small class="text-muted">Ele só aparece nas lojas marcadas: na aba delas aqui em Insumos e no link da contagem.</small>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-novo-insumo-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm" id="novo-insumo-btn-salvar">Cadastrar</button>

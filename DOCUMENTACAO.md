@@ -3863,3 +3863,15 @@ entra na cotação vai pros convites ainda abertos de quem vende; pedido ainda
 não enviado do mesmo fornecedor e loja ganha os itens novos em vez de nascer
 outro; o link do fornecedor só grava preço dos itens do convite dele; e o
 "Gerar pedidos" da cotação passou a olhar "já pedido" por insumo e loja.
+
+### 6.28 Insumo novo só nas lojas marcadas; Açaí mostra só o homologado (2026-09-21)
+
+O "Novo insumo" cadastrava o produto em todas as lojas (`criar_insumo` com
+`LOJAS` inteiro), e por isso alface e pote de salada apareciam no Açaí:
+apagar e cadastrar de novo devolvia o item pras quatro. Agora o formulário
+tem "Lojas que usam esse insumo" (vem marcada a loja da aba aberta) e `POST
+/api/insumos` recebe `lojas` (sem o campo, continua todas, pra quem chamar
+sem ele; gerente só cria pra loja dele). Na edição as lojas continuam em
+"Insumos da loja". Na aba do Açaí (`LOJAS_SO_HOMOLOGADO` em script.js), a
+coluna Fornecedores mostra só o fornecedor homologado, e o filtro vira "Sem
+homologado".

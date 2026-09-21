@@ -1647,6 +1647,10 @@ async function _carregarNomesDeFornecedor() {
 // Homologado primeiro, depois o resto em ordem alfabética. Entram os do
 // cadastro do insumo e também quem só aparece no histórico (cotou ou vendeu),
 // que é o que a VMarket mostrava.
+// No Açaí a compra é com o homologado (pedido dela, 2026-09-21): na aba da
+// loja a coluna mostra só ele, sem quem apenas cotou ou vendeu.
+const LOJAS_SO_HOMOLOGADO = ['Açaí Na Lata'];
+
 function _fornecedoresDoInsumo(insumo) {
   if (!fornecedoresPorId) return [];
   const doCadastro = new Set(insumo.fornecedorIds || []);
@@ -1658,7 +1662,8 @@ function _fornecedoresDoInsumo(insumo) {
   const homologado = nomes.filter((f) => f.id === homologadoId);
   const resto = nomes.filter((f) => f.id !== homologadoId)
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  return [...homologado, ...resto].map((f) => ({ ...f, homologado: f.id === homologadoId }));
+  const lista = [...homologado, ...resto].map((f) => ({ ...f, homologado: f.id === homologadoId }));
+  return LOJAS_SO_HOMOLOGADO.includes(estoqueTabAtual) ? lista.filter((f) => f.homologado) : lista;
 }
 
 // Bolinha com as iniciais e cor do fornecedor, igual à da grid de Cotações
@@ -1902,7 +1907,7 @@ function _atualizarOpcoesFornecedorEstoque(linhas, disponivel) {
   const escolhido = select.value;
   const semFornecedor = linhas.filter((l) => _fornecedoresDoInsumo(l.insumo).length === 0).length;
   select.innerHTML = '<option value="">Todos os fornecedores</option>'
-    + `<option value="sem">Sem fornecedor (${semFornecedor})</option>`;
+    + `<option value="sem">${LOJAS_SO_HOMOLOGADO.includes(estoqueTabAtual) ? 'Sem homologado' : 'Sem fornecedor'} (${semFornecedor})</option>`;
   select.value = escolhido === 'sem' ? 'sem' : '';
   return select.value;
 }
@@ -6491,6 +6496,18 @@ function abrirModalNovoInsumo(insumo) {
   document.getElementById('novo-insumo-id').value = insumo ? insumo.id : '';
   document.getElementById('novo-insumo-titulo').textContent = insumo ? 'Editar insumo' : 'Novo insumo';
   document.getElementById('novo-insumo-btn-salvar').textContent = insumo ? 'Salvar' : 'Cadastrar';
+  // Cadastro novo: escolhe as lojas (já vem marcada a da aba aberta). Na
+  // edição, as lojas mudam em "Insumos da loja".
+  const grupoLojas = document.getElementById('novo-insumo-lojas-grupo');
+  if (grupoLojas) {
+    grupoLojas.style.display = insumo ? 'none' : '';
+    document.getElementById('novo-insumo-lojas').innerHTML = LOJAS_ESTOQUE.map((loja) => `
+      <label class="checklist-item">
+        <input type="checkbox" name="novo-insumo-loja" value="${escaparHtml(loja)}" ${estoqueTabAtual === loja ? 'checked' : ''}>
+        ${escaparHtml(loja)}
+      </label>
+    `).join('');
+  }
   document.getElementById('novo-insumo-nome').value = insumo ? insumo.nome : '';
   document.getElementById('novo-insumo-categoria').value = insumo ? insumo.categoria : '';
   document.getElementById('novo-insumo-unidade').value = insumo ? insumo.unidadeMedida : 'un';
@@ -6574,6 +6591,13 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     precoHomologado: precoHomologadoDigitado === '' ? '' : parseFloat(precoHomologadoDigitado) / _escalaDeCusto(unidadeMedida).fator,
     validadePrecoHomologado: document.getElementById('novo-insumo-validade-homologado').value,
   };
+  if (!insumoId) {
+    corpo.lojas = Array.from(document.querySelectorAll('input[name="novo-insumo-loja"]:checked')).map((el) => el.value);
+    if (!corpo.lojas.length) {
+      alert('Marque pelo menos uma loja que usa esse insumo.');
+      return;
+    }
+  }
   try {
     const resposta = await fetch(insumoId ? `/api/insumos/${insumoId}` : '/api/insumos', {
       method: insumoId ? 'PUT' : 'POST',
