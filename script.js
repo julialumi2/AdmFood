@@ -5559,6 +5559,8 @@ function renderConferenciaRequisicao() {
   const btnGerarCotacao = document.getElementById('btn-requisicao-gerar-cotacao');
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovarTodas) btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
+  const btnReaplicar = document.getElementById('btn-requisicao-reaplicar-homologados');
+  if (btnReaplicar) btnReaplicar.style.display = r.jaGerada ? '' : 'none';
   if (btnGerarCotacao) {
     btnGerarCotacao.disabled = !r.totalmenteAprovada;
     btnGerarCotacao.innerHTML = `<i data-lucide="file-text"></i> ${r.jaGerada ? 'Ver cotação/pedidos' : 'Gerar cotação'}`;
@@ -5888,6 +5890,35 @@ function _avisoInsumosSemIdeal(insumosSemIdeal) {
   const nomes = insumosSemIdeal.map((i) => (i.loja ? `${i.nome} (${i.loja})` : i.nome)).join(', ');
   return `\n\nAtenção: ${insumosSemIdeal.length} insumo(s) ficaram de fora por não terem estoque mínimo nem quantidade digitada em "O que comprar": ${nomes}.`;
 }
+
+// "Atualizar com os homologados" (2026-09-21): requisição já gerada, mas os
+// homologados foram acertados depois. Quem tem homologado vira pedido direto
+// e sai da cotação; o resto fica, com os preços que já chegaram.
+document.getElementById('btn-requisicao-reaplicar-homologados')?.addEventListener('click', async () => {
+  const r = requisicaoConferenciaAtual;
+  if (!r) return;
+  if (!confirm('Atualizar a compra dessa requisição com os fornecedores homologados de agora?\n\nO que tiver fornecedor homologado vira pedido direto pra ele e sai da cotação. O que já está em pedido não duplica. O resto continua na cotação, com os preços que os fornecedores já mandaram.')) return;
+  try {
+    const resposta = await fetch('/api/requisicoes/conferencia/reaplicar-homologados', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo: r.titulo, prazoValidade: r.prazoValidade }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível atualizar a compra.');
+    const partes = [];
+    if (dados.pedidos.length) {
+      partes.push(`Pedidos criados (envie pelo WhatsApp em Pedidos):\n${dados.pedidos.map((p) => `• ${p.fornecedor}: ${p.itens.join(', ')}`).join('\n')}`);
+    }
+    if (dados.saiuDaCotacao.length) partes.push(`Saíram da cotação: ${dados.saiuDaCotacao.join(', ')}.`);
+    if (dados.entrouNaCotacao.length) partes.push(`Entraram na cotação (convide quem vende): ${dados.entrouNaCotacao.join(', ')}.`);
+    alert(partes.length ? `Pronto!\n\n${partes.join('\n\n')}` : 'Nada mudou: nenhum item da compra ganhou fornecedor homologado desde que ela foi gerada.');
+    await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+  } catch (erro) {
+    console.error('Falha ao atualizar com os homologados:', erro);
+    alert(erro.message);
+  }
+});
 
 document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
   const r = requisicaoConferenciaAtual;

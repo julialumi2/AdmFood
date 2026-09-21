@@ -3843,3 +3843,14 @@ gerava tudo sozinho quando a última loja era aprovada; agora é "Aprovar e
 conferir a compra" (ou "Conferir a compra", já aprovada) e leva pra
 Conferência, de onde sai a cotação/pedido. Depois de gerada, o botão da
 Conferência vira "Ver cotação/pedidos".
+
+**"Atualizar com os homologados" (2026-09-21).** Na Conferência de uma
+requisição que já virou cotação/pedido aparece esse botão: refaz a compra
+com os homologados de agora, sem apagar a cotação (caso da Contagem 20/09 do
+Açaí, em que os homologados foram acertados depois e a RIBERFOODS já tinha
+mandado preço). Item já em pedido da requisição não duplica; item com
+homologado vira pedido direto e sai da cotação (com o preço e o convite
+dele); o resto fica ou entra na cotação. `POST
+/api/requisicoes/conferencia/reaplicar-homologados` com `{titulo,
+prazoValidade}` → `reaplicar_homologados_requisicao`, que devolve os pedidos
+criados (fornecedor e itens), o que saiu e o que entrou na cotação.

@@ -141,6 +141,7 @@ from backend.armazenamento import (
     definir_quantidade_compra,
     requisicao_ja_gerada,
     fornecedor_homologado_por_insumo,
+    reaplicar_homologados_requisicao,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
@@ -503,6 +504,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/requisicoes/conferencia/aprovar'): 'Aprovou a conferência da requisição',
     ('POST', '/api/requisicoes/conferencia/gerar-cotacao'): 'Gerou a cotação a partir da requisição',
     ('PUT', '/api/requisicoes/conferencia/comprar'): 'Mudou quanto comprar na conferência',
+    ('POST', '/api/requisicoes/conferencia/reaplicar-homologados'): 'Atualizou a compra com os homologados',
     ('POST', '/api/cotacoes'): 'Criou cotação',
     ('PUT', '/api/cotacoes/<int:cotacao_id>'): 'Editou a cotação',
     ('DELETE', '/api/cotacoes/<int:cotacao_id>'): 'Excluiu cotação',
@@ -4028,6 +4030,24 @@ def api_conferencia_requisicao():
     resposta['itens'] = itens
     resposta['jaGerada'] = requisicao_ja_gerada(titulo, prazo_validade)
     return jsonify(resposta)
+
+
+@app.route('/api/requisicoes/conferencia/reaplicar-homologados', methods=['POST'])
+def api_reaplicar_homologados():
+    """Botão "Atualizar com os homologados" da Conferência: refaz a compra de
+    uma requisição já gerada com os homologados de agora, sem apagar a
+    cotação (ver reaplicar_homologados_requisicao)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    prazo_validade = (dados.get('prazoValidade') or '').strip()
+    try:
+        resultado = reaplicar_homologados_requisicao(titulo, prazo_validade)
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    return jsonify(resultado)
 
 
 @app.route('/api/requisicoes/conferencia/comprar', methods=['PUT'])
