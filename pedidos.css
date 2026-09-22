@@ -91,6 +91,23 @@
   white-space: nowrap;
 }
 
+/* Quantidade do "Novo pedido" com a unidade escrita ao lado (kg, L, un): o
+   campo pedia grama enquanto a dica embaixo falava em kg (QA 22/09). */
+.pedido-direto-campo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pedido-direto-campo input { flex: 1; min-width: 0; }
+
+.pedido-direto-unidade {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .pedido-direto-estoque {
   display: block;
   margin-top: 4px;

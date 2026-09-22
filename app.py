@@ -164,6 +164,7 @@ from backend.armazenamento import (
     motivo_para_nao_reaplicar,
     situacao_compra_requisicao,
     definir_forcar_cotacao,
+    definir_fornecedor_avulso,
     item_travado_na_requisicao,
     homologados_por_insumo_loja,
     pedidos_diretos_da_requisicao,
@@ -204,6 +205,7 @@ from backend.armazenamento import (
     DIAS_ENTREGA_ATRASADA,
     buscar_fornecedor_por_id,
     buscar_pedidos_por_token,
+    cancelamentos_por_token,
     marcar_pedidos_enviados_whatsapp,
     confirmar_pedidos_por_token,
     ESTAGIOS_PEDIDO,
@@ -227,7 +229,9 @@ from backend.armazenamento import (
     listar_convites_cotacao,
     buscar_convite_por_token,
     responder_convite_cotacao,
+    listar_recusas_cotacao,
     reabrir_convite_cotacao,
+    estender_prazo_convite,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
 from backend.vendas_semanais_planilha import ler_vendas_semanais_da_planilha
@@ -594,6 +598,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/requisicoes/conferencia/gerar-cotacao'): 'Gerou a cotação a partir da requisição',
     ('PUT', '/api/requisicoes/conferencia/comprar'): 'Mudou quanto comprar na conferência',
     ('PUT', '/api/requisicoes/conferencia/destino'): 'Mudou um item entre pedido direto e cotação',
+    ('PUT', '/api/requisicoes/conferencia/fornecedor-avulso'): 'Combinou um fornecedor só pra esta compra',
     ('POST', '/api/requisicoes/conferencia/gerar-pedidos'): 'Gerou os pedidos homologados da requisição',
     ('POST', '/api/requisicoes/conferencia/reaplicar-homologados'): 'Atualizou a compra com os homologados',
     ('POST', '/api/cotacoes'): 'Criou cotação',
@@ -605,6 +610,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/cotacoes/<int:cotacao_id>/selecionar-melhores-precos'): 'Selecionou os melhores preços',
     ('POST', '/api/cotacoes/<int:cotacao_id>/convites'): 'Gerou os convites da cotação',
     ('POST', '/api/cotacoes/convites/<int:convite_id>/reabrir'): 'Reabriu o convite de um fornecedor',
+    ('PUT', '/api/cotacoes/convites/<int:convite_id>/prazo'): 'Estendeu o prazo do convite de um fornecedor',
     ('POST', '/api/cotacoes/convite/<token>/responder'): 'O fornecedor respondeu a cotação pelo link',
     ('POST', '/api/cotacoes/<int:cotacao_id>/gerar-pedidos'): 'Gerou os pedidos da cotação',
     ('POST', '/api/pedidos/direto'): 'Criou pedido direto',
@@ -3282,6 +3288,7 @@ def api_detalhe_cotacao(cotacao_id):
         "grupos": grupos,
         "itens": itens,
         "catalogoCompleto": catalogo_completo,
+        "recusas": listar_recusas_cotacao(cotacao_id),
     })
 
 
@@ -3456,6 +3463,10 @@ def api_criar_convites_cotacao(cotacao_id):
     prazo_validade = (dados.get('prazoValidade') or '').strip()
     if not prazo_validade:
         return jsonify({"erro": "Informe o prazo de validade do convite."}), 400
+    # Prazo no passado nascia vencido: o fornecedor abria o link e o envio já
+    # era recusado (QA 22/09).
+    if prazo_validade < datetime.now().isoformat(timespec='minutes'):
+        return jsonify({"erro": "Esse prazo já passou. Escolha uma data e hora futuras."}), 400
     # Sem `fornecedorIds` = todo fornecedor ativo (comportamento antigo).
     fornecedor_ids = None
     if 'fornecedorIds' in dados:
@@ -3493,8 +3504,26 @@ def api_reabrir_convite_cotacao(convite_id):
     erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
-    reabrir_convite_cotacao(convite_id)
-    return jsonify({"ok": True})
+    prazo = reabrir_convite_cotacao(convite_id)
+    return jsonify({"ok": True, "prazoValidade": prazo})
+
+
+@app.route('/api/cotacoes/convites/<int:convite_id>/prazo', methods=['PUT'])
+def api_estender_prazo_convite(convite_id):
+    """"Estender prazo" na linha do convite: sem `prazoValidade`, dá mais 24
+    horas a partir de agora. Convite com prazo vencido não tinha conserto
+    nenhum antes disso (QA 22/09)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        prazo = estender_prazo_convite(convite_id, (dados.get('prazoValidade') or '').strip() or None)
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    if prazo is None:
+        return jsonify({"erro": "Convite não encontrado."}), 404
+    return jsonify({"ok": True, "prazoValidade": prazo})
 
 
 @app.route('/api/cotacoes/convite/<token>', methods=['GET'])
@@ -3536,6 +3565,11 @@ def api_responder_convite_cotacao(token):
 
     dados = request.get_json(silent=True) or {}
     precos_brutos = dados.get('precos') or {}
+    # "Não vendo esse item" agora chega junto e fica gravado (QA 22/09).
+    try:
+        nao_vende = {int(i) for i in (dados.get('naoVende') or [])}
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Lista de itens inválida."}), 400
     precos = {}
     try:
         for insumo_id, preco in precos_brutos.items():
@@ -3552,7 +3586,8 @@ def api_responder_convite_cotacao(token):
     # página abriu ("Atualizar com os homologados") não volta por aqui.
     no_convite = {item["insumo_id"] for item in convite["itens"]}
     precos = {insumo_id: preco for insumo_id, preco in precos.items() if insumo_id in no_convite}
-    responder_convite_cotacao(token, precos)
+    nao_vende = (nao_vende & no_convite) - set(precos)
+    responder_convite_cotacao(token, precos, nao_vende)
     return jsonify({"ok": True})
 
 
@@ -3571,6 +3606,10 @@ def api_gerar_pedidos_cotacao(cotacao_id):
 
     resultado = gerar_pedidos_de_cotacao(cotacao_id)
     if not resultado["pedidosCriados"]:
+        # Clicar duas vezes caía num "erro" que parecia defeito; agora a
+        # resposta diz o que de fato aconteceu (QA 22/09).
+        if resultado.get("jaTinhamPedido"):
+            return jsonify({"erro": "Os pedidos dessa cotação já tinham sido gerados. Veja na tela de Pedidos."}), 409
         return jsonify({"erro": "Nenhum insumo com vencedor escolhido e quantidade pra virar pedido."}), 400
     mensagens = _montar_mensagens_whatsapp_pedidos(resultado["pedidosCriados"])
     return jsonify({"ok": True, **resultado, "mensagensWhatsApp": mensagens})
@@ -3906,13 +3945,21 @@ def api_buscar_pedidos_por_token(token):
     # Pública (sem login) — link mandado pro fornecedor confirmar que
     # recebeu o pedido (ver exceção em _exigir_login).
     pedidos = buscar_pedidos_por_token(token)
+    # Pedido cancelado sumia e o link virava "Link inválido": o fornecedor
+    # podia entregar assim mesmo (QA 22/09).
+    cancelados = cancelamentos_por_token(token)
     if not pedidos:
+        if cancelados:
+            quando = datetime.fromisoformat(cancelados[0]["canceladoEm"]).strftime("%d/%m/%Y")
+            return jsonify({"erro": f"Esse pedido foi cancelado em {quando}. Não precisa entregar — fale com a compradora antes de mandar qualquer coisa."}), 410
         return jsonify({"erro": "Link inválido."}), 404
     return jsonify({
         "fornecedorNome": pedidos[0]["fornecedor_nome"],
         "pedidos": [_formatar_pedido_confirmacao(p) for p in pedidos],
         "valorTotal": round(sum(p["valor_total"] for p in pedidos), 2),
         "jaConfirmado": all(p["status"] != "enviado" for p in pedidos),
+        # Quando só uma loja caiu, o resto do pedido continua valendo.
+        "lojasCanceladas": [{"loja": c["loja"], "canceladoEm": c["canceladoEm"]} for c in cancelados],
     })
 
 
@@ -4414,6 +4461,7 @@ def api_conferencia_requisicao():
         return jsonify({"erro": "Requisição não encontrada."}), 404
 
     homologado_de = homologados_por_insumo_loja()
+    nome_fornecedor = {f['id']: f['nome'] for f in listar_fornecedores()}
     # "Comprar direto" (2026-09-22): quem cota cada item em cada loja vem
     # primeiro na lista de fornecedores, e o último custo sugere o preço.
     cotam_de = mapa_insumo_loja_fornecedores()
@@ -4436,6 +4484,15 @@ def api_conferencia_requisicao():
             # Por loja, o que a compradora vê e decide em "O que comprar"
             # (2026-09-21): sugestão do sistema e a quantidade que vale.
             homologado = homologado_de.get((item['insumoId'], contagem['loja']))
+            # "Só nesta compra" (QA 22/09): o combinado avulso vale só nesta
+            # requisição e ganha do homologado, sem apagar o do cadastro.
+            if item.get('fornecedorAvulsoId') and item.get('precoAvulso'):
+                homologado = {
+                    "fornecedorId": item['fornecedorAvulsoId'],
+                    "fornecedor": nome_fornecedor.get(item['fornecedorAvulsoId'], ''),
+                    "preco": item['precoAvulso'],
+                    "avulso": True,
+                }
             agregado['lojas'].append({
                 "fornecedorHomologado": homologado["fornecedor"] if homologado else None,
                 # Fornecedor e preço combinado (bloco dos homologados, 2026-09-22).
@@ -4596,6 +4653,37 @@ def api_destino_item_conferencia():
     if travado:
         return jsonify({"erro": travado}), 409
     if not definir_forcar_cotacao(contagem_id, insumo_id, bool(dados.get('cotacao'))):
+        return jsonify({"erro": "Esse item não está nessa contagem."}), 404
+    return jsonify({"ok": True})
+
+
+@app.route('/api/requisicoes/conferencia/fornecedor-avulso', methods=['PUT'])
+def api_fornecedor_avulso_conferencia():
+    """"Comprar direto · só nesta compra": {contagemId, insumoId,
+    fornecedorId, preco} grava o combinado na própria contagem, sem mexer no
+    homologado do cadastro da loja. fornecedorId null desfaz."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        contagem_id = int(dados.get('contagemId'))
+        insumo_id = int(dados.get('insumoId'))
+        fornecedor_id = int(dados['fornecedorId']) if dados.get('fornecedorId') else None
+        preco = float(dados['preco']) if dados.get('preco') is not None else None
+    except (TypeError, ValueError, KeyError):
+        return jsonify({"erro": "Item inválido."}), 400
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+    travado = item_travado_na_requisicao(contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+    if travado:
+        return jsonify({"erro": travado}), 409
+    try:
+        gravou = definir_fornecedor_avulso(contagem_id, insumo_id, fornecedor_id, preco)
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    if not gravou:
         return jsonify({"erro": "Esse item não está nessa contagem."}), 404
     return jsonify({"ok": True})
 

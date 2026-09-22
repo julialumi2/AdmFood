@@ -49,6 +49,19 @@ def conexao():
         conn.close()
 
 
+def travar_para_escrita(conn):
+    """Começa a transação já pegando a trava de escrita do banco
+    (BEGIN IMMEDIATE). Sem isso, o SELECT que confere "isso já virou pedido?"
+    roda fora da transação: com dois gunicorn no ar, os dois liam "ainda
+    não" e os dois gravavam — pedido duplicado (QA 22/09). Com a trava, o
+    segundo espera o primeiro terminar e enxerga o que ele gravou."""
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+    except sqlite3.OperationalError:
+        # Já tem transação aberta nessa conexão: a trava veio junto.
+        pass
+
+
 def inicializar_banco():
     with conexao() as conn:
         conn.execute(
@@ -972,6 +985,29 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedido_cancelado (
+                token TEXT NOT NULL,
+                pedido_id INTEGER NOT NULL,
+                loja TEXT NOT NULL,
+                fornecedor_id INTEGER,
+                cancelado_em TEXT NOT NULL,
+                PRIMARY KEY (token, pedido_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cotacao_recusa (
+                cotacao_id INTEGER NOT NULL,
+                fornecedor_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                criado_em TEXT NOT NULL,
+                PRIMARY KEY (cotacao_id, fornecedor_id, insumo_id)
+            )
+            """
+        )
         colunas_contagem_item = {c["name"] for c in conn.execute("PRAGMA table_info(contagem_item)").fetchall()}
         if "quantidade_compra" not in colunas_contagem_item:
             # Quanto comprar, decidido na Conferência (2026-09-21): NULL = a
@@ -989,6 +1025,13 @@ def inicializar_banco():
             # própria, sem mexer no prazo (que é parte da identidade da
             # requisição e agruparia errado se mudasse numa loja só).
             conn.execute("ALTER TABLE contagem ADD COLUMN reaberta_em TEXT")
+        if "fornecedor_avulso_id" not in colunas_contagem_item:
+            # "Comprar direto · só nesta compra" (QA 22/09): o fornecedor e o
+            # preço combinados pra UMA compra ficam aqui, na contagem, em vez
+            # de sobrescrever o homologado permanente da loja (que depois
+            # vencia e deixava o item sem homologado nenhum).
+            conn.execute("ALTER TABLE contagem_item ADD COLUMN fornecedor_avulso_id INTEGER")
+            conn.execute("ALTER TABLE contagem_item ADD COLUMN preco_avulso REAL")
         if "estoque_no_envio" not in colunas_contagem_item:
             # Quanto o sistema achava que tinha na hora em que a loja enviou
             # (QA 22/09): a aprovação usa isso pra somar o que entrou e saiu
@@ -5143,9 +5186,10 @@ def buscar_convite_por_token(token):
         return convite
 
 
-def responder_convite_cotacao(token, precos):
-    """`precos` = {insumo_id: preco}, só com quem o fornecedor realmente
-    preencheu — quem ele marcou como "não vendo" nem chega aqui. Uma vez
+def responder_convite_cotacao(token, precos, nao_vende=()):
+    """`precos` = {insumo_id: preco} do que ele preencheu; `nao_vende` = os
+    itens que ele marcou como "não vendo esse item", que antes se perdiam no
+    caminho e ficavam iguais a item esquecido (QA 22/09). Uma vez
     respondido, o convite fica travado (pergunta 18 do roteiro): não dá
     pra chamar de novo pelo mesmo token."""
     convite = buscar_convite_por_token(token)
@@ -5153,12 +5197,43 @@ def responder_convite_cotacao(token, precos):
         return False
     for insumo_id, preco in precos.items():
         adicionar_preco_cotacao(convite["cotacao_id"], int(insumo_id), convite["fornecedor_id"], preco)
+    agora_recusa = datetime.now().isoformat()
+    with conexao() as conn:
+        for insumo_id in nao_vende:
+            conn.execute(
+                "INSERT OR REPLACE INTO cotacao_recusa (cotacao_id, fornecedor_id, insumo_id, criado_em) VALUES (?, ?, ?, ?)",
+                (convite["cotacao_id"], convite["fornecedor_id"], int(insumo_id), agora_recusa),
+            )
+        # Corrigiu e agora mandou preço: a recusa de antes sai.
+        for insumo_id in precos:
+            conn.execute(
+                "DELETE FROM cotacao_recusa WHERE cotacao_id = ? AND fornecedor_id = ? AND insumo_id = ?",
+                (convite["cotacao_id"], convite["fornecedor_id"], int(insumo_id)),
+            )
     with conexao() as conn:
         conn.execute(
             "UPDATE cotacao_convite SET status = 'respondida', respondida_em = ? WHERE token = ?",
             (datetime.now().isoformat(), token),
         )
     return True
+
+
+def listar_recusas_cotacao(cotacao_id):
+    """[{fornecedorId, insumoId}] de quem disse "não vendo esse item" — o
+    comparativo mostra isso no lugar do traço de "não respondeu"."""
+    with conexao() as conn:
+        return [
+            {"fornecedorId": linha["fornecedor_id"], "insumoId": linha["insumo_id"]}
+            for linha in conn.execute(
+                "SELECT fornecedor_id, insumo_id FROM cotacao_recusa WHERE cotacao_id = ?", (cotacao_id,)
+            )
+        ]
+
+
+# Reabrir ou estender um convite dá esta folga de prazo, contada de agora —
+# reabrir com o prazo vencido deixava o fornecedor travado do mesmo jeito
+# (QA 22/09). Mesma ideia do HORAS_APOS_REABERTURA da contagem.
+HORAS_FOLGA_CONVITE = 24
 
 
 def reabrir_convite_cotacao(convite_id):
@@ -5168,12 +5243,38 @@ def reabrir_convite_cotacao(convite_id):
     (o link trava sozinho depois de respondido, pergunta 18 do roteiro).
     Não apaga os preços já lançados por ele — se enviar de novo, cada
     preço é sobrescrito individualmente (`adicionar_preco_cotacao` já faz
-    upsert por insumo), não tudo de uma vez."""
+    upsert por insumo), não tudo de uma vez.
+    Se o prazo já tiver vencido, empurra junto: reabrir sem prazo não
+    destravava nada (QA 22/09). Devolve o prazo que ficou valendo."""
     with conexao() as conn:
         conn.execute(
             "UPDATE cotacao_convite SET status = 'aberta', respondida_em = NULL WHERE id = ?",
             (convite_id,),
         )
+    return estender_prazo_convite(convite_id)
+
+
+def estender_prazo_convite(convite_id, prazo_validade=None):
+    """Empurra o prazo de um convite. Sem `prazo_validade`, dá
+    HORAS_FOLGA_CONVITE horas a partir de agora (só se o atual já venceu ou
+    vence antes disso). Com prazo, usa o que ela escolheu — recusando data
+    que já passou. Devolve o prazo que ficou valendo, ou None se o convite
+    não existe."""
+    folga = (datetime.now() + timedelta(hours=HORAS_FOLGA_CONVITE)).isoformat(timespec="minutes")
+    if prazo_validade:
+        if prazo_validade < datetime.now().isoformat(timespec="minutes"):
+            raise ValueError("Esse prazo já passou. Escolha uma data e hora futuras.")
+        novo = prazo_validade
+    else:
+        novo = folga
+    with conexao() as conn:
+        linha = conn.execute("SELECT prazo_validade FROM cotacao_convite WHERE id = ?", (convite_id,)).fetchone()
+        if not linha:
+            return None
+        if prazo_validade is None and (linha["prazo_validade"] or "") > novo:
+            return linha["prazo_validade"]
+        conn.execute("UPDATE cotacao_convite SET prazo_validade = ? WHERE id = ?", (novo, convite_id))
+    return novo
 
 
 ESTAGIOS_PEDIDO = ['enviado', 'confirmado', 'a_caminho', 'recebido']
@@ -5194,7 +5295,17 @@ def gerar_pedidos_de_cotacao(cotacao_id):
     precos = listar_precos_cotacao(cotacao_id)
     vencedores = {p['insumo_id']: p for p in precos if p['selecionado']}
 
+    agora = datetime.now().isoformat()
+    pedidos_criados = []
+    # Mesmo token pra todo pedido do mesmo fornecedor nessa leva (pode ter
+    # loja(s) diferente(s) — "feito em conjunto" na mensagem de WhatsApp),
+    # pra um só link/clique confirmar todos de uma vez.
+    token_por_fornecedor = {}
+    # Conferir o que já virou pedido e gravar os novos na MESMA transação
+    # (QA 22/09): em conexões separadas, dois cliques quase juntos geravam o
+    # mesmo pedido duas vezes.
     with conexao() as conn:
+        travar_para_escrita(conn)
         linhas_loja = conn.execute(
             "SELECT insumo_id, loja, quantidade FROM cotacao_item_loja WHERE cotacao_id = ?",
             (cotacao_id,),
@@ -5215,34 +5326,27 @@ def gerar_pedidos_de_cotacao(cotacao_id):
             ).fetchall()
         }
 
-    grupos = {}
-    insumos_com_quantidade = set()
-    for linha in linhas_loja:
-        insumos_com_quantidade.add(linha['insumo_id'])
-        if (linha['insumo_id'], linha['loja']) in insumos_ja_pedidos:
-            continue
-        vencedor = vencedores.get(linha['insumo_id'])
-        if not vencedor:
-            continue
-        chave = (vencedor['fornecedor_id'], linha['loja'])
-        grupos.setdefault(chave, []).append({
-            "insumoId": linha['insumo_id'],
-            "quantidade": linha['quantidade'],
-            "precoUnitario": vencedor['preco'],
-        })
+        grupos = {}
+        insumos_com_quantidade = set()
+        for linha in linhas_loja:
+            insumos_com_quantidade.add(linha['insumo_id'])
+            if (linha['insumo_id'], linha['loja']) in insumos_ja_pedidos:
+                continue
+            vencedor = vencedores.get(linha['insumo_id'])
+            if not vencedor:
+                continue
+            chave = (vencedor['fornecedor_id'], linha['loja'])
+            grupos.setdefault(chave, []).append({
+                "insumoId": linha['insumo_id'],
+                "quantidade": linha['quantidade'],
+                "precoUnitario": vencedor['preco'],
+            })
 
-    insumos_sem_vencedor = len(insumos_com_quantidade - set(vencedores.keys()))
+        insumos_sem_vencedor = len(insumos_com_quantidade - set(vencedores.keys()))
+        # Nada novo pra gerar: quem já tinha pedido conta pra mensagem de quem
+        # clicou duas vezes ("os pedidos já tinham sido gerados").
+        ja_tinham = len(insumos_ja_pedidos)
 
-    if not grupos:
-        return {"pedidosCriados": [], "insumosSemVencedor": insumos_sem_vencedor}
-
-    agora = datetime.now().isoformat()
-    pedidos_criados = []
-    # Mesmo token pra todo pedido do mesmo fornecedor nessa leva (pode ter
-    # loja(s) diferente(s) — "feito em conjunto" na mensagem de WhatsApp),
-    # pra um só link/clique confirmar todos de uma vez.
-    token_por_fornecedor = {}
-    with conexao() as conn:
         for (fornecedor_id, loja), itens in grupos.items():
             if fornecedor_id not in token_por_fornecedor:
                 token_por_fornecedor[fornecedor_id] = secrets.token_urlsafe(24)
@@ -5259,7 +5363,7 @@ def gerar_pedidos_de_cotacao(cotacao_id):
                 )
             pedidos_criados.append({"id": pedido_id, "fornecedorId": fornecedor_id, "loja": loja, "token": token})
 
-    return {"pedidosCriados": pedidos_criados, "insumosSemVencedor": insumos_sem_vencedor}
+    return {"pedidosCriados": pedidos_criados, "insumosSemVencedor": insumos_sem_vencedor, "jaTinhamPedido": ja_tinham}
 
 
 def listar_pedidos():
@@ -5371,8 +5475,17 @@ def excluir_pedido(pedido_id):
     errado). O arquivo da nota fica com quem chama (app.py)."""
     with conexao() as conn:
         pedido = conn.execute(
-            "SELECT loja, compra_fora, somou_estoque FROM pedido_compra WHERE id = ?", (pedido_id,)
+            "SELECT loja, compra_fora, somou_estoque, token, fornecedor_id FROM pedido_compra WHERE id = ?", (pedido_id,)
         ).fetchone()
+        # O fornecedor fica com o link na mão: sem esse registro, cancelar
+        # deixava o link dizendo só "Link inválido" e ele podia entregar
+        # assim mesmo (QA 22/09).
+        if pedido and pedido["token"]:
+            conn.execute(
+                "INSERT OR REPLACE INTO pedido_cancelado (token, pedido_id, loja, fornecedor_id, cancelado_em) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (pedido["token"], pedido_id, pedido["loja"], pedido["fornecedor_id"], datetime.now().isoformat()),
+            )
         if pedido and pedido["compra_fora"] and pedido["somou_estoque"]:
             agora = datetime.now().isoformat()
             for item in conn.execute(
@@ -5385,6 +5498,18 @@ def excluir_pedido(pedido_id):
                 )
         conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
         conn.execute("DELETE FROM pedido_compra WHERE id = ?", (pedido_id,))
+
+
+def cancelamentos_por_token(token):
+    """[{loja, canceladoEm}] dos pedidos daquele link que foram cancelados —
+    o link do fornecedor explica em vez de dizer "Link inválido"."""
+    with conexao() as conn:
+        return [
+            {"loja": linha["loja"], "canceladoEm": linha["cancelado_em"]}
+            for linha in conn.execute(
+                "SELECT loja, cancelado_em FROM pedido_cancelado WHERE token = ? ORDER BY cancelado_em", (token,)
+            )
+        ]
 
 
 def marcar_pedidos_enviados_whatsapp(token):
@@ -6732,6 +6857,7 @@ def listar_itens_contagem(contagem_id, loja):
         linhas = conn.execute(
             """
             SELECT ci.insumo_id, ci.quantidade_preenchida, ci.quantidade_compra, ci.forcar_cotacao,
+                   ci.fornecedor_avulso_id, ci.preco_avulso,
                    i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
                    i.fator_conversao_compra, i.unidade_compra
             FROM contagem_item ci
@@ -6762,6 +6888,8 @@ def listar_itens_contagem(contagem_id, loja):
             "quantidadeIdealAjustada": ajustada,
             "quantidadeCompra": linha["quantidade_compra"],
             "forcarCotacao": bool(linha["forcar_cotacao"]),
+            "fornecedorAvulsoId": linha["fornecedor_avulso_id"],
+            "precoAvulso": linha["preco_avulso"],
             "fatorConversaoCompra": linha["fator_conversao_compra"],
             "unidadeCompra": linha["unidade_compra"],
             "custoUnitario": (custos.get(linha["insumo_id"]) or {}).get("valor"),
@@ -6806,6 +6934,25 @@ def definir_forcar_cotacao(contagem_id, insumo_id, forcar):
         cursor = conn.execute(
             "UPDATE contagem_item SET forcar_cotacao = ? WHERE contagem_id = ? AND insumo_id = ?",
             (1 if forcar else 0, contagem_id, insumo_id),
+        )
+        return cursor.rowcount > 0
+
+
+def definir_fornecedor_avulso(contagem_id, insumo_id, fornecedor_id, preco):
+    """"Comprar direto · só nesta compra" (QA 22/09): fornecedor e preço
+    combinados valendo só nessa contagem, sem tocar no homologado do cadastro.
+    `fornecedor_id` None limpa. Devolve False se o item não está na contagem."""
+    if fornecedor_id is not None and not (preco and preco > 0):
+        raise ValueError("Preço combinado tem que ser maior que zero.")
+    with conexao() as conn:
+        if fornecedor_id is not None and not conn.execute(
+            "SELECT 1 FROM fornecedor WHERE id = ? AND ativo = 1", (fornecedor_id,)
+        ).fetchone():
+            raise ValueError("Fornecedor não encontrado (ou desativado).")
+        cursor = conn.execute(
+            "UPDATE contagem_item SET fornecedor_avulso_id = ?, preco_avulso = ?, forcar_cotacao = 0 "
+            "WHERE contagem_id = ? AND insumo_id = ?",
+            (fornecedor_id, preco if fornecedor_id is not None else None, contagem_id, insumo_id),
         )
         return cursor.rowcount > 0
 
@@ -7073,20 +7220,24 @@ def _grupo_requisicao_aprovado(titulo, prazo_validade):
 
 def _compra_da_requisicao(grupo):
     """{(insumo_id, loja): quantidade que vale na Conferência}, {insumo_id:
-    nome} e o conjunto de (insumo_id, loja) movidos pra cotação."""
-    compra, nomes, forcados = {}, {}, set()
+    nome}, o conjunto de (insumo_id, loja) movidos pra cotação e os
+    fornecedores avulsos ("só nesta compra")."""
+    compra, nomes, forcados, avulsos = {}, {}, set(), {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
             nomes[item['insumoId']] = item['nome']
+            chave = (item['insumoId'], contagem['loja'])
             if item.get('forcarCotacao'):
-                forcados.add((item['insumoId'], contagem['loja']))
+                forcados.add(chave)
+            if item.get('fornecedorAvulsoId') and item.get('precoAvulso'):
+                avulsos[chave] = {"fornecedor_id": item['fornecedorAvulsoId'], "preco": item['precoAvulso'], "nome": item['nome']}
             quantidade = quantidade_a_comprar(item)
             if quantidade > 0:
-                compra[(item['insumoId'], contagem['loja'])] = quantidade
-    return compra, nomes, forcados
+                compra[chave] = quantidade
+    return compra, nomes, forcados, avulsos
 
 
-def _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados=frozenset()):
+def _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados=frozenset(), avulsos=None):
     """O que o "Atualizar com os homologados" faria, sem gravar nada — a
     Conferência mostra isso na coluna "Vai pra" e o "Ver cotação/pedidos"
     grava. Item já em pedido da requisição (direto ou gerado da cotação)
@@ -7123,7 +7274,11 @@ def _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados=frozenset(
         }
     tudo = dict(compra)
     tudo.update(travado)
-    homologados = _homologados_validos(conn)
+    # O fornecedor "só nesta compra" ganha do homologado do cadastro e do
+    # "Mover pra cotação" — ele é a decisão mais recente desta requisição.
+    homologados = dict(_homologados_validos(conn))
+    homologados.update(avulsos or {})
+    forcados = set(forcados) - set(avulsos or {})
     diretos, entrar = {}, {}
     for (insumo_id, loja), quantidade in tudo.items():
         chave = (insumo_id, loja)
@@ -7144,9 +7299,9 @@ def situacao_compra_requisicao(titulo, prazo_validade):
     """Pra Conferência de uma requisição já gerada: {(insumo_id, loja):
     {"tipo": "pedido"|"vaiPraPedido"|"cotacao"|"vaiPraCotacao", ...}}."""
     grupo = _grupo_requisicao_aprovado(titulo, prazo_validade)
-    compra, _nomes, forcados = _compra_da_requisicao(grupo)
+    compra, _nomes, forcados, avulsos = _compra_da_requisicao(grupo)
     with conexao() as conn:
-        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados)
+        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados, avulsos)
         nome_fornecedor = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM fornecedor")}
     situacao = {}
     for chave in plano["travado"]:
@@ -7185,11 +7340,12 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade, parte=None):
     if motivo:
         raise ValueError(motivo)
     grupo = _grupo_requisicao_aprovado(titulo, prazo_validade)
-    compra, nomes, forcados = _compra_da_requisicao(grupo)
+    compra, nomes, forcados, avulsos = _compra_da_requisicao(grupo)
 
     agora = datetime.now().isoformat()
     with conexao() as conn:
-        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados)
+        travar_para_escrita(conn)
+        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados, avulsos)
         cotacao_id, travado = plano["cotacao_id"], plano["travado"]
         diretos, entrar, homologados = plano["diretos"], plano["entrar"], plano["homologados"]
         if parte == "cotacao":

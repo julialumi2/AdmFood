@@ -4327,3 +4327,52 @@ Os três críticos do Cardápio:
   em cada) e o servidor recusa nome repetido, dizendo qual já existe. Telefone
   fora do padrão (menos de 10 ou mais de 13 dígitos) avisa que o convite de
   cotação pode não abrir no WhatsApp.
+
+### 6.50 Fluxo de compras (QA "altos", leva D — 2026-09-22)
+
+A leva D pega o caminho requisição → cotação → pedido, onde os erros custam
+dinheiro de verdade (pedido duplicado, fornecedor apagado, item pedido em
+grama).
+
+- **"Comprar direto · só nesta compra" não apaga mais o homologado.** Antes
+  ele gravava fornecedor e preço em `insumo_loja_homologado` com validade de
+  um dia: o combinado de sempre daquela loja era sobrescrito e, passado o dia,
+  o item ficava sem homologado nenhum. Agora o avulso mora na contagem
+  (`contagem_item.fornecedor_avulso_id` e `preco_avulso`, rota
+  `PUT /api/requisicoes/conferencia/fornecedor-avulso`), vale só naquela
+  requisição e ganha do cadastro no plano de geração (`_plano_reaplicacao`
+  soma os avulsos por cima de `_homologados_validos`). A linha do bloco dos
+  homologados mostra o selo "só nesta compra". O modal abre com essa opção
+  marcada; escolher "Sempre" avisa em vermelho qual fornecedor será
+  substituído em cada loja.
+- **Recarregar antes de gerar.** "Gerar pedidos homologados" e "Gerar cotação"
+  buscam a conferência de novo antes de perguntar; se a contagem de itens ou o
+  total em R$ mudou (mínimo alterado em Insumos, quantidade que a outra pessoa
+  editou, item que já virou pedido), a tela se atualiza e diz "os números
+  mudaram desde que você abriu a tela — confira e clique de novo" em vez de
+  gerar o que ela não viu.
+- **Pedido duplicado.** `gerar_pedidos_de_cotacao` passou a conferir o que já
+  virou pedido e gravar os novos **na mesma transação** (`travar_para_escrita`
+  = `BEGIN IMMEDIATE`); com dois gunicorn no ar, os dois liam "ainda não" e os
+  dois gravavam. Mesma trava em `reaplicar_homologados_requisicao`. O botão da
+  Cotação trava durante a chamada ("Gerando…") e, quando a primeira geração já
+  tinha terminado, a segunda responde 409 com "os pedidos dessa cotação já
+  tinham sido gerados" no lugar do erro seco.
+- **Convite com prazo vencido tem conserto.** O campo de prazo não aceita mais
+  data passada (`min` no campo, checagem na tela e no servidor) e já vem
+  sugerido pra amanhã 11h; a linha do convite vencido ganhou "Estender prazo"
+  (+24 h, `PUT /api/cotacoes/convites/<id>/prazo`); e "Reabrir" empurra o prazo
+  junto (`HORAS_FOLGA_CONVITE`) — reabrir com prazo vencido não destravava
+  nada.
+- **"Não vendo esse item" fica gravado.** O link do fornecedor manda as
+  recusas junto com os preços (tabela `cotacao_recusa`), dá pra enviar com tudo
+  recusado e o comparativo mostra "não vende" em vez do mesmo traço de quem não
+  respondeu. O envio também avisa quando ficou item sem preço e sem recusa.
+- **"Novo pedido" em kg/L.** A quantidade é digitada na unidade de quem compra,
+  com a unidade escrita ao lado do campo e o preço na mesma escala (R$ 18,90
+  por kg, não R$ 0,0189); a conversão é no envio. Quantidade 10× o mínimo da
+  loja pede confirmação — quase sempre é unidade trocada.
+- **Link de pedido cancelado explica.** Cancelar guarda o registro
+  (`pedido_cancelado`, por token): o link antigo devolve 410 com "esse pedido
+  foi cancelado em DD/MM — fale com a compradora" em vez de "Link inválido", e
+  quando só uma loja caiu o link avisa qual, mantendo o resto do pedido.

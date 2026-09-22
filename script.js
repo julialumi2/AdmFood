@@ -4185,7 +4185,7 @@ async function recarregarCotacaoDetalhe() {
       convitesCard.style.display = 'none';
     }
 
-    renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || [], !!dados.catalogoCompleto);
+    renderCotacaoComparacao(dados.grupos, isAdmin, dados.itens || [], !!dados.catalogoCompleto, dados.recusas || []);
   } catch (erro) {
     console.error('Falha ao carregar cotação:', erro);
     alert('Não foi possível carregar a cotação.');
@@ -4570,6 +4570,12 @@ function renderConvitesCotacao(convites) {
               Reabrir
             </button>
           ` : ''}
+          ${expirado ? `
+            <button type="button" class="btn-secondary-sm" data-acao="estender-prazo-convite" data-id="${c.id}" title="Dar mais 24 horas pro fornecedor responder por esse mesmo link">
+              <i data-lucide="clock"></i>
+              Estender prazo
+            </button>
+          ` : ''}
         </div></td>
       </tr>
     `;
@@ -4589,9 +4595,29 @@ function renderConvitesCotacao(convites) {
     });
   });
 
+  // Convite vencido não tinha conserto: o "Reabrir" só existia pra quem já
+  // tinha respondido e nem mexia no prazo, e convite novo era recusado com
+  // "todos já têm convite nessa cotação" (QA 22/09).
+  tbody.querySelectorAll('[data-acao="estender-prazo-convite"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Dar mais 24 horas pra esse fornecedor responder? O link dele continua o mesmo.')) return;
+      btn.disabled = true;
+      try {
+        const resposta = await fetch(`/api/cotacoes/convites/${btn.dataset.id}/prazo`, { method: 'PUT' });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao estender o prazo');
+        await carregarConvitesCotacao();
+      } catch (erro) {
+        console.error('Falha ao estender o prazo do convite:', erro);
+        alert(erro.message || 'Não foi possível estender o prazo desse convite.');
+        btn.disabled = false;
+      }
+    });
+  });
+
   tbody.querySelectorAll('[data-acao="reabrir-convite"]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Reabrir esse convite? O fornecedor vai poder preencher os preços de novo pelo mesmo link.')) return;
+      if (!confirm('Reabrir esse convite? O fornecedor vai poder preencher os preços de novo pelo mesmo link, com pelo menos 24 horas de prazo.')) return;
       try {
         const resposta = await fetch(`/api/cotacoes/convites/${btn.dataset.id}/reabrir`, { method: 'POST' });
         const dados = await resposta.json();
@@ -4607,8 +4633,18 @@ function renderConvitesCotacao(convites) {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// Data e hora de agora no formato do campo (datetime-local é sempre local).
+function _agoraParaCampo(minutosAFrente = 0) {
+  const quando = new Date(Date.now() + minutosAFrente * 60000);
+  return new Date(quando.getTime() - quando.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 document.getElementById('btn-cotacao-convidar-fornecedores')?.addEventListener('click', () => {
-  document.getElementById('convidar-fornecedores-prazo').value = '';
+  const campoPrazo = document.getElementById('convidar-fornecedores-prazo');
+  // O campo aceitava data passada e o convite nascia vencido (QA 22/09);
+  // já vem sugerido pra amanhã no fim da manhã.
+  campoPrazo.min = _agoraParaCampo(5);
+  campoPrazo.value = `${_agoraParaCampo(24 * 60).slice(0, 10)}T11:00`;
   document.getElementById('modal-convidar-fornecedores').style.display = 'flex';
   renderListaConvidarFornecedores();
 });
@@ -4625,6 +4661,10 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
   const fornecedorIds = Array.from(document.querySelectorAll('#convidar-fornecedores-lista input:checked')).map((caixa) => parseInt(caixa.value, 10));
   if (!fornecedorIds.length) {
     alert('Marque pelo menos um fornecedor.');
+    return;
+  }
+  if (prazoValidade && prazoValidade <= _agoraParaCampo()) {
+    alert('Esse prazo já passou. O fornecedor abriria o link e o envio já seria recusado.');
     return;
   }
   // O que ficou marcado no link de cada um (2026-09-21).
@@ -4669,10 +4709,10 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
   }
 });
 
-let cotacaoComparacaoDados = { grupos: [], isAdmin: false, itens: [], catalogoCompleto: false };
+let cotacaoComparacaoDados = { grupos: [], isAdmin: false, itens: [], catalogoCompleto: false, recusas: [] };
 
-function renderCotacaoComparacao(grupos, isAdmin, itens, catalogoCompleto) {
-  cotacaoComparacaoDados = { grupos, isAdmin, itens: itens || [], catalogoCompleto: !!catalogoCompleto };
+function renderCotacaoComparacao(grupos, isAdmin, itens, catalogoCompleto, recusas) {
+  cotacaoComparacaoDados = { grupos, isAdmin, itens: itens || [], catalogoCompleto: !!catalogoCompleto, recusas: recusas || [] };
   _renderTabelaComparacaoCotacao();
 }
 
@@ -4716,7 +4756,7 @@ function _linkWhatsAppTexto(telefone, mensagem) {
 }
 
 function _renderTabelaComparacaoCotacao() {
-  const { grupos, isAdmin, itens, catalogoCompleto } = cotacaoComparacaoDados;
+  const { grupos, isAdmin, itens, catalogoCompleto, recusas } = cotacaoComparacaoDados;
   const container = document.getElementById('cotacao-comparacao-lista');
   const buscaWrapper = document.getElementById('cotacao-comparacao-busca-wrapper');
   const categoriaSelectEl = document.getElementById('cotacao-comparacao-categoria');
@@ -4865,7 +4905,12 @@ function _renderTabelaComparacaoCotacao() {
     const celulas = fornecedores.map(f => {
       const preco = precoPorFornecedor.get(f.id);
       if (!preco) {
-        return `<td class="td-comparacao-preco td-sem-preco">—</td>`;
+        // "Não vendo esse item" (QA 22/09): item recusado tinha a mesma cara
+        // de item esquecido, e ela ficava cobrando preço de quem não vende.
+        const recusou = (recusas || []).some((r) => r.fornecedorId === f.id && r.insumoId === linha.insumoId);
+        return recusou
+          ? '<td class="td-comparacao-preco td-sem-preco" title="Ele respondeu que não vende esse item">não vende</td>'
+          : '<td class="td-comparacao-preco td-sem-preco">—</td>';
       }
       const classes = ['td-comparacao-preco'];
       if (preco.selecionado) classes.push('selecionado');
@@ -4986,8 +5031,14 @@ document.getElementById('btn-cotacao-selecionar-melhores')?.addEventListener('cl
   }
 });
 
-document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', async () => {
+document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', async (evento) => {
   if (!confirm('Gerar pedido de compra pros insumos já com vencedor escolhido? Quem ainda não tem vencedor fica de fora, sem problema — dá pra gerar de novo depois.')) return;
+  // O botão trava durante a chamada: sem isso, dois cliques no Wi-Fi ruim
+  // mandavam duas gerações (QA 22/09).
+  const botao = evento.currentTarget;
+  const textoOriginal = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = 'Gerando…';
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/gerar-pedidos`, { method: 'POST' });
     const dados = await resposta.json();
@@ -5007,6 +5058,8 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
   } catch (erro) {
     console.error('Falha ao gerar pedidos:', erro);
     alert(erro.message || 'Não foi possível gerar os pedidos.');
+    botao.disabled = false;
+    botao.textContent = textoOriginal;
   }
 });
 
@@ -6319,7 +6372,9 @@ function _linhaHomologadoHTML({ item, l }) {
         <span class="font-bold">${escaparHtml(item.nome)}</span>
         <span class="conferencia-categoria">${escaparHtml(item.categoria || '')}</span>
       </td>
-      <td><span class="loja-tag-compra">${escaparHtml(l.loja)}</span></td>
+      <td><span class="loja-tag-compra">${escaparHtml(l.loja)}</span>${l.homologado?.avulso
+        ? '<span class="selo-avulso" title="Combinado só nesta compra: o homologado do cadastro não mudou">só nesta compra</span>'
+        : ''}</td>
       <td>${_celulaCompraHTML(item, l, travada)}</td>
       <td class="col-dinheiro">${preco != null
         ? `${_reais(preco * escala.fator)}<span class="preco-unidade">/ ${escaparHtml(escala.rotulo)}</span>`
@@ -6437,9 +6492,11 @@ function _renderBlocoCotacao(r) {
 }
 
 // --- "Comprar direto" (2026-09-22): o caminho inverso do "Mover pra
-// cotação". Fornecedor e preço combinado ficam no cadastro do insumo (regra
-// dela), então isso grava o homologado da loja; "Só nesta compra" grava com
-// validade curta, e na próxima requisição o item volta pra cotação.
+// cotação". "Só nesta compra" (padrão) grava fornecedor e preço na própria
+// contagem e não encosta no cadastro — antes gravava o homologado da loja
+// com validade de um dia, o que apagava o combinado de sempre e depois
+// vencia, deixando o item sem homologado nenhum (QA 22/09). "Sempre" grava
+// o homologado do cadastro, avisando quem vai ser substituído.
 let comprarDiretoAtual = null; // { item, lojas }
 let fornecedoresCompraDireta = null;
 
@@ -6482,11 +6539,32 @@ async function abrirModalComprarDireto(insumoId) {
   document.getElementById('comprar-direto-preco-dica').textContent = item.custoUnitario
     ? `Veio do último custo desse insumo (${_reais(item.custoUnitario * escala.fator)} por ${escala.rotulo}). Confira com o fornecedor.`
     : '';
-  document.querySelector('input[name="comprar-direto-validade"][value="sempre"]').checked = true;
-  document.getElementById('comprar-direto-so-agora').textContent = `Só nesta compra (vale até ${_dataBR(_amanhaLocalISO()).slice(0, 5)})`;
+  document.querySelector('input[name="comprar-direto-validade"][value="agora"]').checked = true;
+  const substituidos = lojas.filter((l) => l.homologado && !l.homologado.avulso)
+    .map((l) => `${l.loja}: ${l.homologado.fornecedor}`);
+  _avisoComprarDireto(substituidos);
+  document.querySelectorAll('input[name="comprar-direto-validade"]').forEach((radio) => {
+    radio.onchange = () => _avisoComprarDireto(substituidos);
+  });
   document.getElementById('comprar-direto-erro').hidden = true;
   document.getElementById('modal-comprar-direto').style.display = 'flex';
   document.getElementById('comprar-direto-fornecedor').focus();
+}
+
+// O "Sempre" sobrescreve o homologado do cadastro daquela loja: a tela diz
+// em vermelho quem vai ser substituído antes de a pessoa clicar (QA 22/09).
+function _avisoComprarDireto(substituidos) {
+  const aviso = document.getElementById('comprar-direto-aviso');
+  if (!aviso) return;
+  const sempre = document.querySelector('input[name="comprar-direto-validade"]:checked')?.value === 'sempre';
+  aviso.classList.toggle('comprar-direto-aviso-troca', sempre && substituidos.length > 0);
+  if (!sempre) {
+    aviso.textContent = 'Vale só nesta requisição. O fornecedor homologado do cadastro fica como está.';
+  } else if (substituidos.length) {
+    aviso.textContent = `Atenção: isso substitui o homologado do cadastro — ${substituidos.join(' · ')}. Pra voltar atrás, é em Insumos.`;
+  } else {
+    aviso.textContent = 'Fica gravado no cadastro do insumo, nessas lojas. Pra mudar depois, é em Insumos.';
+  }
 }
 
 function fecharModalComprarDireto() {
@@ -6519,28 +6597,41 @@ document.getElementById('form-comprar-direto')?.addEventListener('submit', async
   if (botao) botao.disabled = true;
   try {
     for (const l of lojas.filter((x) => marcadas.includes(x.loja))) {
-      const resposta = await fetch(`/api/insumos/${item.insumoId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          loja: l.loja,
-          fornecedorHomologadoId: fornecedorId,
-          precoHomologado: precoBase,
-          validadePrecoHomologado: soAgora ? _amanhaLocalISO() : '',
-        }),
-      });
-      const dados = await resposta.json().catch(() => ({}));
-      if (!resposta.ok) throw new Error(dados.erro || `Não foi possível gravar o homologado em ${l.loja}.`);
-      if (l.forcarCotacao) {
-        const volta = await fetch('/api/requisicoes/conferencia/destino', {
+      if (soAgora) {
+        // Combinado só desta requisição: fica na contagem e já tira o item
+        // da cotação do lado do servidor.
+        const resposta = await fetch('/api/requisicoes/conferencia/fornecedor-avulso', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contagemId: l.contagemId, insumoId: item.insumoId, cotacao: false }),
+          body: JSON.stringify({ contagemId: l.contagemId, insumoId: item.insumoId, fornecedorId, preco: precoBase }),
         });
-        if (!volta.ok) throw new Error((await volta.json().catch(() => ({}))).erro || 'Não foi possível tirar o item da cotação.');
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.erro || `Não foi possível combinar o fornecedor em ${l.loja}.`);
         l.forcarCotacao = false;
+      } else {
+        const resposta = await fetch(`/api/insumos/${item.insumoId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loja: l.loja,
+            fornecedorHomologadoId: fornecedorId,
+            precoHomologado: precoBase,
+            validadePrecoHomologado: '',
+          }),
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.erro || `Não foi possível gravar o homologado em ${l.loja}.`);
+        if (l.forcarCotacao) {
+          const volta = await fetch('/api/requisicoes/conferencia/destino', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contagemId: l.contagemId, insumoId: item.insumoId, cotacao: false }),
+          });
+          if (!volta.ok) throw new Error((await volta.json().catch(() => ({}))).erro || 'Não foi possível tirar o item da cotação.');
+          l.forcarCotacao = false;
+        }
       }
-      l.homologado = { fornecedorId, fornecedor: fornecedor?.nome || '', preco: precoBase };
+      l.homologado = { fornecedorId, fornecedor: fornecedor?.nome || '', preco: precoBase, avulso: soAgora };
       l.fornecedorHomologado = fornecedor?.nome || '';
     }
     fecharModalComprarDireto();
@@ -6850,11 +6941,42 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
   }
 });
 
+// A conferência carrega uma vez e envelhece: mínimo mudado em Insumos, data
+// especial que entrou, quantidade que a outra pessoa editou, item que já
+// virou pedido. Antes de gerar, busca de novo; se os números mudaram,
+// redesenha a tela e pede pra conferir em vez de gerar o que ela não viu
+// (QA 22/09).
+async function _conferenciaAtualizadaAntesDeGerar(r, parte) {
+  let novo;
+  try {
+    const resposta = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(r.titulo)}&prazoValidade=${encodeURIComponent(r.prazoValidade)}`);
+    novo = await resposta.json();
+    if (!resposta.ok) throw new Error(novo.erro || 'falha ao recarregar');
+  } catch (erro) {
+    return confirm('Não deu pra conferir se os números continuam os mesmos (conexão). Gerar assim mesmo?') ? r : null;
+  }
+  const resumo = (dados) => {
+    const pendentes = _pendentesDaCompra(dados);
+    const linhas = parte === 'pedidos' ? pendentes.itensHomologados : pendentes.itensParaCotacao;
+    const total = linhas.reduce((t, { l }) => t + (l.comprar || 0) * (l.homologado?.preco || 0), 0);
+    return { qtd: linhas.length, total: Math.round(total * 100) / 100 };
+  };
+  const antes = resumo(r);
+  const agora = resumo(novo);
+  requisicaoConferenciaAtual = novo;
+  if (antes.qtd === agora.qtd && antes.total === agora.total) return novo;
+  renderConferenciaRequisicao();
+  alert(`Os números mudaram desde que você abriu a tela: agora ${_qtdTexto(agora.qtd, 'item', 'itens')}${parte === 'pedidos' ? ` (${_reais(agora.total)})` : ''}, antes ${antes.qtd}. Atualizei a tela — confira e clique de novo.`);
+  return null;
+}
+
 // "Gerar pedidos homologados" (2026-09-22): um pedido por fornecedor e loja,
 // com o preço combinado do cadastro. Depois o bloco mostra o "Enviar por
 // WhatsApp" de cada fornecedor, com o link de confirmação dele.
 document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('click', async (evento) => {
-  const r = requisicaoConferenciaAtual;
+  let r = requisicaoConferenciaAtual;
+  if (!r) return;
+  r = await _conferenciaAtualizadaAntesDeGerar(r, 'pedidos');
   if (!r) return;
   const { itensHomologados: direto } = _pendentesDaCompra(r);
   if (!direto.length) return;
@@ -6892,7 +7014,9 @@ document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('clic
 
 // "Gerar cotação" / "Pôr na cotação": só o que está no bloco da cotação.
 document.getElementById('btn-gerar-cotacao-requisicao')?.addEventListener('click', async (evento) => {
-  const r = requisicaoConferenciaAtual;
+  let r = requisicaoConferenciaAtual;
+  if (!r) return;
+  r = await _conferenciaAtualizadaAntesDeGerar(r, 'cotacao');
   if (!r) return;
   const { itensHomologados: direto, itensParaCotacao: cotacao } = _pendentesDaCompra(r);
   if (!cotacao.length) return;
@@ -7355,10 +7479,19 @@ async function inicializarPreencherCotacao() {
         if (!(valor > 0)) return;
         precos[input.dataset.insumoId] = String(Math.round((valor / fator) * 1e6) / 1e6);
       });
-      if (!Object.keys(precos).length) {
-        alert('Preencha o preço de pelo menos um item, ou marque todos como "não vendo esse item".');
+      // "Não vendo esse item" agora vai junto: antes o envio levava só os
+      // preços, e item recusado chegava igual a item esquecido (QA 22/09).
+      const naoVende = [...container.querySelectorAll('[data-nao-vende-id]')]
+        .filter((caixa) => caixa.checked)
+        .map((caixa) => caixa.dataset.naoVendeId);
+      const semResposta = [...container.querySelectorAll('[data-insumo-id]')]
+        .filter((input) => !input.disabled && input.value === '').length;
+      if (!Object.keys(precos).length && !naoVende.length) {
+        alert('Preencha o preço de pelo menos um item, ou marque os que você não vende.');
         return;
       }
+      if (semResposta && !confirm(`${semResposta === 1 ? 'Ficou 1 item' : `Ficaram ${semResposta} itens`} sem preço e sem marcar "não vendo esse item". Enviar assim mesmo?`)) return;
+      if (!Object.keys(precos).length && !confirm('Você marcou todos os itens como "não vendo esse item". Enviar assim?')) return;
       if (!confirm('Após fechar, não vai dar pra alterar os preços. Tem certeza?')) return;
       const btn = document.getElementById('btn-cotacao-publica-enviar');
       btn.disabled = true;
@@ -7366,7 +7499,7 @@ async function inicializarPreencherCotacao() {
         const resp = await fetch(`/api/cotacoes/convite/${encodeURIComponent(token)}/responder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ precos }),
+          body: JSON.stringify({ precos, naoVende }),
         });
         const respDados = await resp.json();
         if (!resp.ok) throw new Error(respDados.erro || 'falha ao enviar');
@@ -7419,7 +7552,13 @@ async function inicializarConfirmarPedido() {
     }
 
     document.getElementById('pedido-publico-fornecedor').textContent = dados.fornecedorNome;
-    document.getElementById('pedido-publico-lojas').innerHTML = dados.pedidos.map((pedido) => `
+    // Quando só uma loja caiu, o resto continua valendo — antes a loja
+    // cancelada simplesmente sumia do link, sem uma palavra (QA 22/09).
+    const canceladas = dados.lojasCanceladas || [];
+    document.getElementById('pedido-publico-lojas').innerHTML = (canceladas.length ? `
+      <div class="pedido-publico-cancelado">
+        <strong>Atenção:</strong> ${canceladas.length === 1 ? 'a loja' : 'as lojas'} ${canceladas.map((c) => escaparHtml(c.loja)).join(', ')} ${canceladas.length === 1 ? 'foi cancelada' : 'foram canceladas'} e ${canceladas.length === 1 ? 'não entra' : 'não entram'} nessa entrega. Fale com a compradora antes de mandar.
+      </div>` : '') + dados.pedidos.map((pedido) => `
       <div class="pedido-publico-loja-bloco">
         <h3>${escaparHtml(pedido.loja)}</h3>
         <div class="table-responsive">
@@ -9212,6 +9351,8 @@ function renderPedidoDireto() {
   document.getElementById('pedido-direto-itens').innerHTML = itens.map((insumo) => {
     const lojasDele = _lojasHomologadasDoFornecedor(insumo, pedidoDiretoFornecedorId);
     const precos = [...new Set(lojasDele.map((loja) => insumo.porLoja[loja].precoHomologado))];
+    // Quantidade e preço na unidade de quem compra (kg, L, unidade).
+    const escala = _escalaDeCusto(insumo.unidadeMedida);
     const colunas = lojas.map((loja) => {
       const estoque = insumo.porLoja?.[loja];
       if (!lojasDele.includes(loja)) {
@@ -9222,16 +9363,22 @@ function renderPedidoDireto() {
         ? `tem ${_formatarQuantidade(estoque.quantidadeAtual, insumo.unidadeMedida)} · mín ${_formatarQuantidade(estoque.estoqueMinimo, insumo.unidadeMedida)}`
         : 'não usa hoje';
       const valor = digitado[`${insumo.id}|${loja}`] || '';
+      // A dica embaixo fala em kg ("tem 9,56 kg · mín 5 kg") e o campo pedia
+      // grama sem dizer: quem digitava 10 pedia 10 gramas (QA 22/09). Agora o
+      // campo é na mesma unidade da dica, e a conversão é no envio.
       return `
         <td>
-          <input type="number" min="0" step="any" value="${escaparHtml(valor)}" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" data-preco="${precoLoja}" aria-label="${escaparHtml(insumo.nome)}, ${escaparHtml(loja)}">
+          <div class="pedido-direto-campo">
+            <input type="number" min="0" step="any" value="${escaparHtml(valor)}" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" data-preco="${precoLoja}" data-fator="${escala.fator}" data-minimo="${estoque?.estoqueMinimo || 0}" aria-label="${escaparHtml(insumo.nome)}, ${escaparHtml(loja)}, em ${escaparHtml(escala.rotulo)}">
+            <span class="pedido-direto-unidade">${escaparHtml(escala.rotulo)}</span>
+          </div>
           <span class="pedido-direto-estoque">${info}</span>
         </td>`;
     }).join('');
     return `
       <tr>
         <td class="font-bold">${escaparHtml(insumo.nome)}</td>
-        <td class="preco-combinado-valor">${precos.length === 1 ? `R$ ${_formatarPrecoUnitario(precos[0])}` : 'varia por loja'}<span class="pedido-direto-estoque">por ${escaparHtml(insumo.unidadeMedida)}</span></td>
+        <td class="preco-combinado-valor">${precos.length === 1 ? `R$ ${_formatarPrecoUnitario(precos[0] * escala.fator)}` : 'varia por loja'}<span class="pedido-direto-estoque">por ${escaparHtml(escala.rotulo)}</span></td>
         ${colunas}
       </tr>`;
   }).join('');
@@ -9250,7 +9397,7 @@ function _atualizarTotaisPedidoDireto() {
   const minimo = fornecedor?.pedidoMinimo || 0;
   const totais = Object.fromEntries(lojas.map((l) => [l, 0]));
   document.querySelectorAll('#pedido-direto-itens input').forEach((input) => {
-    const quantidade = parseFloat(input.value) || 0;
+    const quantidade = (parseFloat(input.value) || 0) * (parseFloat(input.dataset.fator) || 1);
     if (quantidade > 0) totais[input.dataset.loja] += quantidade * parseFloat(input.dataset.preco);
   });
   const geral = Object.values(totais).reduce((soma, valor) => soma + valor, 0);
@@ -9290,9 +9437,26 @@ document.getElementById('form-pedido-direto')?.addEventListener('submit', async 
   evento.preventDefault();
   const erro = document.getElementById('pedido-direto-erro');
   erro.style.display = 'none';
-  const itens = Array.from(document.querySelectorAll('#pedido-direto-itens input'))
-    .map((input) => ({ insumoId: parseInt(input.dataset.insumoId, 10), loja: input.dataset.loja, quantidade: parseFloat(input.value) || 0 }))
-    .filter((item) => item.quantidade > 0);
+  const campos = Array.from(document.querySelectorAll('#pedido-direto-itens input'))
+    .map((input) => ({
+      insumoId: parseInt(input.dataset.insumoId, 10),
+      loja: input.dataset.loja,
+      digitado: parseFloat(input.value) || 0,
+      fator: parseFloat(input.dataset.fator) || 1,
+      minimo: parseFloat(input.dataset.minimo) || 0,
+      rotulo: input.nextElementSibling?.textContent || '',
+      nome: (input.getAttribute('aria-label') || '').split(',')[0],
+    }))
+    .filter((campo) => campo.digitado > 0);
+  // Pedir muito mais que o mínimo da loja quase sempre é unidade trocada.
+  const exagerados = campos.filter((c) => c.minimo > 0 && c.digitado * c.fator >= c.minimo * 10)
+    .map((c) => `${c.nome} (${c.loja}): ${c.digitado} ${c.rotulo}`);
+  if (exagerados.length && !confirm(`Confira a quantidade — isso é 10 vezes o mínimo da loja: ${exagerados.join(' · ')}. Pedir assim mesmo?`)) return;
+  const itens = campos.map((campo) => ({
+    insumoId: campo.insumoId,
+    loja: campo.loja,
+    quantidade: Math.round(campo.digitado * campo.fator * 1000) / 1000,
+  }));
   const botao = document.getElementById('btn-pedido-direto-gerar');
   botao.disabled = true;
   try {

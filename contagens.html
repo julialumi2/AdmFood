@@ -364,10 +364,10 @@
               </div>
               <fieldset class="comprar-direto-validade">
                 <legend>Vale</legend>
-                <label><input type="radio" name="comprar-direto-validade" value="sempre" checked> Sempre: vira o homologado dessas lojas</label>
-                <label><input type="radio" name="comprar-direto-validade" value="agora"> <span id="comprar-direto-so-agora">Só nesta compra</span></label>
+                <label><input type="radio" name="comprar-direto-validade" value="agora" checked> <span id="comprar-direto-so-agora">Só nesta compra: não mexe no cadastro</span></label>
+                <label><input type="radio" name="comprar-direto-validade" value="sempre"> Sempre: vira o homologado dessas lojas</label>
               </fieldset>
-              <p class="panel-subtitle comprar-direto-aviso">Fica gravado no cadastro do insumo, nessas lojas. Pra mudar depois, é em Insumos.</p>
+              <p class="panel-subtitle comprar-direto-aviso" id="comprar-direto-aviso">Vale só nesta requisição. O fornecedor homologado do cadastro fica como está.</p>
               <p id="comprar-direto-erro" class="comprar-direto-erro" hidden></p>
               <div class="modal-actions">
                 <button type="button" class="btn-secondary-sm" id="btn-comprar-direto-cancelar">Cancelar</button>

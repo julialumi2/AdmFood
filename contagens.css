@@ -319,6 +319,10 @@
 .comprar-direto-validade label { display: inline-flex; align-items: center; gap: 8px; }
 
 .comprar-direto-aviso { margin: 0; font-size: 0.78rem; }
+/* "Sempre" substitui o homologado do cadastro: o aviso fica vermelho com o
+   nome de quem sai (QA 22/09). */
+.comprar-direto-aviso-troca { color: var(--danger-texto); font-weight: 600; }
+.selo-avulso { display: inline-block; margin-left: var(--space-1); padding: 1px 6px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; background: var(--warning-soft); color: var(--warning-texto); }
 
 .comprar-direto-erro { margin: var(--space-2) 0 0; font-size: 0.8rem; color: var(--danger-texto); }
 
