@@ -11,6 +11,10 @@ __pycache__/
 venv/
 .env
 
+# Chave que assina o cookie de login, gerada sozinha ao lado do banco
+# quando não existe SECRET_KEY no ambiente — nunca vai pro repositório.
+.chave_sessao
+
 # Cache local de faturamento sincronizado com a Cardápio Web
 admfood.db
 sincronizar.log

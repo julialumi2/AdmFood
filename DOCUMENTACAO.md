@@ -4086,6 +4086,8 @@ foram corrigidos:
    movimento.
 5. **Acesso.** `_usuario_logado` passou a recusar conta desativada (antes
    `ativo` só era conferido no login, e a sessão dura 7 dias), e o app não sobe
-   mais com uma chave de sessão escrita no código: sem `SECRET_KEY` no
-   ambiente, ele sorteia uma na hora (o repositório é público, então a chave
-   antiga deve ser considerada queimada).
+   mais com uma chave de sessão escrita no código (o repositório é público,
+   então a chave antiga deve ser considerada queimada). Sem `SECRET_KEY` no
+   ambiente, `_chave_de_sessao` guarda uma chave sorteada em `.chave_sessao`,
+   ao lado do banco: a primeira versão sorteava uma chave por processo e,
+   como a produção roda com dois, o login caía no clique seguinte.

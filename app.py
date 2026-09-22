@@ -234,15 +234,54 @@ from backend.cardapio_web import (
 )
 from sincronizar import sincronizar_dia, DIA_FECHADO
 
-app = Flask(__name__)
 # Sem CORS: frontend e backend são servidos pelo mesmo Flask (mesma origem),
 # então cross-origin nunca foi necessário de verdade em produção — e com
 # login/sessão em jogo, quanto menos origens confiadas, melhor.
+app = Flask(__name__)
+
+
+def _chave_de_sessao():
+    """A chave que assina o cookie de login.
+
+    Vem de SECRET_KEY quando ela existe. Sem ela, o sistema guarda uma chave
+    sorteada num arquivo ao lado do banco (mesmo volume que sobrevive a
+    deploy) em vez de sortear uma por processo: a produção roda com dois
+    processos, e chave diferente em cada um derruba o login no clique
+    seguinte. Nunca volta a ser uma chave fixa no código — o repositório é
+    público, e com ela dá pra forjar o cookie de um admin (QA 22/09)."""
+    if SECRET_KEY:
+        return SECRET_KEY
+
+    caminho = os.path.join(os.path.dirname(os.path.abspath(CAMINHO_BANCO)), ".chave_sessao")
+    for _ in range(10):
+        try:
+            with io.open(caminho, encoding="utf-8") as arquivo:
+                guardada = arquivo.read().strip()
+            if guardada:
+                return guardada
+            time.sleep(0.1)  # outro processo criou e ainda está escrevendo
+            continue
+        except FileNotFoundError:
+            pass
+        try:
+            # O_EXCL: se dois processos subirem juntos, só um cria o arquivo;
+            # o outro cai no FileExistsError e lê o que foi gravado.
+            descritor = os.open(caminho, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            continue
+        except OSError as erro:
+            print(f"⚠️  Não deu pra guardar a chave de sessão em {caminho} ({erro}) — todo mundo vai cair do login a cada restart. Defina SECRET_KEY no ambiente.")
+            return secrets.token_hex(32)
+        with os.fdopen(descritor, "w") as arquivo:
+            arquivo.write(secrets.token_hex(32))
+
+    print("⚠️  Não deu pra ler a chave de sessão guardada — defina SECRET_KEY no ambiente.")
+    return secrets.token_hex(32)
+
+
 if not SECRET_KEY:
-    print("⚠️  SECRET_KEY não definida — usando uma chave sorteada agora: todo mundo cai do login a cada restart/redeploy. Defina no .env (local) ou nas variáveis de ambiente do Dokploy (produção).")
-# Sorteada, nunca fixa no código: o repositório é público, e uma chave que
-# está lá dentro permite forjar o cookie de sessão de um admin (QA 22/09).
-app.secret_key = SECRET_KEY or secrets.token_hex(32)
+    print("⚠️  SECRET_KEY não definida — usando a chave guardada ao lado do banco. Pra deixar explícito, defina no .env (local) ou nas variáveis de ambiente do Dokploy (produção).")
+app.secret_key = _chave_de_sessao()
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
