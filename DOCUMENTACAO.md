@@ -4153,3 +4153,25 @@ Os três críticos de Insumos do relatório de QA:
 - **Gerente apagava custo e preço homologado sem saber:** a API não manda
   esses campos pro perfil gerente, o formulário abria vazio e salvava "vazio =
   apagar". A tela só envia custo e homologado quando quem edita é admin.
+
+### 6.44 Requisição destravada e contagem com bom senso (QA, leva 3 — 2026-09-22)
+
+- **Reabrir não esbarra mais no prazo.** O prazo faz parte da identidade da
+  requisição (título + prazo agrupam as lojas), então ele não muda; o que
+  mudou é que a contagem guarda `reaberta_em` e ganha uma janela própria de
+  `HORAS_APOS_REABERTURA` (24 h) pra loja reenviar, mesmo com o prazo vencido
+  (`_contagem_fora_do_prazo` no app.py). "Reabrir" também passou a valer pra
+  contagem que ficou **aberta e venceu** — antes a tela respondia "essa
+  contagem já está aberta" e a requisição inteira travava esperando uma loja
+  que não tinha mais como responder.
+- **Excluir requisição não passa mais por cima de pedido recebido.** A rota
+  recusa quando existe pedido já recebido (`pedidos_recebidos_da_requisicao`),
+  dizendo quais são: o estoque deles já entrou, e apagar deixava a mercadoria
+  sem origem e o histórico de compra (que alimenta o custo) com buraco. Pra
+  descartar mesmo, cancela-se cada pedido pela tela de Pedidos antes.
+- **O link da contagem avisa quando o número está fora de proporção.** O item
+  agora vem com `estoqueAtual`, e digitar 10× mais (ou 10× menos) do que a
+  loja tinha da última vez acende um aviso amarelo no card — "confira a
+  unidade: você digitou 5 g e da última vez tinha 5 kg". No envio, esses itens
+  aparecem numa confirmação antes de ir. Era o buraco por onde o erro de
+  unidade virava estoque e compra errados sem ninguém perceber.

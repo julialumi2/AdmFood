@@ -981,6 +981,14 @@ def inicializar_banco():
             # "Mover pra cotação" (2026-09-22): o homologado não atende nessa
             # compra, então o item dessa loja vai pra cotação em vez de pedido.
             conn.execute("ALTER TABLE contagem_item ADD COLUMN forcar_cotacao INTEGER NOT NULL DEFAULT 0")
+        colunas_contagem = {c["name"] for c in conn.execute("PRAGMA table_info(contagem)").fetchall()}
+        if "reaberta_em" not in colunas_contagem:
+            # Reabrir pra corrigir não podia esbarrar no prazo vencido: a
+            # aprovação quase sempre é depois do prazo, então a loja reabria e
+            # o link recusava o reenvio (QA 22/09). Reaberta ganha uma janela
+            # própria, sem mexer no prazo (que é parte da identidade da
+            # requisição e agruparia errado se mudasse numa loja só).
+            conn.execute("ALTER TABLE contagem ADD COLUMN reaberta_em TEXT")
         if "estoque_no_envio" not in colunas_contagem_item:
             # Quanto o sistema achava que tinha na hora em que a loja enviou
             # (QA 22/09): a aprovação usa isso pra somar o que entrou e saiu
@@ -5869,6 +5877,29 @@ def limpar_requisicoes_e_cotacoes():
         conn.execute("DELETE FROM contagem")
 
 
+def pedidos_recebidos_da_requisicao(titulo, prazo_validade):
+    """Pedidos dessa requisição que já foram recebidos (o estoque deles já
+    entrou). Excluir a requisição apagava esses pedidos sem tirar nada do
+    estoque, e ainda levava junto o histórico de compra que alimenta o custo
+    (QA 22/09)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT p.id, f.nome AS fornecedor, p.loja
+            FROM pedido_compra p
+            JOIN fornecedor f ON f.id = p.fornecedor_id
+            WHERE p.status = 'recebido'
+              AND (
+                (p.requisicao_titulo = ? AND p.requisicao_prazo = ?)
+                OR p.cotacao_id IN (SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ?)
+              )
+            ORDER BY p.id
+            """,
+            (titulo, prazo_validade, titulo, prazo_validade),
+        ).fetchall()
+        return [dict(linha) for linha in linhas]
+
+
 def excluir_requisicao(titulo, prazo_validade):
     """Apaga uma única requisição (o grupo de contagens com esse título +
     prazo) e a cotação/pedidos gerados a partir dela, se existir — versão
@@ -6604,6 +6635,13 @@ def listar_itens_contagem(contagem_id, loja):
     ficava "—" quase sempre; mínimo é um número que já existe e em que
     ela confia."""
     mapa_minimo = _mapa_minimo_loja(loja)
+    # Quanto a loja tem hoje, pro link avisar quando o número digitado estiver
+    # fora de qualquer proporção (o erro de digitar 5 onde eram 5.000).
+    with conexao() as conn:
+        mapa_estoque = {
+            linha["insumo_id"]: linha["quantidade_atual"]
+            for linha in conn.execute("SELECT insumo_id, quantidade_atual FROM estoque_insumo WHERE loja = ?", (loja,))
+        }
     mapa_ajustes = mapa_ajustes_quantidade_ideal(loja)
     multiplicador = multiplicador_quantidade_ideal(loja)
     # Custo pra "Previsão compra" do link (sugestão × custo), no formato do
@@ -6639,6 +6677,7 @@ def listar_itens_contagem(contagem_id, loja):
             "marcaHomologada": linha["marca_homologada"],
             "quantidadePreenchida": linha["quantidade_preenchida"],
             "quantidadeIdeal": quantidade_ideal,
+            "estoqueAtual": mapa_estoque.get(linha["insumo_id"]),
             "quantidadeIdealAjustada": ajustada,
             "quantidadeCompra": linha["quantidade_compra"],
             "forcarCotacao": bool(linha["forcar_cotacao"]),
@@ -7407,8 +7446,8 @@ def reabrir_contagem(contagem_id):
     disso antes de reabrir."""
     with conexao() as conn:
         conn.execute(
-            "UPDATE contagem SET status = 'aberta', respondida_em = NULL, aprovada_em = NULL WHERE id = ?",
-            (contagem_id,),
+            "UPDATE contagem SET status = 'aberta', respondida_em = NULL, aprovada_em = NULL, reaberta_em = ? WHERE id = ?",
+            (datetime.now().isoformat(), contagem_id),
         )
 
 

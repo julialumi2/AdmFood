@@ -163,6 +163,7 @@ from backend.armazenamento import (
     item_travado_na_requisicao,
     homologados_por_insumo_loja,
     pedidos_diretos_da_requisicao,
+    pedidos_recebidos_da_requisicao,
     tirar_item_da_cotacao,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
@@ -4154,6 +4155,23 @@ def api_desfazer_importacao_vmarket():
     return jsonify(desfazer_importacao_vmarket())
 
 
+HORAS_APOS_REABERTURA = 24
+
+
+def _contagem_fora_do_prazo(contagem):
+    """Contagem reaberta ganha uma janela própria (HORAS_APOS_REABERTURA):
+    reabrir não mexe no prazo — ele é parte da identidade da requisição —,
+    mas a loja precisa conseguir reenviar, senão a requisição inteira trava
+    esperando uma loja que não tem mais como responder (QA 22/09)."""
+    if not _prazo_vencido(contagem['prazo_validade']):
+        return False
+    reaberta = contagem['reaberta_em'] if 'reaberta_em' in contagem.keys() else None
+    if not reaberta:
+        return True
+    limite = datetime.fromisoformat(reaberta) + timedelta(hours=HORAS_APOS_REABERTURA)
+    return datetime.now() > limite
+
+
 def _prazo_vencido(prazo_iso):
     # .replace(tzinfo=None) porque o front pode mandar um ISO com "Z"
     # (timezone-aware) — datetime.now() é naive, comparar os dois direto
@@ -4234,6 +4252,17 @@ def api_excluir_requisicao():
     grupo = _buscar_grupo_requisicao(titulo, prazo_validade)
     if not grupo:
         return jsonify({"erro": "Requisição não encontrada."}), 404
+    # Excluir apagava os pedidos junto, inclusive os recebidos — e sem tirar
+    # do estoque o que tinha entrado, deixando mercadoria sem origem e o
+    # histórico de compra (que alimenta o custo) com buraco (QA 22/09).
+    recebidos = pedidos_recebidos_da_requisicao(titulo, prazo_validade)
+    if recebidos:
+        lista = ", ".join(f"nº {p['id']} ({p['fornecedor']}, {p['loja']})" for p in recebidos[:5])
+        resto = f" e mais {len(recebidos) - 5}" if len(recebidos) > 5 else ""
+        return jsonify({"erro":
+            f"Essa requisição tem {len(recebidos)} pedido(s) já recebido(s): {lista}{resto}. "
+            "O estoque deles já entrou, então apagar aqui deixaria a mercadoria sem origem. "
+            "Cancele cada pedido pela tela de Pedidos antes, se for mesmo pra descartar."}), 400
     excluir_requisicao(titulo, prazo_validade)
     return jsonify({"ok": True})
 
@@ -4616,11 +4645,14 @@ def api_reabrir_contagem(contagem_id):
         return jsonify({"erro": "Contagem não encontrada."}), 404
     if not _loja_visivel(contagem['loja']):
         return jsonify({"erro": "Essa contagem é de outra loja."}), 403
-    if contagem['status'] == 'aberta':
-        return jsonify({"erro": "Essa contagem já está aberta."}), 400
+    # Aberta e ainda no prazo não tem o que reabrir; aberta com o prazo
+    # vencido tem: é a loja que não respondeu a tempo e ficou sem como
+    # responder, travando a requisição inteira (QA 22/09).
+    if contagem['status'] == 'aberta' and not _contagem_fora_do_prazo(contagem):
+        return jsonify({"erro": "Essa contagem já está aberta e dentro do prazo."}), 400
 
     reabrir_contagem(contagem_id)
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "horasParaResponder": HORAS_APOS_REABERTURA})
 
 
 @app.route('/api/insumos/<int:insumo_id>/quantidade-ideal', methods=['PUT'])
@@ -4868,7 +4900,7 @@ def api_buscar_contagem_por_token(token):
     resposta = _formatar_contagem(contagem)
     resposta.pop('token', None)
     resposta['itens'] = listar_itens_contagem(contagem['id'], contagem['loja'])
-    resposta['expirada'] = contagem['status'] == 'aberta' and _prazo_vencido(contagem['prazo_validade'])
+    resposta['expirada'] = contagem['status'] == 'aberta' and _contagem_fora_do_prazo(contagem)
     return jsonify(resposta)
 
 
@@ -4880,8 +4912,8 @@ def api_responder_contagem(token):
         return jsonify({"erro": "Link inválido."}), 404
     if contagem['status'] != 'aberta':
         return jsonify({"erro": "Essa contagem já foi respondida."}), 400
-    if _prazo_vencido(contagem['prazo_validade']):
-        return jsonify({"erro": "O prazo para preencher essa contagem já venceu."}), 400
+    if _contagem_fora_do_prazo(contagem):
+        return jsonify({"erro": "O prazo para preencher essa contagem já venceu. Peça pra reabrirem o link."}), 400
 
     dados = request.get_json(silent=True) or {}
     valores_brutos = dados.get('valores') or {}

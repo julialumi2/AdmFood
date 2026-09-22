@@ -1024,3 +1024,10 @@
 @media (max-width: 640px) {
   .pendencia-linha { grid-template-columns: minmax(0, 1fr) auto; }
 }
+
+/* Unidade do insumo ao lado do rótulo em Editar estoque (QA 22/09):
+   o campo pedia um número sem dizer se era grama ou quilo. */
+.editar-estoque-unidade {
+  font-weight: 600;
+  color: var(--text-muted);
+}

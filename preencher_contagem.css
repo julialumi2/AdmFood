@@ -159,6 +159,17 @@ body {
 
 .contagem-stepper input:focus { border-color: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
 
+/* Número fora de qualquer proporção com o que a loja tinha (QA 22/09) */
+.contagem-aviso-unidade {
+  margin: 0;
+  padding: 8px var(--space-3);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--warning-soft);
+  color: var(--warning-texto);
+  font-size: 0.85rem;
+}
+
 .contagem-previsao { display: flex; justify-content: center; }
 
 .contagem-previsao-pill {

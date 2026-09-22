@@ -5807,6 +5807,11 @@ document.getElementById('btn-contagem-reabrir')?.addEventListener('click', async
     const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/reabrir`, { method: 'POST' });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao reabrir');
+    // O prazo da requisição não muda (ele agrupa as lojas), mas a reabertura
+    // abre uma janela própria pra loja reenviar (QA 22/09).
+    if (dados.horasParaResponder) {
+      alert(`Link reaberto. A loja tem ${dados.horasParaResponder}h pra reenviar, mesmo com o prazo da requisição já vencido.`);
+    }
     await abrirContagemDetalhe(contagemDetalheAtual.id);
   } catch (erro) {
     console.error('Falha ao reabrir contagem:', erro);
@@ -7004,6 +7009,7 @@ async function inicializarContagemPublica() {
               <input type="number" step="any" min="0" inputmode="decimal" placeholder="0" id="contagem-qtd-${item.insumoId}" data-insumo-id="${item.insumoId}" required>
               <button type="button" data-passo="1" aria-label="Aumentar">+</button>
             </div>
+            <p class="contagem-aviso-unidade" data-aviso-insumo-id="${item.insumoId}" hidden></p>
             <span class="contagem-rotulo">Sugestão</span>
             <div class="contagem-campo-leitura" data-sugestao-insumo-id="${item.insumoId}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div>
             ${item.custoUnitario != null ? `
@@ -7019,6 +7025,31 @@ async function inicializarContagemPublica() {
         `).join('')}
       </section>
     `).join('');
+
+    // Digitar 5 onde eram 5.000 (quilo no lugar de grama) passava direto e
+    // virava estoque e compra errados, sem ninguém ver (QA 22/09). O card
+    // compara com o que a loja tinha da última vez e avisa na hora; o envio
+    // ainda pede confirmação listando o que ficou fora da proporção.
+    const FORA_DE_PROPORCAO = 10;
+
+    function _foraDeProporcao(item, valor) {
+      const anterior = item.estoqueAtual;
+      if (!anterior || anterior <= 0 || !(valor > 0)) return null;
+      if (valor >= anterior * FORA_DE_PROPORCAO) return 'muito maior';
+      if (valor * FORA_DE_PROPORCAO <= anterior) return 'muito menor';
+      return null;
+    }
+
+    function atualizarAviso(input) {
+      const item = itensPorId.get(input.dataset.insumoId);
+      const aviso = container.querySelector(`[data-aviso-insumo-id="${input.dataset.insumoId}"]`);
+      if (!aviso) return;
+      const problema = input.value === '' ? null : _foraDeProporcao(item, parseFloat(input.value));
+      aviso.hidden = !problema;
+      if (problema) {
+        aviso.textContent = `Confira a unidade: você digitou ${_formatarQuantidade(parseFloat(input.value), item.unidadeMedida)} e da última vez tinha ${_formatarQuantidade(item.estoqueAtual, item.unidadeMedida)}.`;
+      }
+    }
 
     // Sugestão = ideal − o que tem (arredondado pra embalagem); previsão =
     // sugestão × custo do insumo.
@@ -7046,7 +7077,9 @@ async function inicializarContagemPublica() {
     cards.forEach((card, indice) => {
       const input = card.querySelector('input[data-insumo-id]');
       atualizarSugestao(input);
+      atualizarAviso(input);
       input.addEventListener('input', () => {
+        atualizarAviso(input);
         card.classList.toggle('preenchido', input.value !== '');
         atualizarSugestao(input);
         atualizarProgresso();
@@ -7112,9 +7145,19 @@ async function inicializarContagemPublica() {
     form.addEventListener('submit', async (evento) => {
       evento.preventDefault();
       const valores = {};
+      const conferir = [];
       form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
         valores[input.dataset.insumoId] = input.value;
+        const item = itensPorId.get(input.dataset.insumoId);
+        if (item && input.value !== '' && _foraDeProporcao(item, parseFloat(input.value))) {
+          conferir.push(`${item.nome}: ${_formatarQuantidade(parseFloat(input.value), item.unidadeMedida)} (da última vez, ${_formatarQuantidade(item.estoqueAtual, item.unidadeMedida)})`);
+        }
       });
+      if (conferir.length) {
+        const lista = conferir.slice(0, 8).join('\n');
+        const resto = conferir.length > 8 ? `\n… e mais ${conferir.length - 8}` : '';
+        if (!confirm(`Confira estes itens antes de enviar — o número ficou bem fora do que tinha da última vez:\n\n${lista}${resto}\n\nEnviar assim mesmo?`)) return;
+      }
       const btn = document.getElementById('btn-contagem-publica-enviar');
       btn.disabled = true;
       try {
