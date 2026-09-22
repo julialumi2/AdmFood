@@ -4106,3 +4106,23 @@ O "Gerar pedidos homologados" da Conferência não muda de tela (ela ainda vai
 mandar cada um pelo WhatsApp ali mesmo), mas passou a dizer no aviso quais
 pedidos nasceram e quais já existiam e ganharam itens — a resposta do servidor
 já trazia isso e era descartada.
+
+### 6.42 Números que não enganam (QA, leva 1 — 2026-09-22)
+
+Dois críticos do relatório de QA que faziam o sistema mostrar número errado
+como se fosse certo:
+
+- **Vendas Diárias** tinha "R$ 142.850,00", "3.420" e "R$ 41,76" escritos no
+  próprio HTML, e o tratamento de erro só trocava a tabela de canais: servidor
+  fora do ar, sessão vencida ou rede ruim mostravam esses valores de exemplo
+  como se fossem o faturamento do período. Os cards nascem em "—" e o erro
+  zera os três, escreve a falha no Histórico Diário e na tabela de canais.
+- **Custo em uso** (`custo_em_uso_por_insumo`) aceitava qualquer preço recente
+  de compra ou cotação, sem olhar ordem de grandeza — o erro de kg lançado
+  como g multiplicava por mil o CMV, a margem do Cardápio e a Curva ABC, calado.
+  Agora, quando o preço de fora está 4× acima ou abaixo do custo do cadastro
+  (`_preco_fora_da_curva`, a mesma régua da Evolução do preço), ele é deixado
+  de lado e vale o custo digitado, com a marca `ignorouSuspeito` — que o modal
+  do insumo mostra: "a última compra ou cotação veio muito fora dessa faixa e
+  foi ignorada — confira a unidade do preço lançado". Sem custo de cadastro pra
+  cair de volta, o preço continua valendo (é o único que existe).

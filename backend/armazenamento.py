@@ -3775,6 +3775,7 @@ def custo_em_uso_por_insumo():
 
     em_uso = {}
     for insumo_id in set(cadastro) | set(cotacao) | set(compra):
+        referencia = (cadastro.get(insumo_id) or {}).get("valor")
         opcoes = (
             recente(compra.get(insumo_id)),
             recente(cotacao.get(insumo_id)),
@@ -3782,7 +3783,16 @@ def custo_em_uso_por_insumo():
             compra.get(insumo_id),
             cotacao.get(insumo_id),
         )
-        em_uso[insumo_id] = next(info for info in opcoes if info)
+        # Preço fora de qualquer ordem de grandeza (o erro clássico de kg
+        # lançado como g) não entra no custo enquanto existir o custo do
+        # cadastro pra cair de volta: ele multiplicava CMV, margem e Curva ABC
+        # por mil sem nenhum aviso (QA 22/09). A régua é a mesma que a
+        # Evolução do preço já usa pra dizer "confira a unidade".
+        escolhida = next(info for info in opcoes if info)
+        if referencia and _preco_fora_da_curva(escolhida.get("valor"), referencia) and escolhida["origem"] != "cadastro":
+            escolhida = dict(cadastro[insumo_id])
+            escolhida["ignorouSuspeito"] = True
+        em_uso[insumo_id] = escolhida
     # Mistura feita na casa custa o que foi dentro dela, então o custo da
     # receita ganha de tudo acima — uma "compra" de Tempero Batata seria erro
     # de cadastro. Receita incompleta não entra aqui: fica o que já valia.
@@ -7377,6 +7387,16 @@ def reabrir_contagem(contagem_id):
 # insumo (é o mesmo número que o custo em uso usa).
 
 FATOR_PRECO_SUSPEITO = 4
+
+
+def _preco_fora_da_curva(valor, referencia):
+    """Um preço é suspeito quando está FATOR_PRECO_SUSPEITO vezes acima ou
+    abaixo da referência — quase sempre unidade trocada (kg digitado onde o
+    sistema guarda grama). Usado na Evolução do preço e, desde o QA de
+    22/09, também pra segurar o custo que alimenta o CMV."""
+    if not valor or not referencia or valor <= 0 or referencia <= 0:
+        return False
+    return valor >= referencia * FATOR_PRECO_SUSPEITO or valor * FATOR_PRECO_SUSPEITO <= referencia
 
 
 def historico_precos_insumo(insumo_id):

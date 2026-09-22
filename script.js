@@ -1334,8 +1334,23 @@ async function carregarInsights(inicio, fim, diaSemana) {
     marcarAtualizadoAgora('insight-atualizado-em');
   } catch (erro) {
     console.error('Falha ao carregar insights:', erro);
+    // Zerar os cards junto com a tabela: deixá-los com o número anterior (ou
+    // com o valor de exemplo do HTML) fazia a tela mentir num erro de rede
+    // ou de sessão vencida (QA 22/09).
+    ['val-faturamento', 'val-pedidos', 'val-ticket'].forEach((id) => {
+      const campo = document.getElementById(id);
+      if (campo) campo.textContent = '—';
+    });
+    ['trend-faturamento', 'trend-pedidos', 'trend-ticket'].forEach((id) => {
+      const campo = document.getElementById(id);
+      if (campo) campo.innerHTML = '';
+    });
+    const historico = document.getElementById('daily-table-body');
+    if (historico) {
+      historico.innerHTML = `<tr><td colspan="4" style="color: var(--danger-texto);">Não foi possível carregar as vendas agora. Tente de novo em instantes.</td></tr>`;
+    }
     if (canalTableBody) {
-      canalTableBody.innerHTML = `<tr><td colspan="5" style="color: var(--danger-texto);">Não foi possível carregar os dados. Confira se o Flask está rodando e se a sincronização já rodou pelo menos uma vez (python sincronizar.py).</td></tr>`;
+      canalTableBody.innerHTML = `<tr><td colspan="5" style="color: var(--danger-texto);">Não foi possível carregar as vendas agora. Tente de novo em instantes.</td></tr>`;
     }
   }
 }
@@ -7471,6 +7486,11 @@ function _textoCustoEmUso(insumo) {
   }
   if (emUso.origem === 'receita') {
     return `Valendo no CMV: ${valor}, calculado pela receita da mistura. O custo digitado só vale se a receita ficar incompleta.`;
+  }
+  if (emUso.ignorouSuspeito) {
+    // O preço de fora estava 4× acima ou abaixo deste custo (quase sempre
+    // unidade trocada), então ele foi deixado de lado (QA 22/09).
+    return `Valendo no CMV: ${valor}, este custo. A última compra ou cotação veio muito fora dessa faixa e foi ignorada — confira a unidade do preço lançado.`;
   }
   return `Valendo no CMV: ${valor}, este custo.`;
 }
