@@ -9863,7 +9863,7 @@ const TOOLTIP_HOME = {
  */
 let graficoRedeInstance = null;
 async function carregarGraficoRede() {
-  if (_semFaturamentoNaTela()) return;
+  if (await _semFaturamentoNaTela()) return;
   const canvas = document.getElementById('salesChart');
   if (!canvas || typeof Chart === 'undefined') return;
 
@@ -9935,7 +9935,7 @@ async function carregarGraficoRede() {
  */
 let homeCanalChartInstance = null;
 async function carregarCanalRedeHome() {
-  if (_semFaturamentoNaTela()) return;
+  if (await _semFaturamentoNaTela()) return;
   const canvas = document.getElementById('homeCanalChart');
   const legenda = document.getElementById('home-canal-legend');
   if (!canvas || typeof Chart === 'undefined') return;
@@ -10211,7 +10211,15 @@ function _formatarMoedaBRL(valor) {
 // Faturamento virou só de admin (pedido dela, 22/09): o gerente continua com a
 // Home pelos alertas e pelo estoque crítico, mas sem os blocos de dinheiro —
 // senão a tela abriria tentando carregar o que a API recusa.
-function _semFaturamentoNaTela() {
+// Espera saber QUEM está logado antes de decidir: sem isso a checagem rodava
+// com `usuarioLogado` ainda vazio e escondia o faturamento até do admin
+// (achado por ela na Home, 22/09).
+async function _semFaturamentoNaTela() {
+  try {
+    await window.usuarioPronto;
+  } catch (erro) {
+    console.error('Falha ao saber quem está logado:', erro);
+  }
   if (_souAdmin()) return false;
   document.querySelectorAll('[data-so-admin]').forEach((bloco) => { bloco.style.display = 'none'; });
   return true;
@@ -10222,7 +10230,7 @@ async function carregarDadosLojas() {
   const totalRedeElem = document.getElementById('total-rede-valor');
 
   if (!container) return;
-  if (_semFaturamentoNaTela()) return;
+  if (await _semFaturamentoNaTela()) return;
 
   try {
     // dias=90 pra garantir que o mês passado inteiro sempre caiba na janela
@@ -11511,7 +11519,11 @@ const CANAIS_CARDAPIO = [
   { chave: 'cardapioWeb', label: 'Cardápio Web' },
 ];
 
+// Preço 0 quer dizer "não vendo nesse canal" (ela usa isso nos produtos que
+// só saem no balcão, 22/09) — mostrar "R$ 0,00" fazia parecer venda de graça,
+// e a Curva ABC chegava a contar receita zero por causa disso.
 function _formatarPrecoCardapio(valor) {
+  if (valor === 0) return 'não vende';
   return typeof valor === 'number'
     ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     : null;
