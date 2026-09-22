@@ -557,6 +557,21 @@ body.dark-mode {
    Aguardando/Histórico e a lista de itens que abre na linha.
    =========================================================================== */
 
+/* Selo dos pedidos que acabaram de ser gerados (QA 22/09) */
+.pedido-selo-novo {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background-color: var(--success-soft);
+  color: var(--success-texto);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 /* Campo com a unidade escrita do lado (kg/L/un e R$/kg) — quem recebe conta
    caixa e quilo, não grama (QA 22/09). */
 .recebimento-campo-unidade {

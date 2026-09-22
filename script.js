@@ -399,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4.0997 TELA DE PEDIDOS (admin)
   if (document.getElementById('pedidos-tabela-body')) {
+    _lerPedidosNovosDaUrl();
     carregarPedidos();
     // Atalho "Lançar nota de compra" da Home: espera o nome de quem está
     // logado, que o formulário já traz preenchido como comprador.
@@ -4909,7 +4910,8 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/gerar-pedidos`, { method: 'POST' });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar pedidos');
-    let mensagem = `${dados.pedidosCriados.length} pedido(s) gerado(s).`;
+    const ids = (dados.pedidosCriados || []).map((p) => p.id).filter(Boolean);
+    let mensagem = `${_qtdTexto(ids.length, 'pedido gerado', 'pedidos gerados')}: ${_listaDeNumerosDePedido(ids)}.`;
     if (dados.insumosSemVencedor > 0) mensagem += ` ${dados.insumosSemVencedor} insumo(s) ainda sem vencedor escolhido ficaram de fora.`;
     // Não tenta mais abrir o WhatsApp automático aqui — window.open() depois
     // de um fetch/await perde a permissão do navegador e fica bloqueado sem
@@ -4919,7 +4921,7 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
     mensagem += ' Envie pelo WhatsApp direto na tela de Pedidos.';
 
     alert(mensagem);
-    window.location.href = 'pedidos.html';
+    window.location.href = ids.length ? `pedidos.html?novos=${ids.join(',')}` : 'pedidos.html';
   } catch (erro) {
     console.error('Falha ao gerar pedidos:', erro);
     alert(erro.message || 'Não foi possível gerar os pedidos.');
@@ -5058,10 +5060,40 @@ const PEDIDOS_SITUACAO = {
   aberto: { rotulo: 'Em aberto', filtro: (p) => p.status !== 'recebido' },
   enviar: { rotulo: 'Falta enviar', filtro: (p) => _pedidoPendenteDeEnvio(p) },
   atrasado: { rotulo: 'Atrasados', filtro: (p) => p.atrasado },
+  // "Gerar pedidos" manda pra cá com ?novos=12,13 (QA 22/09): antes a tela
+  // abria com tudo e os recém-criados se perdiam no meio do histórico.
+  novos: { rotulo: 'Gerados agora', filtro: (p) => pedidosNovosIds.has(p.id) },
 };
+
+// Ids que vieram no ?novos= da URL — também põem o selo "novo" na linha.
+let pedidosNovosIds = new Set();
+
+function _lerPedidosNovosDaUrl() {
+  const bruto = new URLSearchParams(location.search).get('novos') || '';
+  pedidosNovosIds = new Set(bruto.split(',').map((n) => parseInt(n, 10)).filter(Number.isInteger));
+  if (pedidosNovosIds.size) {
+    pedidosSituacaoFiltro = 'novos';
+    // Tira o ?novos= da barra de endereço: recarregar a página depois não
+    // devia continuar escondendo o resto dos pedidos.
+    history.replaceState(null, '', location.pathname);
+  }
+}
 
 function _qtdTexto(n, singular, plural) {
   return `${n} ${n === 1 ? singular : plural}`;
+}
+
+// "nº 12", "nº 12 e nº 13 (GN)", "nº 12, nº 13 e mais 4" — aceita id solto ou
+// {id, fornecedor}. Até 6 números, pra o alerta não virar um parágrafo.
+function _listaDeNumerosDePedido(pedidos) {
+  const numeros = pedidos.map((p) => (p && typeof p === 'object'
+    ? `nº ${p.id}${p.fornecedor ? ` (${p.fornecedor})` : ''}`
+    : `nº ${p}`));
+  const extras = numeros.length > 6 ? numeros.length - 6 : 0;
+  const mostrados = extras ? numeros.slice(0, 6) : numeros;
+  if (extras) return `${mostrados.join(', ')} e mais ${extras}`;
+  if (mostrados.length <= 1) return mostrados.join('');
+  return `${mostrados.slice(0, -1).join(', ')} e ${mostrados[mostrados.length - 1]}`;
 }
 
 function _pedidosDaLojaEFornecedor() {
@@ -5140,7 +5172,8 @@ function _renderChipSituacaoPedidos() {
   const situacao = PEDIDOS_SITUACAO[pedidosSituacaoFiltro];
   chip.hidden = !situacao;
   if (!situacao) return;
-  document.getElementById('pedidos-filtro-situacao-texto').textContent = situacao.rotulo;
+  document.getElementById('pedidos-filtro-situacao-texto').textContent =
+    pedidosSituacaoFiltro === 'novos' ? `${situacao.rotulo} (${pedidosNovosIds.size})` : situacao.rotulo;
   chip.setAttribute('aria-label', `Tirar o filtro "${situacao.rotulo}"`);
 }
 
@@ -5218,7 +5251,7 @@ function renderPedidosTabela() {
     <tr class="pedido-linha" data-id="${p.id}">
       <td>
         <span class="pedido-fornecedor">${escaparHtml(p.fornecedorNome)}</span>
-        <span class="pedido-numero">Pedido nº ${p.id}</span>
+        <span class="pedido-numero">Pedido nº ${p.id}${pedidosNovosIds.has(p.id) ? '<span class="pedido-selo-novo">novo</span>' : ''}</span>
       </td>
       <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
       <td class="pedido-origem">${escaparHtml(p.compraFora ? 'Compra por fora' : (p.cotacaoTitulo || '—'))}</td>
@@ -6744,6 +6777,17 @@ document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('clic
     const dados = await resposta.json().catch(() => ({}));
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível gerar os pedidos.');
     await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+    // Antes a tela só recarregava e os números dos pedidos ficavam espalhados
+    // linha a linha (QA 22/09).
+    const criados = (dados.pedidos || []).filter((p) => p.novo);
+    const acrescentados = (dados.pedidos || []).filter((p) => !p.novo);
+    if (criados.length || acrescentados.length) {
+      const partes = [];
+      if (criados.length) partes.push(`${_qtdTexto(criados.length, 'pedido gerado', 'pedidos gerados')}: ${_listaDeNumerosDePedido(criados)}.`);
+      if (acrescentados.length) partes.push(`${_qtdTexto(acrescentados.length, 'pedido que já existia ganhou', 'pedidos que já existiam ganharam')} itens: ${_listaDeNumerosDePedido(acrescentados)}.`);
+      partes.push('Mande cada um pelo WhatsApp no bloco de cima, ou abra a tela de Pedidos.');
+      alert(partes.join('\n\n'));
+    }
   } catch (erro) {
     console.error('Falha ao gerar os pedidos homologados:', erro);
     alert(erro.message);

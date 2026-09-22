@@ -4094,3 +4094,15 @@ foram corrigidos:
    ambiente, `_chave_de_sessao` guarda uma chave sorteada em `.chave_sessao`,
    ao lado do banco: a primeira versão sorteava uma chave por processo e,
    como a produção roda com dois, o login caía no clique seguinte.
+
+### 6.41 Destaque dos pedidos recém-gerados (2026-09-22)
+
+"Gerar pedidos" da cotação agora avisa os números ("2 pedidos gerados: nº 12 e
+nº 13") e abre Pedidos com `?novos=12,13`: a tela já entra com o chip "Gerados
+agora (N)" ligado, mostrando só eles, e cada linha ganha o selo **novo** ao
+lado do número. O `?novos=` sai da barra de endereço assim que é lido, pra um
+F5 não continuar escondendo o resto. Tirando o chip, a lista volta ao normal.
+O "Gerar pedidos homologados" da Conferência não muda de tela (ela ainda vai
+mandar cada um pelo WhatsApp ali mesmo), mas passou a dizer no aviso quais
+pedidos nasceram e quais já existiam e ganharam itens — a resposta do servidor
+já trazia isso e era descartada.
