@@ -4236,3 +4236,31 @@ Os três críticos do Cardápio:
 - **Curva ABC.** O subtítulo passou a dizer "receita estimada (preço de tabela
   × unidades)", e o texto da tela explica que cupom e promoção não entram — o
   faturamento de verdade está em Vendas Diárias.
+
+### 6.47 Acessos e sessão (QA "altos", leva A — 2026-09-22)
+
+- **Faturamento e relatórios pediam só estar logado.** `/api/faturamento-ontem`,
+  `/api/faturamento-rede-diario`, `/api/insights`, `/api/insights-automaticos`,
+  `/api/vendas/mais-vendidos` e `/api/preparo` devolviam a rede inteira pra
+  qualquer perfil, inclusive a operação, que por regra não vê faturamento —
+  quem limitava era só a tela escondendo as abas. Todas passaram a exigir
+  gestão, e o faturamento de ontem devolve só a loja de quem olha
+  (`_so_da_minha_loja`).
+- **Venda presencial** (lançar e apagar) também exigia só login: mexia em
+  faturamento, ticket médio e resultado semanal de qualquer loja. Agora é de
+  gestão.
+- **"Sincronizar agora"** virou admin e entrou no registro de ações (estava na
+  lista de rotas sem registro).
+- **Nota fiscal:** o download conferia o perfil mas não a loja — gerente de uma
+  loja abria a nota de qualquer outra.
+- **Tentativa de senha** passou a contar pelo e-mail em minúsculas: a busca no
+  banco já era minúscula, então trocar uma letra pra maiúscula zerava o
+  bloqueio de 5 tentativas.
+- **Sessão vencida leva pro login.** Um envelope no `fetch` (ignorado nas
+  páginas públicas) detecta 401, avisa "sua sessão expirou" e leva pro login
+  guardando a página de origem — antes aparecia "Erro no servidor Flask: 401"
+  e o que a pessoa tinha digitado se perdia.
+- **Configurações:** "Sincronização com a Cardápio Web" (com o botão) e "Lojas
+  cadastradas" (que mostra pedaço do token de cada loja) agora só aparecem pro
+  admin, como os outros painéis; o texto do painel passou a dizer o que o
+  sistema faz de verdade (de 15 em 15 minutos e às 3h, reconferindo 7 dias).

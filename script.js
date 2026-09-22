@@ -8,6 +8,26 @@ function escaparHtml(texto) {
   }[c]));
 }
 
+// Sessão vencida (401) não levava ninguém a lugar nenhum: aparecia "Erro no
+// servidor Flask: 401" e o que a pessoa tinha digitado se perdia (QA 22/09).
+// Um envelope só no fetch resolve pras 13 mil linhas de tela.
+(function _tratarSessaoVencida() {
+  const PAGINAS_PUBLICAS = ['login.html', 'registro.html', 'esquecisenha.html', 'landing.html',
+    'preencher_contagem.html', 'preencher_cotacao.html', 'confirmar_pedido.html'];
+  if (PAGINAS_PUBLICAS.some((pagina) => location.pathname.endsWith(pagina))) return;
+  const fetchOriginal = window.fetch.bind(window);
+  let avisando = false;
+  window.fetch = async (...argumentos) => {
+    const resposta = await fetchOriginal(...argumentos);
+    if (resposta.status === 401 && !avisando) {
+      avisando = true;
+      alert('Sua sessão expirou. Entre de novo pra continuar.');
+      location.href = `login.html?voltar=${encodeURIComponent(location.pathname + location.search)}`;
+    }
+    return resposta;
+  };
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
 
   // 1. INICIALIZA ÍCONES LUCIDE
@@ -10553,6 +10573,12 @@ async function carregarUsuarioLogado() {
     if (painelZonaPerigo && usuario.papel === 'admin') {
       painelZonaPerigo.style.display = '';
     }
+    // Lojas cadastradas (com pedaço do token da Cardápio Web) e "Sincronizar
+    // agora" eram os únicos painéis sem trava de perfil aqui (QA 22/09).
+    ['painel-sincronizacao', 'painel-lojas'].forEach((id) => {
+      const painel = document.getElementById(id);
+      if (painel && usuario.papel === 'admin') painel.style.display = '';
+    });
     const painelBackup = document.getElementById('painel-backup');
     if (painelBackup && usuario.papel === 'admin') {
       painelBackup.style.display = '';

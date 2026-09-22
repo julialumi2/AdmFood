@@ -1089,6 +1089,10 @@ MAX_TENTATIVAS_LOGIN_NA_JANELA = 5
 
 
 def _login_bloqueado(email):
+    # Sempre em minúsculas: a contagem usava o e-mail como foi digitado e a
+    # busca no banco é minúscula, então trocar uma letra pra maiúscula zerava
+    # o bloqueio (QA 22/09).
+    email = (email or '').strip().lower()
     agora = time.time()
     tentativas = [t for t in _TENTATIVAS_LOGIN_FALHAS.get(email, []) if agora - t < JANELA_RATE_LIMIT_LOGIN_SEGUNDOS]
     _TENTATIVAS_LOGIN_FALHAS[email] = tentativas
@@ -1096,7 +1100,7 @@ def _login_bloqueado(email):
 
 
 def _registrar_falha_login(email):
-    _TENTATIVAS_LOGIN_FALHAS.setdefault(email, []).append(time.time())
+    _TENTATIVAS_LOGIN_FALHAS.setdefault((email or '').strip().lower(), []).append(time.time())
 
 
 @app.route('/api/login', methods=['POST'])
@@ -2626,6 +2630,9 @@ def api_mais_vendidos_do_dia():
     """Ranking de produtos de um dia, por loja (Insights → Mais Vendidos),
     com o faturamento real da loja no dia e no mesmo dia da semana anterior.
     Sem `dia`, o último dia que teve venda."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     dia = request.args.get('dia') or None
     if dia:
         try:
@@ -4202,6 +4209,10 @@ def api_nota_fiscal_pedido(pedido_id):
     pedido = buscar_pedido(pedido_id)
     if not pedido or not pedido["nota_fiscal_arquivo"]:
         return jsonify({"erro": "Esse pedido não tem nota fiscal anexada."}), 404
+    # A checagem de loja existia no envio e faltava aqui: gerente de uma loja
+    # abria a nota de qualquer outra (QA 22/09).
+    if not _loja_visivel(pedido["loja"]):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
     return send_from_directory(PASTA_NOTAS_FISCAIS, pedido["nota_fiscal_arquivo"])
 
 
@@ -5031,6 +5042,12 @@ def api_responder_contagem(token):
 
 @app.route('/api/faturamento-ontem', methods=['GET'])
 def api_faturamento_ontem():
+    # Faturamento é de gestão: a rota devolvia a rede inteira pra qualquer
+    # pessoa logada, inclusive a operação, que por regra não vê faturamento
+    # (QA 22/09).
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     # Lê do mesmo cache local sincronizado, em vez de chamar a Cardápio Web
     # ao vivo (o endpoint antigo usava uma URL da API que nunca funcionou).
     ontem = (date.today() - timedelta(days=1)).isoformat()
@@ -5048,12 +5065,25 @@ def api_faturamento_ontem():
     for nome_unidade in LOJAS.keys():
         if nome_unidade not in unidades_com_dado:
             lojas.append({"nome": nome_unidade, "total": 0.0, "sucesso": False})
+    lojas = _so_da_minha_loja(lojas, campo='nome')
+    total_rede = sum(l["total"] for l in lojas)
 
-    return jsonify({"data": ontem, "total_rede": total_rede, "lojas": lojas})
+    # A Home não dizia que faltava loja: quem não sincronizou entrava com zero
+    # e sumia do ranking, então o total aparecia menor sem nenhuma marca
+    # (QA 22/09).
+    return jsonify({
+        "data": ontem, "total_rede": total_rede, "lojas": lojas,
+        "lojasComDado": sum(1 for l in lojas if l["sucesso"]),
+        "lojasNoTotal": len(lojas),
+        "semDado": [l["nome"] for l in lojas if not l["sucesso"]],
+    })
 
 
 @app.route('/api/faturamento-rede-diario', methods=['GET'])
 def api_faturamento_rede_diario():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     # Faturamento da rede (4 lojas somadas) dia a dia, pro gráfico da Home.
     try:
         dias = int(request.args.get('dias', 7))
@@ -5226,6 +5256,9 @@ def api_pedidos_nao_finalizados():
 
 @app.route('/api/sincronizar-agora', methods=['POST'])
 def api_sincronizar_agora():
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
     # Sem ?dia=, sincroniza ontem (uso normal do botão). Com ?dia=AAAA-MM-DD,
     # sincroniza um dia específico — útil pra corrigir um dia com dado
     # incompleto/desatualizado sem esperar o próximo agendamento automático.
@@ -5258,6 +5291,11 @@ def api_sincronizar_agora():
 
 @app.route('/api/venda-presencial', methods=['POST'])
 def api_salvar_venda_presencial():
+    # Lançar (e apagar) venda presencial mexe em faturamento, ticket médio e
+    # resultado semanal — não podia estar aberto pra qualquer perfil (QA 22/09).
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     dados = request.get_json(silent=True) or {}
     unidade = _loja_no_escopo(dados.get('unidade'))
     dia = dados.get('dia')
@@ -5287,6 +5325,9 @@ def api_salvar_venda_presencial():
 
 @app.route('/api/venda-presencial', methods=['DELETE'])
 def api_excluir_venda_presencial():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     unidade = _loja_no_escopo(request.args.get('unidade'))
     dia = request.args.get('dia')
 
@@ -5456,6 +5497,9 @@ def api_faturamento_mesmo_dia_semana():
 
 @app.route('/api/insights', methods=['GET'])
 def api_insights():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     inicio_str = request.args.get('inicio')
     fim_str = request.args.get('fim')
 
@@ -5629,6 +5673,9 @@ def api_salvar_resultado_semanal():
 
 @app.route('/api/insights-automaticos', methods=['GET'])
 def api_insights_automaticos():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     # Sempre compara ontem contra a média dos 7 dias anteriores a ontem —
     # independente do período selecionado no filtro da tela, porque essa
     # é uma checagem de "o que mudou recentemente", não do histórico.
@@ -5732,6 +5779,9 @@ def _montar_bloco_preparo(pedidos):
 
 @app.route('/api/preparo', methods=['GET'])
 def api_preparo():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     inicio_str = request.args.get('inicio')
     fim_str = request.args.get('fim')
 

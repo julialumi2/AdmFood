@@ -238,7 +238,7 @@
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel" id="painel-sincronizacao" style="display:none;">
             <div class="panel-header">
               <h3 class="panel-title">Sincronização com a Cardápio Web</h3>
               <span class="panel-subtitle">Última sincronização: <span id="config-ultima-sync">—</span></span>
@@ -246,7 +246,7 @@
 
             <div class="sync-info">
               <i data-lucide="clock"></i>
-              <p>Automática, todo dia às <strong>03:00</strong> (horário de Brasília) — busca sempre o dia anterior.</p>
+              <p>Automática: de <strong>15 em 15 minutos</strong> pro dia de hoje e às <strong>03:00</strong> reconferindo os últimos 7 dias (horário de Brasília).</p>
             </div>
 
             <button type="button" class="btn-whatsapp" id="btn-sincronizar-agora">
@@ -259,7 +259,7 @@
         </div>
 
         <!-- LOJAS CADASTRADAS -->
-        <div class="panel panel-table">
+        <div class="panel panel-table" id="painel-lojas" style="display:none;">
           <div class="panel-header">
             <h3 class="panel-title">Lojas Cadastradas</h3>
             <span class="panel-subtitle">Integração com a Cardápio Web</span>
