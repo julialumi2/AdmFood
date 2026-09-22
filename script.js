@@ -1114,10 +1114,12 @@ const NOMES_CURTOS_WHATSAPP = {
 
 // Nesse relatório, "portal" vira "Presencial" em qualquer loja (não só na
 // Simus) — o modelo só tem essas 4 categorias fixas, então todo canal
-// precisa cair em uma delas pra o "Total do dia" fechar certinho.
+// precisa cair em uma delas pra o "Total do dia" fechar certinho. O totem
+// também é venda presencial (pedido dela, 2026-09-22: a Simus vende pelo
+// totem e a mensagem do dia 18/09 somava ele no total mas não no Presencial).
 function nomeExibicaoCanalRelatorio(canalBruto) {
-  const mapa = { ifood: 'IFood', food99: '99Food', catalog: 'Cardápio Web', portal: 'Presencial' };
-  return mapa[canalBruto] || canalBruto;
+  const mapa = { ifood: 'IFood', food99: '99Food', catalog: 'Cardápio Web', portal: 'Presencial', totem: 'Presencial' };
+  return mapa[String(canalBruto || '').toLowerCase()] || canalBruto;
 }
 
 // Dia da semana por extenso, pro cabeçalho do relatório de um dia só. Usa
