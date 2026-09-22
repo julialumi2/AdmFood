@@ -4268,3 +4268,32 @@ Os três críticos do Cardápio:
   cadastradas" (que mostra pedaço do token de cada loja) agora só aparecem pro
   admin, como os outros painéis; o texto do painel passou a dizer o que o
   sistema faz de verdade (de 15 em 15 minutos e às 3h, reconferindo 7 dias).
+
+### 6.48 Estados de tela e mensagens (QA "altos", leva B — 2026-09-22)
+
+- **Fim do "Confira se o Flask está rodando".** As 20 mensagens com esse texto
+  e as 42 do tipo "Erro no servidor Flask: 500" viraram frases de gente ("o
+  sistema não respondeu agora (código 500). Tente de novo em instantes."), com
+  o código técnico só no console.
+- **"Carregando..." nas tabelas** (`_linhaCarregando`): Fornecedores, Cotações,
+  Pedidos, Requisições, Contagens, Recebimentos, Curva ABC de insumos e Vendas
+  Semanais. A tela vazia dos primeiros segundos parecia "não tem nada
+  cadastrado" — no celular, parecia que o clique não funcionou.
+- **Carimbo de hora honesto.** `marcarAtualizadoAgora` só marca quando a carga
+  deu certo; no erro, `marcarSemConexao` escreve "Sem conexão — números de
+  14:02" em vermelho e o valor grande da Home vira "—". Antes o carimbo era
+  escrito sem esperar as respostas, então número velho aparecia com hora nova.
+- **Ícones não derrubam mais a página.** As duas chamadas soltas de
+  `lucide.createIcons()` (uma no topo do arquivo) ganharam a mesma proteção do
+  resto: quando a biblioteca de fora não carrega, o script continua rodando em
+  vez de morrer ali e deixar todas as telas mudas.
+- **Curva ABC e Vendas Semanais limpam antes de carregar.** Trocar loja ou
+  período mostrava os números anteriores até a resposta chegar — e pra sempre,
+  se desse erro. Agora as listas, a fita, o cartão e o subtítulo são zerados, e
+  o erro aparece nos três lugares, não só na tabela grande.
+- **Preparo** ganhou "Carregando...", aviso de erro na tabela de dias lentos e
+  o carimbo de "sem conexão".
+- **Cópia de segurança que falha fica registrada** (`backup_falhou` em
+  `execucao_rotina`) e o painel mostra "última falha em 22/09: ...". Antes o
+  erro morria no log e a tela seguia exibindo a data da última cópia que deu
+  certo.

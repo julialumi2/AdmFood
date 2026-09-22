@@ -8007,7 +8007,18 @@ def listar_execucoes_rotina():
 
 
 def rodar_backup_diario():
-    """O que o agendador chama de madrugada."""
+    """O que o agendador chama de madrugada. A falha fica registrada: antes
+    o erro morria no log do servidor e o painel continuava mostrando a data da
+    última cópia que deu certo, sem dizer que as seguintes falharam
+    (QA 22/09)."""
+    try:
+        return _rodar_backup_diario()
+    except Exception as erro:  # noqa: BLE001 - qualquer falha precisa ficar registrada
+        marcar_execucao_rotina("backup_falhou", str(erro)[:200])
+        raise
+
+
+def _rodar_backup_diario():
     destino = gerar_backup()
     apagados = limpar_backups_antigos()
     print(f"💾 Backup do banco: {os.path.basename(destino)}"

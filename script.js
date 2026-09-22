@@ -575,8 +575,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 }); // Fim do DOMContentLoaded
 
-// Inicializar Ícones Lucide
-lucide.createIcons();
+// Inicializar Ícones Lucide. Com a proteção: sem ela, um dia em que a
+// biblioteca de fora não carrega derrubava o arquivo inteiro aqui, e nenhuma
+// tela funcionava, sem mensagem nenhuma (QA 22/09).
+if (typeof lucide !== 'undefined') lucide.createIcons();
 
 // --- DADOS DA APLICAÇÃO ---
 // Preenchido de verdade via carregarInsights(), buscando do backend Flask
@@ -703,7 +705,7 @@ function updateDashboard(tabKey) {
   renderHistoricoDiario(data.diario || []);
 
   // Re-inicializa ícones do Lucide após re-renderizar HTML
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // Nomes de exibição dos canais em todas as abas (Visão Geral + as 4 lojas).
@@ -774,7 +776,7 @@ async function exibirCanalDoDia(unidade, diaIso) {
     const resposta = await fetch(
       `/api/canal-analise?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`
     );
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
 
     canalSelecionado = { unidade, diaIso };
@@ -814,7 +816,7 @@ async function exibirCanalDoDia(unidade, diaIso) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (erro) {
     console.error('Falha ao carregar análise de canal do dia:', erro);
-    alert('Não foi possível carregar a análise de canal desse dia. Confira se o Flask está rodando.');
+    alert('Não foi possível carregar a análise de canal desse dia. Tente de novo em instantes.');
   }
 }
 
@@ -1253,7 +1255,7 @@ if (btnWhatsApp) {
       if (modalWhatsApp) modalWhatsApp.style.display = 'flex';
     } catch (erro) {
       console.error('Falha ao montar relatório do WhatsApp:', erro);
-      alert('Não foi possível montar o relatório. Confira se o Flask está rodando.');
+      alert('Não foi possível montar o relatório. Tente de novo em instantes.');
     } finally {
       btnWhatsApp.disabled = false;
       btnWhatsApp.innerHTML = htmlOriginal;
@@ -1347,7 +1349,7 @@ async function carregarInsights(inicio, fim, diaSemana) {
     const filtroDiaSemana = diaSemana ? `&diaSemana=${diaSemana}` : '';
     const resposta = await fetch(`/api/insights?inicio=${inicio}&fim=${fim}${filtroDiaSemana}`);
     if (!resposta.ok) {
-      throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+      throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     }
     dashboardData = await resposta.json();
     updateDashboard(dashboardData[currentTab] ? currentTab : 'geral');
@@ -1403,14 +1405,22 @@ function _formatarMinutos(valor) {
 
 async function carregarPreparo() {
   const { inicio, fim } = periodoPreparoSelecionado();
+  // Sem estado de carregando, trocar o período deixava os números do período
+  // anterior na tela — e, no erro, eles ficavam lá como se fossem do novo
+  // (QA 22/09).
+  const avisoPreparo = document.getElementById('preparo-atualizado-em');
+  if (avisoPreparo) avisoPreparo.textContent = 'Carregando...';
   try {
     const resposta = await fetch(`/api/preparo?inicio=${inicio}&fim=${fim}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     preparoData = await resposta.json();
     renderPreparoTab(preparoTabAtual);
     marcarAtualizadoAgora('preparo-atualizado-em');
   } catch (erro) {
     console.error('Falha ao carregar Preparo:', erro);
+    marcarSemConexao('preparo-atualizado-em');
+    const tabela = document.getElementById('preparo-gargalos-body');
+    if (tabela) tabela.innerHTML = `<tr><td colspan="4" class="panel-subtitle">Não foi possível carregar o preparo agora. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -1533,7 +1543,7 @@ async function carregarInsumos() {
       fetch(`/api/insumos/consumo-medio?inicio=${inicioRecente}&fim=${fimRecente}`),
       ...LOJAS_ESTOQUE.map((loja) => fetch(`/api/insumos/ajustes-quantidade-ideal?loja=${encodeURIComponent(loja)}`)),
     ]);
-    if (!respostaInsumos.ok) throw new Error(`Erro no servidor Flask: ${respostaInsumos.status}`);
+    if (!respostaInsumos.ok) throw new Error(`O sistema não respondeu agora (código ${respostaInsumos.status}). Tente de novo em instantes.`);
     const dados = await respostaInsumos.json();
     estoqueInsumos = dados.insumos || [];
 
@@ -1573,7 +1583,7 @@ async function carregarInsumos() {
   } catch (erro) {
     console.error('Falha ao carregar insumos:', erro);
     const tbody = document.getElementById('estoque-tabela-body');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger-texto);">Não foi possível carregar o estoque. Confira se o Flask está rodando.</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger-texto);">Não foi possível carregar o estoque. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -3119,7 +3129,7 @@ async function carregarLotesVencendo() {
   if (!tbody) return;
   try {
     const resposta = await fetch('/api/insumos/lotes-vencendo?dias=7');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     lotesVencendo = dados.lotes || [];
     renderLotesVencendo();
@@ -3228,7 +3238,7 @@ async function carregarDatasEspeciais() {
   if (window.usuarioLogado?.papel !== 'admin') return;
   try {
     const resposta = await fetch('/api/datas-especiais');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     datasEspeciaisLista = dados.datasEspeciais || [];
     card.style.display = '';
@@ -3335,17 +3345,25 @@ document.getElementById('form-nova-data-especial')?.addEventListener('submit', a
 let fornecedoresLista = [];
 let fornecedorEditandoId = null;
 
+// "Carregando..." nas tabelas: sem isso, a tela vazia dos primeiros segundos
+// parecia "não tem nada cadastrado" — e no celular com internet ruim, parecia
+// que o clique não funcionou (QA 22/09).
+function _linhaCarregando(colunas) {
+  return `<tr><td colspan="${colunas}" class="panel-subtitle" style="padding:var(--space-4);">Carregando...</td></tr>`;
+}
+
 async function carregarFornecedores() {
   const tbody = document.getElementById('fornecedores-tabela-body');
+  if (tbody) tbody.innerHTML = _linhaCarregando(8);
   try {
     const resposta = await fetch('/api/fornecedores');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     fornecedoresLista = dados.fornecedores || [];
     if (tbody) renderFornecedoresTabela();
   } catch (erro) {
     console.error('Falha ao carregar fornecedores:', erro);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger-texto);">Não foi possível carregar os fornecedores. Confira se o Flask está rodando.</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger-texto);">Não foi possível carregar os fornecedores. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -3622,9 +3640,10 @@ let cotacaoAtualId = null;
 async function carregarCotacoes() {
   const tbody = document.getElementById('cotacoes-tabela-body');
   if (!tbody) return;
+  tbody.innerHTML = _linhaCarregando(10);
   try {
     const resposta = await fetch('/api/cotacoes');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     cotacoesLista = dados.cotacoes || [];
     renderCotacoesLista();
@@ -3632,7 +3651,7 @@ async function carregarCotacoes() {
     _renderEconomiaCotacoes();
   } catch (erro) {
     console.error('Falha ao carregar cotações:', erro);
-    tbody.innerHTML = `<tr><td colspan="10" style="color:var(--danger-texto);">Não foi possível carregar as cotações. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="color:var(--danger-texto);">Não foi possível carregar as cotações. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -3998,13 +4017,13 @@ async function carregarHistoricoCompras() {
   container.innerHTML = `<p class="panel-subtitle">Carregando...</p>`;
   try {
     const resposta = await fetch('/api/cotacoes/historico');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     historicoComprasLista = dados.historico || [];
     renderHistoricoCompras();
   } catch (erro) {
     console.error('Falha ao carregar histórico de compras:', erro);
-    container.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar o histórico. Confira se o Flask está rodando.</p>`;
+    container.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar o histórico. Tente de novo em instantes.</p>`;
   }
 }
 
@@ -4097,7 +4116,7 @@ async function recarregarCotacaoDetalhe() {
   const isAdmin = _possoGerir();
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
 
     document.getElementById('cotacao-detalhe-titulo').textContent = dados.cotacao.titulo;
@@ -4150,7 +4169,7 @@ async function carregarConvitesCotacao() {
   if (!card) return;
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     lojasCotacaoAtual = dados.lojas || [];
     renderConvitesCotacao(dados.convites || []);
@@ -4247,7 +4266,7 @@ async function carregarPreviaConvite() {
   alvo.innerHTML = '<p class="panel-subtitle">Carregando...</p>';
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites/previa`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     previaConviteDados = await resposta.json();
     renderPreviaConvite();
   } catch (erro) {
@@ -5064,9 +5083,10 @@ async function carregarLinksWhatsAppPedidos(lista) {
 async function carregarPedidos() {
   const tbody = document.getElementById('pedidos-tabela-body');
   if (!tbody) return;
+  if (!pedidosLista.length) tbody.innerHTML = _linhaCarregando(7);
   try {
     const resposta = await fetch('/api/pedidos');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     pedidosLista = dados.pedidos || [];
     if (dados.estagios) pedidoEstagios = dados.estagios;
@@ -5077,7 +5097,7 @@ async function carregarPedidos() {
     carregarContadoresMenuCompras();
   } catch (erro) {
     console.error('Falha ao carregar pedidos:', erro);
-    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -5581,15 +5601,16 @@ let contagemDetalheAtual = null;
 async function carregarContagens() {
   const tbody = document.getElementById('contagens-tabela-body');
   if (!tbody) return;
+  tbody.innerHTML = _linhaCarregando(6);
   try {
     const resposta = await fetch('/api/contagens');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     contagensLista = dados.contagens || [];
     renderContagensTabela();
   } catch (erro) {
     console.error('Falha ao carregar contagens:', erro);
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar as contagens. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar as contagens. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -5847,15 +5868,16 @@ let requisicaoConferenciaAtual = null;
 async function carregarRequisicoes() {
   const tbody = document.getElementById('requisicoes-tabela-body');
   if (!tbody) return;
+  tbody.innerHTML = _linhaCarregando(5);
   try {
     const resposta = await fetch('/api/requisicoes');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     requisicoesLista = dados.requisicoes || [];
     renderRequisicoesTabela();
   } catch (erro) {
     console.error('Falha ao carregar requisições:', erro);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar as requisições. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar as requisições. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -8513,12 +8535,13 @@ function _inicioDoPeriodo(dias) {
 async function carregarRecebimentos() {
   const tbody = document.getElementById('recebimentos-tabela-body');
   if (!tbody) return;
+  if (!recebimentosLista.length) tbody.innerHTML = _linhaCarregando(6);
   try {
     const [resposta, respostaRecebidos] = await Promise.all([
       fetch('/api/recebimentos'),
       fetch('/api/recebimentos/recebidos?dias=30'),
     ]);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     recebimentosLista = dados.pedidos || [];
     if (dados.diasEntregaAtrasada) pedidosDiasAtraso = dados.diasEntregaAtrasada;
@@ -8529,7 +8552,7 @@ async function carregarRecebimentos() {
     carregarContadoresMenuCompras();
   } catch (erro) {
     console.error('Falha ao carregar recebimentos:', erro);
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger-texto);">Não foi possível carregar os pedidos. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -9039,7 +9062,7 @@ function _lojasHomologadasDoFornecedor(insumo, fornecedorId) {
 async function _carregarInsumosParaPreco(forcar = false) {
   if (insumosParaPreco && !forcar) return insumosParaPreco;
   const resposta = await fetch('/api/insumos');
-  if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+  if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
   insumosParaPreco = (await resposta.json()).insumos || [];
   return insumosParaPreco;
 }
@@ -9413,7 +9436,7 @@ async function abrirCompraFora() {
   document.getElementById('modal-compra-fora').style.display = 'flex';
   try {
     const [respostaFornecedores] = await Promise.all([fetch('/api/fornecedores'), _carregarInsumosParaPreco(true)]);
-    if (!respostaFornecedores.ok) throw new Error(`Erro no servidor Flask: ${respostaFornecedores.status}`);
+    if (!respostaFornecedores.ok) throw new Error(`O sistema não respondeu agora (código ${respostaFornecedores.status}). Tente de novo em instantes.`);
     compraForaFornecedores = (await respostaFornecedores.json()).fornecedores || [];
     document.getElementById('compra-fora-lista-fornecedores').innerHTML = compraForaFornecedores
       .filter((f) => f.ativo)
@@ -9619,7 +9642,7 @@ async function carregarPresencial(unidade) {
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Carregando...</td></tr>`;
   try {
     const resposta = await fetch(`/api/venda-presencial?unidade=${encodeURIComponent(unidade)}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     const lancamentos = dados.lancamentos || [];
     tbody.innerHTML = lancamentos.length
@@ -9690,7 +9713,7 @@ if (presencialTableBody) {
         );
         if (!resposta.ok) {
           const erroDados = await resposta.json().catch(() => ({}));
-          throw new Error(erroDados.erro || `Erro no servidor Flask: ${resposta.status}`);
+          throw new Error(erroDados.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
         }
         if (presencialEditandoDiaOriginal === diaIso) cancelarEdicaoPresencial();
         await carregarPresencial(currentTab);
@@ -9700,7 +9723,7 @@ if (presencialTableBody) {
         }
       } catch (erro) {
         console.error('Falha ao excluir venda presencial:', erro);
-        alert('Não foi possível excluir o lançamento. Confira se o Flask está rodando.');
+        alert('Não foi possível excluir o lançamento. Tente de novo em instantes.');
       }
     }
   });
@@ -9739,7 +9762,7 @@ if (formPresencial) {
       });
       if (!resposta.ok) {
         const erroDados = await resposta.json().catch(() => ({}));
-        throw new Error(erroDados.erro || `Erro no servidor Flask: ${resposta.status}`);
+        throw new Error(erroDados.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
       }
       cancelarEdicaoPresencial();
       await carregarPresencial(currentTab);
@@ -9749,7 +9772,7 @@ if (formPresencial) {
       }
     } catch (erro) {
       console.error('Falha ao salvar venda presencial:', erro);
-      alert('Não foi possível salvar o lançamento presencial. Confira se o Flask está rodando.');
+      alert('Não foi possível salvar o lançamento presencial. Tente de novo em instantes.');
     }
   });
 }
@@ -9846,7 +9869,7 @@ async function carregarGraficoRede() {
 
   try {
     const resposta = await fetch('/api/faturamento-rede-diario?dias=7');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     const dias = dados.dias || [];
 
@@ -9926,7 +9949,7 @@ async function carregarCanalRedeHome() {
 
   try {
     const resposta = await fetch(`/api/insights?inicio=${paraIso(inicio)}&fim=${paraIso(fim)}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     const canaisBrutos = (dados.geral && dados.geral.canais) || [];
 
@@ -10003,9 +10026,21 @@ function iniciarAtualizacaoAutomatica(callback, intervaloMs = 2 * 60 * 1000) {
   }, intervaloMs);
 }
 
+// Marca a hora SÓ quando a carga deu certo: antes o carimbo era escrito sem
+// esperar as respostas, então uma falha de rede deixava número velho com hora
+// nova na tela (QA 22/09). `marcarSemConexao` é o outro lado.
+function marcarSemConexao(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const hora = el.textContent.match(/[0-9]{2}:[0-9]{2}/);
+  el.textContent = hora ? `Sem conexão — números de ${hora[0]}` : 'Sem conexão agora';
+  el.classList.add('atualizado-em-falhou');
+}
+
 function marcarAtualizadoAgora(elementId) {
   const el = document.getElementById(elementId);
   if (!el) return;
+  el.classList.remove('atualizado-em-falhou');
   const agora = new Date();
   const hh = String(agora.getHours()).padStart(2, '0');
   const mm = String(agora.getMinutes()).padStart(2, '0');
@@ -10055,7 +10090,7 @@ async function carregarStatusSincronizacaoHome() {
   };
   try {
     const resposta = await fetch('/api/config/lojas');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const lojas = (await resposta.json()).lojas || [];
     const atrasadas = lojas.filter((l) => !_sincronizacaoEmDia(l.ultimaSincronizacao));
     if (!atrasadas.length) {
@@ -10082,7 +10117,7 @@ async function carregarConfigLojas() {
 
   try {
     const resposta = await fetch('/api/config/lojas');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
 
     if (ultimaSyncElem) {
@@ -10119,7 +10154,7 @@ async function carregarConfigLojas() {
       : `<tr><td colspan="4" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
   } catch (erro) {
     console.error('Falha ao carregar lojas cadastradas:', erro);
-    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Confira se o Flask está rodando.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Tente de novo em instantes.</td></tr>`;
   }
 }
 
@@ -10144,7 +10179,7 @@ async function sincronizarAgora() {
 
   try {
     const resposta = await fetch('/api/sincronizar-agora', { method: 'POST' });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
 
     if (resultadoElem) {
@@ -10156,7 +10191,7 @@ async function sincronizarAgora() {
   } catch (erro) {
     console.error('Falha ao sincronizar:', erro);
     if (resultadoElem) {
-      resultadoElem.innerHTML = `<div class="sync-resultado-item erro">Não foi possível sincronizar. Confira se o Flask está rodando.</div>`;
+      resultadoElem.innerHTML = `<div class="sync-resultado-item erro">Não foi possível sincronizar. Tente de novo em instantes.</div>`;
     }
   } finally {
     botao.disabled = false;
@@ -10197,8 +10232,8 @@ async function carregarDadosLojas() {
       fetch('/api/faturamento-rede-diario?dias=90'),
     ]);
 
-    if (!respOntem.ok) throw new Error(`Erro no servidor Flask: ${respOntem.status}`);
-    if (!respSerie.ok) throw new Error(`Erro no servidor Flask: ${respSerie.status}`);
+    if (!respOntem.ok) throw new Error(`O sistema não respondeu agora (código ${respOntem.status}). Tente de novo em instantes.`);
+    if (!respSerie.ok) throw new Error(`O sistema não respondeu agora (código ${respSerie.status}). Tente de novo em instantes.`);
 
     const dadosOntem = await respOntem.json();
     const dadosSerie = await respSerie.json();
@@ -10247,8 +10282,13 @@ async function carregarDadosLojas() {
     }
 
   } catch (error) {
-    console.error('Falha ao conectar com o backend Flask:', error);
+    console.error('Falha ao conectar com o backend:', error);
     document.getElementById('home-semanal-periodo').textContent = 'Não foi possível carregar o faturamento.';
+    // Sem isso, os números velhos ficavam na tela com hora nova no carimbo
+    // (QA 22/09).
+    marcarSemConexao('home-atualizado-em');
+    const valorRede = document.getElementById('total-rede-valor');
+    if (valorRede) valorRede.textContent = '—';
   }
 }
 
@@ -10458,7 +10498,7 @@ async function carregarGestaoHome() {
   if (!document.getElementById('home-curva-a')) return;
   try {
     const resposta = await fetch('/api/home/gestao');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     _renderEstoqueCriticoHome(dados.estoqueCritico || {});
     _renderSaudeFinanceiraHome(dados.saudeFinanceira || {});
@@ -10698,7 +10738,7 @@ async function carregarRegistroAtividade() {
   const dias = document.getElementById('registro-filtro-dias')?.value || 7;
   try {
     const resposta = await fetch(`/api/admin/registro?dias=${encodeURIComponent(dias)}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const acoes = (await resposta.json()).acoes || [];
     if (!acoes.length) {
       tbody.innerHTML = '<tr><td colspan="4" class="panel-subtitle">Nada registrado nesse período.</td></tr>';
@@ -10754,7 +10794,7 @@ async function carregarBackups() {
 
   try {
     const resposta = await fetch('/api/admin/backups');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     const copias = dados.backups || [];
     const ultima = copias[0];
@@ -10776,6 +10816,7 @@ async function carregarBackups() {
         <span class="backup-rotulo">Cópia automática</span>
         <span class="backup-valor">${dados.automatico ? `todo dia às ${dados.horaAutomatica}` : 'desligada'}</span>
         ${_rotinaRodandoHTML(dados.execucoes?.backup, 2)}
+        ${dados.execucoes?.backup_falhou ? `<span class="backup-alerta">última falha em ${_dataBR(dados.execucoes.backup_falhou.ultimaEm)}: ${escaparHtml(dados.execucoes.backup_falhou.detalhe || 'erro ao gerar')}</span>` : ''}
       </div>
       <div>
         <span class="backup-rotulo">Sincronização das vendas</span>
@@ -10899,7 +10940,7 @@ async function carregarEquipe() {
 
   try {
     const resposta = await fetch('/api/usuarios');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     equipeData = dados.usuarios;
 
@@ -11173,13 +11214,13 @@ async function carregarTarefas() {
   if (!board) return;
   try {
     const resposta = await fetch('/api/tarefas');
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     tarefasData = dados.tarefas || [];
     renderKanban();
   } catch (erro) {
     console.error('Falha ao carregar tarefas:', erro);
-    board.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar as tarefas. Confira se o Flask está rodando.</p>`;
+    board.innerHTML = `<p class="panel-subtitle" style="color:var(--danger-texto);">Não foi possível carregar as tarefas. Tente de novo em instantes.</p>`;
   }
 }
 
@@ -11252,11 +11293,11 @@ async function moverTarefa(tarefaId, novoStatus) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: novoStatus }),
     });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     await carregarTarefas();
   } catch (erro) {
     console.error('Falha ao mover tarefa:', erro);
-    alert('Não foi possível mover a tarefa. Confira se o Flask está rodando.');
+    alert('Não foi possível mover a tarefa. Tente de novo em instantes.');
   }
 }
 
@@ -11295,12 +11336,12 @@ async function salvarNovaTarefa(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corpo),
     });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     fecharModalCriar();
     await carregarTarefas();
   } catch (erro) {
     console.error('Falha ao criar tarefa:', erro);
-    alert('Não foi possível criar a tarefa. Confira se o Flask está rodando.');
+    alert('Não foi possível criar a tarefa. Tente de novo em instantes.');
   }
 }
 
@@ -11387,12 +11428,12 @@ async function adicionarSubtarefa() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ titulo }),
     });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     input.value = '';
     await recarregarTarefaSelecionada();
   } catch (erro) {
     console.error('Falha ao adicionar subtarefa:', erro);
-    alert('Não foi possível adicionar a subtarefa. Confira se o Flask está rodando.');
+    alert('Não foi possível adicionar a subtarefa. Tente de novo em instantes.');
   }
 }
 
@@ -11404,7 +11445,7 @@ async function alternarSubtarefa(subtarefaId, concluida) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ concluida }),
     });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     await recarregarTarefaSelecionada();
   } catch (erro) {
     console.error('Falha ao atualizar subtarefa:', erro);
@@ -11421,12 +11462,12 @@ async function enviarComentario() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ texto }),
     });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     input.value = '';
     await recarregarTarefaSelecionada();
   } catch (erro) {
     console.error('Falha ao enviar comentário:', erro);
-    alert('Não foi possível enviar o comentário. Confira se o Flask está rodando.');
+    alert('Não foi possível enviar o comentário. Tente de novo em instantes.');
   }
 }
 
@@ -11435,12 +11476,12 @@ async function excluirTarefa() {
   if (!confirm('Excluir essa tarefa? Essa ação não pode ser desfeita.')) return;
   try {
     const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, { method: 'DELETE' });
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     fecharModalDetalhes();
     await carregarTarefas();
   } catch (erro) {
     console.error('Falha ao excluir tarefa:', erro);
-    alert('Não foi possível excluir a tarefa. Confira se o Flask está rodando.');
+    alert('Não foi possível excluir a tarefa. Tente de novo em instantes.');
   }
 }
 
@@ -12555,7 +12596,7 @@ document.getElementById('btn-detalhe-produto-fechar')?.addEventListener('click',
 async function _buscarFichaTecnicaItem(itemId) {
   if (fichaTecnicaInsumosCache.has(itemId)) return fichaTecnicaInsumosCache.get(itemId);
   const resposta = await fetch(`/api/itens-cardapio/${itemId}/ficha-tecnica?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
-  if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+  if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
   const dados = await resposta.json();
   fichaTecnicaInsumosCache.set(itemId, dados);
   return dados;
@@ -12980,6 +13021,16 @@ let curvaAbcDias = 30;
 let curvaAbcDados = null;
 
 async function carregarCurvaAbc() {
+  // Trocar de loja ou período deixava os números da loja anterior na tela até
+  // a resposta chegar — e pra sempre, se desse erro (QA 22/09).
+  const subtituloAbc = document.getElementById('curva-tabela-subtitulo');
+  if (subtituloAbc) subtituloAbc.textContent = 'Carregando...';
+  ['curva-a-body', 'curva-c-body'].forEach((id) => {
+    const corpo = document.getElementById(id);
+    if (corpo) corpo.innerHTML = '';
+  });
+  const avisoAbc = document.getElementById('curva-aviso');
+  if (avisoAbc) avisoAbc.style.display = 'none';
   try {
     const resposta = await fetch(`/api/curva-abc?loja=${encodeURIComponent(curvaAbcLoja)}&dias=${curvaAbcDias}`);
     const dados = await resposta.json();
@@ -12988,8 +13039,15 @@ async function carregarCurvaAbc() {
     renderCurvaAbc();
   } catch (erro) {
     console.error('Falha ao carregar Curva ABC:', erro);
+    // O erro aparecia só na tabela grande: as duas listas e o subtítulo
+    // ficavam com os números da loja/período anteriores (QA 22/09).
     document.getElementById('curva-tabela-body').innerHTML =
-      `<tr><td colspan="8" class="panel-subtitle">Não foi possível carregar a análise.</td></tr>`;
+      `<tr><td colspan="8" class="panel-subtitle">Não foi possível carregar a análise. Tente de novo em instantes.</td></tr>`;
+    if (subtituloAbc) subtituloAbc.textContent = 'Não foi possível carregar a análise.';
+    ['curva-a-body', 'curva-c-body'].forEach((id) => {
+      const corpo = document.getElementById(id);
+      if (corpo) corpo.innerHTML = `<tr><td colspan="4" class="panel-subtitle">—</td></tr>`;
+    });
   }
 }
 
@@ -13194,6 +13252,17 @@ const VEREDITO = {
 async function carregarVendasSemanais(loja) {
   const subtitulo = document.getElementById('vendas-semanais-subtitulo');
   if (subtitulo) subtitulo.textContent = loja;
+  // Trocar de loja só trocava o nome embaixo: o cartão grande, a fita e os
+  // canais continuavam com a loja anterior até a resposta chegar — e pra
+  // sempre, se desse erro (QA 22/09).
+  vendasSemanaisDados = [];
+  vendasSemanaisSelecionada = null;
+  const heroSemanal = document.getElementById('semana-hero-container');
+  if (heroSemanal) heroSemanal.innerHTML = '<p class="panel-subtitle">Carregando...</p>';
+  const fitaSemanal = document.getElementById('fita');
+  if (fitaSemanal) fitaSemanal.innerHTML = '';
+  const tabelaSemanal = document.getElementById('vendas-semanais-tabela-body');
+  if (tabelaSemanal) tabelaSemanal.innerHTML = _linhaCarregando(9);
   try {
     const resposta = await fetch(`/api/faturamento-semanal?loja=${encodeURIComponent(loja)}`);
     const dados = await resposta.json();
@@ -13204,7 +13273,8 @@ async function carregarVendasSemanais(loja) {
   } catch (erro) {
     console.error('Falha ao carregar vendas semanais:', erro);
     document.getElementById('vendas-semanais-tabela-body').innerHTML =
-      `<tr><td colspan="9" class="panel-subtitle">Não foi possível carregar o histórico.</td></tr>`;
+      `<tr><td colspan="9" class="panel-subtitle">Não foi possível carregar o histórico. Tente de novo em instantes.</td></tr>`;
+    if (heroSemanal) heroSemanal.innerHTML = '<p class="panel-subtitle">Não foi possível carregar essa loja agora.</p>';
   }
 }
 
@@ -13479,6 +13549,7 @@ let curvaInsumosDias = 90;
 
 async function carregarCurvaAbcInsumos() {
   const tbody = document.getElementById('curva-insumos-body');
+  if (tbody) tbody.innerHTML = _linhaCarregando(7);
   try {
     const resposta = await fetch(`/api/curva-abc-insumos?dias=${curvaInsumosDias}`);
     const dados = await resposta.json();
@@ -13647,7 +13718,7 @@ function renderVariacoesPreco() {
 async function carregarVariacoesPreco() {
   try {
     const resposta = await fetch(`/api/precos/variacoes?dias=${precosDias}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     precosVariacoes = (await resposta.json()).variacoes || [];
     renderVariacoesPreco();
   } catch (erro) {
@@ -13683,7 +13754,7 @@ function _dataCurtaDoInstante(ms) {
 async function abrirHistoricoPreco(insumoId) {
   try {
     const resposta = await fetch(`/api/precos/insumo/${insumoId}`);
-    if (!resposta.ok) throw new Error(`Erro no servidor Flask: ${resposta.status}`);
+    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const d = await resposta.json();
     const compras = d.compras || [];
     const unidade = d.insumo.unidade_medida;

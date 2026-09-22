@@ -1982,3 +1982,10 @@ tr:hover { background-color: var(--surface-muted); }
   .acoes-linha { justify-content: flex-end; }
   .btn-acao-icone { width: 36px; height: 36px; }
 }
+
+/* Carimbo de atualização quando a carga falhou (QA 22/09): número
+   velho não pode aparecer com hora nova. */
+.atualizado-em-falhou {
+  color: var(--danger-texto);
+  font-weight: 600;
+}
