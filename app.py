@@ -1826,6 +1826,11 @@ def api_atualizar_preco_cardapio(item_id):
                 valor = float(valor)
             except (TypeError, ValueError):
                 return jsonify({"erro": f"Valor inválido pra {chave}."}), 400
+            # Zero é "não vendo nesse canal" e vale (ela usa nos produtos que
+            # só saem no balcão); negativo é sempre erro de digitação
+            # (QA 22/09).
+            if valor < 0:
+                return jsonify({"erro": "Preço não pode ser negativo."}), 400
         campos[CAMPO_PRECO_CARDAPIO_PARA_COLUNA[chave]] = valor
 
     if not campos:
@@ -3124,6 +3129,21 @@ def api_criar_fornecedor():
     campos, erro_resposta, status = _campos_fornecedor_do_corpo(dados)
     if erro_resposta:
         return erro_resposta, status
+
+    # Nome repetido é quase sempre clique duplo ou cadastro esquecido: com dois
+    # fornecedores iguais, metade dos insumos fica ligada a um e metade ao
+    # outro, e o convite de cotação sai partido (QA 22/09).
+    def _nome_simples(texto):
+        return ' '.join((texto or '').strip().lower().split())
+
+    nome_novo = _nome_simples(campos.get('nome', ''))
+    existente = next(
+        (f for f in listar_fornecedores() if _nome_simples(f['nome']) == nome_novo),
+        None,
+    )
+    if existente:
+        return jsonify({"erro":
+            f"Já existe um fornecedor chamado \"{existente['nome']}\". Edite o que existe em vez de cadastrar outro."}), 400
 
     fornecedor_id = criar_fornecedor(campos)
     lojas = _lojas_fornecedor_do_corpo(dados)

@@ -4297,3 +4297,33 @@ Os três críticos do Cardápio:
   `execucao_rotina`) e o painel mostra "última falha em 22/09: ...". Antes o
   erro morria no log e a tela seguia exibindo a data da última cópia que deu
   certo.
+
+### 6.49 Travas de digitação (QA "altos", leva C — 2026-09-22)
+
+- **Preço do Cardápio.** O servidor recusa negativo; **zero continua valendo e
+  quer dizer "não vendo nesse canal"** (ela usa nos produtos que só saem no
+  balcão, 22/09): a tela mostra "não vende" no lugar de "R$ 0,00" e a Curva ABC
+  deixou de contar aquela venda como receita zero, o que derrubava o preço
+  médio e estourava o CMV do produto. Ao salvar, o modal confere o que mudou:
+  preço 3× acima ou abaixo do anterior e campo apagado pedem confirmação
+  ("iFood: vai ficar SEM preço (estava R$ 39,90). Se é 'não vendo nesse canal',
+  digite 0").
+- **Número brasileiro nos "Colar lista".** `_lerNumeroBR` passou a entender
+  ponto de milhar sem vírgula ("1.500" = mil e quinhentos), e os dois colares
+  de Insumos (estoque em lote e quantidade ideal) usam ele — antes faziam
+  `replace(',', '.')` na mão e "Bacon;1.500" entrava como 1,5, com o resumo
+  dizendo "12 casados, todos encontrados".
+- **Ficha técnica abre sem insumo escolhido** ("Escolha o insumo..."), e linha
+  sem insumo não vai pro banco. Vinha o primeiro insumo da ordem alfabética
+  já selecionado, e um Salvar distraído cadastrava ele no produto.
+- **Venda presencial sem quantidade** pede confirmação, dizendo que o ticket
+  médio do dia fica distorcido (o valor entra, os pedidos não).
+- **"Desativar" pergunta antes**, com o nome: "Desativar o acesso de Fulano?
+  Ele perde o acesso agora, em qualquer aparelho onde estiver logado" — e o
+  mesmo pro fornecedor ("ele sai das próximas cotações e do Lançar preço").
+  Eram três ícones iguais e colados, e o do meio executava no primeiro clique.
+- **Fornecedor duplicado e telefone.** O Salvar trava enquanto grava (dois
+  cliques criavam o mesmo fornecedor duas vezes, e os insumos ficavam metade
+  em cada) e o servidor recusa nome repetido, dizendo qual já existe. Telefone
+  fora do padrão (menos de 10 ou mais de 13 dígitos) avisa que o convite de
+  cotação pode não abrir no WhatsApp.

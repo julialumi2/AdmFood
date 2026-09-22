@@ -3549,6 +3549,10 @@ function wireFornecedoresTableEvents() {
     btn.addEventListener('click', async () => {
       const id = parseInt(btn.dataset.id, 10);
       const novoValor = btn.dataset.ativo !== '1';
+      const nomeFornecedor = (fornecedoresLista.find((f) => f.id === id) || {}).nome || 'esse fornecedor';
+      // Um clique só, sem pergunta e ao lado de "Ver detalhes" e "Editar" —
+      // no celular era fácil errar o alvo (QA 22/09).
+      if (!novoValor && !confirm(`Desativar ${nomeFornecedor}? Ele sai das próximas cotações e do "Lançar preço".`)) return;
       try {
         const resposta = await fetch(`/api/fornecedores/${id}`, {
           method: 'PUT',
@@ -3608,6 +3612,25 @@ document.getElementById('form-fornecedor')?.addEventListener('submit', async (ev
     observacoes: document.getElementById('fornecedor-observacoes').value,
     lojas: Array.from(document.querySelectorAll('#fornecedor-lojas input:checked')).map((caixa) => caixa.value),
   };
+  // Telefone é conferido aqui, não só no banco: sem DDD, com o "0" da
+  // operadora ou com dígito faltando, o convite de cotação abre um WhatsApp
+  // que não existe — e o "Copiar link" nem aparece pra quem tem telefone
+  // cadastrado (QA 22/09).
+  const digitosTelefone = (corpo.contatoTelefone || '').replace(/\D/g, '');
+  if (digitosTelefone && (digitosTelefone.length < 10 || digitosTelefone.length > 13)
+      && !confirm('Esse telefone parece incompleto (o normal é DDD + número, tipo (15) 99999-9999). O convite de cotação pode não abrir no WhatsApp. Salvar assim mesmo?')) {
+    return;
+  }
+
+  // Salvar travado enquanto grava: dois cliques (ou um clique com Wi-Fi ruim)
+  // criavam o mesmo fornecedor duas vezes, e os insumos ficavam metade num
+  // cadastro e metade no outro (QA 22/09).
+  const botaoSalvar = evento.submitter || document.querySelector('#form-fornecedor button[type="submit"]');
+  const textoSalvar = botaoSalvar ? botaoSalvar.textContent : '';
+  if (botaoSalvar) {
+    botaoSalvar.disabled = true;
+    botaoSalvar.textContent = 'Salvando...';
+  }
   try {
     const url = fornecedorEditandoId ? `/api/fornecedores/${fornecedorEditandoId}` : '/api/fornecedores';
     const metodo = fornecedorEditandoId ? 'PUT' : 'POST';
@@ -3623,6 +3646,11 @@ document.getElementById('form-fornecedor')?.addEventListener('submit', async (ev
   } catch (erro) {
     console.error('Falha ao salvar fornecedor:', erro);
     alert(erro.message || 'Não foi possível salvar o fornecedor.');
+  } finally {
+    if (botaoSalvar) {
+      botaoSalvar.disabled = false;
+      botaoSalvar.textContent = textoSalvar;
+    }
   }
 });
 
@@ -6180,10 +6208,15 @@ const _numeroCampo = (valor) => Number(valor).toLocaleString('pt-BR', { maximumF
 // "7,5" e "7.5" = 7,5 (o ponto do teclado numérico é decimal: "0.250" é
 // 0,25, nunca 250). Com vírgula, os pontos são de milhar ("1.000,5").
 // Vazio = 0; NaN se não for número.
+// Número do jeito que ela digita: "1.500" é mil e quinhentos, "1,5" é um e
+// meio. Sem tratar o ponto de milhar, "Bacon;1.500" entrava como 1,5 nos
+// "Colar lista", calado (QA 22/09).
 function _lerNumeroBR(texto) {
   const limpo = String(texto).trim().replace(/\s/g, '');
   if (!limpo) return 0;
   if (limpo.includes(',')) return Number(limpo.replace(/\./g, '').replace(',', '.'));
+  // Só ponto: milhar quando vem em grupos de 3 (1.500, 12.000, 1.234.567).
+  if (/^-?\d{1,3}(\.\d{3})+$/.test(limpo)) return Number(limpo.replace(/\./g, ''));
   return Number(limpo);
 }
 
@@ -8143,9 +8176,10 @@ function processarColarListaAjusteLote() {
     const partes = bruta.split(separador);
     if (partes.length < 2) { naoEncontrados.push(bruta); return; }
 
-    const valor = partes[partes.length - 1].trim().replace(',', '.');
+    const bruto = partes[partes.length - 1].trim();
+    const valor = _lerNumeroBR(bruto);
     const nome = partes.slice(0, -1).join(separador).trim();
-    if (!nome || isNaN(parseFloat(valor))) { naoEncontrados.push(bruta); return; }
+    if (!nome || !bruto || isNaN(valor)) { naoEncontrados.push(bruta); return; }
 
     const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
     if (insumoId) {
@@ -8278,9 +8312,9 @@ function processarColarListaAtualizarEstoqueLote() {
     const partes = bruta.split(separador);
     if (partes.length < 2) { naoEncontrados.push(bruta); return; }
 
-    const ultimo = partes[partes.length - 1].trim().replace(',', '.');
-    const penultimo = partes.length > 2 ? partes[partes.length - 2].trim().replace(',', '.') : null;
-    const temMinimo = penultimo !== null && !isNaN(parseFloat(penultimo));
+    const ultimo = _lerNumeroBR(partes[partes.length - 1]);
+    const penultimo = partes.length > 2 ? _lerNumeroBR(partes[partes.length - 2]) : null;
+    const temMinimo = penultimo !== null && !isNaN(penultimo);
 
     const valor = temMinimo ? penultimo : ultimo;
     const minimo = temMinimo ? ultimo : null;
@@ -9744,6 +9778,13 @@ if (formPresencial) {
 
     const temQuantidade = UNIDADES_COM_QUANTIDADE_PRESENCIAL.includes(currentTab);
     const quantidade = temQuantidade && presencialQuantidadeInput ? (presencialQuantidadeInput.value || 0) : 0;
+    // Sem a quantidade, o valor entra no faturamento e a conta do ticket médio
+    // fica com pedido a menos — o ticket do dia sobe sem ninguém entender por
+    // quê (QA 22/09).
+    if (temQuantidade && !(parseFloat(quantidade) > 0)
+        && !confirm('Sem a quantidade de vendas, o ticket médio do dia fica distorcido: o valor entra, os pedidos não. Lançar assim mesmo?')) {
+      return;
+    }
 
     try {
       // Editando e trocou a data: precisa apagar o registro antigo primeiro,
@@ -10996,7 +11037,13 @@ function wireEquipeRowEvents() {
     const usuario = equipeData.find(u => String(u.id) === linha.dataset.id);
     if (!usuario) return;
     linha.querySelector('[data-acao="editar"]')?.addEventListener('click', () => abrirModalEditarUsuario(usuario));
-    linha.querySelector('[data-acao="alternar-ativo"]')?.addEventListener('click', () => alternarAtivoUsuario(usuario.id, !usuario.ativo));
+    linha.querySelector('[data-acao="alternar-ativo"]')?.addEventListener('click', () => {
+      // Eram três ícones iguais e colados (editar, desativar, excluir) e o do
+      // meio executava no primeiro clique. Agora desativar pergunta, e o
+      // acesso cai na hora (QA 22/09).
+      if (usuario.ativo && !confirm(`Desativar o acesso de ${usuario.nome}? Ele perde o acesso agora, em qualquer aparelho onde estiver logado.`)) return;
+      alternarAtivoUsuario(usuario.id, !usuario.ativo);
+    });
     linha.querySelector('[data-acao="excluir"]')?.addEventListener('click', () => excluirUsuarioEquipe(usuario.id, usuario.nome));
   });
 }
@@ -12421,6 +12468,9 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   atualizarCustoEMargens();
 
   corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
+    // Guarda o preço que estava lá: é a régua pra avisar de 3,90 virando
+    // 39,00 e pra perguntar antes de deixar o canal sem preço (QA 22/09).
+    input.dataset.precoAnterior = input.value;
     input.addEventListener('input', (evento) => {
       alteracoesPreco[evento.target.dataset.canal] = evento.target.value === '' ? null : evento.target.value;
     });
@@ -12464,6 +12514,27 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         return;
       }
     }
+    // Confere os preços antes de mandar: mudança fora de proporção e campo
+    // apagado passavam direto, e só a cor da margem denunciava (QA 22/09).
+    const avisosPreco = [];
+    corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
+      const canal = input.dataset.canal;
+      if (!(canal in alteracoesPreco)) return;
+      const anterior = parseFloat(input.dataset.precoAnterior);
+      const novo = alteracoesPreco[canal] === null ? null : parseFloat(alteracoesPreco[canal]);
+      const nomeCanal = (CANAIS_CARDAPIO.find((c) => c.chave === canal) || {}).label || canal;
+      if (novo === null && anterior > 0) {
+        avisosPreco.push(`${nomeCanal}: vai ficar SEM preço (estava ${_formatarMoedaBRL(anterior)}). Se é "não vendo nesse canal", digite 0.`);
+      } else if (novo !== null && anterior > 0 && novo > 0 && (novo >= anterior * 3 || novo * 3 <= anterior)) {
+        avisosPreco.push(`${nomeCanal}: ${_formatarMoedaBRL(anterior)} → ${_formatarMoedaBRL(novo)}`);
+      }
+    });
+    if (avisosPreco.length && !confirm(`Confira antes de salvar:\n\n${avisosPreco.join('\n')}\n\nSalvar assim mesmo?`)) {
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+      return;
+    }
+
     try {
       if (Object.keys(alteracoesPreco).length) {
         const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, {
@@ -12756,9 +12827,10 @@ function _formatarQuantidadeFicha(ins) {
 // campo aceita qualquer casa decimal — com step 0,01, 0,014 era recusado
 // pelo navegador e só dava pra gravar 0,01 ou 0,02.
 function _linhaFichaTecnicaHTML(insumoId, quantidade) {
-  const opcoes = fichaTecnicaInsumosDisponiveis.map(i =>
-    `<option value="${i.id}" ${i.id === insumoId ? 'selected' : ''}>${escaparHtml(i.nome)} (${escaparHtml(i.unidadeMedida)})</option>`
-  ).join('');
+  const opcoes = (insumoId ? '' : '<option value="" selected>Escolha o insumo...</option>')
+    + fichaTecnicaInsumosDisponiveis.map(i =>
+      `<option value="${i.id}" ${i.id === insumoId ? 'selected' : ''}>${escaparHtml(i.nome)} (${escaparHtml(i.unidadeMedida)})</option>`
+    ).join('');
   return `
     <div class="ficha-tecnica-linha" data-quantidade-base="${quantidade ?? ''}">
       <select class="ficha-tecnica-select-insumo">${opcoes}</select>
@@ -12875,7 +12947,10 @@ async function abrirModalFichaTecnicaItem(itemId) {
   const container = document.getElementById('ficha-tecnica-item-linhas');
   const linhasIniciais = dados.insumos.length
     ? dados.insumos
-    : [{ insumoId: fichaTecnicaInsumosDisponiveis[0].id, quantidade: null }];
+    // Ficha nova abre com a linha vazia: vinha o primeiro insumo da ordem
+    // alfabética já escolhido, e um Salvar distraído cadastrava ele no
+    // produto (QA 22/09).
+    : [{ insumoId: '', quantidade: null }];
   container.innerHTML = linhasIniciais.map(ins => _linhaFichaTecnicaHTML(ins.insumoId, ins.quantidade)).join('');
 
   // Embalagem pra viagem: só em produto — complemento vai dentro do produto,
@@ -12948,7 +13023,9 @@ document.getElementById('btn-ficha-tecnica-item-cancelar')?.addEventListener('cl
 function _adicionarLinhaFichaTecnica(idContainer) {
   if (!fichaTecnicaInsumosDisponiveis.length) return;
   const container = document.getElementById(idContainer);
-  container.insertAdjacentHTML('beforeend', _linhaFichaTecnicaHTML(fichaTecnicaInsumosDisponiveis[0].id, null));
+  // Sem insumo escolhido: vinha o primeiro da ordem alfabética, e um Salvar
+  // distraído cadastrava ele no produto (QA 22/09).
+  container.insertAdjacentHTML('beforeend', _linhaFichaTecnicaHTML('', null));
   _wireLinhasFichaTecnica();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -12957,10 +13034,13 @@ document.getElementById('btn-ficha-tecnica-add-linha')?.addEventListener('click'
 document.getElementById('btn-ficha-tecnica-add-embalagem')?.addEventListener('click', () => _adicionarLinhaFichaTecnica('ficha-tecnica-embalagem-linhas'));
 
 function _linhasDaListaFichaTecnica(idContainer) {
-  return [...document.querySelectorAll(`#${idContainer} .ficha-tecnica-linha`)].map(linha => ({
-    insumoId: parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10),
-    quantidade: _quantidadeBaseDaLinhaFicha(linha),
-  }));
+  return [...document.querySelectorAll(`#${idContainer} .ficha-tecnica-linha`)]
+    // Linha aberta e não preenchida ("Escolha o insumo...") não vai pro banco.
+    .filter((linha) => linha.querySelector('.ficha-tecnica-select-insumo').value)
+    .map(linha => ({
+      insumoId: parseInt(linha.querySelector('.ficha-tecnica-select-insumo').value, 10),
+      quantidade: _quantidadeBaseDaLinhaFicha(linha),
+    }));
 }
 
 document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', async (evento) => {
