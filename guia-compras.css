@@ -332,3 +332,71 @@
   color: var(--text-muted);
   font-size: 0.84rem;
 }
+
+/* ---------- Fluxograma do caminho de ponta a ponta (2026-09-22) ---------- */
+
+:root {
+  --fluxo-direto-bg: #E6F1FB;
+  --fluxo-direto: #185FA5;
+  --fluxo-direto-texto: #0C447C;
+  --fluxo-cotacao-bg: #EEEDFE;
+  --fluxo-cotacao: #534AB7;
+  --fluxo-cotacao-texto: #3C3489;
+}
+
+body.dark-mode {
+  --fluxo-direto-bg: rgba(55, 138, 221, 0.16);
+  --fluxo-direto: #85B7EB;
+  --fluxo-direto-texto: #B5D4F4;
+  --fluxo-cotacao-bg: rgba(127, 119, 221, 0.18);
+  --fluxo-cotacao: #AFA9EC;
+  --fluxo-cotacao-texto: #CECBF6;
+}
+
+.guia-fluxo-moldura { overflow-x: auto; }
+
+.guia-fluxo {
+  display: block;
+  width: 100%;
+  min-width: 520px;
+  max-width: 680px;
+  height: auto;
+  margin: var(--space-3) auto var(--space-2);
+  font-family: inherit;
+}
+
+.guia-fluxo .no { fill: var(--surface-muted); stroke: var(--border-strong); stroke-width: 1; }
+
+.guia-fluxo .no-direto { fill: var(--fluxo-direto-bg); stroke: var(--fluxo-direto); }
+
+.guia-fluxo .no-cotacao { fill: var(--fluxo-cotacao-bg); stroke: var(--fluxo-cotacao); }
+
+.guia-fluxo .titulo { font-size: 14px; font-weight: 700; fill: var(--text-dark); }
+
+.guia-fluxo .sub { font-size: 12px; fill: var(--text-muted); }
+
+.guia-fluxo .direto .titulo,
+.guia-fluxo .direto .sub { fill: var(--fluxo-direto-texto); }
+
+.guia-fluxo .cotacao .titulo,
+.guia-fluxo .cotacao .sub { fill: var(--fluxo-cotacao-texto); }
+
+.guia-fluxo .seta { fill: none; stroke: var(--text-faint); stroke-width: 1.5; }
+
+.guia-fluxo .seta-direto { stroke: var(--fluxo-direto); }
+
+.guia-fluxo .seta-cotacao { stroke: var(--fluxo-cotacao); }
+
+.guia-fluxo .ponta {
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guia-fluxo .ponta-direto { stroke: var(--fluxo-direto); }
+
+.guia-fluxo .ponta-cotacao { stroke: var(--fluxo-cotacao); }
+
+.guia-fluxo .rotulo { font-size: 12px; font-weight: 600; fill: var(--text-muted); }

@@ -183,20 +183,73 @@
 
         <div class="chart-card">
           <p class="panel-title" style="margin-bottom: var(--space-1);">O caminho, de ponta a ponta</p>
-          <div class="guia-mapa" style="margin-bottom: var(--space-2);">
-            <div class="guia-mapa-no"><span class="num">1</span><span class="rotulo">Requisição</span></div>
-            <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">2</span><span class="rotulo">Contagem</span></div>
-            <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">3</span><span class="rotulo">O que comprar</span></div>
-            <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">4</span><span class="rotulo">Cotação</span></div>
-            <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">5</span><span class="rotulo">Pedido</span></div>
-            <span class="guia-mapa-seta">→</span>
-            <div class="guia-mapa-no"><span class="num">6</span><span class="rotulo">Recebimento</span></div>
+          <!-- Fluxograma (2026-09-22): a compra se divide em pedido direto dos
+               homologados e cotação, e o item troca de bloco na hora -->
+          <div class="guia-fluxo-moldura">
+            <svg class="guia-fluxo" viewBox="0 0 680 736" role="img" aria-labelledby="guia-fluxo-titulo guia-fluxo-desc">
+              <title id="guia-fluxo-titulo">Fluxo de compras do AdmFood</title>
+              <desc id="guia-fluxo-desc">Do cadastro do insumo ao recebimento, com a compra dividida em pedido direto dos homologados e cotação, e as trocas entre os dois blocos.</desc>
+              <defs>
+                <marker id="guia-seta" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ponta" d="M2 1L8 5L2 9"/></marker>
+                <marker id="guia-seta-direto" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ponta ponta-direto" d="M2 1L8 5L2 9"/></marker>
+                <marker id="guia-seta-cotacao" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ponta ponta-cotacao" d="M2 1L8 5L2 9"/></marker>
+              </defs>
+              <g>
+                <rect class="no" x="180" y="40" width="320" height="56" rx="8"/>
+                <text class="titulo" x="340" y="58" text-anchor="middle" dominant-baseline="central">Cadastro do insumo</text>
+                <text class="sub" x="340" y="78" text-anchor="middle" dominant-baseline="central">fornecedor, homologado e mínimo, por loja</text>
+              </g>
+              <line class="seta" x1="340" y1="96" x2="340" y2="130" marker-end="url(#guia-seta)"/>
+              <g>
+                <rect class="no" x="180" y="136" width="320" height="56" rx="8"/>
+                <text class="titulo" x="340" y="154" text-anchor="middle" dominant-baseline="central">Contagem da loja</text>
+                <text class="sub" x="340" y="174" text-anchor="middle" dominant-baseline="central">a loja conta pelo link, sem login</text>
+              </g>
+              <line class="seta" x1="340" y1="192" x2="340" y2="226" marker-end="url(#guia-seta)"/>
+              <g>
+                <rect class="no" x="180" y="232" width="320" height="56" rx="8"/>
+                <text class="titulo" x="340" y="250" text-anchor="middle" dominant-baseline="central">O que comprar</text>
+                <text class="sub" x="340" y="270" text-anchor="middle" dominant-baseline="central">sugestão: ideal menos o contado</text>
+              </g>
+              <path class="seta" d="M340 288 L340 318 L155 318 L155 342" marker-end="url(#guia-seta)"/>
+              <path class="seta" d="M340 288 L340 318 L525 318 L525 342" marker-end="url(#guia-seta)"/>
+              <g class="direto">
+                <rect class="no no-direto" x="40" y="348" width="230" height="56" rx="8"/>
+                <text class="titulo" x="155" y="366" text-anchor="middle" dominant-baseline="central">Pedido direto</text>
+                <text class="sub" x="155" y="386" text-anchor="middle" dominant-baseline="central">homologado, preço do cadastro</text>
+              </g>
+              <g class="cotacao">
+                <rect class="no no-cotacao" x="410" y="348" width="230" height="56" rx="8"/>
+                <text class="titulo" x="525" y="366" text-anchor="middle" dominant-baseline="central">Cotação</text>
+                <text class="sub" x="525" y="386" text-anchor="middle" dominant-baseline="central">cada fornecedor cota o dele</text>
+              </g>
+              <text class="rotulo" x="340" y="354" text-anchor="middle" dominant-baseline="central">Mover pra cotação</text>
+              <line class="seta seta-cotacao" x1="276" y1="368" x2="404" y2="368" marker-end="url(#guia-seta-cotacao)"/>
+              <line class="seta seta-direto" x1="404" y1="386" x2="276" y2="386" marker-end="url(#guia-seta-direto)"/>
+              <text class="rotulo" x="340" y="399" text-anchor="middle" dominant-baseline="central">Comprar direto</text>
+              <line class="seta" x1="525" y1="404" x2="525" y2="438" marker-end="url(#guia-seta)"/>
+              <g class="cotacao">
+                <rect class="no no-cotacao" x="410" y="444" width="230" height="56" rx="8"/>
+                <text class="titulo" x="525" y="462" text-anchor="middle" dominant-baseline="central">Escolher vencedor</text>
+                <text class="sub" x="525" y="482" text-anchor="middle" dominant-baseline="central">e gerar os pedidos</text>
+              </g>
+              <path class="seta" d="M155 404 L155 568 L174 568" marker-end="url(#guia-seta)"/>
+              <text class="rotulo" x="167" y="472" text-anchor="start" dominant-baseline="central">Gerar pedidos homologados</text>
+              <path class="seta" d="M525 500 L525 568 L506 568" marker-end="url(#guia-seta)"/>
+              <g>
+                <rect class="no" x="180" y="540" width="320" height="56" rx="8"/>
+                <text class="titulo" x="340" y="558" text-anchor="middle" dominant-baseline="central">Pedido por fornecedor e loja</text>
+                <text class="sub" x="340" y="578" text-anchor="middle" dominant-baseline="central">Enviar por WhatsApp, confirma pelo link</text>
+              </g>
+              <line class="seta" x1="340" y1="596" x2="340" y2="634" marker-end="url(#guia-seta)"/>
+              <g>
+                <rect class="no" x="180" y="640" width="320" height="56" rx="8"/>
+                <text class="titulo" x="340" y="658" text-anchor="middle" dominant-baseline="central">Recebimento</text>
+                <text class="sub" x="340" y="678" text-anchor="middle" dominant-baseline="central">confere quantidade e nota, estoque sobe</text>
+              </g>
+            </svg>
           </div>
-          <p class="guia-mapa-atalho">Item com fornecedor homologado pula a cotação: sai da etapa 3 direto em pedido.</p>
+          <p class="guia-mapa-atalho">As duas setas do meio trocam um item de bloco na hora, sem refazer a contagem.</p>
         </div>
 
         <ol class="guia-etapas" style="margin-top: var(--space-8);">
