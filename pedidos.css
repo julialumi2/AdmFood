@@ -557,6 +557,24 @@ body.dark-mode {
    Aguardando/Histórico e a lista de itens que abre na linha.
    =========================================================================== */
 
+/* Campo com a unidade escrita do lado (kg/L/un e R$/kg) — quem recebe conta
+   caixa e quilo, não grama (QA 22/09). */
+.recebimento-campo-unidade {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recebimento-campo-unidade input { flex: 1; min-width: 0; }
+
+.recebimento-campo-unidade span {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .recebimentos-pagina { gap: var(--space-4); }
 
 .recebimentos-modo {

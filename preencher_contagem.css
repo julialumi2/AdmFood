@@ -189,6 +189,25 @@ body {
 
 .contagem-proximo svg { width: 18px; height: 18px; }
 
+/* Preço com a unidade escrita dos dois lados (R$ ... / kg): sem isso o
+   fornecedor digitava o preço do quilo e o sistema guardava como preço do
+   grama (QA 22/09). */
+.cotacao-campo-preco {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cotacao-campo-preco input { flex: 1; min-width: 60px; }
+
+.cotacao-campo-preco span {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* Botão flutuante "Seções" */
 .contagem-secoes { position: fixed; left: var(--space-4); bottom: var(--space-4); z-index: 50; }
 

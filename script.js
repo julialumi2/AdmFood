@@ -4043,7 +4043,11 @@ async function abrirCotacaoDetalhe(cotacaoId) {
 
   const selectInsumo = document.getElementById('cotacao-preco-insumo');
   selectInsumo.innerHTML = (insumosDados.insumos || [])
-    .map(i => `<option value="${i.id}">${escaparHtml(i.nome)}</option>`).join('');
+    .map(i => `<option value="${i.id}" data-unidade="${escaparHtml(i.unidadeMedida || 'un')}">${escaparHtml(i.nome)}</option>`).join('');
+  // Mesma regra do link do fornecedor: o preço é digitado por kg/L/un e
+  // convertido na hora de gravar (QA 22/09).
+  selectInsumo.addEventListener('change', _atualizarUnidadeLancarPreco);
+  _atualizarUnidadeLancarPreco();
 
   const selectFornecedor = document.getElementById('cotacao-preco-fornecedor');
   selectFornecedor.innerHTML = (fornecedoresDados.fornecedores || [])
@@ -4786,7 +4790,7 @@ function _renderTabelaComparacaoCotacao() {
         <td class="${classes.join(' ')}" ${isAdmin ? `data-acao="selecionar-preco" data-id="${preco.id}" title="Marcar como vencedor"` : ''}>
           <div class="comparacao-preco-conteudo">
             ${preco.selecionado ? '<i data-lucide="check-circle" class="icone-preco-selecionado"></i>' : ''}
-            <span class="comparacao-preco-valor">R$ ${preco.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span class="comparacao-preco-valor">${escaparHtml(_formatarCustoPorUnidade(preco.preco, item?.unidadeMedida))}</span>
           </div>
           ${isAdmin ? `<button type="button" class="btn-acao-icone btn-excluir btn-remover-preco-comparacao" data-acao="excluir-preco" data-id="${preco.id}" title="Remover preço"><i data-lucide="trash-2"></i></button>` : ''}
         </td>
@@ -4800,7 +4804,7 @@ function _renderTabelaComparacaoCotacao() {
     const ultimaCompra = item?.ultimaCompra;
     const celulaUltimaCompra = ultimaCompra
       ? `<div class="ultima-compra-conteudo">
-           <span>R$ ${ultimaCompra.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+           <span>${escaparHtml(_formatarCustoPorUnidade(ultimaCompra.preco, item?.unidadeMedida))}</span>
            <span class="text-muted" style="font-size:0.8em;">${new Date(ultimaCompra.dataIso).toLocaleDateString('pt-BR')} · ${escaparHtml(ultimaCompra.fornecedorNome)}</span>
          </div>`
       : '<span class="text-muted">—</span>';
@@ -4933,12 +4937,25 @@ document.getElementById('btn-lancar-preco-cancelar')?.addEventListener('click', 
   document.getElementById('modal-lancar-preco-cotacao').style.display = 'none';
 });
 
+function _unidadeLancarPreco() {
+  const select = document.getElementById('cotacao-preco-insumo');
+  const opcao = select?.options[select.selectedIndex];
+  return _escalaDeCusto(opcao?.dataset.unidade || 'un');
+}
+
+function _atualizarUnidadeLancarPreco() {
+  const rotulo = document.getElementById('cotacao-preco-unidade');
+  if (rotulo) rotulo.textContent = _unidadeLancarPreco().rotulo;
+}
+
 document.getElementById('form-cotacao-preco')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
+  const { fator } = _unidadeLancarPreco();
+  const digitado = parseFloat(document.getElementById('cotacao-preco-valor').value);
   const corpo = {
     insumoId: document.getElementById('cotacao-preco-insumo').value,
     fornecedorId: document.getElementById('cotacao-preco-fornecedor').value,
-    preco: document.getElementById('cotacao-preco-valor').value,
+    preco: String(Math.round((digitado / fator) * 1e6) / 1e6),
   };
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/precos`, {
@@ -5699,12 +5716,16 @@ document.getElementById('btn-contagem-voltar')?.addEventListener('click', () => 
 document.getElementById('btn-contagem-aprovar')?.addEventListener('click', async () => {
   if (!contagemDetalheAtual) return;
   const jaAprovada = contagemDetalheAtual.status === 'aprovada';
-  if (!jaAprovada && !confirm('Aprovar essa loja? As quantidades preenchidas vão substituir o estoque atual dela. Com todas as lojas aprovadas, você confere quanto comprar de cada item antes de gerar a cotação.')) return;
+  if (!jaAprovada && !confirm('Aprovar essa loja? As quantidades preenchidas viram o estoque atual dela, já somando o que entrou e saiu depois que a loja enviou. Com todas as lojas aprovadas, você confere quanto comprar de cada item antes de gerar a cotação.')) return;
   try {
     if (!jaAprovada) {
       const resposta = await fetch(`/api/contagens/${contagemDetalheAtual.id}/aprovar`, { method: 'POST' });
       const dados = await resposta.json();
       if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+      // Aviso do que mudou entre o envio e a aprovação (QA 22/09).
+      if (dados.comMovimento) {
+        alert(`${_qtdTexto(dados.comMovimento, 'item teve', 'itens tiveram')} movimento entre o envio e a aprovação (recebimento, compra por fora ou venda). O estoque foi ajustado por esse movimento, em cima do que a loja contou.`);
+      }
     }
 
     // A compra não sai mais direto daqui (2026-09-21): com todas as lojas
@@ -7099,16 +7120,29 @@ async function inicializarPreencherCotacao() {
     document.getElementById('cotacao-publica-titulo').textContent = dados.cotacaoTitulo || 'Preencher cotação de preços';
     document.getElementById('cotacao-publica-subtitulo').textContent = `Válido até ${new Date(dados.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
 
+    // O fornecedor fala em kg/L/un, o banco guarda por g/ml/un: a tela pedia
+    // "Preço Unitário (R$)" sem unidade nenhuma ao lado de uma quantidade em
+    // kg, então o preço do quilo entrava como preço do grama — pedido e custo
+    // mil vezes maiores (QA 22/09). Agora a unidade está escrita na linha e a
+    // conversão é feita na hora de enviar.
     const container = document.getElementById('cotacao-publica-itens');
-    container.innerHTML = dados.itens.map((item) => `
-      <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
+    container.innerHTML = dados.itens.map((item) => {
+      const { rotulo, fator } = _escalaDeCusto(item.unidadeMedida);
+      const quantidade = Math.round((item.quantidade / fator) * 1000) / 1000;
+      return `
+      <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}" data-fator="${fator}">
         <td class="font-bold">${escaparHtml(item.nome)}</td>
         <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '—')}</div></td>
-        <td><div class="contagem-item-somente-leitura">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</div></td>
-        <td><input type="number" step="0.01" min="0.01" placeholder="0,00" data-insumo-id="${item.insumoId}"></td>
+        <td><div class="contagem-item-somente-leitura">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</div></td>
+        <td><div class="cotacao-campo-preco">
+          <span>R$</span>
+          <input type="number" step="any" min="0" placeholder="0,00" data-insumo-id="${item.insumoId}">
+          <span>/ ${escaparHtml(rotulo)}</span>
+        </div></td>
         <td style="text-align:center;"><input type="checkbox" data-nao-vende-id="${item.insumoId}"></td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     container.querySelectorAll('[data-nao-vende-id]').forEach((checkbox) => {
       checkbox.addEventListener('change', () => {
@@ -7132,7 +7166,12 @@ async function inicializarPreencherCotacao() {
       evento.preventDefault();
       const precos = {};
       container.querySelectorAll('[data-insumo-id]').forEach((input) => {
-        if (!input.disabled && input.value !== '') precos[input.dataset.insumoId] = input.value;
+        if (input.disabled || input.value === '') return;
+        // De R$/kg (o que ele digitou) pra R$/g (o que o sistema guarda).
+        const fator = parseFloat(input.closest('tr')?.dataset.fator) || 1;
+        const valor = parseFloat(input.value);
+        if (!(valor > 0)) return;
+        precos[input.dataset.insumoId] = String(Math.round((valor / fator) * 1e6) / 1e6);
       });
       if (!Object.keys(precos).length) {
         alert('Preencha o preço de pelo menos um item, ou marque todos como "não vendo esse item".');
@@ -7211,7 +7250,7 @@ async function inicializarConfirmarPedido() {
               <tr>
                 <td class="font-bold">${escaparHtml(item.nome)}</td>
                 <td>${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
-                <td>R$ ${item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                <td>${escaparHtml(_formatarCustoPorUnidade(item.precoUnitario, item.unidadeMedida))}</td>
                 <td>R$ ${item.precoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
               </tr>
             `).join('')}
@@ -8601,13 +8640,27 @@ document.getElementById('recebimentos-filtro-atraso')?.addEventListener('click',
 
 document.getElementById('recebimentos-busca')?.addEventListener('input', renderRecebimentosTabela);
 
+// Quem recebe conta caixa e quilo, não grama: o campo agora é na unidade de
+// compra (kg/L/un), com a unidade escrita do lado — antes a caixa vinha com
+// "9563" ao lado de uma coluna escrita "9,56 kg", e quem digitava 10 punha 10
+// gramas no estoque (QA 22/09). A conversão pra unidade do insumo é feita na
+// hora de enviar; o preço vira R$ por kg/L pelo mesmo motivo.
 function _linhaRecebimentoItemHTML(item) {
+  const { rotulo, fator } = _escalaDeCusto(item.unidadeMedida);
+  const quantidade = Math.round((item.quantidade / fator) * 1000) / 1000;
+  const preco = Math.round(item.precoUnitario * fator * 100) / 100;
   return `
-    <tr data-insumo-id="${item.insumoId}">
+    <tr data-insumo-id="${item.insumoId}" data-fator="${fator}">
       <td class="font-bold">${escaparHtml(item.nome)}</td>
-      <td class="text-muted">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
-      <td><input type="number" step="0.01" min="0" class="recebimento-input-quantidade" value="${item.quantidade}"></td>
-      <td><input type="number" step="0.01" min="0" class="recebimento-input-preco" value="${item.precoUnitario}"></td>
+      <td class="text-muted">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</td>
+      <td><div class="recebimento-campo-unidade">
+        <input type="number" step="any" min="0" class="recebimento-input-quantidade" value="${quantidade}">
+        <span>${escaparHtml(rotulo)}</span>
+      </div></td>
+      <td><div class="recebimento-campo-unidade">
+        <input type="number" step="any" min="0" class="recebimento-input-preco" value="${preco}">
+        <span>R$/${escaparHtml(rotulo)}</span>
+      </div></td>
     </tr>
   `;
 }
@@ -8706,11 +8759,23 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
   const erro = document.getElementById('recebimento-erro');
   erro.style.display = 'none';
 
-  const itens = Array.from(document.querySelectorAll('#recebimento-itens-body tr')).map((linha) => ({
-    insumoId: parseInt(linha.dataset.insumoId, 10),
-    quantidade: parseFloat(linha.querySelector('.recebimento-input-quantidade').value),
-    precoUnitario: parseFloat(linha.querySelector('.recebimento-input-preco').value),
-  }));
+  const itens = Array.from(document.querySelectorAll('#recebimento-itens-body tr')).map((linha) => {
+    const fator = parseFloat(linha.dataset.fator) || 1;
+    return {
+      insumoId: parseInt(linha.dataset.insumoId, 10),
+      quantidade: (parseFloat(linha.querySelector('.recebimento-input-quantidade').value) || 0) * fator,
+      precoUnitario: (parseFloat(linha.querySelector('.recebimento-input-preco').value) || 0) / fator,
+    };
+  });
+
+  // Confirmar duas vezes somava o estoque duas vezes (QA 22/09): o botão trava
+  // e avisa que está confirmando. O servidor também recusa a segunda.
+  const botao = evento.currentTarget.querySelector('button[type="submit"]');
+  const textoBotao = botao ? botao.textContent : '';
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = 'Confirmando...';
+  }
 
   try {
     const resposta = await fetch(`/api/recebimentos/${recebimentoAtual.id}/confirmar`, {
@@ -8746,6 +8811,11 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
     console.error('Falha ao confirmar recebimento:', erroCatch);
     erro.textContent = erroCatch.message || 'Não foi possível confirmar o recebimento.';
     erro.style.display = '';
+  } finally {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = textoBotao;
+    }
   }
 });
 

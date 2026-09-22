@@ -4049,3 +4049,43 @@ um botão por pessoa da loja que abre o WhatsApp com a mensagem e o link da
 contagem (só enquanto a loja não respondeu); o mesmo aparece nos links logo
 depois de criar a requisição. Os contatos da VMarket (estoquistas) foram
 cadastrados pela tela em produção, não no código (o repositório é público).
+
+### 6.40 Correções dos 5 críticos do QA (2026-09-22)
+
+Auditoria de QA de todas as telas (23 telas, três personas: conferente no
+celular, compradora no computador e dono). Os cinco problemas mais graves
+foram corrigidos:
+
+1. **Preço da cotação com unidade.** O link do fornecedor mostrava a
+   quantidade em kg e pedia "Preço Unitário (R$)" sem unidade, e o número era
+   gravado como preço por **grama** — pedido e custo mil vezes maiores (no
+   teste, um pedido de R$ 554.796,59). Agora a linha diz `R$ ___ / kg` (ou
+   `/ L`, `/ un`), o campo aceita qualquer casa decimal e a conversão pra
+   unidade do insumo é feita no envio. Vale igual pro "Lançar preço" de
+   Cotações ("Preço em R$ por kg"), e o comparativo, a "Última compra", a
+   mensagem do pedido no WhatsApp e a tela de confirmação do fornecedor
+   passaram a mostrar em kg/L/un (`_formatarCustoPorUnidade` e
+   `_escala_comercial` no app.py).
+2. **Etapa do pedido.** `/api/pedidos/<id>/avancar` e `/voltar` conferiam a
+   loja com uma variável inexistente **depois** de gravar: a etapa mudava e a
+   chamada estourava 500, e clicar de novo avançava de novo. Agora o pedido é
+   buscado antes, avançar até "recebido" é recusado (quem soma no estoque é o
+   Recebimentos) e voltar etapa de pedido já recebido também.
+3. **Recebimento em kg/L.** A caixa de "Qtd. recebida" vinha em grama ao lado
+   de uma coluna escrita em kg; agora quantidade e preço são na unidade de
+   compra, com a unidade escrita do lado, e a conversão acontece no envio. O
+   botão trava durante o envio e a gravação marca o pedido como recebido
+   condicionada a ele ainda não estar recebido (`WHERE status != 'recebido'`),
+   então clique duplo ou duas pessoas juntas não somam o estoque duas vezes.
+4. **Aprovar contagem sem apagar movimento.** `responder_contagem` guarda em
+   `contagem_item.estoque_no_envio` quanto havia no estoque quando a loja
+   enviou; `aprovar_contagem` aplica `contado + (estoque de agora − estoque do
+   envio)`, então recebimento, compra por fora e baixa por venda que
+   aconteceram no meio não somem mais. Contagem antiga (sem essa foto)
+   continua com o comportamento de antes, e a tela avisa quantos itens tiveram
+   movimento.
+5. **Acesso.** `_usuario_logado` passou a recusar conta desativada (antes
+   `ativo` só era conferido no login, e a sessão dura 7 dias), e o app não sobe
+   mais com uma chave de sessão escrita no código: sem `SECRET_KEY` no
+   ambiente, ele sorteia uma na hora (o repositório é público, então a chave
+   antiga deve ser considerada queimada).

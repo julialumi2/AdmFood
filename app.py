@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+import secrets
 import tempfile
 import threading
 import time
@@ -238,8 +239,10 @@ app = Flask(__name__)
 # então cross-origin nunca foi necessário de verdade em produção — e com
 # login/sessão em jogo, quanto menos origens confiadas, melhor.
 if not SECRET_KEY:
-    print("⚠️  SECRET_KEY não definida — sessões de login não vão sobreviver a um restart/redeploy. Defina no .env (local) ou nas variáveis de ambiente do Dokploy (produção).")
-app.secret_key = SECRET_KEY or "chave-insegura-so-para-dev-local"
+    print("⚠️  SECRET_KEY não definida — usando uma chave sorteada agora: todo mundo cai do login a cada restart/redeploy. Defina no .env (local) ou nas variáveis de ambiente do Dokploy (produção).")
+# Sorteada, nunca fixa no código: o repositório é público, e uma chave que
+# está lá dentro permite forjar o cookie de sessão de um admin (QA 22/09).
+app.secret_key = SECRET_KEY or secrets.token_hex(32)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
@@ -350,7 +353,11 @@ def _usuario_logado():
     # seria uma ida ao banco por chamada.
     if getattr(g, 'usuario_cache_id', None) != usuario_id:
         g.usuario_cache_id = usuario_id
-        g.usuario_cache = buscar_usuario_por_id(usuario_id)
+        usuario = buscar_usuario_por_id(usuario_id)
+        # Desativar alguém tem que valer agora, não daqui a 7 dias: a sessão
+        # continuava valendo porque `ativo` só era conferido no login
+        # (QA 22/09). Vale também pra conta excluída.
+        g.usuario_cache = usuario if usuario and usuario.get('ativo') else None
     return g.usuario_cache
 
 
@@ -3354,6 +3361,19 @@ def api_gerar_pedidos_cotacao(cotacao_id):
     return jsonify({"ok": True, **resultado, "mensagensWhatsApp": mensagens})
 
 
+def _escala_comercial(unidade):
+    """g -> ('kg', 1000), ml -> ('L', 1000), resto -> (a própria, 1).
+    Espelha `_escalaDeCusto` do script.js: o banco guarda por g/ml/un, mas
+    fornecedor e loja falam em kg/L/un (QA 22/09 — a mensagem do pedido saía
+    com "Unidade: g" e "Preço Unitário: R$ 0,05")."""
+    u = (unidade or '').strip().lower()
+    if u in ('g', 'gr'):
+        return 'kg', 1000
+    if u == 'ml':
+        return 'L', 1000
+    return (unidade or 'un'), 1
+
+
 def _fmt_quantidade_pedido(quantidade):
     """35.0 -> '35', 998.2 -> '998.2' — a VMarket mostra a quantidade como
     número cru, sem separador de milhar nem vírgula decimal (diferente do
@@ -3370,14 +3390,17 @@ def _texto_bloco_loja_pedido(pedido):
     razao_social = loja_info.get("razao_social") or "Não informado"
     cnpj = loja_info.get("cnpj") or "Não informado"
 
-    itens_texto = "\n\n".join(
-        f"*{item['nome']}* - \n"
-        f"Unidade: {item['unidade_medida']}\n"
-        f"Preço Unitário: R$ {_formatar_moeda(item['preco_unitario'])}\n"
-        f"Quantidade: {_fmt_quantidade_pedido(item['quantidade'])}\n"
-        f"Preço Total:  R$ {_formatar_moeda(item['quantidade'] * item['preco_unitario'])}"
-        for item in pedido["itens"]
-    )
+    def _linha_item(item):
+        rotulo, fator = _escala_comercial(item['unidade_medida'])
+        return (
+            f"*{item['nome']}* - \n"
+            f"Unidade: {rotulo}\n"
+            f"Preço Unitário: R$ {_formatar_moeda(item['preco_unitario'] * fator)}\n"
+            f"Quantidade: {_fmt_quantidade_pedido(round(item['quantidade'] / fator, 3))}\n"
+            f"Preço Total:  R$ {_formatar_moeda(item['quantidade'] * item['preco_unitario'])}"
+        )
+
+    itens_texto = "\n\n".join(_linha_item(item) for item in pedido["itens"])
 
     return (
         f"Nome Fantasia: *{nome_fantasia}*\n"
@@ -3580,11 +3603,24 @@ def api_avancar_pedido(pedido_id):
     if erro_etapa:
         return erro_etapa
 
-    novo_status = avancar_status_pedido(pedido_id)
-    if novo_status is None:
+    # Conferir ANTES de mexer: a checagem de loja usava uma variável que não
+    # existia aqui e rodava depois de gravar, então a etapa mudava e a
+    # chamada estourava erro 500 — e clicar de novo avançava de novo
+    # (QA 22/09).
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
     if not _loja_visivel(pedido['loja']):
         return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+    # Chegar em "recebido" por aqui pulava o Recebimentos inteiro: o estoque
+    # não subia, não ficava quem recebeu, nem nota, nem tarefa de divergência.
+    indice = ESTAGIOS_PEDIDO.index(pedido['status'])
+    if indice + 1 < len(ESTAGIOS_PEDIDO) and ESTAGIOS_PEDIDO[indice + 1] == 'recebido':
+        return jsonify({"erro": "Marque o recebimento pela tela de Recebimentos — é ela que soma no estoque e guarda a nota."}), 400
+
+    novo_status = avancar_status_pedido(pedido_id)
+    if novo_status is None:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
     return jsonify({"ok": True, "status": novo_status})
 
 
@@ -3597,11 +3633,19 @@ def api_voltar_pedido(pedido_id):
     if erro_etapa:
         return erro_etapa
 
-    novo_status = voltar_status_pedido(pedido_id)
-    if novo_status is None:
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
         return jsonify({"erro": "Pedido não encontrado."}), 404
     if not _loja_visivel(pedido['loja']):
         return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+    # Voltar um pedido já recebido devolvia ele pra fila de Recebimentos sem
+    # tirar nada do estoque: confirmar de novo somava tudo outra vez.
+    if pedido['status'] == 'recebido':
+        return jsonify({"erro": "Esse pedido já foi recebido. Pra desfazer, cancele o recebimento no pedido — voltar etapa faria o estoque ser somado de novo."}), 400
+
+    novo_status = voltar_status_pedido(pedido_id)
+    if novo_status is None:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
     return jsonify({"ok": True, "status": novo_status})
 
 
@@ -3789,6 +3833,11 @@ def api_confirmar_recebimento(pedido_id):
         pedido_id, recebido_por, valor_nf, itens, data_recebimento.isoformat(),
         numero_nf=(dados.get('numeroNf') or '').strip() or None,
     )
+    # Quem barra de verdade a segunda confirmação é a própria gravação (a
+    # checagem acima pode passar duas vezes ao mesmo tempo, com dois
+    # processos no ar) — sem isso o estoque era somado em dobro (QA 22/09).
+    if resultado.get("jaRecebido"):
+        return jsonify({"erro": "Esse pedido já foi confirmado como recebido."}), 400
     return jsonify({"ok": True, **resultado})
 
 
@@ -4465,8 +4514,8 @@ def api_aprovar_contagem(contagem_id):
     if contagem['status'] == 'aprovada':
         return jsonify({"erro": "Essa contagem já foi aprovada."}), 400
 
-    aprovar_contagem(contagem_id)
-    return jsonify({"ok": True})
+    resultado = aprovar_contagem(contagem_id) or {}
+    return jsonify({"ok": True, **resultado})
 
 
 @app.route('/api/contagens/<int:contagem_id>/reabrir', methods=['POST'])

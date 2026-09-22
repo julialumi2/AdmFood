@@ -981,6 +981,12 @@ def inicializar_banco():
             # "Mover pra cotação" (2026-09-22): o homologado não atende nessa
             # compra, então o item dessa loja vai pra cotação em vez de pedido.
             conn.execute("ALTER TABLE contagem_item ADD COLUMN forcar_cotacao INTEGER NOT NULL DEFAULT 0")
+        if "estoque_no_envio" not in colunas_contagem_item:
+            # Quanto o sistema achava que tinha na hora em que a loja enviou
+            # (QA 22/09): a aprovação usa isso pra somar o que entrou e saiu
+            # desde então, em vez de sobrescrever. Contagem antiga fica NULL
+            # e continua com o comportamento de antes.
+            conn.execute("ALTER TABLE contagem_item ADD COLUMN estoque_no_envio REAL")
         # Histórico trazido da VMarket (2026-09-16, a rede está saindo de lá):
         # o id de origem fica em cada registro importado, pra carga poder
         # rodar de novo sem duplicar. Ver importar_da_vmarket.
@@ -5400,13 +5406,31 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
 
     agora = datetime.now().isoformat()
     recebido_em = f"{data_recebimento}{agora[10:]}" if data_recebimento else agora
-    valor_calculado = 0.0
+    valor_calculado = round(sum(float(item["quantidade"]) * float(item["precoUnitario"]) for item in itens), 2)
+    divergencia = abs(valor_nf - valor_calculado) > 0.05
     with conexao() as conn:
+        # Marca como recebido ANTES de somar o estoque, e só se ainda não
+        # estiver recebido: era conferido numa consulta separada da gravação,
+        # então clique duplo (ou as duas pessoas ao mesmo tempo, com dois
+        # processos no ar) somava o estoque duas vezes (QA 22/09).
+        marcou = conn.execute(
+            """
+            UPDATE pedido_compra
+            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, numero_nf = ?,
+                divergencia_nf = ?, atualizado_em = ?
+            WHERE id = ? AND status != ?
+            """,
+            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf,
+             (numero_nf or '').strip() or pedido["numero_nf"], 1 if divergencia else 0, agora,
+             pedido_id, ESTAGIOS_PEDIDO[-1]),
+        ).rowcount
+        if not marcou:
+            return {"jaRecebido": True}
+
         for item in itens:
             insumo_id = int(item["insumoId"])
             quantidade = float(item["quantidade"])
             preco_unitario = float(item["precoUnitario"])
-            valor_calculado += quantidade * preco_unitario
             conn.execute(
                 "UPDATE pedido_compra_item SET quantidade = ?, preco_unitario = ? WHERE pedido_id = ? AND insumo_id = ?",
                 (quantidade, preco_unitario, pedido_id, insumo_id),
@@ -5415,20 +5439,6 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
                 "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual + ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
                 (quantidade, agora, insumo_id, pedido["loja"]),
             )
-
-        valor_calculado = round(valor_calculado, 2)
-        divergencia = abs(valor_nf - valor_calculado) > 0.05
-
-        conn.execute(
-            """
-            UPDATE pedido_compra
-            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, numero_nf = ?,
-                divergencia_nf = ?, atualizado_em = ?
-            WHERE id = ?
-            """,
-            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf,
-             (numero_nf or '').strip() or pedido["numero_nf"], 1 if divergencia else 0, agora, pedido_id),
-        )
 
     if divergencia:
         criar_tarefa(
@@ -7263,13 +7273,27 @@ def salvar_quantidade_item_cotacao(cotacao_id, insumo_id, quantidade):
 
 def responder_contagem(token, valores):
     """Grava o preenchimento (uma vez só — ver validação de status/prazo na
-    rota). `valores` = {insumo_id: quantidade}."""
+    rota). `valores` = {insumo_id: quantidade}.
+
+    Junto guarda quanto o sistema achava que tinha de cada insumo nesse
+    momento (`estoque_no_envio`): é o que deixa a aprovação aplicar a
+    diferença em vez de apagar o que entrou e saiu no meio do caminho
+    (QA 22/09)."""
     agora = datetime.now().isoformat()
     with conexao() as conn:
+        linha_contagem = conn.execute("SELECT id, loja FROM contagem WHERE token = ?", (token,)).fetchone()
+        loja = linha_contagem["loja"] if linha_contagem else None
         for insumo_id, quantidade in valores.items():
+            estoque_agora = None
+            if loja:
+                linha_estoque = conn.execute(
+                    "SELECT quantidade_atual FROM estoque_insumo WHERE insumo_id = ? AND loja = ?",
+                    (insumo_id, loja),
+                ).fetchone()
+                estoque_agora = linha_estoque["quantidade_atual"] if linha_estoque else None
             conn.execute(
-                "UPDATE contagem_item SET quantidade_preenchida = ? WHERE contagem_id = (SELECT id FROM contagem WHERE token = ?) AND insumo_id = ?",
-                (quantidade, token, insumo_id),
+                "UPDATE contagem_item SET quantidade_preenchida = ?, estoque_no_envio = ? WHERE contagem_id = (SELECT id FROM contagem WHERE token = ?) AND insumo_id = ?",
+                (quantidade, estoque_agora, token, insumo_id),
             )
         conn.execute(
             "UPDATE contagem SET status = 'respondida', respondida_em = ? WHERE token = ?",
@@ -7280,17 +7304,34 @@ def responder_contagem(token, valores):
 def aprovar_contagem(contagem_id):
     """Kethllyn confere e aprova — só agora o que foi preenchido vira
     quantidade_atual de verdade em estoque_insumo (itens não preenchidos
-    ficam com o valor antigo, não zeram)."""
+    ficam com o valor antigo, não zeram).
+
+    O que entrou e saiu entre o envio da loja e a aprovação é somado de volta
+    (QA 22/09): a contagem é de um momento, e recebimento, compra por fora e
+    baixa por venda continuam mexendo no estoque depois dela — antes, aprovar
+    à tarde uma contagem da manhã apagava a entrega do dia. Devolve quantos
+    itens tiveram movimento no meio, pra tela poder avisar."""
     contagem = buscar_contagem(contagem_id)
     if not contagem:
-        return
+        return None
     agora = datetime.now().isoformat()
+    com_movimento = 0
     with conexao() as conn:
         itens = conn.execute(
-            "SELECT insumo_id, quantidade_preenchida FROM contagem_item WHERE contagem_id = ? AND quantidade_preenchida IS NOT NULL",
+            "SELECT insumo_id, quantidade_preenchida, estoque_no_envio FROM contagem_item WHERE contagem_id = ? AND quantidade_preenchida IS NOT NULL",
             (contagem_id,),
         ).fetchall()
         for item in itens:
+            quantidade = item["quantidade_preenchida"]
+            if item["estoque_no_envio"] is not None:
+                atual = conn.execute(
+                    "SELECT quantidade_atual FROM estoque_insumo WHERE insumo_id = ? AND loja = ?",
+                    (item["insumo_id"], contagem["loja"]),
+                ).fetchone()
+                movimento = round((atual["quantidade_atual"] if atual else 0) - item["estoque_no_envio"], 4)
+                if movimento:
+                    com_movimento += 1
+                    quantidade = round(quantidade + movimento, 4)
             # Cria a linha de estoque se o insumo ainda não tinha uma na loja
             # (marcado só em "Insumos da loja"), em vez de perder a contagem.
             conn.execute(
@@ -7300,12 +7341,13 @@ def aprovar_contagem(contagem_id):
                 ON CONFLICT (insumo_id, loja) DO UPDATE SET
                     quantidade_atual = excluded.quantidade_atual, atualizado_em = excluded.atualizado_em
                 """,
-                (item["insumo_id"], contagem["loja"], item["quantidade_preenchida"], agora),
+                (item["insumo_id"], contagem["loja"], quantidade, agora),
             )
         conn.execute(
             "UPDATE contagem SET status = 'aprovada', aprovada_em = ? WHERE id = ?",
             (agora, contagem_id),
         )
+    return {"itens": len(itens), "comMovimento": com_movimento}
 
 
 def reabrir_contagem(contagem_id):
