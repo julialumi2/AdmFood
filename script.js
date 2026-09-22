@@ -5847,9 +5847,142 @@ document.getElementById('requisicoes-filtro-periodo')?.addEventListener('change'
   renderContagensTabela();
 });
 
+// --- Quem conta o estoque (2026-09-22) ---
+// Cada loja tem quem recebe o link da contagem; na requisição, cada loja
+// ganha o "Enviar por WhatsApp" pra essa pessoa (link de verdade: clique
+// direto num link nunca é bloqueado pelo navegador).
+let contatosContagem = null;
+
+async function carregarContatosContagem(forcar = false) {
+  if (contatosContagem && !forcar) return contatosContagem;
+  try {
+    const resposta = await fetch('/api/contatos-contagem');
+    contatosContagem = resposta.ok ? ((await resposta.json()).contatos || []) : [];
+  } catch (erro) {
+    contatosContagem = [];
+  }
+  return contatosContagem;
+}
+
+function _prazoContagemTexto(prazo) {
+  if (!prazo) return '';
+  const [dia, hora] = prazo.split('T');
+  return `${_dataBR(dia).slice(0, 5)}${hora ? ` às ${hora.slice(0, 5)}` : ''}`;
+}
+
+// Um botão por pessoa da loja; sem ninguém cadastrado, o atalho pro cadastro.
+function _envioContagemHTML(loja, token, prazo) {
+  const contatos = (contatosContagem || []).filter((c) => c.loja === loja);
+  if (!contatos.length) {
+    return '<button type="button" class="btn-limpar-filtro" data-acao="abrir-contatos-contagem">cadastrar quem conta</button>';
+  }
+  const link = `${location.origin}/preencher_contagem.html?token=${token}`;
+  const ate = _prazoContagemTexto(prazo);
+  return `<div class="envio-contagem">${contatos.map((c) => {
+    const primeiroNome = c.nome.trim().split(/\s+/)[0];
+    const mensagem = `Oi, ${primeiroNome}! Pode fazer a contagem de estoque da ${loja}? É só abrir o link e preencher quanto tem de cada item${ate ? ` (até ${ate})` : ''}:\n${link}`;
+    const href = _linkWhatsAppTexto(c.telefone, mensagem);
+    return href
+      ? `<a class="btn-secondary-sm btn-enviar-contagem" href="${escaparHtml(href)}" target="_blank" rel="noopener" title="Mandar o link pro WhatsApp de ${escaparHtml(c.nome)}"><i data-lucide="send"></i> ${escaparHtml(primeiroNome)}</a>`
+      : '';
+  }).join('')}</div>`;
+}
+
+function renderContatosContagem() {
+  const alvo = document.getElementById('contatos-contagem-lojas');
+  if (!alvo) return;
+  alvo.innerHTML = LOJAS_ESTOQUE.map((loja) => {
+    const contatos = (contatosContagem || []).filter((c) => c.loja === loja);
+    return `
+      <section data-loja="${escaparHtml(loja)}">
+        <h4 class="contatos-loja-titulo">${escaparHtml(loja)}</h4>
+        ${contatos.length ? contatos.map((c) => `
+          <div class="contato-linha">
+            <strong>${escaparHtml(c.nome)}</strong>
+            <span>${escaparHtml(_telefoneFormatado(c.telefone))}</span>
+            <button type="button" class="btn-limpar-filtro" data-acao="tirar-contato" data-id="${c.id}" data-nome="${escaparHtml(c.nome)}">Tirar</button>
+          </div>
+        `).join('') : '<p class="contato-vazio">Ninguém cadastrado ainda.</p>'}
+        <form class="contato-novo" data-loja="${escaparHtml(loja)}">
+          <input type="text" name="nome" placeholder="Nome" aria-label="Nome de quem conta na ${escaparHtml(loja)}" required>
+          <input type="tel" name="telefone" placeholder="WhatsApp com DDD" aria-label="WhatsApp de quem conta na ${escaparHtml(loja)}" required>
+          <button type="submit" class="btn-secondary-sm">Adicionar</button>
+        </form>
+      </section>
+    `;
+  }).join('');
+}
+
+function _telefoneFormatado(telefone) {
+  const d = String(telefone || '').replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return d;
+}
+
+async function abrirModalContatosContagem() {
+  await carregarContatosContagem(true);
+  renderContatosContagem();
+  document.getElementById('modal-contatos-contagem').style.display = 'flex';
+}
+
+function fecharModalContatosContagem() {
+  document.getElementById('modal-contatos-contagem').style.display = 'none';
+  // A requisição aberta atualiza os botões de envio com o que mudou.
+  if (requisicaoConferenciaAtual && document.getElementById('requisicao-conferencia-view')?.style.display !== 'none') {
+    renderConferenciaRequisicao();
+  }
+}
+
+(function inicializarContatosContagem() {
+  const modal = document.getElementById('modal-contatos-contagem');
+  if (!modal) return;
+  document.getElementById('btn-contatos-contagem')?.addEventListener('click', abrirModalContatosContagem);
+  document.getElementById('btn-contatos-contagem-fechar')?.addEventListener('click', fecharModalContatosContagem);
+  document.getElementById('btn-contatos-contagem-fechar-2')?.addEventListener('click', fecharModalContatosContagem);
+  modal.addEventListener('submit', async (evento) => {
+    const form = evento.target.closest('.contato-novo');
+    if (!form) return;
+    evento.preventDefault();
+    form.querySelector('.contato-erro')?.remove();
+    try {
+      const resposta = await fetch('/api/contatos-contagem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loja: form.dataset.loja, nome: form.nome.value, telefone: form.telefone.value }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível cadastrar.');
+      await carregarContatosContagem(true);
+      renderContatosContagem();
+    } catch (erro) {
+      form.insertAdjacentHTML('beforeend', `<p class="contato-erro">${escaparHtml(erro.message)}</p>`);
+    }
+  });
+  modal.addEventListener('click', async (evento) => {
+    const botao = evento.target.closest('[data-acao="tirar-contato"]');
+    if (!botao) return;
+    if (!confirm(`Tirar ${botao.dataset.nome} de quem conta o estoque?`)) return;
+    const resposta = await fetch(`/api/contatos-contagem/${botao.dataset.id}`, { method: 'DELETE' });
+    if (!resposta.ok) {
+      alert((await resposta.json().catch(() => ({}))).erro || 'Não foi possível tirar.');
+      return;
+    }
+    await carregarContatosContagem(true);
+    renderContatosContagem();
+  });
+  // "cadastrar quem conta" nas lojas sem ninguém (requisição e links gerados).
+  document.addEventListener('click', (evento) => {
+    if (evento.target.closest('[data-acao="abrir-contatos-contagem"]')) abrirModalContatosContagem();
+  });
+})();
+
 async function abrirConferenciaRequisicao(titulo, prazoValidade) {
   try {
-    const resposta = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`);
+    const [resposta] = await Promise.all([
+      fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`),
+      carregarContatosContagem(),
+    ]);
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar requisição');
     requisicaoConferenciaAtual = dados;
@@ -5899,6 +6032,7 @@ function renderConferenciaRequisicao() {
         <td class="font-bold">${escaparHtml(c.loja)}</td>
         <td>${c.itensPreenchidos} de ${c.totalItens}</td>
         <td><span class="badge-pill ${classe}">${status}</span></td>
+        <td>${c.status === 'aberta' && c.token ? _envioContagemHTML(c.loja, c.token, c.prazoValidade) : '<span class="text-muted">—</span>'}</td>
         <td class="col-acoes"><div class="acoes-linha">
           <button type="button" class="btn-acao-icone" data-acao="abrir-contagem-da-requisicao" data-id="${c.id}" title="Ver/conferir essa loja">
             <i data-lucide="arrow-right"></i>
@@ -6672,17 +6806,20 @@ document.getElementById('form-nova-contagem')?.addEventListener('submit', async 
       });
       const dados = await resposta.json();
       if (!resposta.ok) throw new Error(dados.erro || `falha ao criar contagem de ${loja}`);
-      linksGerados.push({ loja, link: `${location.origin}/preencher_contagem.html?token=${dados.token}` });
+      linksGerados.push({ loja, token: dados.token, link: `${location.origin}/preencher_contagem.html?token=${dados.token}` });
     }
 
     fecharModalNovaContagem();
+    await carregarContatosContagem();
     document.getElementById('contagem-link-lista').innerHTML = linksGerados.map((item, indice) => `
       <div class="contagem-link-item">
         <span class="contagem-link-loja">${escaparHtml(item.loja)}</span>
         <input type="text" readonly value="${escaparHtml(item.link)}" id="contagem-link-valor-${indice}">
         <button type="button" class="btn-secondary-sm" data-copiar="contagem-link-valor-${indice}">Copiar</button>
+        ${_envioContagemHTML(item.loja, item.token, prazoValidade)}
       </div>
     `).join('');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     document.getElementById('contagem-link-lista').querySelectorAll('[data-copiar]').forEach((botao) => {
       botao.addEventListener('click', async () => {
         const input = document.getElementById(botao.dataset.copiar);

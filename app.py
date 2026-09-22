@@ -59,6 +59,9 @@ from backend.armazenamento import (
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
+    listar_contatos_contagem,
+    criar_contato_contagem,
+    excluir_contato_contagem,
     tirar_insumo_da_loja,
     atualizar_insumo,
     excluir_insumo,
@@ -517,6 +520,8 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/insumos/por-loja'): 'Mudou os insumos que a loja usa',
     ('PUT', '/api/insumos/<int:insumo_id>/receita'): 'Alterou a receita da mistura',
     ('POST', '/api/contagens'): 'Abriu requisição de contagem',
+    ('POST', '/api/contatos-contagem'): 'Cadastrou quem conta o estoque de uma loja',
+    ('DELETE', '/api/contatos-contagem/<int:contato_id>'): 'Tirou alguém de quem conta o estoque',
     ('POST', '/api/contagens/<int:contagem_id>/aprovar'): 'Aprovou a contagem (mexe no estoque)',
     ('POST', '/api/contagens/<int:contagem_id>/reabrir'): 'Reabriu a contagem',
     ('POST', '/api/contagens/token/<token>/responder'): 'A loja preencheu a contagem pelo link',
@@ -4367,6 +4372,46 @@ def api_gerar_cotacao_requisicao():
     if not resultado['entrouNaCotacao']:
         return jsonify({"erro": "Nenhum item novo pra cotação."}), 400
     return jsonify({"ok": True, "cotacaoId": resultado["cotacaoId"], "entrouNaCotacao": resultado["entrouNaCotacao"]})
+
+
+@app.route('/api/contatos-contagem', methods=['GET'])
+def api_listar_contatos_contagem():
+    """Quem conta o estoque de cada loja (recebe o link da contagem)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    return jsonify({"contatos": [c for c in listar_contatos_contagem() if _loja_visivel(c['loja'])]})
+
+
+@app.route('/api/contatos-contagem', methods=['POST'])
+def api_criar_contato_contagem():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    loja = (dados.get('loja') or '').strip()
+    nome = (dados.get('nome') or '').strip()
+    telefone = re.sub(r'\D', '', dados.get('telefone') or '')
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    if not _loja_visivel(loja):
+        return jsonify({"erro": "Essa loja não é a sua."}), 403
+    if not nome:
+        return jsonify({"erro": "Informe o nome."}), 400
+    if len(telefone) < 10:
+        return jsonify({"erro": "Informe o WhatsApp com DDD."}), 400
+    contato_id = criar_contato_contagem(loja, nome, telefone)
+    return jsonify({"id": contato_id, "loja": loja, "nome": nome, "telefone": telefone})
+
+
+@app.route('/api/contatos-contagem/<int:contato_id>', methods=['DELETE'])
+def api_excluir_contato_contagem(contato_id):
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    if not excluir_contato_contagem(contato_id):
+        return jsonify({"erro": "Contato não encontrado."}), 404
+    return jsonify({"ok": True})
 
 
 @app.route('/api/contagens', methods=['POST'])

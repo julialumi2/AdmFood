@@ -958,6 +958,20 @@ def inicializar_banco():
             )
             """
         )
+        # Quem conta o estoque de cada loja (2026-09-22): recebe o link da
+        # contagem pelo WhatsApp, sem login. Os da VMarket foram cadastrados
+        # pela tela (telefone não fica no código: o repositório é público).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contato_contagem (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loja TEXT NOT NULL,
+                nome TEXT NOT NULL,
+                telefone TEXT NOT NULL,
+                criado_em TEXT NOT NULL
+            )
+            """
+        )
         colunas_contagem_item = {c["name"] for c in conn.execute("PRAGMA table_info(contagem_item)").fetchall()}
         if "quantidade_compra" not in colunas_contagem_item:
             # Quanto comprar, decidido na Conferência (2026-09-21): NULL = a
@@ -6289,6 +6303,29 @@ def listar_contagens():
             """
         ).fetchall()
         return [dict(linha) for linha in linhas]
+
+
+def listar_contatos_contagem():
+    """Quem conta o estoque de cada loja: [{id, loja, nome, telefone}]."""
+    with conexao() as conn:
+        return [
+            dict(linha)
+            for linha in conn.execute("SELECT id, loja, nome, telefone FROM contato_contagem ORDER BY loja, nome COLLATE NOCASE")
+        ]
+
+
+def criar_contato_contagem(loja, nome, telefone):
+    with conexao() as conn:
+        return conn.execute(
+            "INSERT INTO contato_contagem (loja, nome, telefone, criado_em) VALUES (?, ?, ?, ?)",
+            (loja, nome, telefone, datetime.now().isoformat()),
+        ).lastrowid
+
+
+def excluir_contato_contagem(contato_id):
+    """Devolve False se o contato não existe."""
+    with conexao() as conn:
+        return conn.execute("DELETE FROM contato_contagem WHERE id = ?", (contato_id,)).rowcount > 0
 
 
 def listar_requisicoes():

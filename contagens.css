@@ -323,3 +323,72 @@
 .comprar-direto-erro { margin: var(--space-2) 0 0; font-size: 0.8rem; color: var(--danger-texto); }
 
 .comprar-direto-erro[hidden] { display: none; }
+
+/* Quem conta o estoque + envio do link pelo WhatsApp (2026-09-22) */
+.contatos-contagem-subtitulo { margin: 4px 0 0; font-size: 0.8rem; }
+
+.contatos-contagem-lojas { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.contatos-loja-titulo {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.contato-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--surface-muted-border);
+  font-size: 0.85rem;
+}
+
+.contato-linha span { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.contato-vazio { margin: 0; padding: 4px 0; font-size: 0.8rem; color: var(--text-faint); }
+
+.contato-novo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.contato-novo input {
+  flex: 1 1 150px;
+  padding: 7px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.contato-novo input:focus-visible {
+  outline: none;
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+.contato-erro { width: 100%; margin: 0; font-size: 0.75rem; color: var(--danger-texto); }
+
+.envio-contagem { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.btn-enviar-contagem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success-texto);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-enviar-contagem svg { width: 14px; height: 14px; }
+
+.contagem-link-item .envio-contagem { margin-top: 6px; width: 100%; }

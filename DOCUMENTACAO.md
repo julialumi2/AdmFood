@@ -4038,3 +4038,14 @@ embalagem pra viagem com o custo dela. A margem não desconta a comissão dos
 apps nem a embalagem. `/api/itens-cardapio/<id>/ficha-tecnica` passou a mandar
 `custoUnitario` e `custo` de cada insumo; salvar a ficha recarrega a lista
 pra atualizar o custo.
+
+### 6.39 Quem conta o estoque e o link pelo WhatsApp (2026-09-22)
+
+Requisições ganhou o botão **Quem conta o estoque**: por loja, nome e WhatsApp
+de quem recebe o link da contagem (tabela `contato_contagem`, rotas
+`/api/contatos-contagem`; não precisa de login, não é usuário do sistema). Na
+requisição, a lista "Lojas dessa requisição" tem a coluna **Enviar o link**, com
+um botão por pessoa da loja que abre o WhatsApp com a mensagem e o link da
+contagem (só enquanto a loja não respondeu); o mesmo aparece nos links logo
+depois de criar a requisição. Os contatos da VMarket (estoquistas) foram
+cadastrados pela tela em produção, não no código (o repositório é público).
