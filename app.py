@@ -426,11 +426,14 @@ PAPEIS = ('admin', 'gerente', 'operacao')
 
 # Telas de cada perfil. O admin não aparece aqui porque vê todas.
 PAGINAS_POR_PAPEL = {
+    # Faturamento e relatórios de venda ficaram só com o admin (22/09): as
+    # telas saíram da lista do gerente junto com as rotas, senão ele abriria
+    # uma tela que só mostra erro. Preparo (tempo de pedido) e Evolução do
+    # preço (custo de insumo) continuam, porque são de operação e de compra.
     'gerente': {
         'index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html',
         'contagens.html', 'pedidos.html', 'recebimentos.html', 'guia-compras.html',
-        'cardapio.html', 'preparo.html', 'curva-abc.html', 'insight.html',
-        'mais-vendidos.html', 'vendas-semanais.html', 'precos.html', 'configuracoes.html',
+        'cardapio.html', 'preparo.html', 'precos.html', 'configuracoes.html',
         'instalar-extensao.html',
     },
     'operacao': {
@@ -2630,7 +2633,7 @@ def api_mais_vendidos_do_dia():
     """Ranking de produtos de um dia, por loja (Insights → Mais Vendidos),
     com o faturamento real da loja no dia e no mesmo dia da semana anterior.
     Sem `dia`, o último dia que teve venda."""
-    erro_admin = _exigir_gestao()
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     dia = request.args.get('dia') or None
@@ -5042,10 +5045,9 @@ def api_responder_contagem(token):
 
 @app.route('/api/faturamento-ontem', methods=['GET'])
 def api_faturamento_ontem():
-    # Faturamento é de gestão: a rota devolvia a rede inteira pra qualquer
-    # pessoa logada, inclusive a operação, que por regra não vê faturamento
-    # (QA 22/09).
-    erro_admin = _exigir_gestao()
+    # Faturamento é só do admin (ela decidiu assim em 22/09; antes do QA a rota
+    # nem perfil conferia e devolvia a rede inteira pra qualquer pessoa logada).
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     # Lê do mesmo cache local sincronizado, em vez de chamar a Cardápio Web
@@ -5081,7 +5083,7 @@ def api_faturamento_ontem():
 
 @app.route('/api/faturamento-rede-diario', methods=['GET'])
 def api_faturamento_rede_diario():
-    erro_admin = _exigir_gestao()
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     # Faturamento da rede (4 lojas somadas) dia a dia, pro gráfico da Home.
@@ -5292,8 +5294,8 @@ def api_sincronizar_agora():
 @app.route('/api/venda-presencial', methods=['POST'])
 def api_salvar_venda_presencial():
     # Lançar (e apagar) venda presencial mexe em faturamento, ticket médio e
-    # resultado semanal — não podia estar aberto pra qualquer perfil (QA 22/09).
-    erro_admin = _exigir_gestao()
+    # resultado semanal: só admin (pedido dela, 22/09).
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     dados = request.get_json(silent=True) or {}
@@ -5325,7 +5327,7 @@ def api_salvar_venda_presencial():
 
 @app.route('/api/venda-presencial', methods=['DELETE'])
 def api_excluir_venda_presencial():
-    erro_admin = _exigir_gestao()
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     unidade = _loja_no_escopo(request.args.get('unidade'))
@@ -5497,7 +5499,7 @@ def api_faturamento_mesmo_dia_semana():
 
 @app.route('/api/insights', methods=['GET'])
 def api_insights():
-    erro_admin = _exigir_gestao()
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     inicio_str = request.args.get('inicio')
@@ -5673,7 +5675,7 @@ def api_salvar_resultado_semanal():
 
 @app.route('/api/insights-automaticos', methods=['GET'])
 def api_insights_automaticos():
-    erro_admin = _exigir_gestao()
+    erro_admin = _exigir_admin()
     if erro_admin:
         return erro_admin
     # Sempre compara ontem contra a média dos 7 dias anteriores a ontem —

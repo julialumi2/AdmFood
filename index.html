@@ -200,8 +200,8 @@
         <!-- Resposta do botão Sincronizar (some quando vazio) -->
         <div class="sync-resultado" id="sync-resultado"></div>
 
-        <!-- QUADRO DA REDE: faturamento de ontem em destaque -->
-        <div class="hero-band">
+        <!-- QUADRO DA REDE: faturamento de ontem em destaque (só admin) -->
+        <div class="hero-band" data-so-admin>
           <div class="hero-eyebrow">Visão geral da rede — Ontem, <span id="data-ontem">...</span></div>
           <div class="hero-main">
             <div>
@@ -256,8 +256,8 @@
           </div>
         </div>
 
-        <!-- GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA -->
-        <div class="home-charts-row">
+        <!-- GRÁFICOS: FATURAMENTO DA REDE + CANAIS DE VENDA (só admin) -->
+        <div class="home-charts-row" data-so-admin>
           <div class="chart-card">
             <div class="chart-header">
               <div class="chart-title">
@@ -294,7 +294,7 @@
 
         <!-- RANKING DE LOJAS + GESTÃO OPERACIONAL -->
         <div class="home-secondary-row">
-          <div class="panel">
+          <div class="panel" data-so-admin>
             <div class="panel-header">
               <h3 class="panel-title">Ranking de lojas</h3>
               <span class="panel-subtitle">Faturamento de ontem</span>

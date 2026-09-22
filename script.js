@@ -9840,6 +9840,7 @@ const TOOLTIP_HOME = {
  */
 let graficoRedeInstance = null;
 async function carregarGraficoRede() {
+  if (_semFaturamentoNaTela()) return;
   const canvas = document.getElementById('salesChart');
   if (!canvas || typeof Chart === 'undefined') return;
 
@@ -9911,6 +9912,7 @@ async function carregarGraficoRede() {
  */
 let homeCanalChartInstance = null;
 async function carregarCanalRedeHome() {
+  if (_semFaturamentoNaTela()) return;
   const canvas = document.getElementById('homeCanalChart');
   const legenda = document.getElementById('home-canal-legend');
   if (!canvas || typeof Chart === 'undefined') return;
@@ -10171,11 +10173,21 @@ function _formatarMoedaBRL(valor) {
  * Home. O Semanal mostra sempre a última semana FECHADA, de terça a segunda
  * como a planilha delas — nunca a semana em andamento.
  */
+// Faturamento virou só de admin (pedido dela, 22/09): o gerente continua com a
+// Home pelos alertas e pelo estoque crítico, mas sem os blocos de dinheiro —
+// senão a tela abriria tentando carregar o que a API recusa.
+function _semFaturamentoNaTela() {
+  if (_souAdmin()) return false;
+  document.querySelectorAll('[data-so-admin]').forEach((bloco) => { bloco.style.display = 'none'; });
+  return true;
+}
+
 async function carregarDadosLojas() {
   const container = document.getElementById('container-periodo');
   const totalRedeElem = document.getElementById('total-rede-valor');
 
   if (!container) return;
+  if (_semFaturamentoNaTela()) return;
 
   try {
     // dias=90 pra garantir que o mês passado inteiro sempre caiba na janela

@@ -4242,13 +4242,17 @@ Os três críticos do Cardápio:
 - **Faturamento e relatórios pediam só estar logado.** `/api/faturamento-ontem`,
   `/api/faturamento-rede-diario`, `/api/insights`, `/api/insights-automaticos`,
   `/api/vendas/mais-vendidos` e `/api/preparo` devolviam a rede inteira pra
-  qualquer perfil, inclusive a operação, que por regra não vê faturamento —
-  quem limitava era só a tela escondendo as abas. Todas passaram a exigir
-  gestão, e o faturamento de ontem devolve só a loja de quem olha
-  (`_so_da_minha_loja`).
+  qualquer perfil, inclusive a operação — quem limitava era só a tela
+  escondendo as abas. **Faturamento e relatórios de venda passaram a ser só do
+  admin** (decisão dela, 22/09): as telas Vendas Diárias, Mais Vendidos, Vendas
+  Semanais e Curva ABC saíram da lista do gerente junto com as rotas, senão ele
+  abriria tela que só mostra erro. A Home continua com ele, mas sem os blocos
+  de faturamento (os elementos marcados com `data-so-admin`). Preparo (tempo de
+  pedido) e Evolução do preço (custo de insumo) seguem em gestão, porque são de
+  operação e de compra.
 - **Venda presencial** (lançar e apagar) também exigia só login: mexia em
-  faturamento, ticket médio e resultado semanal de qualquer loja. Agora é de
-  gestão.
+  faturamento, ticket médio e resultado semanal de qualquer loja. Agora é só do
+  admin.
 - **"Sincronizar agora"** virou admin e entrou no registro de ações (estava na
   lista de rotas sem registro).
 - **Nota fiscal:** o download conferia o perfil mas não a loja — gerente de uma
