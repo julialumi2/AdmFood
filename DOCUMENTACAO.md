@@ -4199,3 +4199,40 @@ Os três críticos do Cardápio:
   silêncio, descontando a ficha inteira por complemento vendido. Agora a
   gravação é recusada nomeando os insumos que precisam do conteúdo por unidade
   (`insumos_sem_conversao_da_ficha`).
+
+### 6.46 Fechando os críticos do QA (leva 5 — 2026-09-22)
+
+- **Tarefas com trava de perfil.** A tela é de admin, mas nenhuma rota de
+  `/api/tarefas` conferia nada: qualquer pessoa logada podia listar, criar,
+  editar e apagar card da equipe pela API. Ler, criar, comentar e mexer em
+  subtarefa agora é `_exigir_gestao()`; excluir é `_exigir_admin()`. As rotas
+  também entraram no `DESCRICAO_DA_ACAO`, então o Registro de atividade mostra
+  "Criou tarefa" em vez do endereço da rota.
+- **Divergência de NF com prazo e loja.** A tarefa automática nascia sem
+  `data_limite`, e as "atividades do dia" da Home só contam tarefa com prazo
+  até hoje — ela podia ficar meses sem ninguém ver. Agora nasce com prazo pra
+  amanhã e a loja no título.
+- **Agendador com batimento.** A trava que escolhe quem agenda (`
+  admfood_scheduler.lock`) era criada uma vez e nunca solta: se aquele worker
+  reiniciasse, o substituto encontrava a trava e desistia, e paravam juntas a
+  sincronização de 15 em 15 minutos, a das 3h e a cópia das 3h30. A trava
+  agora guarda um batimento (o worker reescreve a hora a cada
+  `SEGUNDOS_BATIMENTO_AGENDADOR`), e outro worker assume quando ela passa de
+  `SEGUNDOS_TRAVA_PARADA` sem sinal. Cada rotina grava em `execucao_rotina`
+  quando rodou de verdade, e Configurações mostra "rodou em 22/09 às 03:30" ou
+  um aviso vermelho de "parada há N dias" — antes o painel lia a configuração
+  e dizia "todo dia às 03:30" mesmo com tudo parado.
+- **Vendas Semanais.** O corte que monta as semanas passou a olhar só o que a
+  planilha cobre: incluir as semanas que existiam por terem CMV digitado fazia
+  a semana anterior sumir da tabela e da fita quando alguém digitava um CMV, e
+  a variação passava a comparar semanas que não são vizinhas. E a semana que
+  ainda não fechou ganhou a etiqueta "em andamento · X de 7 dias", sem seta de
+  variação e sem veredito (`emAndamento` no retorno).
+- **Guia de Compras.** A etapa da cotação ganhou o quadro "Atenção à unidade do
+  preço": onde a unidade aparece no link e no "Lançar preço", e que o preço
+  lançado vira o custo do insumo e mexe no CMV por 90 dias. Também deixou de
+  prometer que "os preços aparecem sozinhos" (a tela não se atualiza) e que
+  dá pra trocar o vencedor depois de gerar o pedido.
+- **Curva ABC.** O subtítulo passou a dizer "receita estimada (preço de tabela
+  × unidades)", e o texto da tela explica que cupom e promoção não entram — o
+  faturamento de verdade está em Vendas Diárias.

@@ -394,3 +394,26 @@
 }
 
 .semana-valor-editavel input::placeholder { color: var(--text-faint); font-weight: 400; }
+
+/* Semana que ainda não fechou (QA 22/09): sem essa marca, meia semana
+   aparecia igual a uma semana cheia, com seta de variação e veredito. */
+.semana-hero-etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.tag-em-andamento {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--warning-texto);
+  background-color: var(--warning-soft);
+  border: 1px solid var(--warning);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}

@@ -61,6 +61,8 @@ from backend.armazenamento import (
     uso_do_insumo,
     insumos_sem_conversao_da_ficha,
     quantidades_tipicas_por_insumo,
+    listar_execucoes_rotina,
+    marcar_execucao_rotina,
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
@@ -622,6 +624,12 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/admin/importar-vmarket'): 'Importou carga da VMarket',
     ('DELETE', '/api/admin/importar-vmarket'): 'Desfez a carga da VMarket',
     ('POST', '/api/admin/backups'): 'Gerou cópia de segurança',
+    ('POST', '/api/tarefas'): 'Criou tarefa',
+    ('PUT', '/api/tarefas/<int:tarefa_id>'): 'Alterou uma tarefa',
+    ('DELETE', '/api/tarefas/<int:tarefa_id>'): 'Excluiu tarefa',
+    ('POST', '/api/tarefas/<int:tarefa_id>/subtarefas'): 'Criou subtarefa',
+    ('PUT', '/api/tarefas/<int:tarefa_id>/subtarefas/<int:subtarefa_id>'): 'Marcou ou desmarcou subtarefa',
+    ('POST', '/api/tarefas/<int:tarefa_id>/comentarios'): 'Comentou numa tarefa',
     ('POST', '/api/venda-presencial'): 'Lançou venda presencial',
     ('DELETE', '/api/venda-presencial'): 'Excluiu venda presencial',
     ('PUT', '/api/ajuste-canal'): 'Ajustou o faturamento de um canal',
@@ -672,6 +680,11 @@ def _registrar_acao_da_requisicao(resposta):
     return resposta
 
 
+# Quanto tempo sem batimento até outro worker assumir o agendamento.
+SEGUNDOS_BATIMENTO_AGENDADOR = 120
+SEGUNDOS_TRAVA_PARADA = 600
+
+
 def _sou_o_unico_worker_a_agendar():
     """Em produção o Gunicorn roda vários workers (processos separados), e
     cada um carrega esse arquivo do zero — sem essa trava, cada worker criaria
@@ -681,18 +694,38 @@ def _sou_o_unico_worker_a_agendar():
     container (some no próximo deploy/restart, já que a pasta temporária é
     recriada). No Windows (desenvolvimento) a pasta temporária é outra, daí o
     gettempdir em vez de "/tmp" na unha."""
+    # A trava tem batimento: o worker que agenda reescreve a hora de tempos em
+    # tempos, e um worker novo assume quando a trava está parada. Antes o
+    # arquivo era criado uma vez e nunca solto — se aquele processo fosse
+    # reiniciado, o substituto achava a trava e desistia, e paravam JUNTAS a
+    # sincronização de 15 em 15 minutos, a das 3h e a cópia das 3h30, sem
+    # ninguém perceber (QA 22/09).
     caminho_trava = os.path.join(tempfile.gettempdir(), "admfood_scheduler.lock")
+    agora = time.time()
     try:
-        descritor = os.open(caminho_trava, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(descritor, str(os.getpid()).encode())
-        os.close(descritor)
+        with io.open(caminho_trava, encoding="utf-8") as arquivo:
+            batimento = float(arquivo.read().split()[-1])
+        if agora - batimento < SEGUNDOS_TRAVA_PARADA:
+            return False
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        with io.open(caminho_trava, "w", encoding="utf-8") as arquivo:
+            arquivo.write(f"{os.getpid()} {agora}")
         return True
-    except FileExistsError:
-        return False
     except OSError:
         # Sem pasta temporária gravável não dá pra coordenar os workers; melhor
         # não agendar nada do que agendar em todos ao mesmo tempo.
         return False
+
+
+def _bater_ponto_do_agendador():
+    """Diz que o worker que agenda continua vivo (ver _sou_o_unico_worker_a_agendar)."""
+    try:
+        with io.open(os.path.join(tempfile.gettempdir(), "admfood_scheduler.lock"), "w", encoding="utf-8") as arquivo:
+            arquivo.write(f"{os.getpid()} {time.time()}")
+    except OSError:
+        pass
 
 
 # Sincronização automática com a Cardápio Web. Localmente isso já é feito
@@ -736,15 +769,18 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
         def _rodar_sincronizacao_diaria():
             for dias_atras in range(1, DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA + 1):
                 sincronizar_dia(date.today() - timedelta(days=dias_atras))
+            marcar_execucao_rotina("sincronizacao_diaria", f"{DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA} dias reconferidos")
 
         def _rodar_sincronizacao_hoje():
             sincronizar_dia(date.today())
+            marcar_execucao_rotina("sincronizacao_hoje", date.today().isoformat())
 
         _scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
         _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=3, minute=0)
         _scheduler.add_job(
             _rodar_sincronizacao_hoje, "interval", minutes=15, next_run_time=datetime.now()
         )
+        _scheduler.add_job(_bater_ponto_do_agendador, "interval", seconds=SEGUNDOS_BATIMENTO_AGENDADOR)
         _scheduler.start()
 
 # Cópia de segurança do banco, todo dia às 3h30 (depois da sincronização das
@@ -760,6 +796,7 @@ if os.environ.get("BACKUP_AUTOMATICO", "true").lower() == "true" and _ESTE_WORKE
     )
     # O registro de ações guarda um ano; a faxina vai junto da madrugada.
     _scheduler_backup.add_job(limpar_registro_acoes_antigos, "cron", hour=3, minute=45)
+    _scheduler_backup.add_job(_bater_ponto_do_agendador, "interval", seconds=SEGUNDOS_BATIMENTO_AGENDADOR)
     _scheduler_backup.start()
 
 # Lojas que registram vendas presenciais (não passam pela Cardápio Web e
@@ -1614,11 +1651,16 @@ def api_listar_backups():
     erro = _exigir_admin()
     if erro:
         return erro
+    # `execucoes` é o que rodou de verdade (o painel mostrava só a
+    # configuração, então backup e sincronização podiam estar parados há dias
+    # com a tela dizendo "todo dia às 03:30" — QA 22/09).
     return jsonify({
         "backups": listar_backups(),
         "horaAutomatica": f"{HORA_DO_BACKUP[0]:02d}:{HORA_DO_BACKUP[1]:02d}",
         "automatico": os.environ.get("BACKUP_AUTOMATICO", "true").lower() == "true",
         "tamanhoBanco": os.path.getsize(CAMINHO_BANCO) if os.path.exists(CAMINHO_BANCO) else 0,
+        "execucoes": listar_execucoes_rotina(),
+        "esteProcessoAgenda": _ESTE_WORKER_AGENDA,
     })
 
 
@@ -5760,8 +5802,15 @@ def _tarefa_inacessivel(tarefa_id):
     return None
 
 
+# O quadro é uma tela de admin, mas as rotas não conferiam perfil nenhum:
+# qualquer pessoa logada podia listar, criar, editar e apagar card da equipe
+# chamando a API direto (QA 22/09). Ler e comentar é de gestão, apagar é só
+# do admin, que é quem enxerga a tela.
 @app.route('/api/tarefas', methods=['GET'])
 def api_listar_tarefas():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     return jsonify({"tarefas": [_formatar_tarefa(t) for t in listar_tarefas(_id_usuario_logado())]})
 
 
@@ -5771,6 +5820,9 @@ STATUS_TAREFA_VALIDOS = {'todo', 'doing', 'done'}
 
 @app.route('/api/tarefas', methods=['POST'])
 def api_criar_tarefa():
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     dados = request.get_json(silent=True) or {}
     titulo = (dados.get('titulo') or '').strip()
     if not titulo:
@@ -5807,6 +5859,9 @@ CAMPOS_TAREFA_PERMITIDOS = {
 
 @app.route('/api/tarefas/<int:tarefa_id>', methods=['PUT'])
 def api_atualizar_tarefa(tarefa_id):
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     erro = _tarefa_inacessivel(tarefa_id)
     if erro:
         return erro
@@ -5828,6 +5883,9 @@ def api_atualizar_tarefa(tarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>', methods=['DELETE'])
 def api_excluir_tarefa(tarefa_id):
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
     erro = _tarefa_inacessivel(tarefa_id)
     if erro:
         return erro
@@ -5837,6 +5895,9 @@ def api_excluir_tarefa(tarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>/subtarefas', methods=['POST'])
 def api_adicionar_subtarefa(tarefa_id):
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     erro = _tarefa_inacessivel(tarefa_id)
     if erro:
         return erro
@@ -5850,6 +5911,9 @@ def api_adicionar_subtarefa(tarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>/subtarefas/<int:subtarefa_id>', methods=['PUT'])
 def api_alternar_subtarefa(tarefa_id, subtarefa_id):
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     erro = _tarefa_inacessivel(tarefa_id)
     if erro:
         return erro
@@ -5860,6 +5924,9 @@ def api_alternar_subtarefa(tarefa_id, subtarefa_id):
 
 @app.route('/api/tarefas/<int:tarefa_id>/comentarios', methods=['POST'])
 def api_adicionar_comentario(tarefa_id):
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
     erro = _tarefa_inacessivel(tarefa_id)
     if erro:
         return erro

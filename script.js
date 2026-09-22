@@ -10694,6 +10694,21 @@ function _tamanhoLegivel(bytes) {
   return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+// O painel dizia "todo dia às 03:30" lendo a configuração, não o agendador:
+// backup e sincronização podiam estar parados há dias sem ninguém perceber
+// (QA 22/09). Agora mostra quando cada rotina rodou de verdade.
+function _rotinaRodandoHTML(execucao, diasDeFolga) {
+  if (!execucao || !execucao.ultimaEm) {
+    return '<span class="backup-alerta">sem registro de execução ainda</span>';
+  }
+  const quando = new Date(execucao.ultimaEm);
+  const dias = (Date.now() - quando.getTime()) / 86400000;
+  const texto = `rodou em ${_dataBR(execucao.ultimaEm)} às ${String(execucao.ultimaEm).slice(11, 16)}`;
+  return dias > diasDeFolga
+    ? `<span class="backup-alerta">${texto} — parada há ${Math.floor(dias)} dia(s)</span>`
+    : `<span class="backup-ok">${texto}</span>`;
+}
+
 async function carregarBackups() {
   const resumo = document.getElementById('backup-resumo');
   const tbody = document.getElementById('backup-tbody');
@@ -10722,6 +10737,12 @@ async function carregarBackups() {
       <div>
         <span class="backup-rotulo">Cópia automática</span>
         <span class="backup-valor">${dados.automatico ? `todo dia às ${dados.horaAutomatica}` : 'desligada'}</span>
+        ${_rotinaRodandoHTML(dados.execucoes?.backup, 2)}
+      </div>
+      <div>
+        <span class="backup-rotulo">Sincronização das vendas</span>
+        <span class="backup-valor">${dados.automatico === false ? '—' : 'de 15 em 15 min e às 03:00'}</span>
+        ${_rotinaRodandoHTML(dados.execucoes?.sincronizacao_hoje, 1)}
       </div>
     `;
 
@@ -13041,7 +13062,7 @@ function renderCurvaAbc() {
   _renderPendenciasCmv(d);
 
   document.getElementById('curva-tabela-subtitulo').textContent =
-    `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos · R$ ${_formatarMoedaBR(d.totalReceita)} de receita`;
+    `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos · R$ ${_formatarMoedaBR(d.totalReceita)} de receita estimada (preço de tabela × unidades)`;
 
   const curvaA = d.itens.filter(i => i.curva === 'A');
   const curvaC = d.itens.filter(i => i.curva === 'C');
@@ -13202,6 +13223,13 @@ function renderVendasSemanais() {
   const origemTitulo = semana.origem === 'sistema'
     ? 'Somado do faturamento diário que o AdmFood sincroniza sozinho'
     : 'Veio da planilha importada — o sistema ainda não tinha esse período';
+  // Semana que ainda não fechou aparecia igualzinha a uma semana cheia, com
+  // seta de variação contra a semana inteira anterior e CMV calculado sobre
+  // um faturamento pela metade (QA 22/09).
+  const emAndamento = !!semana.emAndamento;
+  const etiquetaAndamento = emAndamento
+    ? `<span class="tag-origem tag-em-andamento" title="A semana ainda não fechou: o faturamento é só dos dias que já entraram">em andamento · ${semana.diasComDadoDiario} de ${semana.diasNoPeriodo} dias</span>`
+    : '';
 
   heroEl.innerHTML = `
     <div class="semana-hero ${veredito ? 'veredito-' + semana.classificacao : ''}">
@@ -13210,29 +13238,31 @@ function renderVendasSemanais() {
           <span class="semana-hero-rotulo">${ehMaisRecente ? 'Semana mais recente' : 'Semana selecionada'}</span>
           <span class="semana-hero-periodo">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)} · ${semana.periodoInicio.slice(0, 4)}</span>
         </div>
-        <span class="tag-origem" title="${origemTitulo}">${semana.origem === 'sistema' ? 'do sistema' : 'da planilha'}</span>
+        <span class="semana-hero-etiquetas">${etiquetaAndamento}<span class="tag-origem" title="${origemTitulo}">${semana.origem === 'sistema' ? 'do sistema' : 'da planilha'}</span></span>
       </div>
 
       <div class="semana-hero-corpo">
         <div class="veredito-bloco">
           <span class="semana-hero-rotulo">CMV sobre o faturamento</span>
-          <span class="veredito-pct">${semana.pctCmv !== null ? _pctBR(semana.pctCmv) : '—'}</span>
-          <span class="veredito-palavra">${veredito ? veredito.palavra : 'sem CMV'}</span>
-          <span class="veredito-legenda">${semana.pctCmv !== null
-            ? 'Meta: abaixo de 31% é ótimo, até 34% é bom.'
-            : 'Sem CMV lançado nessa semana, então não dá pra classificar.'}</span>
+          <span class="veredito-pct">${semana.pctCmv !== null && !emAndamento ? _pctBR(semana.pctCmv) : '—'}</span>
+          <span class="veredito-palavra">${emAndamento ? 'semana aberta' : (veredito ? veredito.palavra : 'sem CMV')}</span>
+          <span class="veredito-legenda">${emAndamento
+            ? 'A semana ainda não fechou: o CMV só vale sobre o faturamento da semana inteira.'
+            : (semana.pctCmv !== null
+              ? 'Meta: abaixo de 31% é ótimo, até 34% é bom.'
+              : 'Sem CMV lançado nessa semana, então não dá pra classificar.')}</span>
         </div>
 
         <div class="semana-numeros">
           <div class="semana-linha">
             <span class="semana-linha-rotulo">Faturamento</span>
             <span class="semana-linha-valor destaque">R$ ${_formatarMoedaBR(semana.total)}</span>
-            ${_deltaHTML(semana.variacaoTotal, true)}
+            ${emAndamento ? '' : _deltaHTML(semana.variacaoTotal, true)}
           </div>
           <div class="semana-linha">
             <span class="semana-linha-rotulo">CMV</span>
             ${_valorEditavelHTML('cmv', semana.cmv, isAdmin)}
-            ${_deltaHTML(semana.variacaoCmv, false)}
+            ${emAndamento ? '' : _deltaHTML(semana.variacaoCmv, false)}
           </div>
           <div class="semana-linha">
             <span class="semana-linha-rotulo">Promoção da loja</span>
@@ -13355,7 +13385,8 @@ function renderVendasSemanaisTabela(semanas) {
     return `
       <tr>
         <td class="font-bold num-mono">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)}
-          <span class="text-muted" style="font-weight:400;">${semana.periodoInicio.slice(0, 4)}</span></td>
+          <span class="text-muted" style="font-weight:400;">${semana.periodoInicio.slice(0, 4)}</span>
+          ${semana.emAndamento ? `<span class="tag-em-andamento" title="Só ${semana.diasComDadoDiario} de ${semana.diasNoPeriodo} dias entraram">em andamento</span>` : ''}</td>
         ${celulas}
         <td class="font-bold num-mono col-atual-destaque">R$ ${_formatarMoedaBR(semana.total)}</td>
         <td class="num-mono">${semana.cmv !== null ? 'R$ ' + _formatarMoedaBR(semana.cmv) : '<span class="text-muted">—</span>'}</td>

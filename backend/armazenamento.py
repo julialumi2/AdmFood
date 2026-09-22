@@ -1045,6 +1045,15 @@ def inicializar_banco():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS execucao_rotina (
+                nome TEXT PRIMARY KEY,
+                ultima_em TEXT NOT NULL,
+                detalhe TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
         conn.execute("CREATE TABLE IF NOT EXISTS migracao_feita (nome TEXT PRIMARY KEY, feita_em TEXT NOT NULL)")
         if not conn.execute("SELECT 1 FROM migracao_feita WHERE nome = 'limpar_fichas_orfas'").fetchone():
             # Insumo excluído não limpava ficha, embalagem nem receita, e o
@@ -1456,7 +1465,11 @@ def listar_resultado_semanal(unidade):
     # dia seguinte ao fim do que veio da planilha. Era de segunda a domingo e
     # a semana depois da planilha saía "07/09 a 13/09", repetindo o feriado
     # de 07/09 que já estava na semana anterior (2026-09-18).
-    ultimo_fim = max((info["periodoFim"] for info in periodos.values()), default=None)
+    # O corte é só o que a planilha cobre. Antes entravam também as semanas
+    # que só existiam por terem CMV digitado, e digitar o CMV de uma semana
+    # fazia a semana anterior sumir da tabela e da fita — a variação passava a
+    # comparar semanas que não são vizinhas (QA 22/09).
+    ultimo_fim = max((linha["periodo_fim"] for linha in canais_planilha), default=None)
     for dia in sorted(faturamento_diario):
         if ultimo_fim and dia <= ultimo_fim:
             continue
@@ -1508,6 +1521,10 @@ def listar_resultado_semanal(unidade):
             "origem": origem,
             "diasComDadoDiario": len(cobertos),
             "diasNoPeriodo": len(dias),
+            # Semana que ainda não fechou: a tela esconde variação e veredito
+            # e avisa "em andamento", em vez de mostrar meia semana como se
+            # fosse semana cheia (QA 22/09).
+            "emAndamento": origem == "sistema" and len(cobertos) < len(dias) and periodo_fim >= date.today().isoformat(),
         })
 
     # Variação em relação à semana anterior — calculada na ordem cronológica
@@ -5552,8 +5569,11 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
             )
 
     if divergencia:
+        # Com prazo pra amanhã e a loja no título: sem data_limite a tarefa
+        # não entrava nas "atividades do dia" da Home e podia ficar meses sem
+        # ninguém ver — o contrário do que ela existe pra fazer (QA 22/09).
         criar_tarefa(
-            titulo=f"Divergência de NF — Pedido #{pedido_id} ({pedido['fornecedor_nome']})",
+            titulo=f"Divergência de NF — Pedido #{pedido_id} ({pedido['fornecedor_nome']}, {pedido['loja']})",
             descricao=(
                 f"Valor da Nota Fiscal informado (R$ {valor_nf:.2f}) não bate com o valor "
                 f"calculado dos itens recebidos (R$ {valor_calculado:.2f}). Recebido por "
@@ -5562,7 +5582,7 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
             ),
             categoria="Estoque",
             prioridade="alta",
-            data_limite=None,
+            data_limite=(datetime.now() + timedelta(days=1)).date().isoformat(),
         )
 
     return {"divergencia": divergencia, "valorCalculado": valor_calculado}
@@ -7962,6 +7982,30 @@ def listar_backups():
     return sorted(copias, key=lambda c: c["arquivo"], reverse=True)
 
 
+def marcar_execucao_rotina(nome, detalhe=""):
+    """Registra que uma rotina automática rodou agora. O painel de
+    Configurações lia a configuração ("todo dia às 03:30") e não o agendador,
+    então backup e sincronização podiam estar parados há dias sem ninguém
+    perceber (QA 22/09)."""
+    with conexao() as conn:
+        conn.execute(
+            """
+            INSERT INTO execucao_rotina (nome, ultima_em, detalhe) VALUES (?, ?, ?)
+            ON CONFLICT (nome) DO UPDATE SET ultima_em = excluded.ultima_em, detalhe = excluded.detalhe
+            """,
+            (nome, datetime.now().isoformat(), detalhe or ""),
+        )
+
+
+def listar_execucoes_rotina():
+    """{nome: {"ultimaEm", "detalhe"}} das rotinas automáticas."""
+    with conexao() as conn:
+        return {
+            linha["nome"]: {"ultimaEm": linha["ultima_em"], "detalhe": linha["detalhe"]}
+            for linha in conn.execute("SELECT nome, ultima_em, detalhe FROM execucao_rotina")
+        }
+
+
 def rodar_backup_diario():
     """O que o agendador chama de madrugada."""
     destino = gerar_backup()
@@ -7969,4 +8013,5 @@ def rodar_backup_diario():
     print(f"💾 Backup do banco: {os.path.basename(destino)}"
           f" ({os.path.getsize(destino) // 1024} KB)"
           + (f" — {len(apagados)} cópia(s) antiga(s) apagada(s)" if apagados else ""))
+    marcar_execucao_rotina("backup", os.path.basename(destino))
     return destino

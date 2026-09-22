@@ -254,3 +254,13 @@
   white-space: nowrap;
   font-size: 0.78rem;
 }
+
+/* Quando a rotina automática rodou de verdade (QA 22/09) */
+.backup-ok, .backup-alerta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+}
+
+.backup-ok { color: var(--text-faint); }
+.backup-alerta { color: var(--danger-texto); font-weight: 600; }
