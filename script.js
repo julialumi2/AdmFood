@@ -1921,6 +1921,7 @@ function renderEstoqueTab() {
   const isAdmin = _possoGerir();
   const tbody = document.getElementById('estoque-tabela-body');
   if (!tbody) return;
+  _atualizarBotaoPendencias();
 
   const thAcoes = document.getElementById('estoque-th-acoes');
   const subtitulo = document.getElementById('estoque-tabela-subtitulo');
@@ -6985,6 +6986,15 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
       return;
     }
   }
+  // Como na VMarket (2026-09-22): todo insumo tem pelo menos um fornecedor
+  // que cota, senão não vai em link de cotação. Na edição vale pra loja da
+  // aba aberta; mistura (feita na casa) não precisa.
+  const ehMistura = insumoId && estoqueInsumos.find((i) => String(i.id) === String(insumoId))?.ehMistura;
+  const exigeFornecedor = !insumoId || (corpo.loja && !ehMistura);
+  if (exigeFornecedor && !fornecedorIds.length && !corpo.fornecedorHomologadoId) {
+    alert('Marque pelo menos um fornecedor que cota esse insumo. Sem fornecedor, ele não vai em nenhum link de cotação.');
+    return;
+  }
   try {
     const resposta = await fetch(insumoId ? `/api/insumos/${insumoId}` : '/api/insumos', {
       method: insumoId ? 'PUT' : 'POST',
@@ -6999,6 +7009,210 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     console.error('Falha ao salvar insumo:', erro);
     alert(erro.message || 'Não foi possível salvar o insumo.');
   }
+});
+
+// --- Pendências de cadastro (2026-09-22) -----------------------------------
+// O que falta pra compra funcionar sozinha, igual na VMarket: insumo sem
+// estoque mínimo (não entra sozinho na sugestão de compra) e insumo sem
+// fornecedor que cota (não vai em link de cotação), por loja. Mistura feita
+// na casa fica de fora (não é comprada), e insumo com ajuste de quantidade
+// ideal não conta como sem mínimo (o ajuste vale no lugar dele).
+let pendenciasAba = 'minimo';
+
+function _pendenciasCadastro() {
+  const minimo = [];
+  const fornecedor = new Map(); // insumoId -> { insumo, lojas: [] }
+  estoqueInsumos.forEach((insumo) => {
+    if (insumo.ehMistura) return;
+    Object.entries(insumo.porLoja || {}).forEach(([loja, dados]) => {
+      if (!dados.aplica || !LOJAS_ESTOQUE.includes(loja)) return;
+      const temAjuste = estoqueAjustesIdeal[insumo.id]?.[loja] != null;
+      if (!(dados.estoqueMinimo > 0) && !temAjuste) minimo.push({ insumo, loja });
+      if (!(dados.fornecedorIds || []).length && !dados.fornecedorHomologadoId) {
+        if (!fornecedor.has(insumo.id)) fornecedor.set(insumo.id, { insumo, lojas: [] });
+        fornecedor.get(insumo.id).lojas.push(loja);
+      }
+    });
+  });
+  return { minimo, fornecedor: [...fornecedor.values()] };
+}
+
+function _atualizarBotaoPendencias() {
+  const botao = document.getElementById('btn-pendencias-cadastro');
+  if (!botao) return;
+  const { minimo, fornecedor } = _pendenciasCadastro();
+  const total = minimo.length + fornecedor.length;
+  botao.hidden = !_possoGerir() || !total;
+  document.getElementById('pendencias-contador').textContent = total;
+}
+
+async function abrirModalPendencias() {
+  if (fornecedoresPorId === null) await _carregarNomesDeFornecedor();
+  const filtro = document.getElementById('pendencias-filtro-loja');
+  filtro.innerHTML = `<option value="">Todas as lojas</option>${LOJAS_ESTOQUE.map((loja) => `<option value="${escaparHtml(loja)}">${escaparHtml(loja)}</option>`).join('')}`;
+  filtro.value = LOJAS_ESTOQUE.includes(estoqueTabAtual) ? estoqueTabAtual : '';
+  renderPendencias();
+  document.getElementById('modal-pendencias-cadastro').style.display = 'flex';
+}
+
+function fecharModalPendencias() {
+  document.getElementById('modal-pendencias-cadastro').style.display = 'none';
+  renderEstoqueTab();
+}
+
+function _opcoesFornecedorPendencia(insumo) {
+  const ativos = fornecedoresPorId ? [...fornecedoresPorId.values()].filter((f) => f.ativo !== false) : [];
+  const doHistorico = new Set(insumo.fornecedoresDoHistorico || []);
+  const opcao = (f) => `<option value="${f.id}">${escaparHtml(f.nome)}</option>`;
+  const jaVenderam = ativos.filter((f) => doHistorico.has(f.id)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const outros = ativos.filter((f) => !doHistorico.has(f.id)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  return `<option value="">Quem vende?</option>${jaVenderam.length ? `<optgroup label="Já cotou ou vendeu">${jaVenderam.map(opcao).join('')}</optgroup>` : ''}<optgroup label="${jaVenderam.length ? 'Outros fornecedores' : 'Fornecedores'}">${outros.map(opcao).join('')}</optgroup>`;
+}
+
+function renderPendencias() {
+  const lista = document.getElementById('pendencias-lista');
+  if (!lista) return;
+  const lojaFiltro = document.getElementById('pendencias-filtro-loja').value;
+  const { minimo, fornecedor } = _pendenciasCadastro();
+  const daLoja = (loja) => !lojaFiltro || loja === lojaFiltro;
+  const minimoVisivel = minimo.filter((p) => daLoja(p.loja));
+  const fornecedorVisivel = fornecedor
+    .map((p) => ({ ...p, lojas: p.lojas.filter(daLoja) }))
+    .filter((p) => p.lojas.length);
+
+  document.getElementById('pendencias-contador-minimo').textContent = minimoVisivel.length;
+  document.getElementById('pendencias-contador-fornecedor').textContent = fornecedorVisivel.length;
+  document.querySelectorAll('.pendencias-abas [data-aba]').forEach((aba) => {
+    const ativa = aba.dataset.aba === pendenciasAba;
+    aba.classList.toggle('active', ativa);
+    aba.setAttribute('aria-selected', String(ativa));
+  });
+  document.getElementById('pendencias-explicacao').textContent = pendenciasAba === 'minimo'
+    ? 'Sem mínimo, o item não entra sozinho na sugestão de compra (igual na VMarket). Coloque o mínimo, ou tire da loja se ela não usa esse insumo.'
+    : 'Sem fornecedor que cota, o item não vai em nenhum link de cotação. Na VMarket todo produto tem pelo menos um. Escolha quem vende: ele passa a cotar nessas lojas.';
+
+  const porNome = (a, b) => a.insumo.nome.localeCompare(b.insumo.nome, 'pt-BR');
+  if (pendenciasAba === 'minimo') {
+    if (!minimoVisivel.length) {
+      lista.innerHTML = '<p class="pendencias-vazio">Nenhum insumo sem mínimo aqui.</p>';
+      return;
+    }
+    lista.innerHTML = LOJAS_ESTOQUE.filter(daLoja).map((loja) => {
+      const itens = minimoVisivel.filter((p) => p.loja === loja).sort(porNome);
+      if (!itens.length) return '';
+      return `
+        <p class="pendencias-grupo">${escaparHtml(loja)} · ${_qtdTexto(itens.length, 'insumo', 'insumos')}</p>
+        ${itens.map(({ insumo }) => `
+          <div class="pendencia-linha" data-insumo="${insumo.id}" data-loja="${escaparHtml(loja)}">
+            <div class="pendencia-insumo">
+              <strong title="${escaparHtml(insumo.nome)}">${escaparHtml(insumo.nome)}</strong>
+              <span>${escaparHtml(insumo.categoria || '')}</span>
+            </div>
+            <label class="pendencia-campo">
+              Mínimo
+              <input type="number" min="0" step="any" data-campo="minimo" aria-label="Estoque mínimo de ${escaparHtml(insumo.nome)} na ${escaparHtml(loja)}">
+              <span class="pendencia-unidade">${escaparHtml(insumo.unidadeMedida || '')}</span>
+            </label>
+            <button type="button" class="btn-secondary-sm" data-acao="salvar-minimo">Salvar</button>
+            <button type="button" class="btn-limpar-filtro" data-acao="tirar-da-loja">Não usa nesta loja</button>
+          </div>
+        `).join('')}`;
+    }).join('');
+    return;
+  }
+
+  if (!fornecedorVisivel.length) {
+    lista.innerHTML = '<p class="pendencias-vazio">Nenhum insumo sem fornecedor aqui.</p>';
+    return;
+  }
+  lista.innerHTML = fornecedorVisivel.sort(porNome).map(({ insumo, lojas }) => `
+    <div class="pendencia-linha" data-insumo="${insumo.id}" data-lojas="${escaparHtml(lojas.join('|'))}">
+      <div class="pendencia-insumo">
+        <strong title="${escaparHtml(insumo.nome)}">${escaparHtml(insumo.nome)}</strong>
+        <span>${escaparHtml(insumo.categoria || '')} · sem fornecedor em ${escaparHtml(lojas.join(', '))}</span>
+      </div>
+      <select data-campo="fornecedor" aria-label="Fornecedor que cota ${escaparHtml(insumo.nome)}">${_opcoesFornecedorPendencia(insumo)}</select>
+      <button type="button" class="btn-secondary-sm" data-acao="ligar-fornecedor">Ligar</button>
+      ${lojas.length === 1 ? '<button type="button" class="btn-limpar-filtro" data-acao="tirar-da-loja">Não usa nesta loja</button>' : '<span></span>'}
+    </div>
+  `).join('');
+}
+
+function _erroNaPendencia(linha, mensagem) {
+  linha.querySelector('.pendencia-erro')?.remove();
+  linha.insertAdjacentHTML('beforeend', `<p class="pendencia-erro">${escaparHtml(mensagem)}</p>`);
+}
+
+async function _resolverPendencia(botao) {
+  const linha = botao.closest('.pendencia-linha');
+  const insumo = estoqueInsumos.find((i) => i.id === parseInt(linha.dataset.insumo, 10));
+  if (!insumo) return;
+  const acao = botao.dataset.acao;
+  botao.disabled = true;
+  try {
+    if (acao === 'salvar-minimo') {
+      const loja = linha.dataset.loja;
+      const minimo = parseFloat(linha.querySelector('[data-campo="minimo"]').value);
+      if (!Number.isFinite(minimo) || minimo <= 0) throw new Error('Digite um mínimo maior que 0.');
+      const resposta = await fetch(`/api/insumos/${insumo.id}/estoque/${encodeURIComponent(loja)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estoqueMinimo: minimo }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar o mínimo.');
+      insumo.porLoja[loja].estoqueMinimo = minimo;
+    } else if (acao === 'ligar-fornecedor') {
+      const fornecedorId = parseInt(linha.querySelector('[data-campo="fornecedor"]').value, 10);
+      if (!fornecedorId) throw new Error('Escolha o fornecedor.');
+      for (const loja of linha.dataset.lojas.split('|')) {
+        const atuais = insumo.porLoja[loja].fornecedorIds || [];
+        const resposta = await fetch(`/api/insumos/${insumo.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loja, fornecedorIds: [...new Set([...atuais, fornecedorId])] }),
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível ligar o fornecedor.');
+        insumo.porLoja[loja].fornecedorIds = [...new Set([...atuais, fornecedorId])];
+      }
+    } else if (acao === 'tirar-da-loja') {
+      const loja = linha.dataset.loja || linha.dataset.lojas;
+      if (!confirm(`Tirar "${insumo.nome}" da ${loja}? Ele some da aba e da contagem dessa loja. Nas outras lojas nada muda.`)) {
+        botao.disabled = false;
+        return;
+      }
+      const resposta = await fetch(`/api/insumos/${insumo.id}/lojas/${encodeURIComponent(loja)}`, { method: 'DELETE' });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível tirar da loja.');
+      insumo.porLoja[loja].aplica = false;
+    }
+    renderPendencias();
+    _atualizarBotaoPendencias();
+  } catch (erro) {
+    botao.disabled = false;
+    _erroNaPendencia(linha, erro.message);
+  }
+}
+
+document.getElementById('btn-pendencias-cadastro')?.addEventListener('click', abrirModalPendencias);
+document.getElementById('btn-pendencias-fechar')?.addEventListener('click', fecharModalPendencias);
+document.getElementById('pendencias-filtro-loja')?.addEventListener('change', renderPendencias);
+document.querySelectorAll('.pendencias-abas [data-aba]').forEach((aba) => {
+  aba.addEventListener('click', () => {
+    pendenciasAba = aba.dataset.aba;
+    renderPendencias();
+  });
+});
+document.getElementById('pendencias-lista')?.addEventListener('click', (evento) => {
+  const botao = evento.target.closest('[data-acao]');
+  if (botao) _resolverPendencia(botao);
+});
+// Enter no campo do mínimo salva a linha (pra ir de um em um no teclado).
+document.getElementById('pendencias-lista')?.addEventListener('keydown', (evento) => {
+  if (evento.key !== 'Enter' || !evento.target.matches('[data-campo="minimo"]')) return;
+  evento.preventDefault();
+  evento.target.closest('.pendencia-linha').querySelector('[data-acao="salvar-minimo"]')?.click();
 });
 
 // --- Modal: Importar insumos em lote (catálogo novo de uma loja, ex: VMarket) ---

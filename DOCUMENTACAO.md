@@ -3975,3 +3975,18 @@ período é pela data do pedido (no histórico, pela data do recebimento).
 `/api/recebimentos` passou a mandar `itens`, `atrasado`, `diasEsperando` e
 `pendenteDeEnvio`; `/api/recebimentos/recebidos?dias=N` (novo,
 `listar_pedidos_recebidos`) traz o que chegou nos últimos N dias.
+
+### 6.35 Fornecedor obrigatório e pendências de cadastro (2026-09-22)
+
+Pra compra funcionar como na VMarket (conferido lá: todo produto de cotação
+tem pelo menos um fornecedor ligado, e item sem mínimo não entra na
+cotação): insumo novo só é cadastrado com pelo menos um fornecedor que cota
+ou o homologado (`POST /api/insumos` recusa sem; o modal avisa), e a edição
+numa aba de loja também pede, menos pra mistura feita na casa. Em Insumos, o
+botão **Pendências** (só gestão, aparece quando tem) abre a lista por loja
+de insumo **sem estoque mínimo** (fora mistura e quem tem ajuste de
+quantidade ideal) e **sem fornecedor que cota** (nem homologado), com a
+correção na própria linha: salvar o mínimo, ligar um fornecedor (primeiro
+quem já cotou ou vendeu) ou "Não usa nesta loja" (`DELETE
+/api/insumos/<id>/lojas/<loja>`, `tirar_insumo_da_loja`: tira só da lista
+dessa loja; estoque e histórico ficam).

@@ -208,6 +208,12 @@
                 </div>
               </div>
               <div class="page-acoes-topo" id="estoque-acoes-admin" style="display:none;">
+                <!-- Pendências de cadastro (2026-09-22): sem mínimo e sem fornecedor -->
+                <button type="button" class="btn-secondary btn-pendencias" id="btn-pendencias-cadastro" hidden>
+                  <i data-lucide="list-todo"></i>
+                  Pendências
+                  <span class="pendencias-contador" id="pendencias-contador">0</span>
+                </button>
                 <div class="acoes-menu" id="estoque-acoes-menu">
                   <button type="button" class="btn-secondary acoes-menu-trigger" id="estoque-acoes-trigger">
                     <i data-lucide="sliders-horizontal"></i>
@@ -622,6 +628,37 @@
       </div>
     </div>
 
+    <!-- MODAL: PENDÊNCIAS DE CADASTRO (2026-09-22) — o que falta pra compra
+         funcionar sozinha, igual na VMarket: mínimo e fornecedor, por loja -->
+    <div class="modal-overlay" id="modal-pendencias-cadastro" style="display:none;">
+      <div class="modal-content modal-pendencias">
+        <div class="modal-header">
+          <div>
+            <h3 class="panel-title">Pendências de cadastro</h3>
+            <p class="panel-subtitle pendencias-subtitulo">O que falta pra compra funcionar sozinha. Resolva aqui mesmo, item por item.</p>
+          </div>
+          <button type="button" class="btn-close" id="btn-pendencias-fechar" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="pendencias-topo">
+          <div class="pendencias-abas" role="tablist" aria-label="Tipo de pendência">
+            <button type="button" role="tab" class="active" data-aba="minimo" aria-selected="true">
+              Sem estoque mínimo <span class="pendencias-aba-contador" id="pendencias-contador-minimo">0</span>
+            </button>
+            <button type="button" role="tab" data-aba="fornecedor" aria-selected="false">
+              Sem fornecedor <span class="pendencias-aba-contador" id="pendencias-contador-fornecedor">0</span>
+            </button>
+          </div>
+          <span class="filtro-select-pendencias">
+            <select id="pendencias-filtro-loja" aria-label="Loja">
+              <option value="">Todas as lojas</option>
+            </select>
+          </span>
+        </div>
+        <p class="pendencias-explicacao" id="pendencias-explicacao"></p>
+        <div class="pendencias-lista" id="pendencias-lista" role="tabpanel"></div>
+      </div>
+    </div>
+
     <!-- MODAL: NOVA DATA ESPECIAL -->
     <div class="modal-overlay" id="modal-nova-data-especial" style="display:none;">
       <div class="modal-content">
@@ -766,7 +803,7 @@
           <p class="panel-subtitle novo-insumo-aviso-loja" id="novo-insumo-aviso-loja" style="display:none;"></p>
           <div id="novo-insumo-bloco-fornecedores">
           <div class="form-group">
-            <label>Fornecedores que cotam esse insumo</label>
+            <label>Fornecedores que cotam esse insumo <span class="rotulo-obrigatorio">(pelo menos um)</span></label>
             <div class="checklist-fornecedores" id="novo-insumo-fornecedores">
               <!-- Renderizado dinamicamente via JS -->
             </div>

@@ -2829,6 +2829,14 @@ def salvar_insumos_da_loja(loja, insumo_ids):
             conn.execute("INSERT INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, loja))
 
 
+def tirar_insumo_da_loja(insumo_id, loja):
+    """Tira um insumo da lista de uma loja só (pendências de cadastro,
+    2026-09-22): ele some da aba e da contagem dessa loja. Estoque e
+    histórico ficam; nas outras lojas nada muda."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM insumo_loja WHERE insumo_id = ? AND loja = ?", (insumo_id, loja))
+
+
 def atualizar_insumo(insumo_id, campos):
     if not campos:
         return

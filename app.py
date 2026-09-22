@@ -59,6 +59,7 @@ from backend.armazenamento import (
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
+    tirar_insumo_da_loja,
     atualizar_insumo,
     excluir_insumo,
     mesclar_insumo,
@@ -497,6 +498,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/insumos/lote'): 'Importou insumos em lote',
     ('PUT', '/api/insumos/<int:insumo_id>'): 'Editou o cadastro do insumo',
     ('DELETE', '/api/insumos/<int:insumo_id>'): 'Excluiu insumo',
+    ('DELETE', '/api/insumos/<int:insumo_id>/lojas/<loja>'): 'Tirou um insumo de uma loja',
     ('POST', '/api/insumos/<int:insumo_id>/mesclar'): 'Juntou dois insumos',
     ('PUT', '/api/insumos/<int:insumo_id>/estoque/<loja>'): 'Alterou o estoque na mão',
     ('POST', '/api/insumos/<int:insumo_id>/entrada'): 'Registrou entrada de estoque',
@@ -2051,11 +2053,20 @@ def api_criar_insumo():
     if not lojas:
         return jsonify({"erro": "Essa loja não é a sua."}), 403
 
+    # Como na VMarket (2026-09-22): insumo novo nasce com pelo menos um
+    # fornecedor que cota (ou o homologado). Sem ninguém, ele não iria em
+    # nenhum link de cotação.
+    try:
+        fornecedor_ids = [int(f) for f in (dados.get('fornecedorIds') or [])]
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Fornecedor inválido."}), 400
+    if not fornecedor_ids and not homologado.get('fornecedor_homologado_id'):
+        return jsonify({"erro": "Marque pelo menos um fornecedor que cota esse insumo. Sem fornecedor, ele não vai em nenhum link de cotação."}), 400
+
     insumo_id = criar_insumo(nome, categoria, unidade_medida, lojas)
     atualizar_insumo(insumo_id, campos)
-    fornecedor_ids = dados.get('fornecedorIds')
-    if fornecedor_ids is not None:
-        definir_fornecedores_insumo(insumo_id, [int(f) for f in fornecedor_ids], lojas)
+    if fornecedor_ids:
+        definir_fornecedores_insumo(insumo_id, fornecedor_ids, lojas)
     if homologado.get('fornecedor_homologado_id'):
         definir_homologado_insumo(insumo_id, lojas, homologado['fornecedor_homologado_id'],
                                   homologado.get('preco_homologado'), homologado.get('validade_preco_homologado'))
@@ -2211,6 +2222,20 @@ def api_mesclar_insumo(insumo_id):
     except ValueError as erro:
         return jsonify({"erro": str(erro)}), 400
     return jsonify(resumo)
+
+
+@app.route('/api/insumos/<int:insumo_id>/lojas/<loja>', methods=['DELETE'])
+def api_tirar_insumo_da_loja(insumo_id, loja):
+    """Tira o insumo só dessa loja (ver tirar_insumo_da_loja)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    if not _loja_visivel(loja):
+        return jsonify({"erro": "Essa loja não é a sua."}), 403
+    tirar_insumo_da_loja(insumo_id, loja)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/insumos/<int:insumo_id>/estoque/<loja>', methods=['PUT'])
