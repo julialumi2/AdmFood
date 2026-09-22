@@ -3807,6 +3807,18 @@ def _custo_por_item_da_ficha(loja, precos_insumo):
     }
 
 
+def custos_da_ficha_por_item(loja):
+    """Custo de cada produto pela ficha técnica da loja, o mesmo do CMV e da
+    Curva ABC (ver _custo_por_item_da_ficha): a tela de Cardápio mostra ele
+    com a margem de cada canal (2026-09-21)."""
+    return _custo_por_item_da_ficha(loja, _mapa_preco_insumo())
+
+
+def precos_insumo_em_uso():
+    """{insumo_id: custo} que o CMV usa (ver custo_em_uso_por_insumo)."""
+    return _mapa_preco_insumo()
+
+
 # Canal gravado em venda_item → coluna de preço em preco_cardapio. "portal"
 # é a venda presencial/balcão, que usa o mesmo preço do Cardápio Web.
 _CANAL_VENDA_PARA_PRECO = {

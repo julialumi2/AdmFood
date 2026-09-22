@@ -161,91 +161,89 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE CARDÁPIO -->
-      <div class="page-content">
+      <!-- PÁGINA DE CARDÁPIO (redesenho de 22/09: topo enxuto, loja + categorias
+           em carrossel e a grade de produtos; clicar num produto abre o modal
+           com preço, custo, margem e ficha) -->
+      <div class="page-content cardapio-pagina">
 
         <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="book-open" class="icon-pin"></i>
-            <span>CARDÁPIO</span>
-          </div>
-          <div class="title-row">
-            <h1>Cardápio</h1>
-            <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
-            <div id="cardapio-importar-area" style="display:none;">
-              <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
-              <button type="button" class="btn-secondary" onclick="document.getElementById('cardapio-importar-arquivo').click()">
-                <i data-lucide="upload"></i>
-                Importar planilha
-              </button>
+          <div class="title-row cardapio-topo">
+            <div class="cardapio-titulo">
+              <h1>Cardápio</h1>
+              <p class="panel-subtitle">Gerencie preços por canal, custos e fichas técnicas dos produtos por unidade.</p>
+            </div>
+            <div class="page-acoes-topo">
+              <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
+              <div id="cardapio-importar-area" style="display:none;">
+                <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
+                <button type="button" class="btn-secondary" onclick="document.getElementById('cardapio-importar-arquivo').click()">
+                  <i data-lucide="upload"></i>
+                  Importar planilha
+                </button>
+              </div>
+              <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
+                <button type="button" class="btn-secondary" id="btn-colar-lista-complementos" style="display:none;">
+                  <i data-lucide="clipboard-list"></i>
+                  Colar lista
+                </button>
+                <button type="button" class="btn-primary" id="btn-novo-item-cardapio">
+                  <i data-lucide="plus"></i>
+                  <span id="btn-novo-item-cardapio-texto">Novo item</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         <p id="cardapio-importar-status" class="panel-subtitle" style="display:none;"></p>
 
-        <!-- Preços e Ficha Técnica viraram uma tela só (2026-09-09): o cartão
-             do produto já mostra foto + preço por canal (clique no lápis pra
-             editar); clicar no cartão expande a ficha técnica + custo.
-             "Complementos" entra como mais um item no menu de categorias
-             lateral (só quando a loja é Açaí Na Lata) — ver
-             renderFichaTecnicaConteudo em script.js. -->
-        <div class="content-header">
-          <p class="panel-subtitle" id="ficha-tecnica-subtitulo">
-            Preço por canal de venda, ficha técnica e custo de cada produto, por loja — a receita (insumos +
-            quantidade) é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra.
-            Clique num produto pra ver/editar os insumos e o custo; o lápis edita o preço. Uma planilha nova
-            traz os preços atualizados (o admin pode reimportar a qualquer momento).
-          </p>
-          <div class="ficha-tecnica-topo-acoes">
-            <div class="loja-select loja-select-realce" id="ficha-tecnica-loja-select">
-              <button type="button" class="loja-select-trigger" id="ficha-tecnica-loja-trigger">
-                <span class="loja-select-icone-realce"><i data-lucide="store"></i></span>
-                <span class="loja-select-texto-realce">
-                  <span class="loja-select-rotulo-realce">Loja selecionada</span>
-                  <span class="loja-select-label">Hamburgueria Artesanos</span>
-                </span>
-                <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+        <!-- Loja e categorias (setas só quando as pills não cabem) -->
+        <div class="cardapio-navegacao">
+          <div class="loja-select loja-select-realce" id="ficha-tecnica-loja-select">
+            <button type="button" class="loja-select-trigger" id="ficha-tecnica-loja-trigger">
+              <span class="loja-select-icone-realce"><i data-lucide="store"></i></span>
+              <span class="loja-select-texto-realce">
+                <span class="loja-select-rotulo-realce">Loja selecionada</span>
+                <span class="loja-select-label">Hamburgueria Artesanos</span>
+              </span>
+              <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+            </button>
+            <div class="loja-select-menu" id="ficha-tecnica-loja-menu">
+              <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
+                <i data-lucide="store"></i>
+                <span>Hamburgueria Artesanos</span>
               </button>
-              <div class="loja-select-menu" id="ficha-tecnica-loja-menu">
-                <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
-                  <i data-lucide="store"></i>
-                  <span>Hamburgueria Artesanos</span>
-                </button>
-                <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
-                  <i data-lucide="store"></i>
-                  <span>Açaí Na Lata</span>
-                </button>
-                <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
-                  <i data-lucide="store"></i>
-                  <span>Tradiça ZN</span>
-                </button>
-                <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
-                  <i data-lucide="store"></i>
-                  <span>Tradiça Simus</span>
-                </button>
-              </div>
-            </div>
-            <div class="action-controls" id="ficha-tecnica-acoes-admin" style="display:none;">
-              <button type="button" class="btn-secondary" id="btn-colar-lista-complementos" style="display:none;">
-                <i data-lucide="clipboard-list"></i>
-                Colar lista
+              <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
+                <i data-lucide="store"></i>
+                <span>Açaí Na Lata</span>
               </button>
-              <button type="button" class="btn-secondary" id="btn-novo-item-cardapio">
-                <i data-lucide="plus"></i>
-                <span id="btn-novo-item-cardapio-texto">Novo item</span>
+              <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
+                <i data-lucide="store"></i>
+                <span>Tradiça ZN</span>
+              </button>
+              <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
+                <i data-lucide="store"></i>
+                <span>Tradiça Simus</span>
               </button>
             </div>
           </div>
+          <div class="cardapio-categorias-trilho">
+            <button type="button" class="cardapio-seta" data-direcao="-1" aria-label="Ver categorias anteriores" hidden>
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <div class="cardapio-categorias-sidebar" id="ficha-tecnica-categorias-sidebar">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+            <button type="button" class="cardapio-seta" data-direcao="1" aria-label="Ver mais categorias" hidden>
+              <i data-lucide="chevron-right"></i>
+            </button>
+          </div>
+          <p class="panel-subtitle cardapio-dica" id="ficha-tecnica-subtitulo" hidden></p>
         </div>
 
-        <div class="cardapio-catalogo-layout">
-          <div class="cardapio-categorias-sidebar" id="ficha-tecnica-categorias-sidebar">
-            <!-- Renderizado dinamicamente via JS -->
-          </div>
-          <div id="ficha-tecnica-conteudo">
-            <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
-          </div>
+        <!-- Vitrine de produtos -->
+        <div id="ficha-tecnica-conteudo">
+          <p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>
         </div>
 
       </div> <!-- /page-content -->

@@ -11042,6 +11042,39 @@ function _formatarPrecoCardapio(valor) {
     : null;
 }
 
+// Custo que vale pro produto: o digitado à mão ganha do calculado pela ficha
+// técnica (mesma regra da Curva ABC).
+function _custoEmUsoProduto(p) {
+  return p.custo ?? p.custoFicha ?? null;
+}
+
+// Margem sobre o preço (1 - custo/preço), sem a comissão do app.
+function _margemProduto(custo, preco) {
+  return custo != null && typeof preco === 'number' && preco > 0 ? 1 - custo / preco : null;
+}
+
+// Faixa pela régua do CMV (ótimo / bom / ruim): margem boa é CMV baixo.
+function _faixaMargem(margem) {
+  if (margem == null) return '';
+  const cmv = 1 - margem;
+  if (cmv < cardapioCmvLimites.otimo) return 'otima';
+  return cmv < cardapioCmvLimites.bom ? 'boa' : 'ruim';
+}
+
+function _pctTexto(fracao) {
+  return fracao == null ? '—' : `${Math.round(fracao * 100)}%`;
+}
+
+// Carrossel de categorias (22/09): setas só quando as pills não cabem.
+function _atualizarSetasCategorias() {
+  const trilho = document.getElementById('ficha-tecnica-categorias-sidebar');
+  if (!trilho) return;
+  const [anterior, proxima] = trilho.parentElement.querySelectorAll('.cardapio-seta');
+  const fim = trilho.scrollWidth - trilho.clientWidth - 1;
+  if (anterior) anterior.hidden = trilho.scrollLeft <= 0;
+  if (proxima) proxima.hidden = trilho.scrollLeft >= fim;
+}
+
 // categorias: [{ nome, contagem }] — contagem vira o número de itens
 // daquela categoria, mostrado como badge (Preços e Ficha Técnica).
 function _renderSidebarCategorias(containerId, categorias, categoriaSelecionada, onSelecionar) {
@@ -11106,6 +11139,8 @@ let complementoEditandoNomeId = null;
 const fichaTecnicaInsumosCache = new Map();
 let fichaTecnicaProdutoPendente = null;
 let fichaTecnicaCategoriaSelecionada = null;
+// Régua do CMV (a mesma da Home e das Vendas Semanais), vem do servidor.
+let cardapioCmvLimites = { otimo: 0.31, bom: 0.34 };
 // Preços + Ficha Técnica viraram uma tela só (2026-09-09) — cartão no
 // visual de Preços (foto + preço por canal). Sem lápis/lixeira soltos:
 // clicar no cartão expande TUDO editável junto (preço + custo + ficha
@@ -11149,6 +11184,7 @@ function carregarFichaTecnicaAtual() {
   ]).then(([dadosProdutos, dadosComplementos, dadosMisturas]) => {
     fichaTecnicaMisturas = dadosMisturas.misturas || [];
     fichaTecnicaProdutos = dadosProdutos.produtos || [];
+    if (dadosProdutos.cmvLimites) cardapioCmvLimites = dadosProdutos.cmvLimites;
     fichaTecnicaComplementos = (dadosComplementos.complementos || []).map(c => ({
       itemCardapioId: c.id,
       nome: c.nome,
@@ -11204,7 +11240,7 @@ function _receitaCardHTML(p, isAdmin, canais) {
         <span class="cardapio-preco-valor">${_formatarPrecoCardapio(p[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>
       </div>
     `).join('')}
-    ${!p.itemCardapioId ? '<span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>' : ''}
+    ${_custoEmUsoProduto(p) == null ? `<span class="cardapio-tag-sem-custo" title="${p.itemCardapioId ? 'A ficha técnica tem insumo sem preço ou sem quantidade' : 'Sem ficha técnica ainda'}">sem custo</span>` : ''}
   `;
 
   return `
@@ -11294,6 +11330,7 @@ function renderFichaTecnicaConteudo() {
 
   if (!fichaTecnicaProdutos.length) {
     document.getElementById('ficha-tecnica-categorias-sidebar').innerHTML = '';
+    _atualizarSetasCategorias();
     conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto encontrado pra essa loja em Preços — importe a planilha de preços primeiro.</p>`;
     return;
   }
@@ -11329,6 +11366,7 @@ function renderFichaTecnicaConteudo() {
     fichaTecnicaCategoriaSelecionada = nome;
     renderFichaTecnicaConteudo();
   });
+  _atualizarSetasCategorias();
 
   const ehComplemento = fichaTecnicaTipoAtual === 'complemento';
   const ehMistura = fichaTecnicaTipoAtual === 'mistura';
@@ -11336,7 +11374,8 @@ function renderFichaTecnicaConteudo() {
     ? 'Receita do que é feito na casa (tempero, molho, maionese...): quanto rende e o que vai dentro. Quando sai um produto que leva a mistura, o estoque desconta os ingredientes, e o custo dela sai desta conta. A receita vale pra todas as lojas.'
     : ehComplemento
       ? 'Insumos de cada complemento (Granola, Leite condensado, Morango...), por loja — usado pra descontar o insumo certo do estoque quando o cliente monta o próprio produto com adicionais.'
-      : 'Custo e valor de venda (balcão) de cada produto, por loja — a receita (insumos + quantidade) também é por loja desde 2026-09, então o mesmo prato pode divergir de uma unidade pra outra. Clique num produto pra ver/editar os insumos.';
+      : '';
+  if (subtitulo) subtitulo.hidden = !subtitulo.textContent;
   if (btnNovoTexto) btnNovoTexto.textContent = ehMistura ? 'Nova mistura' : ehComplemento ? 'Novo complemento' : 'Novo item';
   if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
 
@@ -11356,7 +11395,6 @@ function renderFichaTecnicaConteudo() {
 // abrirModalDetalheProduto.
 function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria, canais) {
   conteudoEl.innerHTML = `
-    <div class="cardapio-categoria-titulo">${escaparHtml(fichaTecnicaCategoriaSelecionada)}</div>
     <div class="cardapio-lista">
       ${produtosDaCategoria.map(p => `
         <div class="cardapio-card" data-id="${p.precoCardapioId}">
@@ -11730,99 +11768,177 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   const alteracoesPreco = {};
   let custoAlterado = null;
 
+  // Redesenho de 22/09 (pedido dela): duas colunas sem rolagem. Esquerda:
+  // foto e preço por canal. Direita: o custo (calculado pela ficha técnica,
+  // ou o digitado, que ganha) com a margem de cada canal ao lado, que muda
+  // enquanto ela digita o preço; depois insumos e embalagem. Rodapé fixo.
+  const insumosFicha = dadosInsumos.insumos || [];
+  const faltamCusto = insumosFicha.filter((ins) => ins.quantidade == null || ins.custoUnitario == null);
+  const embalagem = dadosInsumos.embalagemViagem || [];
+  const custoEmbalagem = embalagem.length && embalagem.every((ins) => ins.custo != null)
+    ? embalagem.reduce((total, ins) => total + ins.custo, 0)
+    : null;
+  const chipInsumo = (ins) => {
+    const semQuantidade = ins.quantidade == null;
+    const semPreco = !semQuantidade && ins.custoUnitario == null;
+    const titulo = semQuantidade ? 'Sem quantidade: o custo do produto não fecha'
+      : semPreco ? 'Insumo sem preço: o custo do produto não fecha'
+        : ins.custo != null ? `R$ ${_formatarMoedaBR(ins.custo)} neste produto` : '';
+    return `<span class="ficha-tecnica-chip${semQuantidade || semPreco ? ' sem-custo' : ''}"${titulo ? ` title="${titulo}"` : ''}>${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidadeFicha(ins)})</span>` : ''}</span>`;
+  };
+
   const precoHTML = `
-    <div class="detalhe-produto-secao">
-      <div class="receita-eyebrow">Preço por canal</div>
-      <div class="detalhe-produto-linha">
+    <section class="detalhe-produto-secao">
+      <h4 class="receita-eyebrow">Preço por canal</h4>
+      <div class="detalhe-produto-precos">
         ${canais.map(c => `
           <div class="detalhe-produto-campo">
-            <label>${c.label}</label>
+            <label${isAdmin ? ` for="detalhe-preco-${c.chave}"` : ''}>${c.label}</label>
             ${isAdmin
-              ? `<input type="number" step="0.01" min="0" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
+              ? `<input type="number" step="0.01" min="0" id="detalhe-preco-${c.chave}" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
               : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(produto[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>`}
           </div>
         `).join('')}
       </div>
-    </div>
+    </section>
+  `;
+
+  const custoHTML = `
+    <section class="detalhe-produto-secao">
+      <h4 class="receita-eyebrow">Custo do produto</h4>
+      <div class="detalhe-custo-painel">
+        <div class="detalhe-custo-total">
+          <strong id="detalhe-custo-valor">—</strong>
+          <span id="detalhe-custo-origem"></span>
+        </div>
+        <div class="detalhe-margens" aria-label="Margem por canal">
+          ${canais.map(c => `
+            <div class="detalhe-margem" data-margem-canal="${c.chave}">
+              <span class="detalhe-margem-canal">${c.label}</span>
+              <span class="detalhe-margem-pct">—</span>
+              <span class="detalhe-margem-barra" aria-hidden="true"><span></span></span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="detalhe-custo-rodape">
+        ${isAdmin && produto.itemCardapioId ? `
+          <label class="detalhe-custo-manual">Custo digitado
+            <input type="number" step="0.01" min="0" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="${produto.custoFicha != null ? `ficha: ${_formatarMoedaBR(produto.custoFicha)}` : 'R$ 0,00'}">
+          </label>
+        ` : ''}
+        <span class="detalhe-margens-nota">Margem sem a comissão do app e sem a embalagem.</span>
+      </div>
+    </section>
   `;
 
   const fichaTecnicaHTML = produto.itemCardapioId ? `
-    <div class="detalhe-produto-secao">
-      <div class="receita-eyebrow">Custo</div>
-      <div class="detalhe-produto-linha">
-        <div class="detalhe-produto-campo">
-          <label>Preço de custo</label>
-          ${isAdmin
-            ? `<input type="number" step="0.01" min="0" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="R$ 0,00">`
-            : (produto.custo != null ? `<span class="receita-preco-custo-rotulo">R$ ${produto.custo.toFixed(2)}</span>` : `<span class="ficha-tecnica-vazio">—</span>`)}
-        </div>
-      </div>
-    </div>
-    <div class="detalhe-produto-secao">
-      <div class="receita-eyebrow">Insumos</div>
+    <section class="detalhe-produto-secao">
+      <h4 class="receita-eyebrow">Insumos (ficha técnica)</h4>
       <div class="ficha-tecnica-ingredientes">
-        ${dadosInsumos.insumos.length ? dadosInsumos.insumos.map(ins => `
-          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidadeFicha(ins)})</span>` : ''}</span>
-        `).join('') : `<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>`}
+        ${insumosFicha.length ? insumosFicha.map(chipInsumo).join('') : '<span class="ficha-tecnica-vazio">Nenhum insumo cadastrado ainda nessa loja.</span>'}
       </div>
       ${isAdmin ? `
-        <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-editar-insumos" style="align-self: flex-start;">
+        <button type="button" class="btn-secondary-sm detalhe-produto-btn-editar" id="btn-detalhe-produto-editar-insumos">
           <i data-lucide="pencil"></i>
           Editar insumos
         </button>
       ` : ''}
-    </div>
-    <div class="detalhe-produto-secao">
-      <div class="receita-eyebrow">Embalagem pra viagem</div>
-      <div class="ficha-tecnica-ingredientes">
-        ${(dadosInsumos.embalagemViagem || []).length ? dadosInsumos.embalagemViagem.map(ins => `
-          <span class="ficha-tecnica-chip">${escaparHtml(ins.nome)}${ins.quantidade != null ? ` <span class="qtd">(${_formatarQuantidadeFicha(ins)})</span>` : ''}</span>
-        `).join('') : `<span class="ficha-tecnica-vazio">Nenhuma. Ela sai do estoque só nos pedidos de delivery e retirada.</span>`}
-      </div>
+    </section>
+    <section class="detalhe-produto-secao">
+      <h4 class="receita-eyebrow">Embalagem pra viagem</h4>
+      <p class="detalhe-produto-texto">${embalagem.length
+        ? `Sai do estoque nos pedidos de delivery e retirada${custoEmbalagem != null ? `, e custa R$ ${_formatarMoedaBR(custoEmbalagem)} por unidade` : ''}.`
+        : 'Nenhuma cadastrada. A embalagem sai do estoque só nos pedidos de delivery e retirada.'}</p>
+      ${embalagem.length ? `<div class="ficha-tecnica-ingredientes">${embalagem.map(chipInsumo).join('')}</div>` : ''}
       ${isAdmin ? `
-        <button type="button" class="btn-secondary-sm" data-acao="detalhe-editar-embalagem" style="align-self: flex-start;">
+        <button type="button" class="btn-secondary-sm detalhe-produto-btn-editar" data-acao="detalhe-editar-embalagem">
           <i data-lucide="pencil"></i>
           Editar embalagem
         </button>
       ` : ''}
-    </div>
-  ` : (isAdmin ? `
-    <div class="detalhe-produto-secao">
-      <span class="ficha-tecnica-vazio">Sem ficha técnica ainda</span>
-      <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-criar-ficha" style="align-self: flex-start;">Cadastrar ficha técnica</button>
-    </div>
-  ` : '');
+    </section>
+  ` : `
+    <section class="detalhe-produto-secao">
+      <h4 class="receita-eyebrow">Insumos (ficha técnica)</h4>
+      <span class="ficha-tecnica-vazio">Sem ficha técnica ainda: sem ela o produto fica sem custo.</span>
+      ${isAdmin ? '<button type="button" class="btn-secondary-sm detalhe-produto-btn-editar" id="btn-detalhe-produto-criar-ficha">Cadastrar ficha técnica</button>' : ''}
+    </section>
+  `;
 
   corpo.innerHTML = `
     <div class="detalhe-produto-grid">
-      <div class="detalhe-produto-foto">
-        ${produto.fotoUrl ? `<img src="${produto.fotoUrl}" alt="">` : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
-        ${isAdmin ? `
-          <button type="button" class="detalhe-produto-btn-foto" id="btn-detalhe-produto-foto" title="Trocar foto">
-            <i data-lucide="camera"></i>
-          </button>
-          <input type="file" accept="image/*" id="detalhe-produto-input-foto" style="display:none;">
-        ` : ''}
-      </div>
-      <div class="detalhe-produto-campos">
+      <div class="detalhe-produto-coluna">
+        <div class="detalhe-produto-foto">
+          ${produto.fotoUrl ? `<img src="${produto.fotoUrl}" alt="">` : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`}
+          ${isAdmin ? `
+            <button type="button" class="detalhe-produto-btn-foto" id="btn-detalhe-produto-foto" title="Trocar foto" aria-label="Trocar foto">
+              <i data-lucide="camera"></i>
+            </button>
+            <input type="file" accept="image/*" id="detalhe-produto-input-foto" style="display:none;">
+          ` : ''}
+        </div>
         ${precoHTML}
+      </div>
+      <div class="detalhe-produto-coluna">
+        ${custoHTML}
         ${fichaTecnicaHTML}
         ${porcoesHTML}
       </div>
     </div>
     ${isAdmin ? `
-      <div class="modal-actions detalhe-produto-acoes">
-        <div class="detalhe-produto-acoes-extra">
-          <button type="button" class="btn-secondary-sm btn-excluir" id="btn-detalhe-produto-tirar">
-            <i data-lucide="circle-minus"></i>
-            Tirar do cardápio desta loja
-          </button>
-        </div>
+      <div class="detalhe-produto-rodape">
+        <button type="button" class="btn-secondary-sm btn-excluir detalhe-produto-btn-tirar" id="btn-detalhe-produto-tirar">
+          <i data-lucide="circle-minus"></i>
+          Tirar do cardápio desta loja
+        </button>
         <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-cancelar">Cancelar</button>
         <button type="button" class="btn-primary-sm" id="btn-detalhe-produto-salvar">Salvar</button>
       </div>
     ` : ''}
   `;
+
+  // Custo e margem ao vivo: o custo digitado ganha do calculado pela ficha
+  // (mesma regra da Curva ABC).
+  const atualizarCustoEMargens = () => {
+    const campoCusto = document.getElementById('detalhe-produto-input-custo');
+    const digitado = campoCusto ? (campoCusto.value === '' ? null : parseFloat(campoCusto.value)) : produto.custo;
+    const manual = Number.isFinite(digitado) ? digitado : null;
+    const custo = manual ?? produto.custoFicha ?? null;
+    document.getElementById('detalhe-custo-valor').textContent = custo != null ? `R$ ${_formatarMoedaBR(custo)}` : '—';
+    let origem;
+    let alerta = false;
+    if (manual != null) {
+      origem = `digitado à mão${produto.custoFicha != null ? ` · a ficha dá R$ ${_formatarMoedaBR(produto.custoFicha)}` : ''}`;
+    } else if (produto.custoFicha != null) {
+      origem = `pela ficha técnica · ${_qtdTexto(insumosFicha.length, 'insumo', 'insumos')}`;
+    } else if (produto.itemCardapioId) {
+      origem = faltamCusto.length
+        ? `ficha incompleta: ${_qtdTexto(faltamCusto.length, 'insumo', 'insumos')} sem preço ou quantidade`
+        : 'a ficha técnica ainda não tem insumos';
+      alerta = true;
+    } else {
+      origem = 'sem ficha técnica';
+      alerta = true;
+    }
+    const campoOrigem = document.getElementById('detalhe-custo-origem');
+    campoOrigem.textContent = origem;
+    campoOrigem.classList.toggle('alerta', alerta);
+    canais.forEach((c) => {
+      const campo = corpo.querySelector(`[data-acao="detalhe-editar-preco"][data-canal="${c.chave}"]`);
+      const preco = campo ? (campo.value === '' ? null : parseFloat(campo.value)) : produto[c.chave];
+      const margem = _margemProduto(custo, preco);
+      const bloco = corpo.querySelector(`[data-margem-canal="${c.chave}"]`);
+      if (!bloco) return;
+      bloco.dataset.faixa = _faixaMargem(margem);
+      bloco.querySelector('.detalhe-margem-pct').textContent = _pctTexto(margem);
+      bloco.querySelector('.detalhe-margem-barra span').style.width = `${margem == null ? 0 : Math.max(0, Math.min(100, margem * 100))}%`;
+    });
+  };
+  corpo.querySelectorAll('[data-acao="detalhe-editar-preco"], #detalhe-produto-input-custo').forEach((campo) => {
+    campo.addEventListener('input', atualizarCustoEMargens);
+  });
+  atualizarCustoEMargens();
 
   corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
     input.addEventListener('input', (evento) => {
@@ -12017,6 +12133,20 @@ async function _buscarFichaTecnicaItem(itemId) {
   fichaTecnicaInsumosCache.set(itemId, dados);
   return dados;
 }
+
+// Setas do carrossel de categorias (22/09).
+(function inicializarTopoCardapio() {
+  const trilho = document.getElementById('ficha-tecnica-categorias-sidebar');
+  if (!trilho) return;
+  trilho.addEventListener('scroll', _atualizarSetasCategorias, { passive: true });
+  window.addEventListener('resize', _atualizarSetasCategorias);
+  trilho.parentElement.querySelectorAll('.cardapio-seta').forEach((seta) => {
+    seta.addEventListener('click', () => {
+      const semAnimacao = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      trilho.scrollBy({ left: Number(seta.dataset.direcao) * trilho.clientWidth * 0.7, behavior: semAnimacao ? 'auto' : 'smooth' });
+    });
+  });
+})();
 
 // --- Dropdown de loja (mesmo componente/JS do seletor de Estoque) ---
 (function inicializarLojaSelectFichaTecnica() {
@@ -12383,7 +12513,8 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
       // Produto não usa mais o acordeão (fichaTecnicaExpandidos) — o
       // cartão de receita mostra os insumos sempre, então precisa
       // re-renderizar a grade pra puxar a lista já atualizada.
-      renderFichaTecnicaConteudo();
+      // Recarrega a lista: o custo pela ficha muda com os insumos novos.
+      await carregarFichaTecnicaAtual();
     }
   } catch (erro) {
     console.error('Falha ao salvar ficha técnica:', erro);

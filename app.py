@@ -79,6 +79,10 @@ from backend.armazenamento import (
     salvar_custo_item_cardapio,
     remover_custo_item_cardapio,
     listar_produtos_por_loja,
+    custos_da_ficha_por_item,
+    precos_insumo_em_uso,
+    CMV_OTIMO_ATE,
+    CMV_BOM_ATE,
     curva_abc_cardapio,
     curva_abc_insumos,
     mapa_curva_abc_insumos,
@@ -2539,10 +2543,15 @@ def api_listar_produtos_cardapio():
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
     produtos = listar_produtos_por_loja(loja)
+    # Custo pela ficha técnica (2026-09-21): a tela mostra a margem de cada
+    # canal com ele; o custo digitado à mão (`custo`) continua ganhando.
+    custos_ficha = custos_da_ficha_por_item(loja)
     for p in produtos:
         foto_arquivo = p.pop('fotoArquivo', None)
         p['fotoUrl'] = f"/cardapio-fotos/{foto_arquivo}" if foto_arquivo else None
-    return jsonify({"produtos": produtos})
+        custo_ficha = custos_ficha.get(p['itemCardapioId']) if p['itemCardapioId'] else None
+        p['custoFicha'] = round(custo_ficha, 2) if custo_ficha is not None else None
+    return jsonify({"produtos": produtos, "cmvLimites": {"otimo": CMV_OTIMO_ATE, "bom": CMV_BOM_ATE}})
 
 
 @app.route('/api/curva-abc', methods=['GET'])
@@ -2590,6 +2599,10 @@ def api_buscar_ficha_tecnica_item(item_id):
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
 
+    precos = precos_insumo_em_uso()
+
+    # Custo de cada insumo no produto (2026-09-21): o modal do Cardápio mostra
+    # qual insumo está sem preço quando o custo do produto não fecha.
     def formatar(linhas):
         return [
             {
@@ -2599,6 +2612,9 @@ def api_buscar_ficha_tecnica_item(item_id):
                 "quantidade": i['quantidade'],
                 "conteudoPorUnidade": i['conteudo_por_unidade'],
                 "unidadeConteudo": i['unidade_conteudo'],
+                "custoUnitario": precos.get(i['insumo_id']),
+                "custo": round(i['quantidade'] * precos[i['insumo_id']], 4)
+                if i['quantidade'] is not None and precos.get(i['insumo_id']) is not None else None,
             }
             for i in linhas
         ]

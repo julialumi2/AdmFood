@@ -934,3 +934,390 @@
   margin: var(--space-3) 0 var(--space-2);
   font-size: 0.9rem;
 }
+
+/* ===========================================================================
+   CARDÁPIO: redesenho de 22/09 (pedido dela, sem os cards de indicadores).
+   Topo enxuto, loja + categorias em carrossel, grade de 4 por linha e o
+   modal do produto em duas colunas, com a margem de cada canal ao vivo.
+   =========================================================================== */
+
+:root {
+  --cardapio-alerta-bg: #FDEFD9;
+  --cardapio-alerta: #8A4B0B;
+  --cardapio-alerta-borda: #F2C98F;
+}
+
+body.dark-mode {
+  --cardapio-alerta-bg: rgba(251, 146, 60, 0.14);
+  --cardapio-alerta: #FDBA74;
+  --cardapio-alerta-borda: rgba(251, 146, 60, 0.4);
+}
+
+.cardapio-pagina { gap: var(--space-4); }
+
+/* TOPO: título e apoio à esquerda, botões à direita */
+.cardapio-topo { align-items: flex-end; }
+
+.cardapio-titulo { display: flex; flex-direction: column; gap: 4px; }
+
+.cardapio-titulo .panel-subtitle { margin: 0; font-size: 0.8rem; }
+
+.cardapio-topo .page-acoes-topo {
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cardapio-topo .action-controls { gap: var(--space-2); }
+
+#cardapio-importar-status { margin: 0; }
+
+/* Loja e o carrossel de categorias */
+.cardapio-navegacao {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.cardapio-categorias-trilho {
+  position: relative;
+  width: 100%;
+}
+
+.cardapio-categorias-sidebar {
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.cardapio-categorias-sidebar::-webkit-scrollbar { display: none; }
+
+.cardapio-categoria-item {
+  padding: 7px 12px;
+  font-size: 0.78rem;
+}
+
+.cardapio-categoria-contagem {
+  padding: 1px 7px;
+  font-size: 0.68rem;
+}
+
+.cardapio-seta {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background-color: var(--card-bg);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.cardapio-seta[data-direcao="-1"] { left: -8px; }
+
+.cardapio-seta[data-direcao="1"] { right: -8px; }
+
+.cardapio-seta[hidden] { display: none; }
+
+.cardapio-seta:hover { color: var(--text-dark); }
+
+.cardapio-seta:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+.cardapio-seta svg { width: 16px; height: 16px; }
+
+.cardapio-dica {
+  margin: 0;
+  max-width: 80ch;
+  font-size: 0.8rem;
+}
+
+.cardapio-dica[hidden] { display: none; }
+
+/* Vitrine, 4 por linha */
+.cardapio-lista { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.cardapio-card { padding: 12px; }
+
+.cardapio-card-linha-principal { gap: 12px; }
+
+.cardapio-card-foto {
+  width: 64px;
+  height: 64px;
+}
+
+.cardapio-card-topo { margin-bottom: 4px; }
+
+.cardapio-card-nome { font-size: 0.86rem; line-height: 1.3; }
+
+.cardapio-linha-preco {
+  padding: 3px 0;
+  font-size: 0.78rem;
+}
+
+.cardapio-tag-sem-custo {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--cardapio-alerta-bg);
+  color: var(--cardapio-alerta);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1280px) {
+  .cardapio-lista { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 960px) {
+  .cardapio-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .cardapio-lista { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* MODAL DO PRODUTO: duas colunas, só o meio rola, o rodapé fica fixo */
+.modal-content.modal-detalhe-produto {
+  max-width: 940px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-5) 0;
+  overflow: hidden;
+}
+
+.modal-detalhe-produto .modal-header {
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+}
+
+#detalhe-produto-corpo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.detalhe-produto-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--space-5);
+  padding-bottom: var(--space-4);
+}
+
+.detalhe-produto-coluna {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.detalhe-produto-foto { width: 100%; }
+
+.detalhe-produto-foto img,
+.detalhe-produto-foto .cardapio-foto-vazia {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  max-height: 210px;
+}
+
+.detalhe-produto-secao h4 { margin: 0; }
+
+.detalhe-produto-precos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* Custo + margem por canal: a margem muda enquanto ela digita o preço */
+.detalhe-custo-painel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-muted);
+}
+
+.detalhe-custo-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 104px;
+}
+
+.detalhe-custo-total strong {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dark);
+}
+
+#detalhe-custo-origem {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+#detalhe-custo-origem.alerta { font-weight: 600; color: var(--cardapio-alerta); }
+
+.detalhe-margens {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.detalhe-margem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-color);
+}
+
+.detalhe-margem-canal {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+.detalhe-margem-pct {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.detalhe-margem-barra {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background-color: var(--border-color);
+}
+
+.detalhe-margem-barra span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--text-faint);
+  transition: width 0.2s ease;
+}
+
+.detalhe-margem[data-faixa="otima"] .detalhe-margem-pct { color: var(--success-texto); }
+
+.detalhe-margem[data-faixa="otima"] .detalhe-margem-barra span { background-color: var(--success); }
+
+.detalhe-margem[data-faixa="boa"] .detalhe-margem-pct { color: var(--warning-texto); }
+
+.detalhe-margem[data-faixa="boa"] .detalhe-margem-barra span { background-color: var(--warning); }
+
+.detalhe-margem[data-faixa="ruim"] .detalhe-margem-pct { color: var(--danger-texto); }
+
+.detalhe-margem[data-faixa="ruim"] .detalhe-margem-barra span { background-color: var(--danger); }
+
+.detalhe-custo-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.detalhe-custo-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.detalhe-custo-manual input {
+  width: 118px;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.detalhe-custo-manual input:focus {
+  outline: none;
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+.detalhe-margens-nota { font-size: 0.7rem; color: var(--text-faint); }
+
+.ficha-tecnica-chip.sem-custo {
+  background-color: var(--cardapio-alerta-bg);
+  color: var(--cardapio-alerta);
+}
+
+.ficha-tecnica-chip.sem-custo .qtd { color: inherit; }
+
+.detalhe-produto-texto {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.detalhe-produto-btn-editar { align-self: flex-start; }
+
+.detalhe-produto-rodape {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 calc(-1 * var(--space-5));
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--surface-muted-border);
+  background-color: var(--card-bg);
+}
+
+.detalhe-produto-btn-tirar { margin-right: auto; }
+
+.detalhe-produto-rodape .btn-secondary-sm,
+.detalhe-produto-btn-editar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detalhe-produto-rodape svg,
+.detalhe-produto-btn-editar svg { width: 15px; height: 15px; }
+
+@media (max-width: 820px) {
+  .detalhe-produto-grid { grid-template-columns: minmax(0, 1fr); }
+  .detalhe-custo-painel { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detalhe-margem-barra span { transition: none; }
+}

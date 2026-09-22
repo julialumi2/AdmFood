@@ -4021,3 +4021,20 @@ cadastro (regra dela), isso grava o homologado do insumo nessas lojas pelo
 próxima requisição o item volta pra cotação. O item sobe na hora pro bloco dos
 homologados (e perde o "Mover pra cotação", se tinha). A conferência passou a
 mandar `custoUnitario` por item e `cotam` (quem cota) por loja.
+
+### 6.38 Cardápio redesenhado (2026-09-22)
+
+Topo enxuto ("Cardápio" + uma linha de apoio, "Importar planilha" e "Novo
+item" à direita), loja + categorias em carrossel com setas quando não cabem, e
+a grade de 4 por linha (tag "sem custo" no cartão). Sem os cards de
+indicadores (pedido dela). O modal do
+produto ficou em duas colunas com rodapé fixo: foto e preço por canal à
+esquerda; à direita o **custo do produto**, calculado pela ficha técnica
+(`custoFicha`, o mesmo do CMV e da Curva ABC: `custos_da_ficha_por_item`) ou
+o digitado à mão, que ganha, com a **margem de cada canal** ao lado (1 -
+custo/preço, cor pela régua do CMV), que muda enquanto se digita o preço;
+depois os insumos (em laranja o que está sem preço ou sem quantidade) e a
+embalagem pra viagem com o custo dela. A margem não desconta a comissão dos
+apps nem a embalagem. `/api/itens-cardapio/<id>/ficha-tecnica` passou a mandar
+`custoUnitario` e `custo` de cada insumo; salvar a ficha recarrega a lista
+pra atualizar o custo.
