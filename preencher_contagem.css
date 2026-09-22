@@ -208,6 +208,85 @@ body {
   white-space: nowrap;
 }
 
+/* No computador a caixinha do "não vendo" fala por si na coluna */
+.cotacao-recusa span { display: none; }
+
+/* Celular: cada item vira um card, igual ao link de contagem (pedido dela,
+   22/09) — a tabela de 5 colunas escondia justamente a coluna do preço. */
+@media (max-width: 720px) {
+  .cotacao-tabela-wrap { overflow: visible; }
+
+  .cotacao-tabela,
+  .cotacao-tabela tbody,
+  .cotacao-tabela tr,
+  .cotacao-tabela td { display: block; width: 100%; }
+
+  .cotacao-tabela thead { display: none; }
+
+  .cotacao-tabela tr {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-5) var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .cotacao-tabela td {
+    border: 0;
+    padding: 6px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cotacao-tabela td::before {
+    content: attr(data-rotulo);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .cotacao-tabela td.cotacao-td-nome {
+    padding-top: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-dark);
+  }
+
+  .cotacao-tabela td.cotacao-td-nome::before,
+  .cotacao-tabela td.cotacao-td-recusa::before { content: none; }
+
+  /* Sem marca cadastrada, a linha "Marca —" só ocupava espaço no celular */
+  .cotacao-tabela td.cotacao-td-vazio { display: none; }
+
+  .cotacao-tabela .cotacao-campo-preco input {
+    padding: 12px;
+    font-size: 1.05rem;
+  }
+
+  .cotacao-tabela .cotacao-campo-preco span { font-size: 0.95rem; }
+
+  .cotacao-recusa {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    padding: 10px 0 2px;
+    cursor: pointer;
+  }
+
+  .cotacao-recusa input { width: 22px; height: 22px; flex-shrink: 0; }
+
+  .cotacao-recusa span {
+    display: inline;
+    font-size: 0.95rem;
+    color: var(--text-dark);
+  }
+}
+
 /* Botão flutuante "Seções" */
 .contagem-secoes { position: fixed; left: var(--space-4); bottom: var(--space-4); z-index: 50; }
 

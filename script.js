@@ -7131,15 +7131,20 @@ async function inicializarPreencherCotacao() {
       const quantidade = Math.round((item.quantidade / fator) * 1000) / 1000;
       return `
       <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}" data-fator="${fator}">
-        <td class="font-bold">${escaparHtml(item.nome)}</td>
-        <td><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '—')}</div></td>
-        <td><div class="contagem-item-somente-leitura">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</div></td>
-        <td><div class="cotacao-campo-preco">
+        <td class="font-bold cotacao-td-nome" data-rotulo="Produto">${escaparHtml(item.nome)}</td>
+        <td data-rotulo="Marca" class="${item.marcaHomologada ? '' : 'cotacao-td-vazio'}"><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '—')}</div></td>
+        <td data-rotulo="Quantidade"><div class="contagem-item-somente-leitura">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</div></td>
+        <td data-rotulo="Preço unitário"><div class="cotacao-campo-preco">
           <span>R$</span>
           <input type="number" step="any" min="0" placeholder="0,00" data-insumo-id="${item.insumoId}">
           <span>/ ${escaparHtml(rotulo)}</span>
         </div></td>
-        <td style="text-align:center;"><input type="checkbox" data-nao-vende-id="${item.insumoId}"></td>
+        <td class="cotacao-td-recusa" style="text-align:center;">
+          <label class="cotacao-recusa">
+            <input type="checkbox" data-nao-vende-id="${item.insumoId}">
+            <span>Não vendo esse item</span>
+          </label>
+        </td>
       </tr>
     `;
     }).join('');

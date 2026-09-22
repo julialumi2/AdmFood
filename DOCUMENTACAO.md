@@ -4065,7 +4065,10 @@ foram corrigidos:
    Cotações ("Preço em R$ por kg"), e o comparativo, a "Última compra", a
    mensagem do pedido no WhatsApp e a tela de confirmação do fornecedor
    passaram a mostrar em kg/L/un (`_formatarCustoPorUnidade` e
-   `_escala_comercial` no app.py).
+   `_escala_comercial` no app.py). No celular o link do fornecedor virou um
+   card por item, como o link de contagem — a tabela de 5 colunas empurrava
+   justamente a coluna do preço pra fora da tela; no computador continua a
+   tabela (`.cotacao-tabela` em preencher_contagem.css, a partir de 720px).
 2. **Etapa do pedido.** `/api/pedidos/<id>/avancar` e `/voltar` conferiam a
    loja com uma variável inexistente **depois** de gravar: a etapa mudava e a
    chamada estourava 500, e clicar de novo avançava de novo. Agora o pedido é
