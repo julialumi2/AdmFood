@@ -11769,9 +11769,9 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   let custoAlterado = null;
 
   // Redesenho de 22/09 (pedido dela): duas colunas sem rolagem. Esquerda:
-  // foto e preço por canal. Direita: o custo (calculado pela ficha técnica,
-  // ou o digitado, que ganha) com a margem de cada canal ao lado, que muda
-  // enquanto ela digita o preço; depois insumos e embalagem. Rodapé fixo.
+  // foto e preço por canal, com a margem de cada canal embaixo do preço (muda
+  // enquanto ela digita). Direita: o custo (calculado pela ficha técnica, ou
+  // o digitado, que ganha), insumos e embalagem. Rodapé fixo.
   const insumosFicha = dadosInsumos.insumos || [];
   const faltamCusto = insumosFicha.filter((ins) => ins.quantidade == null || ins.custoUnitario == null);
   const embalagem = dadosInsumos.embalagemViagem || [];
@@ -11797,9 +11797,14 @@ async function abrirModalDetalheProduto(precoCardapioId) {
             ${isAdmin
               ? `<input type="number" step="0.01" min="0" id="detalhe-preco-${c.chave}" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
               : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(produto[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>`}
+            <span class="detalhe-margem" data-margem-canal="${c.chave}">
+              <span class="detalhe-margem-barra" aria-hidden="true"><span></span></span>
+              <span class="detalhe-margem-pct">margem —</span>
+            </span>
           </div>
         `).join('')}
       </div>
+      <p class="detalhe-margens-nota">Margem sobre o preço, sem a comissão do app e sem a embalagem.</p>
     </section>
   `;
 
@@ -11811,23 +11816,11 @@ async function abrirModalDetalheProduto(precoCardapioId) {
           <strong id="detalhe-custo-valor">—</strong>
           <span id="detalhe-custo-origem"></span>
         </div>
-        <div class="detalhe-margens" aria-label="Margem por canal">
-          ${canais.map(c => `
-            <div class="detalhe-margem" data-margem-canal="${c.chave}">
-              <span class="detalhe-margem-canal">${c.label}</span>
-              <span class="detalhe-margem-pct">—</span>
-              <span class="detalhe-margem-barra" aria-hidden="true"><span></span></span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      <div class="detalhe-custo-rodape">
         ${isAdmin && produto.itemCardapioId ? `
           <label class="detalhe-custo-manual">Custo digitado
             <input type="number" step="0.01" min="0" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="${produto.custoFicha != null ? `ficha: ${_formatarMoedaBR(produto.custoFicha)}` : 'R$ 0,00'}">
           </label>
         ` : ''}
-        <span class="detalhe-margens-nota">Margem sem a comissão do app e sem a embalagem.</span>
       </div>
     </section>
   `;
@@ -11931,7 +11924,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       const bloco = corpo.querySelector(`[data-margem-canal="${c.chave}"]`);
       if (!bloco) return;
       bloco.dataset.faixa = _faixaMargem(margem);
-      bloco.querySelector('.detalhe-margem-pct').textContent = _pctTexto(margem);
+      bloco.querySelector('.detalhe-margem-pct').textContent = `margem ${_pctTexto(margem)}`;
       bloco.querySelector('.detalhe-margem-barra span').style.width = `${margem == null ? 0 : Math.max(0, Math.min(100, margem * 100))}%`;
     });
   };
