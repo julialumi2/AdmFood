@@ -3038,7 +3038,7 @@ function wireEstoqueTableEvents() {
       const insumo = estoqueInsumos.find(i => i.id === insumoId);
       const dadosLoja = insumo?.porLoja[loja];
       if (!insumo || !dadosLoja) return;
-      abrirModalEditarEstoque(insumoId, loja, insumo.nome, dadosLoja);
+      abrirModalEditarEstoque(insumoId, loja, insumo.nome, dadosLoja, insumo.unidadeMedida);
     });
   });
 
@@ -7351,11 +7351,27 @@ async function inicializarConfirmarPedido() {
 }
 
 // --- Modal: Editar estoque (correção manual de quantidade/mínimo) ---
-function abrirModalEditarEstoque(insumoId, loja, nomeInsumo, dadosLoja) {
-  estoqueEditandoContexto = { insumoId, loja };
+// Guarda o que estava na tela pra mandar só o que mudou: o formulário
+// enviava sempre os dois campos, e a tela não se atualiza sozinha — corrigir
+// o mínimo à tarde regravava a quantidade da manhã, apagando recebimento e
+// baixa por venda do dia (QA 22/09).
+function abrirModalEditarEstoque(insumoId, loja, nomeInsumo, dadosLoja, unidade) {
+  estoqueEditandoContexto = {
+    insumoId, loja,
+    quantidadeAtual: dadosLoja.quantidadeAtual,
+    estoqueMinimo: dadosLoja.estoqueMinimo,
+    atualizadoEm: dadosLoja.atualizadoEm || null,
+  };
   document.getElementById('editar-estoque-subtitulo').textContent = `${nomeInsumo} — ${loja}`;
   document.getElementById('editar-estoque-quantidade').value = dadosLoja.quantidadeAtual;
   document.getElementById('editar-estoque-minimo').value = dadosLoja.estoqueMinimo;
+  const rotulo = unidade ? `(${unidade})` : '';
+  document.getElementById('editar-estoque-unidade-qtd').textContent = rotulo;
+  document.getElementById('editar-estoque-unidade-min').textContent = rotulo;
+  const aviso = document.getElementById('editar-estoque-ultima-mudanca');
+  aviso.textContent = dadosLoja.atualizadoEm
+    ? `Última mudança em ${_dataBR(dadosLoja.atualizadoEm)} às ${String(dadosLoja.atualizadoEm).slice(11, 16)}.`
+    : '';
   document.getElementById('modal-editar-estoque').style.display = 'flex';
 }
 
@@ -7371,20 +7387,48 @@ document.getElementById('form-editar-estoque')?.addEventListener('submit', async
   evento.preventDefault();
   if (!estoqueEditandoContexto) return;
   const { insumoId, loja } = estoqueEditandoContexto;
-  const corpo = {
-    quantidadeAtual: document.getElementById('editar-estoque-quantidade').value,
-    estoqueMinimo: document.getElementById('editar-estoque-minimo').value,
-  };
-  try {
+  const quantidade = document.getElementById('editar-estoque-quantidade').value;
+  const minimo = document.getElementById('editar-estoque-minimo').value;
+  const corpo = { atualizadoEm: estoqueEditandoContexto.atualizadoEm };
+  // Só o que foi mexido: mandar os dois sempre era o que apagava o movimento
+  // do dia (QA 22/09).
+  if (parseFloat(quantidade) !== parseFloat(estoqueEditandoContexto.quantidadeAtual)) corpo.quantidadeAtual = quantidade;
+  if (parseFloat(minimo) !== parseFloat(estoqueEditandoContexto.estoqueMinimo)) corpo.estoqueMinimo = minimo;
+  if (corpo.quantidadeAtual === undefined && corpo.estoqueMinimo === undefined) {
+    fecharModalEditarEstoque();
+    return;
+  }
+  const salvar = async (forcar) => {
     const resposta = await fetch(`/api/insumos/${insumoId}/estoque/${encodeURIComponent(loja)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo),
+      body: JSON.stringify(forcar ? { ...corpo, forcar: true } : corpo),
     });
     const dados = await resposta.json();
+    // 409: o estoque mudou entre abrir a tela e salvar (recebimento, compra
+    // por fora ou baixa por venda). Antes o valor antigo ia por cima sem nem
+    // avisar (QA 22/09).
+    if (resposta.status === 409 && !forcar) {
+      const hora = String(dados.atualizadoEm || '').slice(11, 16);
+      const ok = confirm(
+        `O estoque dessa loja mudou${hora ? ` às ${hora}` : ''} e agora está em ${_formatarQuantidade(dados.quantidadeAtual, '')}.
+
+`
+        + 'Gravar mesmo assim o valor que você digitou vai apagar essa movimentação. Quer gravar?');
+      if (!ok) {
+        fecharModalEditarEstoque();
+        await carregarInsumos();
+        return;
+      }
+      return salvar(true);
+    }
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
     fecharModalEditarEstoque();
     await carregarInsumos();
+  };
+
+  try {
+    await salvar(false);
   } catch (erro) {
     console.error('Falha ao salvar estoque:', erro);
     alert(erro.message || 'Não foi possível salvar.');
@@ -7428,7 +7472,14 @@ function abrirModalNovoInsumo(insumo) {
   }
   document.getElementById('novo-insumo-nome').value = insumo ? insumo.nome : '';
   document.getElementById('novo-insumo-categoria').value = insumo ? insumo.categoria : '';
-  document.getElementById('novo-insumo-unidade').value = insumo ? insumo.unidadeMedida : 'un';
+  const campoUnidade = document.getElementById('novo-insumo-unidade');
+  const unidadeAtual = insumo ? insumo.unidadeMedida : 'un';
+  // Insumo antigo cadastrado fora de g/ml/un (a lista só fechou em 22/09)
+  // ganha a opção dele, pra abrir e salvar não trocar a unidade sem querer.
+  if (unidadeAtual && !Array.from(campoUnidade.options).some((o) => o.value === unidadeAtual)) {
+    campoUnidade.add(new Option(`${unidadeAtual} (cadastro antigo)`, unidadeAtual));
+  }
+  campoUnidade.value = unidadeAtual;
   document.getElementById('novo-insumo-marca').value = insumo ? (insumo.marcaHomologada || '') : '';
   document.getElementById('novo-insumo-unidade-compra').value = insumo ? (insumo.unidadeCompra || '') : '';
   document.getElementById('novo-insumo-fator-compra').value = insumo && insumo.fatorConversaoCompra ? insumo.fatorConversaoCompra : '';
@@ -7516,19 +7567,24 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
     nome: document.getElementById('novo-insumo-nome').value,
     categoria: document.getElementById('novo-insumo-categoria').value,
     unidadeMedida,
-    // Digitado por kg/litro em grama/ml; gravado na unidade do insumo.
-    custoReferencia: custoDigitado === '' ? '' : parseFloat(custoDigitado) / _escalaDeCusto(unidadeMedida).fator,
     marcaHomologada: document.getElementById('novo-insumo-marca').value,
     unidadeCompra: document.getElementById('novo-insumo-unidade-compra').value,
     fatorConversaoCompra: document.getElementById('novo-insumo-fator-compra').value,
     conteudoPorUnidade: document.getElementById('novo-insumo-conteudo').value,
     unidadeConteudo: document.getElementById('novo-insumo-unidade-conteudo').value,
     fornecedorIds,
-    // Com fornecedor homologado, a Requisição manda o insumo direto em pedido pra ele.
-    fornecedorHomologadoId: document.getElementById('novo-insumo-fornecedor-homologado').value,
-    precoHomologado: precoHomologadoDigitado === '' ? '' : parseFloat(precoHomologadoDigitado) / _escalaDeCusto(unidadeMedida).fator,
-    validadePrecoHomologado: document.getElementById('novo-insumo-validade-homologado').value,
   };
+  // Custo e homologado só viajam pra quem é admin: a API não manda esses
+  // campos pro gerente, então o formulário abria vazio e salvava "vazio =
+  // apagar", limpando o custo da rede e o preço combinado da loja (QA 22/09).
+  if (_souAdmin()) {
+    // Digitado por kg/litro em grama/ml; gravado na unidade do insumo.
+    corpo.custoReferencia = custoDigitado === '' ? '' : parseFloat(custoDigitado) / _escalaDeCusto(unidadeMedida).fator;
+    // Com fornecedor homologado, a Requisição manda o insumo direto em pedido pra ele.
+    corpo.fornecedorHomologadoId = document.getElementById('novo-insumo-fornecedor-homologado').value;
+    corpo.precoHomologado = precoHomologadoDigitado === '' ? '' : parseFloat(precoHomologadoDigitado) / _escalaDeCusto(unidadeMedida).fator;
+    corpo.validadePrecoHomologado = document.getElementById('novo-insumo-validade-homologado').value;
+  }
   if (insumoId) {
     // Edição: fornecedores e homologado só da loja da aba (na Visão geral nem vão).
     if (LOJAS_ESTOQUE.includes(estoqueTabAtual)) {

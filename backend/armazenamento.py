@@ -3013,6 +3013,40 @@ TABELA_QUANTIDADE = {
 }
 
 
+def buscar_estoque_loja(insumo_id, loja):
+    """A linha de estoque de um insumo numa loja (ou None) — usada pra
+    conferir, antes de gravar, se o estoque mudou depois que a tela abriu."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT quantidade_atual, estoque_minimo, atualizado_em FROM estoque_insumo WHERE insumo_id = ? AND loja = ?",
+            (insumo_id, loja),
+        ).fetchone()
+        return dict(linha) if linha else None
+
+
+def uso_do_insumo(insumo_id):
+    """Onde o insumo já aparece: estoque com número, ficha técnica e receita
+    de mistura, mais a unidade que está valendo hoje. Serve pra barrar a troca
+    de unidade de medida, que mudaria o sentido de todos esses números de uma
+    vez (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute("SELECT unidade_medida FROM insumo WHERE id = ?", (insumo_id,)).fetchone()
+        return {
+            "unidade": linha["unidade_medida"] if linha else None,
+            "estoque": conn.execute(
+                "SELECT COUNT(*) AS n FROM estoque_insumo WHERE insumo_id = ? AND (quantidade_atual != 0 OR estoque_minimo != 0)",
+                (insumo_id,),
+            ).fetchone()["n"],
+            "fichas": conn.execute(
+                "SELECT COUNT(*) AS n FROM ficha_tecnica WHERE insumo_id = ?", (insumo_id,)
+            ).fetchone()["n"],
+            "receitas": conn.execute(
+                "SELECT COUNT(*) AS n FROM receita_insumo WHERE insumo_id = ? OR ingrediente_id = ?",
+                (insumo_id, insumo_id),
+            ).fetchone()["n"],
+        }
+
+
 def atualizar_estoque_loja(insumo_id, loja, campos):
     """Edição direta (correção manual/contagem) da quantidade e/ou do
     mínimo de UM insumo em UMA loja — diferente de distribuir_entrada_insumo,

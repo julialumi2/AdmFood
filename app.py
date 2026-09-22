@@ -57,6 +57,8 @@ from backend.armazenamento import (
     PASTA_FOTOS_CARDAPIO,
     criar_insumo,
     criar_insumos_em_lote,
+    buscar_estoque_loja,
+    uso_do_insumo,
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
@@ -237,6 +239,10 @@ from sincronizar import sincronizar_dia, DIA_FECHADO
 # Sem CORS: frontend e backend são servidos pelo mesmo Flask (mesma origem),
 # então cross-origin nunca foi necessário de verdade em produção — e com
 # login/sessão em jogo, quanto menos origens confiadas, melhor.
+# Preço, estoque, ficha técnica e baixa são todos guardados nessas unidades:
+# cadastrar insumo em "kg" quebrava a régua do sistema inteiro (QA 22/09).
+UNIDADES_INSUMO = ('g', 'ml', 'un')
+
 app = Flask(__name__)
 
 
@@ -2079,6 +2085,8 @@ def api_criar_insumo():
     unidade_medida = (dados.get('unidadeMedida') or 'un').strip() or 'un'
     if not nome:
         return jsonify({"erro": "Informe o nome do insumo."}), 400
+    if unidade_medida not in UNIDADES_INSUMO:
+        return jsonify({"erro": "A unidade de medida precisa ser g, ml ou un."}), 400
 
     # Tudo validado ANTES de criar: um erro depois do INSERT deixava o insumo
     # criado pela metade, e tentar de novo cadastrava ele duas vezes.
@@ -2207,7 +2215,28 @@ def api_atualizar_insumo(insumo_id):
     if 'categoria' in dados:
         campos['categoria'] = (dados['categoria'] or 'Geral').strip() or 'Geral'
     if 'unidadeMedida' in dados:
-        campos['unidade_medida'] = (dados['unidadeMedida'] or 'un').strip() or 'un'
+        unidade = (dados['unidadeMedida'] or 'un').strip() or 'un'
+        uso = uso_do_insumo(insumo_id)
+        unidade_antiga = uso.get('unidade')
+        if unidade != unidade_antiga:
+            # Só g/ml/un pra frente: o sistema guarda preço, estoque, ficha e
+            # baixa nessas unidades (QA 22/09). Insumo antigo com outra
+            # unidade continua como está enquanto ninguém mexer.
+            if unidade not in UNIDADES_INSUMO:
+                return jsonify({"erro": "A unidade de medida precisa ser g, ml ou un."}), 400
+            if uso['estoque'] or uso['fichas'] or uso['receitas']:
+                partes = []
+                if uso['estoque']:
+                    partes.append(f"{uso['estoque']} loja(s) com estoque ou mínimo")
+                if uso['fichas']:
+                    partes.append(f"{uso['fichas']} ficha(s) técnica(s)")
+                if uso['receitas']:
+                    partes.append(f"{uso['receitas']} receita(s) de mistura")
+                return jsonify({"erro":
+                    f"Esse insumo já tem {', '.join(partes)} na unidade '{unidade_antiga}'. "
+                    "Trocar a unidade mudaria todos esses números de uma vez — zere o que existe "
+                    "ou cadastre um insumo novo."}), 400
+        campos['unidade_medida'] = unidade
     if 'favorito' in dados:
         campos['favorito'] = 1 if dados['favorito'] else 0
     if 'marcaHomologada' in dados:
@@ -2314,13 +2343,32 @@ def api_atualizar_estoque_loja(insumo_id, loja):
     campos = {}
     try:
         if 'quantidadeAtual' in dados:
+            # Estoque negativo existe de verdade (a venda dá baixa do que a
+            # contagem não viu) e antes era recusado aqui, o que impedia até
+            # corrigir só o mínimo de um item negativo (QA 22/09).
             campos['quantidade_atual'] = float(dados['quantidadeAtual'])
         if 'estoqueMinimo' in dados:
             campos['estoque_minimo'] = float(dados['estoqueMinimo'])
     except (TypeError, ValueError):
         return jsonify({"erro": "Valores inválidos."}), 400
-    if any(v < 0 for v in campos.values()):
-        return jsonify({"erro": "Valores não podem ser negativos."}), 400
+    if campos.get('estoque_minimo', 0) < 0:
+        return jsonify({"erro": "O estoque mínimo não pode ser negativo."}), 400
+    if not campos:
+        return jsonify({"ok": True, "semMudanca": True})
+
+    # A tela de Insumos não se atualiza sozinha: entre abrir e salvar pode ter
+    # entrado um recebimento ou saído uma venda. Quem manda `atualizadoEm`
+    # (a tela) recebe 409 quando o estoque mudou no meio, e só grava por cima
+    # depois de confirmar (QA 22/09).
+    atual = buscar_estoque_loja(insumo_id, loja)
+    visto_em = dados.get('atualizadoEm')
+    if (visto_em and atual and atual['atualizado_em'] != visto_em
+            and 'quantidade_atual' in campos and not dados.get('forcar')):
+        return jsonify({
+            "erro": "conflito",
+            "atualizadoEm": atual['atualizado_em'],
+            "quantidadeAtual": atual['quantidade_atual'],
+        }), 409
 
     atualizar_estoque_loja(insumo_id, loja, campos)
     return jsonify({"ok": True})

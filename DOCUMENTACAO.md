@@ -4126,3 +4126,30 @@ como se fosse certo:
   do insumo mostra: "a última compra ou cotação veio muito fora dessa faixa e
   foi ignorada — confira a unidade do preço lançado". Sem custo de cadastro pra
   cair de volta, o preço continua valendo (é o único que existe).
+
+### 6.43 Estoque e unidade sem pegadinha (QA, leva 2 — 2026-09-22)
+
+Os três críticos de Insumos do relatório de QA:
+
+- **"Editar estoque" mandava sempre os dois campos.** Como a tela não se
+  atualiza sozinha, corrigir só o mínimo à tarde regravava a quantidade que
+  estava na tela de manhã, apagando recebimento e baixa por venda do dia. Agora
+  a tela manda só o campo que mudou e junto o `atualizadoEm` que ela viu; o
+  servidor responde 409 quando o estoque mudou no meio, e a tela pergunta
+  ("o estoque mudou às 11:00 e agora está em 1500; gravar mesmo assim?") antes
+  de repetir com `forcar`. O modal também mostra a unidade do insumo em cada
+  campo e a hora da última mudança.
+- **Quantidade negativa era recusada pelo servidor e pelo campo.** Estoque
+  negativo existe (a venda dá baixa do que a contagem não viu) e, pior, o
+  `min="0"` impedia até corrigir só o mínimo de um item negativo. Agora a
+  quantidade aceita negativo; o mínimo continua não podendo ser.
+- **Unidade de medida era texto livre** (o campo sugeria "kg, L, un..."), e
+  trocar a unidade de um insumo não convertia nada. Agora o cadastro tem uma
+  lista fechada — g, ml ou un, que é como o sistema guarda preço, estoque,
+  ficha e baixa (`UNIDADES_INSUMO` no app.py) — e o servidor recusa trocar a
+  unidade de insumo que já tem estoque, ficha técnica ou receita, dizendo onde
+  ele é usado. Insumo antigo com outra unidade abre com a opção dele na lista,
+  pra salvar o cadastro não trocar a unidade sem querer.
+- **Gerente apagava custo e preço homologado sem saber:** a API não manda
+  esses campos pro perfil gerente, o formulário abria vazio e salvava "vazio =
+  apagar". A tela só envia custo e homologado quando quem edita é admin.
