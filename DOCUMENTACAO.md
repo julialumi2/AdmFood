@@ -4009,3 +4009,15 @@ homologado configurado depois de gerar aparece sozinho no bloco de cima, por
 isso o "Atualizar com os homologados" saiu. A trava agora é por item
 (`item_travado_na_requisicao`): só não muda o que já está num pedido ou na
 cotação. Cotação fechada trava só o bloco da cotação.
+
+### 6.37 "Comprar direto" no bloco da cotação (2026-09-22)
+
+O caminho inverso do "Mover pra cotação": cada linha da tabela da cotação tem
+"Comprar direto", que abre uma janela pra escolher as lojas, o fornecedor
+(primeiro quem já cota o insumo na loja) e o preço combinado (na escala do
+cadastro, sugerido pelo último custo). Como fornecedor e preço moram no
+cadastro (regra dela), isso grava o homologado do insumo nessas lojas pelo
+`PUT /api/insumos/<id>`; "Só nesta compra" grava com validade até amanhã, e na
+próxima requisição o item volta pra cotação. O item sobe na hora pro bloco dos
+homologados (e perde o "Mover pra cotação", se tinha). A conferência passou a
+mandar `custoUnitario` por item e `cotam` (quem cota) por loja.

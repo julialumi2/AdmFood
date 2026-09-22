@@ -5875,7 +5875,8 @@ function renderConferenciaRequisicao() {
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
   if (btnAprovarTodas) {
     btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
-    btnAprovarTodas.hidden = !!r.totalmenteAprovada;
+    // style.display: o .btn-secondary tem display próprio e ignora o hidden.
+    btnAprovarTodas.style.display = r.totalmenteAprovada ? 'none' : '';
   }
 
   const aviso = document.getElementById('requisicao-conferencia-aviso');
@@ -6117,9 +6118,9 @@ function _renderBlocoCotacao(r) {
   if (!head || !body) return;
   const lojas = r.contagens.map((c) => c.loja);
   const itens = r.itens.filter((item) => item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao'));
-  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th>${escaparHtml(loja)}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Situação</th></tr>`;
+  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th>${escaparHtml(loja)}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Situação</th><th class="col-acao-bloco"></th></tr>`;
   if (!itens.length) {
-    body.innerHTML = `<tr><td colspan="${lojas.length + 3}" class="panel-subtitle">Nada pra cotar: tudo o que precisa comprar sai pelo homologado.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${lojas.length + 4}" class="panel-subtitle">Nada pra cotar: tudo o que precisa comprar sai pelo homologado.</td></tr>`;
     return;
   }
   body.innerHTML = itens.map((item) => {
@@ -6145,9 +6146,128 @@ function _renderBlocoCotacao(r) {
         }).join('')}
         <td class="col-total-compra" data-total-insumo="${item.insumoId}">${_totalCompraHTML(item)}</td>
         <td class="col-destino-compra">${_situacaoCotacaoHTML(item)}</td>
+        <td class="col-acao-bloco">${!r.motivoPedidos && item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l))
+          ? `<button type="button" class="btn-limpar-filtro" data-acao="comprar-direto" data-insumo="${item.insumoId}" title="Comprar direto de um fornecedor, sem cotar">Comprar direto</button>`
+          : ''}</td>
       </tr>`;
   }).join('');
 }
+
+// --- "Comprar direto" (2026-09-22): o caminho inverso do "Mover pra
+// cotação". Fornecedor e preço combinado ficam no cadastro do insumo (regra
+// dela), então isso grava o homologado da loja; "Só nesta compra" grava com
+// validade curta, e na próxima requisição o item volta pra cotação.
+let comprarDiretoAtual = null; // { item, lojas }
+let fornecedoresCompraDireta = null;
+
+function _amanhaLocalISO() {
+  const amanha = new Date(Date.now() + 86400000);
+  return new Date(amanha.getTime() - amanha.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+async function abrirModalComprarDireto(insumoId) {
+  const r = requisicaoConferenciaAtual;
+  const item = r?.itens.find((i) => i.insumoId === insumoId);
+  if (!item) return;
+  const lojas = item.lojas.filter((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l));
+  if (!lojas.length) return;
+  if (!fornecedoresCompraDireta) {
+    try {
+      const resposta = await fetch('/api/fornecedores');
+      fornecedoresCompraDireta = resposta.ok ? ((await resposta.json()).fornecedores || []).filter((f) => f.ativo !== false) : [];
+    } catch (erro) {
+      fornecedoresCompraDireta = [];
+    }
+  }
+  comprarDiretoAtual = { item, lojas };
+  document.getElementById('comprar-direto-titulo').textContent = `Comprar direto: ${item.nome}`;
+  document.getElementById('comprar-direto-lojas').innerHTML = lojas.map((l) => `
+    <label><input type="checkbox" name="comprar-direto-loja" value="${escaparHtml(l.loja)}" checked> ${escaparHtml(l.loja)}</label>
+  `).join('');
+  // Quem já cota esse insumo nessas lojas vem primeiro.
+  const cotam = new Set(lojas.flatMap((l) => l.cotam || []));
+  const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
+  const opcao = (f) => `<option value="${f.id}">${escaparHtml(f.nome)}</option>`;
+  const primeiro = fornecedoresCompraDireta.filter((f) => cotam.has(f.id)).sort(porNome);
+  const resto = fornecedoresCompraDireta.filter((f) => !cotam.has(f.id)).sort(porNome);
+  document.getElementById('comprar-direto-fornecedor').innerHTML = `<option value="">Escolha o fornecedor</option>${primeiro.length ? `<optgroup label="Cota esse insumo">${primeiro.map(opcao).join('')}</optgroup>` : ''}<optgroup label="${primeiro.length ? 'Outros fornecedores' : 'Fornecedores'}">${resto.map(opcao).join('')}</optgroup>`;
+  // Preço na unidade do cadastro (por kg, litro ou unidade); o último custo sugere.
+  const escala = _escalaDeCusto(item.unidadeMedida);
+  document.getElementById('comprar-direto-preco-rotulo').textContent = `Preço combinado (R$ por ${escala.rotulo})`;
+  const campoPreco = document.getElementById('comprar-direto-preco');
+  campoPreco.value = item.custoUnitario ? Math.round(item.custoUnitario * escala.fator * 100) / 100 : '';
+  document.getElementById('comprar-direto-preco-dica').textContent = item.custoUnitario
+    ? `Veio do último custo desse insumo (${_reais(item.custoUnitario * escala.fator)} por ${escala.rotulo}). Confira com o fornecedor.`
+    : '';
+  document.querySelector('input[name="comprar-direto-validade"][value="sempre"]').checked = true;
+  document.getElementById('comprar-direto-so-agora').textContent = `Só nesta compra (vale até ${_dataBR(_amanhaLocalISO()).slice(0, 5)})`;
+  document.getElementById('comprar-direto-erro').hidden = true;
+  document.getElementById('modal-comprar-direto').style.display = 'flex';
+  document.getElementById('comprar-direto-fornecedor').focus();
+}
+
+function fecharModalComprarDireto() {
+  document.getElementById('modal-comprar-direto').style.display = 'none';
+  comprarDiretoAtual = null;
+}
+
+document.getElementById('btn-comprar-direto-fechar')?.addEventListener('click', fecharModalComprarDireto);
+document.getElementById('btn-comprar-direto-cancelar')?.addEventListener('click', fecharModalComprarDireto);
+
+document.getElementById('form-comprar-direto')?.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  if (!comprarDiretoAtual) return;
+  const { item, lojas } = comprarDiretoAtual;
+  const erro = document.getElementById('comprar-direto-erro');
+  const mostrarErro = (mensagem) => {
+    erro.textContent = mensagem;
+    erro.hidden = false;
+  };
+  const marcadas = [...document.querySelectorAll('input[name="comprar-direto-loja"]:checked')].map((el) => el.value);
+  const fornecedorId = parseInt(document.getElementById('comprar-direto-fornecedor').value, 10);
+  const preco = parseFloat(document.getElementById('comprar-direto-preco').value);
+  if (!marcadas.length) return mostrarErro('Marque pelo menos uma loja.');
+  if (!fornecedorId) return mostrarErro('Escolha o fornecedor.');
+  if (!Number.isFinite(preco) || preco <= 0) return mostrarErro('Digite o preço combinado (maior que zero).');
+  const precoBase = preco / _escalaDeCusto(item.unidadeMedida).fator;
+  const soAgora = document.querySelector('input[name="comprar-direto-validade"]:checked')?.value === 'agora';
+  const fornecedor = fornecedoresCompraDireta.find((f) => f.id === fornecedorId);
+  const botao = evento.submitter;
+  if (botao) botao.disabled = true;
+  try {
+    for (const l of lojas.filter((x) => marcadas.includes(x.loja))) {
+      const resposta = await fetch(`/api/insumos/${item.insumoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loja: l.loja,
+          fornecedorHomologadoId: fornecedorId,
+          precoHomologado: precoBase,
+          validadePrecoHomologado: soAgora ? _amanhaLocalISO() : '',
+        }),
+      });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || `Não foi possível gravar o homologado em ${l.loja}.`);
+      if (l.forcarCotacao) {
+        const volta = await fetch('/api/requisicoes/conferencia/destino', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contagemId: l.contagemId, insumoId: item.insumoId, cotacao: false }),
+        });
+        if (!volta.ok) throw new Error((await volta.json().catch(() => ({}))).erro || 'Não foi possível tirar o item da cotação.');
+        l.forcarCotacao = false;
+      }
+      l.homologado = { fornecedorId, fornecedor: fornecedor?.nome || '', preco: precoBase };
+      l.fornecedorHomologado = fornecedor?.nome || '';
+    }
+    fecharModalComprarDireto();
+    _renderCompraConferencia(requisicaoConferenciaAtual);
+  } catch (falha) {
+    mostrarErro(falha.message);
+  } finally {
+    if (botao) botao.disabled = false;
+  }
+});
 
 // Coluna "Situação" da cotação: o que já entrou (ou já virou pedido).
 function _situacaoCotacaoHTML(item) {
@@ -6307,6 +6427,8 @@ async function _prepararEnviosWhatsApp() {
       _voltarSugestaoConferencia(alvo);
     } else if (alvo.dataset.acao === 'mover-cotacao' || alvo.dataset.acao === 'voltar-homologado') {
       _mudarDestinoItem(parseInt(alvo.dataset.contagem, 10), parseInt(alvo.dataset.insumo, 10), alvo.dataset.acao === 'mover-cotacao');
+    } else if (alvo.dataset.acao === 'comprar-direto') {
+      abrirModalComprarDireto(parseInt(alvo.dataset.insumo, 10));
     } else if (alvo.dataset.acao === 'mostrar-homologados-sem-compra') {
       mostrarHomologadosSemCompra = !mostrarHomologadosSemCompra;
       _renderCompraConferencia(requisicaoConferenciaAtual);

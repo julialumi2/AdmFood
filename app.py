@@ -4097,6 +4097,9 @@ def api_conferencia_requisicao():
         return jsonify({"erro": "Requisição não encontrada."}), 404
 
     homologado_de = homologados_por_insumo_loja()
+    # "Comprar direto" (2026-09-22): quem cota cada item em cada loja vem
+    # primeiro na lista de fornecedores, e o último custo sugere o preço.
+    cotam_de = mapa_insumo_loja_fornecedores()
     agregados = {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
@@ -4106,6 +4109,7 @@ def api_conferencia_requisicao():
                 "categoria": item['categoria'],
                 "unidadeMedida": item['unidadeMedida'],
                 "fatorConversaoCompra": item.get('fatorConversaoCompra'),
+                "custoUnitario": item.get('custoUnitario'),
                 "preenchidoTotal": 0.0,
                 "idealTotal": 0.0,
                 "temIdeal": False,
@@ -4120,6 +4124,7 @@ def api_conferencia_requisicao():
                 # Fornecedor e preço combinado (bloco dos homologados, 2026-09-22).
                 "homologado": homologado,
                 "forcarCotacao": bool(item.get('forcarCotacao')),
+                "cotam": cotam_de.get((item['insumoId'], contagem['loja']), []),
                 "loja": contagem['loja'],
                 "contagemId": contagem['id'],
                 "contado": item['quantidadePreenchida'],
@@ -4147,6 +4152,7 @@ def api_conferencia_requisicao():
             "nome": agregado['nome'],
             "categoria": agregado['categoria'],
             "unidadeMedida": agregado['unidadeMedida'],
+            "custoUnitario": agregado['custoUnitario'],
             "preenchidoTotal": round(agregado['preenchidoTotal'], 2),
             "idealTotal": round(agregado['idealTotal'], 2) if agregado['temIdeal'] else None,
             "idealAjustado": agregado['algumAjustado'],

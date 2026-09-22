@@ -289,3 +289,37 @@
 }
 
 .btn-voltar-homologado { display: block; margin-top: 4px; font-size: 0.72rem; }
+
+/* "Comprar direto" no bloco da cotação (2026-09-22) */
+.conferencia-compra-tabela .col-acao-bloco { text-align: right; white-space: nowrap; }
+
+.comprar-direto-subtitulo { margin: 4px 0 0; font-size: 0.8rem; }
+
+.comprar-direto-lojas { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.85rem; }
+
+.comprar-direto-lojas label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+
+.comprar-direto-validade {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: none;
+  font-size: 0.85rem;
+}
+
+.comprar-direto-validade legend {
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.comprar-direto-validade label { display: inline-flex; align-items: center; gap: 8px; }
+
+.comprar-direto-aviso { margin: 0; font-size: 0.78rem; }
+
+.comprar-direto-erro { margin: var(--space-2) 0 0; font-size: 0.8rem; color: var(--danger-texto); }
+
+.comprar-direto-erro[hidden] { display: none; }
