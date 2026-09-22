@@ -59,6 +59,8 @@ from backend.armazenamento import (
     criar_insumos_em_lote,
     buscar_estoque_loja,
     uso_do_insumo,
+    insumos_sem_conversao_da_ficha,
+    quantidades_tipicas_por_insumo,
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
@@ -243,6 +245,10 @@ from sincronizar import sincronizar_dia, DIA_FECHADO
 # Preço, estoque, ficha técnica e baixa são todos guardados nessas unidades:
 # cadastrar insumo em "kg" quebrava a régua do sistema inteiro (QA 22/09).
 UNIDADES_INSUMO = ('g', 'ml', 'un')
+
+# Quantidade de ficha técnica 10× acima ou abaixo da mediana do mesmo insumo
+# nas outras fichas pede confirmação antes de gravar (QA 22/09).
+FATOR_QUANTIDADE_SUSPEITA = 10
 
 app = Flask(__name__)
 
@@ -2287,6 +2293,22 @@ def api_excluir_insumo(insumo_id):
     if erro_admin:
         return erro_admin
 
+    # Excluir não limpava ficha, embalagem nem receita (o banco roda sem chave
+    # estrangeira): sobrava uma linha invisível na tela que travava o custo do
+    # produto pra sempre (QA 22/09).
+    uso = uso_do_insumo(insumo_id)
+    onde = []
+    if uso['fichas']:
+        onde.append(f"{uso['fichas']} ficha(s) técnica(s)")
+    if uso['embalagens']:
+        onde.append(f"{uso['embalagens']} embalagem(ns) pra viagem")
+    if uso['receitas']:
+        onde.append(f"{uso['receitas']} receita(s) de mistura")
+    if onde:
+        return jsonify({"erro":
+            f"Esse insumo está em {', '.join(onde)}. Tire ele de lá antes de excluir — "
+            "ou junte com outro insumo em 'Mesclar', que leva a ficha junto."}), 400
+
     excluir_insumo(insumo_id)
     return jsonify({"ok": True})
 
@@ -2841,6 +2863,30 @@ def api_definir_ficha_tecnica(item_id):
             return jsonify({"erro": erro}), 400
         gravacoes.append((gravar, links))
 
+    # Quantidade fora de qualquer proporção (grama digitado como quilo) entrava
+    # sem trava e ainda voltava retroativa no estoque, porque a baixa recalcula
+    # os dias com a ficha atual. A régua é a mediana do mesmo insumo nas outras
+    # fichas; quem confirma manda `confirmar` (QA 22/09).
+    if not dados.get('confirmar'):
+        tipicas = quantidades_tipicas_por_insumo(fora_do_item=item_id)
+        nomes = {i['id']: i['nome'] for i in _insumos_unicos(listar_insumos())}
+        suspeitos = []
+        for _gravar, links in gravacoes:
+            for link in links:
+                tipica = tipicas.get(link['insumoId'])
+                quantidade = link.get('quantidade')
+                if not tipica or not quantidade or quantidade <= 0:
+                    continue
+                if quantidade >= tipica * FATOR_QUANTIDADE_SUSPEITA or quantidade * FATOR_QUANTIDADE_SUSPEITA <= tipica:
+                    suspeitos.append({
+                        "insumoId": link['insumoId'],
+                        "nome": nomes.get(link['insumoId'], f"insumo {link['insumoId']}"),
+                        "quantidade": quantidade,
+                        "tipica": tipica,
+                    })
+        if suspeitos:
+            return jsonify({"erro": "confirmar", "suspeitos": suspeitos}), 409
+
     for gravar, links in gravacoes:
         gravar(item_id, loja, links)
     return jsonify({"ok": True})
@@ -2902,6 +2948,15 @@ def api_definir_porcoes_complemento(item_id):
             return jsonify({"erro": "Porção inválida."}), 400
         if gramas <= 0:
             return jsonify({"erro": "Porção precisa ser maior que zero."}), 400
+        # A porção escala a ficha do complemento pelos gramas dela; com insumo
+        # em "un" sem "1 un = X g", não dá pra saber quantos gramas a ficha
+        # soma e a porção era ignorada em silêncio, descontando a ficha inteira
+        # por complemento vendido (QA 22/09).
+        travando = insumos_sem_conversao_da_ficha(complemento_id, loja)
+        if travando:
+            return jsonify({"erro":
+                f"A porção não vale enquanto a ficha desse complemento tiver insumo contado em unidade sem conversão: "
+                f"{', '.join(travando[:4])}. Cadastre '1 un = X g' nesses insumos (no cadastro do insumo) e tente de novo."}), 400
         porcoes.append({"complementoId": complemento_id, "gramas": gramas})
     definir_porcoes_complemento(item_id, loja, porcoes)
     return jsonify({"ok": True})

@@ -12862,14 +12862,31 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
     corpo.embalagemViagem = _linhasDaListaFichaTecnica('ficha-tecnica-embalagem-linhas');
   }
 
-  try {
+  const enviar = async (confirmar) => {
     const resposta = await fetch(`/api/itens-cardapio/${fichaTecnicaEditandoItemId}/ficha-tecnica`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo),
+      body: JSON.stringify(confirmar ? { ...corpo, confirmar: true } : corpo),
     });
     const dados = await resposta.json();
+    // 409: quantidade fora de proporção com o mesmo insumo nas outras fichas
+    // — quase sempre grama digitado como quilo, que ainda volta retroativo no
+    // estoque porque a baixa recalcula os dias com a ficha atual (QA 22/09).
+    if (resposta.status === 409 && dados.suspeitos && !confirmar) {
+      const lista = dados.suspeitos.map((s) => `${s.nome}: ${_numeroBR(s.quantidade)} (nas outras fichas, perto de ${_numeroBR(s.tipica)})`).join('\n');
+      if (!confirm(`Confira estas quantidades antes de salvar:
+
+${lista}
+
+Salvar assim mesmo?`)) return false;
+      return enviar(true);
+    }
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+    return true;
+  };
+
+  try {
+    if (!(await enviar(false))) return;
     const itemId = fichaTecnicaEditandoItemId;
     fecharModalFichaTecnicaItem();
     fichaTecnicaInsumosCache.delete(itemId);

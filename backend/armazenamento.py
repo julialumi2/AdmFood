@@ -1046,6 +1046,20 @@ def inicializar_banco():
             """
         )
         conn.execute("CREATE TABLE IF NOT EXISTS migracao_feita (nome TEXT PRIMARY KEY, feita_em TEXT NOT NULL)")
+        if not conn.execute("SELECT 1 FROM migracao_feita WHERE nome = 'limpar_fichas_orfas'").fetchone():
+            # Insumo excluído não limpava ficha, embalagem nem receita, e o
+            # banco roda sem chave estrangeira: o produto ficava "sem custo"
+            # pra sempre por causa de uma linha invisível na tela (QA 22/09).
+            # A exclusão passou a ser barrada; aqui some o que já ficou pra trás.
+            for tabela, coluna in (("ficha_tecnica", "insumo_id"), ("embalagem_viagem", "insumo_id"),
+                                   ("receita_insumo", "insumo_id"), ("receita_insumo", "ingrediente_id")):
+                conn.execute(
+                    f"DELETE FROM {tabela} WHERE {coluna} NOT IN (SELECT id FROM insumo)"
+                )
+            conn.execute(
+                "INSERT INTO migracao_feita (nome, feita_em) VALUES ('limpar_fichas_orfas', ?)",
+                (datetime.now().isoformat(),),
+            )
         if not conn.execute("SELECT 1 FROM migracao_feita WHERE nome = 'fornecedores_por_loja'").fetchone():
             conn.execute(
                 """
@@ -3048,6 +3062,9 @@ def uso_do_insumo(insumo_id):
             "fichas": conn.execute(
                 "SELECT COUNT(*) AS n FROM ficha_tecnica WHERE insumo_id = ?", (insumo_id,)
             ).fetchone()["n"],
+            "embalagens": conn.execute(
+                "SELECT COUNT(*) AS n FROM embalagem_viagem WHERE insumo_id = ?", (insumo_id,)
+            ).fetchone()["n"],
             "receitas": conn.execute(
                 "SELECT COUNT(*) AS n FROM receita_insumo WHERE insumo_id = ? OR ingrediente_id = ?",
                 (insumo_id, insumo_id),
@@ -3377,6 +3394,48 @@ def _igualar_fichas_do_grupo(conn, grupo):
                     "INSERT OR IGNORE INTO ficha_tecnica (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
                     (item_id, linha["insumo_id"], destino, linha["quantidade"]),
                 )
+
+
+def quantidades_tipicas_por_insumo(fora_do_item=None):
+    """{insumo_id: mediana da quantidade desse insumo nas fichas técnicas}.
+    É a régua pra avisar quando alguém digita uma quantidade fora de qualquer
+    proporção — o erro de grama × quilo na ficha, que ainda volta retroativo
+    no estoque porque a baixa recalcula os dias com a ficha atual (QA 22/09)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT insumo_id, quantidade FROM ficha_tecnica WHERE quantidade IS NOT NULL AND quantidade > 0"
+            + (" AND item_id != ?" if fora_do_item else ""),
+            (fora_do_item,) if fora_do_item else (),
+        ).fetchall()
+    por_insumo = {}
+    for linha in linhas:
+        por_insumo.setdefault(linha["insumo_id"], []).append(linha["quantidade"])
+    medianas = {}
+    for insumo_id, valores in por_insumo.items():
+        valores.sort()
+        meio = len(valores) // 2
+        medianas[insumo_id] = valores[meio] if len(valores) % 2 else (valores[meio - 1] + valores[meio]) / 2
+    return medianas
+
+
+def insumos_sem_conversao_da_ficha(item_id, loja):
+    """Insumos da ficha que impedem saber quantos gramas ela soma: contados
+    em "un" sem "1 un = X g" cadastrado. Enquanto existir um deles, a porção
+    do complemento no produto é ignorada e a ficha inteira é descontada
+    (QA 22/09)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT i.nome FROM ficha_tecnica f
+            JOIN insumo i ON i.id = f.insumo_id
+            WHERE f.item_id = ? AND f.loja = ?
+              AND LOWER(i.unidade_medida) NOT IN ('g', 'ml', 'kg', 'l')
+              AND i.conteudo_por_unidade IS NULL
+            ORDER BY i.nome
+            """,
+            (item_id, loja),
+        ).fetchall()
+        return [linha["nome"] for linha in linhas]
 
 
 def definir_ficha_tecnica(item_id, loja, links):

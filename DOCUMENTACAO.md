@@ -4175,3 +4175,27 @@ Os três críticos de Insumos do relatório de QA:
   unidade: você digitou 5 g e da última vez tinha 5 kg". No envio, esses itens
   aparecem numa confirmação antes de ir. Era o buraco por onde o erro de
   unidade virava estoque e compra errados sem ninguém perceber.
+
+### 6.45 Ficha técnica com trava (QA, leva 4 — 2026-09-22)
+
+Os três críticos do Cardápio:
+
+- **Insumo apagado continuava dentro da ficha.** Excluir não limpava ficha,
+  embalagem nem receita (o banco roda sem chave estrangeira) e o modal escondia
+  a linha órfã — o produto ficava "sem custo" pra sempre por causa de algo
+  invisível. Agora a exclusão é recusada quando o insumo está em ficha,
+  embalagem ou receita, dizendo onde ele está e lembrando do "Mesclar", que
+  leva a ficha junto. Uma migração única (`limpar_fichas_orfas`) apagou as
+  linhas órfãs que já existiam.
+- **Quantidade fora de proporção pede confirmação.** A régua é a mediana do
+  mesmo insumo nas outras fichas (`quantidades_tipicas_por_insumo`); 10× acima
+  ou abaixo devolve 409 com a lista e a tela pergunta "Bacon: 60.000 (nas
+  outras fichas, perto de 70). Salvar assim mesmo?". Importa porque a baixa de
+  estoque recalcula os dias já sincronizados com a ficha atual, então o erro
+  volta retroativo.
+- **Porção de complemento que seria ignorada não entra.** A porção escala a
+  ficha do complemento pelos gramas dela; com insumo em "un" sem "1 un = X g",
+  não dá pra saber quantos gramas a ficha soma e a porção era ignorada em
+  silêncio, descontando a ficha inteira por complemento vendido. Agora a
+  gravação é recusada nomeando os insumos que precisam do conteúdo por unidade
+  (`insumos_sem_conversao_da_ficha`).
