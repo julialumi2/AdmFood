@@ -258,14 +258,6 @@
               <h1 id="requisicao-conferencia-titulo">—</h1>
               <div class="page-acoes-topo" id="requisicao-conferencia-acoes-admin" style="display:none;">
                 <button type="button" class="btn-secondary" id="btn-requisicao-aprovar-todas">Aprovar todas as lojas</button>
-                <button type="button" class="btn-secondary" id="btn-requisicao-reaplicar-homologados" style="display:none;" title="Refaz a compra com os fornecedores homologados de agora, sem apagar a cotação">
-                  <i data-lucide="refresh-cw"></i>
-                  Atualizar com os homologados
-                </button>
-                <button type="button" class="btn-primary" id="btn-requisicao-gerar-cotacao">
-                  <i data-lucide="file-text"></i>
-                  Gerar cotação
-                </button>
               </div>
             </div>
           </div>
@@ -295,11 +287,38 @@
             </div>
           </div>
 
-          <div class="chart-card">
-            <div class="table-header-row">
+          <!-- O QUE COMPRAR EM DOIS BLOCOS (2026-09-22): o homologado sai em
+               pedido direto num clique; o resto vai pra cotação -->
+          <div class="chart-card bloco-compra" id="bloco-homologados">
+            <div class="bloco-compra-topo">
               <div>
-                <h3 class="table-title">O que comprar</h3>
-                <p class="table-subtitle" id="requisicao-conferencia-itens-resumo">Cada loja já vem com a sugestão do sistema. Mude o que quiser: 0 tira o item da compra.</p>
+                <h3 class="table-title">Pedido direto · homologados</h3>
+                <p class="table-subtitle" id="bloco-homologados-resumo"></p>
+              </div>
+              <button type="button" class="btn-primary" id="btn-gerar-pedidos-homologados">
+                <i data-lucide="send"></i>
+                Gerar pedidos homologados
+              </button>
+            </div>
+            <div id="bloco-homologados-corpo"></div>
+            <p class="bloco-compra-nota">Preço ou fornecedor errado? Isso muda no cadastro do insumo, em <a href="estoque.html">Insumos</a>, não aqui.</p>
+          </div>
+
+          <div class="chart-card bloco-compra" id="bloco-cotacao">
+            <div class="bloco-compra-topo">
+              <div>
+                <h3 class="table-title">Cotação · vários fornecedores</h3>
+                <p class="table-subtitle" id="requisicao-conferencia-itens-resumo"></p>
+              </div>
+              <div class="bloco-compra-acoes">
+                <a class="btn-secondary" id="link-abrir-cotacao-requisicao" href="#" hidden>
+                  <i data-lucide="external-link"></i>
+                  Abrir cotação
+                </a>
+                <button type="button" class="btn-primary" id="btn-gerar-cotacao-requisicao">
+                  <i data-lucide="file-text"></i>
+                  Gerar cotação
+                </button>
               </div>
             </div>
             <div class="table-responsive">

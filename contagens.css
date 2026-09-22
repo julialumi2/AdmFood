@@ -154,3 +154,138 @@
 .destino-compra.cotacao { background-color: var(--surface-muted); color: var(--text-muted); }
 
 .destino-compra.feito { background-color: var(--success-soft); color: var(--success-texto); }
+
+/* ===========================================================================
+   O QUE COMPRAR EM DOIS BLOCOS (2026-09-22): pedido direto dos homologados,
+   agrupado por fornecedor, e a cotação com o resto.
+   =========================================================================== */
+
+.bloco-compra { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.bloco-compra-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.bloco-compra-topo .table-subtitle { max-width: 70ch; }
+
+.bloco-compra-acoes { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+.bloco-compra-acoes a[hidden],
+.bloco-compra-topo button[hidden] { display: none; }
+
+.bloco-compra-topo .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.bloco-compra-nota {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.bloco-compra-nota a { color: inherit; font-weight: 600; }
+
+.bloco-vazio {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.grupo-homologado {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.grupo-homologado + .grupo-homologado { margin-top: var(--space-3); }
+
+.grupo-homologado-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: 10px 14px;
+  background-color: var(--surface-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.grupo-homologado-nome { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+
+.grupo-homologado-nome strong { font-size: 0.9rem; color: var(--text-dark); }
+
+.grupo-homologado-nome span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.grupo-homologado-envios { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+
+.grupo-pedidos { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+
+.btn-enviar-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success-texto);
+  text-decoration: none;
+}
+
+.btn-enviar-whatsapp svg { width: 14px; height: 14px; }
+
+.btn-enviar-whatsapp[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+
+/* Larguras fixas: as colunas batem de um fornecedor pro outro */
+.homologados-tabela { width: 100%; min-width: 760px; table-layout: fixed; }
+
+.homologados-tabela th:nth-child(1) { width: 25%; }
+.homologados-tabela th:nth-child(2) { width: 17%; }
+.homologados-tabela th:nth-child(3) { width: 21%; }
+.homologados-tabela th:nth-child(4) { width: 13%; }
+.homologados-tabela th:nth-child(5) { width: 10%; }
+.homologados-tabela th:nth-child(6) { width: 14%; }
+
+.homologados-tabela th,
+.homologados-tabela td { padding: 8px 12px; vertical-align: top; }
+
+.homologados-tabela th { white-space: nowrap; }
+
+.homologados-tabela .col-dinheiro { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.homologados-tabela .col-acao-bloco { text-align: right; white-space: nowrap; }
+
+.preco-unidade { margin-left: 2px; font-size: 0.72rem; color: var(--text-muted); }
+
+.loja-tag-compra {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface-muted);
+  border: 1px solid var(--surface-muted-border);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mostrar-homologados { margin-top: var(--space-2); }
+
+/* Na cotação, a loja cujo item sai pelo homologado aparece apagada */
+.cel-direto {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--info-soft);
+  color: var(--info);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-voltar-homologado { display: block; margin-top: 4px; font-size: 0.72rem; }

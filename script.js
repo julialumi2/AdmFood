@@ -5872,14 +5872,10 @@ function renderConferenciaRequisicao() {
 
   const acoes = document.getElementById('requisicao-conferencia-acoes-admin');
   const btnAprovarTodas = document.getElementById('btn-requisicao-aprovar-todas');
-  const btnGerarCotacao = document.getElementById('btn-requisicao-gerar-cotacao');
   if (acoes) acoes.style.display = isAdmin ? '' : 'none';
-  if (btnAprovarTodas) btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
-  const btnReaplicar = document.getElementById('btn-requisicao-reaplicar-homologados');
-  if (btnReaplicar) btnReaplicar.style.display = r.podeAtualizarHomologados ? '' : 'none';
-  if (btnGerarCotacao) {
-    btnGerarCotacao.disabled = !r.totalmenteAprovada;
-    btnGerarCotacao.innerHTML = `<i data-lucide="file-text"></i> ${r.jaGerada ? 'Ver cotação/pedidos' : 'Gerar cotação'}`;
+  if (btnAprovarTodas) {
+    btnAprovarTodas.disabled = !r.prontaParaConferencia || r.totalmenteAprovada;
+    btnAprovarTodas.hidden = !!r.totalmenteAprovada;
   }
 
   const aviso = document.getElementById('requisicao-conferencia-aviso');
@@ -5973,66 +5969,160 @@ function _celulaCompraHTML(item, l, bloqueado) {
     </div>`;
 }
 
+// Total da linha na tabela da cotação: só as lojas que vão pra cotação.
 function _totalCompraHTML(item) {
-  const total = Math.round((item.lojas || []).reduce((soma, l) => soma + (l.comprar || 0), 0) * 100) / 100;
+  const total = Math.round((item.lojas || []).filter((l) => _blocoDaLoja(l) === 'cotacao')
+    .reduce((soma, l) => soma + (l.comprar || 0), 0) * 100) / 100;
   return total > 0
     ? `<span class="badge-pill neg">${_formatarQuantidade(total, item.unidadeMedida)}</span>`
     : '<span class="text-muted">não compra</span>';
 }
 
-function _destinoCompraHTML(item) {
-  // Requisição já gerada: onde o item está e o que muda no "Ver cotação/pedidos".
-  if (requisicaoConferenciaAtual?.jaGerada && (item.lojas || []).some((l) => l.situacao)) {
-    const rotulos = new Map();
-    item.lojas.forEach((l) => {
-      const s = l.situacao;
-      if (!s) return;
-      if (s.tipo === 'pedido') rotulos.set(`p${s.pedidoId}`, `<span class="destino-compra feito" title="Já está nesse pedido">Pedido nº ${s.pedidoId} · ${escaparHtml(s.fornecedor)}</span>`);
-      else if (s.tipo === 'vaiPraPedido') rotulos.set(`v${s.fornecedor}`, `<span class="destino-compra pedido" title="Ganhou fornecedor homologado: vira pedido quando você clicar em Ver cotação/pedidos">Vai virar pedido · ${escaparHtml(s.fornecedor)}</span>`);
-      else if (s.tipo === 'cotacao') rotulos.set('c', '<span class="destino-compra cotacao">Na cotação</span>');
-      else rotulos.set('vc', '<span class="destino-compra cotacao" title="Entra na cotação quando você clicar em Ver cotação/pedidos">Vai pra cotação</span>');
-    });
-    return [...rotulos.values()].join('<br>');
-  }
-  // Por loja: cada loja pode ter homologado diferente (ou nenhum).
-  const lojasCompra = (item.lojas || []).filter((l) => l.comprar > 0);
-  if (!lojasCompra.length) return '<span class="text-muted">—</span>';
-  const rotulos = new Map();
-  lojasCompra.forEach((l) => {
-    if (l.fornecedorHomologado) {
-      rotulos.set(`p${l.fornecedorHomologado}`, `<span class="destino-compra pedido" title="Fornecedor homologado com preço combinado nessa loja: sai direto em pedido, sem cotação">Pedido · ${escaparHtml(l.fornecedorHomologado)}</span>`);
-    } else {
-      rotulos.set('c', '<span class="destino-compra cotacao">Cotação</span>');
-    }
-  });
-  return [...rotulos.values()].join('<br>');
+// --- Dois blocos (2026-09-22, pedido dela) ---
+// O homologado é um atalho: sai em pedido direto num clique, com o
+// fornecedor e o preço combinados no cadastro do insumo. A cotação fica só
+// com o resto. "Mover pra cotação" tira um item do atalho quando o
+// homologado não atende nessa compra, sem refazer a contagem.
+let mostrarHomologadosSemCompra = false;
+
+const _reais = (valor) => `R$ ${_formatarMoedaBR(Math.round((valor || 0) * 100) / 100)}`;
+
+// Pra qual bloco vai o item dessa loja: o que já está num pedido direto
+// fica nos homologados; o que já está na cotação (ou num pedido que saiu
+// dela) fica na cotação; o resto vai pelo homologado, se tiver e não foi
+// movido. Mesma regra do servidor (_plano_reaplicacao).
+function _blocoDaLoja(l) {
+  const s = l.situacao;
+  if (s?.tipo === 'pedido') return s.direto ? 'direto' : 'cotacao';
+  if (s?.tipo === 'cotacao') return 'cotacao';
+  return l.homologado && !l.forcarCotacao ? 'direto' : 'cotacao';
 }
 
-function _atualizarResumoCompraConferencia(r) {
-  const resumo = document.getElementById('requisicao-conferencia-itens-resumo');
-  if (!resumo) return;
-  if (r.jaGerada) {
-    resumo.textContent = r.pendentes
-      ? `Essa requisição já virou cotação/pedido. ${r.pendentes} item(ns) mudaram de destino (veja "Vai pra"): isso é aplicado quando você clicar em "Ver cotação/pedidos".`
-      : 'Essa requisição já virou cotação/pedido, então as quantidades ficaram travadas. Clique em "Ver cotação/pedidos" pra abrir.';
+function _travadaNaCompra(l) {
+  return l.situacao?.tipo === 'pedido' || l.situacao?.tipo === 'cotacao';
+}
+
+// O que ainda falta gerar, separado nos dois blocos (item × loja com
+// quantidade): itensHomologados saem em pedido direto, itensParaCotacao vão
+// pra cotação.
+function _pendentesDaCompra(r) {
+  const itensHomologados = [];
+  const itensParaCotacao = [];
+  r.itens.forEach((item) => item.lojas.forEach((l) => {
+    if (_travadaNaCompra(l) || !(l.comprar > 0)) return;
+    (_blocoDaLoja(l) === 'direto' ? itensHomologados : itensParaCotacao).push({ item, l });
+  }));
+  return { itensHomologados, itensParaCotacao };
+}
+
+function _fornecedorDaLinha(l) {
+  return {
+    id: l.situacao?.tipo === 'pedido' ? l.situacao.fornecedorId : l.homologado?.fornecedorId,
+    nome: (l.situacao?.tipo === 'pedido' ? l.situacao.fornecedor : l.homologado?.fornecedor) || 'Fornecedor',
+  };
+}
+
+function _linhaHomologadoHTML({ item, l }) {
+  const travada = _travadaNaCompra(l);
+  const preco = l.homologado?.preco;
+  const total = preco != null ? (l.comprar || 0) * preco : null;
+  // O preço combinado é guardado na unidade do insumo (por grama, por ml) e
+  // mostrado como no cadastro: por kg, por litro ou por unidade.
+  const escala = _escalaDeCusto(item.unidadeMedida);
+  return `
+    <tr data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">
+      <td class="conferencia-insumo">
+        <span class="font-bold">${escaparHtml(item.nome)}</span>
+        <span class="conferencia-categoria">${escaparHtml(item.categoria || '')}</span>
+      </td>
+      <td><span class="loja-tag-compra">${escaparHtml(l.loja)}</span></td>
+      <td>${_celulaCompraHTML(item, l, travada)}</td>
+      <td class="col-dinheiro">${preco != null
+        ? `${_reais(preco * escala.fator)}<span class="preco-unidade">/ ${escaparHtml(escala.rotulo)}</span>`
+        : '<span class="text-muted">—</span>'}</td>
+      <td class="col-dinheiro" data-total-homologado>${total > 0 ? `<strong>${_reais(total)}</strong>` : '<span class="text-muted">—</span>'}</td>
+      <td class="col-acao-bloco">${travada
+        ? `<span class="destino-compra feito">no pedido nº ${l.situacao.pedidoId}</span>`
+        : `<button type="button" class="btn-limpar-filtro" data-acao="mover-cotacao" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}" title="O homologado não atende nessa compra: esse item vai pra cotação">Mover pra cotação</button>`}</td>
+    </tr>`;
+}
+
+function _enviosDoFornecedorHTML(r, fornecedorId) {
+  return (r.envios || []).filter((e) => e.fornecedorId === fornecedorId).map((e) => {
+    const numeros = `Pedido${e.pedidoIds.length > 1 ? 's' : ''} nº ${e.pedidoIds.join(', ')}`;
+    return e.enviado
+      ? `<span class="destino-compra feito">${numeros} · enviado</span>`
+      : `<span class="grupo-pedidos">${numeros}</span>
+         <a class="btn-secondary-sm btn-enviar-whatsapp" data-pedido="${e.pedidoIds[0]}" href="#" target="_blank" rel="noopener" aria-disabled="true">
+           <i data-lucide="send"></i> Enviar por WhatsApp
+         </a>`;
+  }).join('');
+}
+
+function _renderBlocoHomologados(r) {
+  const corpo = document.getElementById('bloco-homologados-corpo');
+  if (!corpo) return;
+  const linhas = [];
+  r.itens.forEach((item) => item.lojas.forEach((l) => {
+    if (_blocoDaLoja(l) === 'direto') linhas.push({ item, l });
+  }));
+  // Homologado com estoque em dia (sugestão 0) fica escondido até pedir.
+  const semCompra = linhas.filter(({ l }) => !_travadaNaCompra(l) && !(l.comprar > 0) && !l.editado);
+  const visiveis = linhas.filter((x) => mostrarHomologadosSemCompra || !semCompra.includes(x));
+  if (!linhas.length) {
+    corpo.innerHTML = '<p class="bloco-vazio">Nenhum item com fornecedor homologado nessa compra. Pra um insumo sair aqui, cadastre o homologado e o preço combinado dele em Insumos, na aba da loja.</p>';
     return;
   }
-  const vaoPraCompra = r.itens.filter((i) => i.lojas.some((l) => l.comprar > 0));
-  const emPedido = vaoPraCompra.filter((i) => i.lojas.every((l) => !(l.comprar > 0) || l.fornecedorHomologado)).length;
-  const semDecisao = r.itens.filter((i) => i.lojas.some((l) => l.ideal === null && !l.editado && !l.minimoGuardado)).length;
-  const partes = [`${vaoPraCompra.length} ${vaoPraCompra.length === 1 ? 'item vai' : 'itens vão'} pra compra (${emPedido} em pedido direto, ${vaoPraCompra.length - emPedido} pra cotação)`];
-  if (semDecisao) partes.push(`${semDecisao} sem estoque mínimo, em amarelo, esperando você decidir`);
-  resumo.textContent = `${partes.join(' · ')}. Cada loja já vem com a sugestão do sistema; mude o que quiser, 0 tira o item.`;
+  // Um grupo por fornecedor: é um pedido (e um WhatsApp) por fornecedor.
+  const grupos = new Map();
+  visiveis.forEach((x) => {
+    const fornecedor = _fornecedorDaLinha(x.l);
+    if (!grupos.has(fornecedor.id)) grupos.set(fornecedor.id, { ...fornecedor, linhas: [] });
+    grupos.get(fornecedor.id).linhas.push(x);
+  });
+  const ordenados = [...grupos.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  corpo.innerHTML = `
+    ${ordenados.map((g) => `
+      <section class="grupo-homologado" data-fornecedor="${g.id}">
+        <div class="grupo-homologado-topo">
+          <div class="grupo-homologado-nome">
+            <strong>${escaparHtml(g.nome)}</strong>
+            <span data-resumo-grupo="${g.id}"></span>
+          </div>
+          <div class="grupo-homologado-envios">${_enviosDoFornecedorHTML(r, g.id)}</div>
+        </div>
+        <div class="table-responsive">
+          <table class="homologados-tabela">
+            <thead>
+              <tr><th>Insumo</th><th>Loja</th><th>Quantidade</th><th class="col-dinheiro">Preço combinado</th><th class="col-dinheiro">Total</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${g.linhas.sort((a, b) => a.item.nome.localeCompare(b.item.nome, 'pt-BR')).map(_linhaHomologadoHTML).join('')}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `).join('') || '<p class="bloco-vazio">Nada pra pedir dos homologados agora: o estoque deles está em dia.</p>'}
+    ${semCompra.length ? `
+      <button type="button" class="btn-limpar-filtro mostrar-homologados" data-acao="mostrar-homologados-sem-compra">
+        ${mostrarHomologadosSemCompra ? 'Esconder' : 'Mostrar'} ${_qtdTexto(semCompra.length, 'homologado com estoque em dia', 'homologados com estoque em dia')}
+      </button>` : ''}
+  `;
+  _prepararEnviosWhatsApp();
 }
 
-function _renderCompraConferencia(r) {
+function _renderBlocoCotacao(r) {
   const head = document.getElementById('requisicao-conferencia-itens-head');
   const body = document.getElementById('requisicao-conferencia-itens-body');
   if (!head || !body) return;
   const lojas = r.contagens.map((c) => c.loja);
-  const bloqueado = !!r.jaGerada;
-  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th>${escaparHtml(loja)}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Vai pra</th></tr>`;
-  body.innerHTML = r.itens.map((item) => {
+  const itens = r.itens.filter((item) => item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao'));
+  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th>${escaparHtml(loja)}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Situação</th></tr>`;
+  if (!itens.length) {
+    body.innerHTML = `<tr><td colspan="${lojas.length + 3}" class="panel-subtitle">Nada pra cotar: tudo o que precisa comprar sai pelo homologado.</td></tr>`;
+    return;
+  }
+  body.innerHTML = itens.map((item) => {
     const porLoja = Object.fromEntries((item.lojas || []).map((l) => [l.loja, l]));
     return `
       <tr data-insumo="${item.insumoId}">
@@ -6042,18 +6132,95 @@ function _renderCompraConferencia(r) {
             : ''}
           <span class="conferencia-categoria">${escaparHtml(item.categoria || '')}</span>
         </td>
-        ${lojas.map((loja) => `<td>${porLoja[loja] ? _celulaCompraHTML(item, porLoja[loja], bloqueado) : '<span class="text-muted">—</span>'}</td>`).join('')}
+        ${lojas.map((loja) => {
+          const l = porLoja[loja];
+          if (!l) return '<td><span class="text-muted">—</span></td>';
+          if (_blocoDaLoja(l) === 'direto') {
+            return `<td><span class="cel-direto" title="Sai em pedido direto pro homologado (bloco de cima)">pedido direto</span></td>`;
+          }
+          const voltar = l.forcarCotacao && l.homologado && !_travadaNaCompra(l)
+            ? `<button type="button" class="btn-limpar-filtro btn-voltar-homologado" data-acao="voltar-homologado" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">voltar pro homologado (${escaparHtml(l.homologado.fornecedor)})</button>`
+            : '';
+          return `<td>${_celulaCompraHTML(item, l, _travadaNaCompra(l))}${voltar}</td>`;
+        }).join('')}
         <td class="col-total-compra" data-total-insumo="${item.insumoId}">${_totalCompraHTML(item)}</td>
-        <td class="col-destino-compra" data-destino-insumo="${item.insumoId}">${_destinoCompraHTML(item)}</td>
+        <td class="col-destino-compra">${_situacaoCotacaoHTML(item)}</td>
       </tr>`;
   }).join('');
+}
+
+// Coluna "Situação" da cotação: o que já entrou (ou já virou pedido).
+function _situacaoCotacaoHTML(item) {
+  const rotulos = new Map();
+  item.lojas.forEach((l) => {
+    if (_blocoDaLoja(l) !== 'cotacao') return;
+    const s = l.situacao;
+    if (s?.tipo === 'pedido') rotulos.set(`p${s.pedidoId}`, `<span class="destino-compra feito">Pedido nº ${s.pedidoId} · ${escaparHtml(s.fornecedor)}</span>`);
+    else if (s?.tipo === 'cotacao') rotulos.set('c', '<span class="destino-compra cotacao">Na cotação</span>');
+  });
+  return rotulos.size ? [...rotulos.values()].join('<br>') : '<span class="text-muted">—</span>';
+}
+
+// Resumo e botão de cada bloco, e o total de cada fornecedor — sem redesenhar
+// a tabela (a Ket vai de campo em campo no Tab).
+function _atualizarResumoCompraConferencia(r) {
+  const { itensHomologados: direto, itensParaCotacao: cotacao } = _pendentesDaCompra(r);
+
+  const resumoDireto = document.getElementById('bloco-homologados-resumo');
+  const btnPedidos = document.getElementById('btn-gerar-pedidos-homologados');
+  const fornecedores = new Set(direto.map(({ l }) => l.homologado?.fornecedorId));
+  const totalDireto = direto.reduce((t, { l }) => t + (l.comprar || 0) * (l.homologado?.preco || 0), 0);
+  const jaPedidos = (r.envios || []).length;
+  if (resumoDireto) {
+    if (r.motivoPedidos) resumoDireto.textContent = r.motivoPedidos;
+    else if (!r.totalmenteAprovada) resumoDireto.textContent = 'Aprove todas as lojas pra gerar os pedidos.';
+    else if (direto.length) resumoDireto.textContent = `${_qtdTexto(direto.length, 'item', 'itens')} pra ${_qtdTexto(fornecedores.size, 'fornecedor', 'fornecedores')} · ${_reais(totalDireto)}. Sai em pedido com o preço combinado, sem cotação.`;
+    else if (jaPedidos) resumoDireto.textContent = 'Pedidos gerados. Mande cada um pelo WhatsApp: o fornecedor confirma pelo link.';
+    else resumoDireto.textContent = 'Fornecedor e preço combinados no cadastro do insumo: sai em pedido direto, sem cotação.';
+  }
+  if (btnPedidos) {
+    btnPedidos.disabled = !r.totalmenteAprovada || !direto.length || !!r.motivoPedidos;
+    // Nada pra gerar depois de aprovado: some (o botão desativado parecia ativo).
+    btnPedidos.hidden = !!r.totalmenteAprovada && !direto.length;
+  }
+  document.querySelectorAll('[data-resumo-grupo]').forEach((alvo) => {
+    const id = Number(alvo.dataset.resumoGrupo);
+    const doGrupo = direto.filter(({ l }) => l.homologado?.fornecedorId === id);
+    const total = doGrupo.reduce((t, { l }) => t + (l.comprar || 0) * (l.homologado?.preco || 0), 0);
+    alvo.textContent = doGrupo.length ? `${_qtdTexto(doGrupo.length, 'item', 'itens')} pra pedir · ${_reais(total)}` : '';
+  });
+
+  const resumoCotacao = document.getElementById('requisicao-conferencia-itens-resumo');
+  const btnCotacao = document.getElementById('btn-gerar-cotacao-requisicao');
+  const linkCotacao = document.getElementById('link-abrir-cotacao-requisicao');
+  const insumosCotacao = new Set(cotacao.map(({ item }) => item.insumoId)).size;
+  const semDecisao = r.itens.filter((i) => i.lojas.some((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l)
+    && l.ideal === null && !l.editado && !l.minimoGuardado)).length;
+  if (resumoCotacao) {
+    const partes = [];
+    if (r.motivoCotacao) partes.push(r.motivoCotacao);
+    else if (!r.totalmenteAprovada) partes.push('Aprove todas as lojas pra gerar a cotação');
+    else if (insumosCotacao) partes.push(`${_qtdTexto(insumosCotacao, 'insumo', 'insumos')} pra cotar${r.cotacaoId ? ' (ainda fora da cotação)' : ''}`);
+    else partes.push(r.cotacaoId ? 'Tudo o que precisa de preço já está na cotação' : 'Itens sem fornecedor homologado: os fornecedores recebem o link e mandam o preço');
+    if (semDecisao) partes.push(`${semDecisao} sem estoque mínimo, em amarelo, esperando você decidir`);
+    resumoCotacao.textContent = `${partes.join(' · ')}. Cada loja já vem com a sugestão do sistema; 0 tira o item.`;
+  }
+  if (btnCotacao) {
+    btnCotacao.disabled = !r.totalmenteAprovada || !cotacao.length || !!r.motivoCotacao;
+    btnCotacao.hidden = !!r.totalmenteAprovada && !cotacao.length;
+    btnCotacao.innerHTML = `<i data-lucide="file-text"></i> ${r.cotacaoId ? 'Pôr na cotação' : 'Gerar cotação'}`;
+  }
+  if (linkCotacao) {
+    linkCotacao.hidden = !r.cotacaoId;
+    if (r.cotacaoId) linkCotacao.href = `cotacoes.html?abrir=${r.cotacaoId}`;
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _renderCompraConferencia(r) {
+  _renderBlocoHomologados(r);
+  _renderBlocoCotacao(r);
   _atualizarResumoCompraConferencia(r);
-  body.querySelectorAll('.comprar-input').forEach((input) => {
-    input.addEventListener('change', () => _salvarCompraConferencia(input));
-  });
-  body.querySelectorAll('.comprar-sugestao').forEach((botao) => {
-    botao.addEventListener('click', () => _voltarSugestaoConferencia(botao));
-  });
 }
 
 function _compraDaConferencia(contagemId, insumoId) {
@@ -6062,8 +6229,8 @@ function _compraDaConferencia(contagemId, insumoId) {
   return { item, l };
 }
 
-// Atualiza só a célula mexida (e o total da linha): recriar a tabela tiraria
-// o foco do próximo campo, e a Ket vai de campo em campo no Tab.
+// Atualiza só o que o campo mexido muda (célula, total da linha, resumos):
+// recriar a tabela tiraria o foco do próximo campo.
 function _atualizarCelulaCompra(item, l) {
   const celula = document.querySelector(`.comprar-cel[data-contagem="${l.contagemId}"][data-insumo="${item.insumoId}"]`);
   if (celula) {
@@ -6072,16 +6239,89 @@ function _atualizarCelulaCompra(item, l) {
     const input = celula.querySelector('.comprar-input');
     if (document.activeElement !== input) input.value = _valorCampoCompra(l);
     celula.querySelector('.comprar-ref').textContent = _referenciaCompra(item, l);
-    const acoes = celula.querySelector('.comprar-acoes');
-    acoes.innerHTML = _botaoSugestaoHTML(item, l, false);
-    acoes.querySelector('.comprar-sugestao')?.addEventListener('click', (evento) => _voltarSugestaoConferencia(evento.currentTarget));
+    celula.querySelector('.comprar-acoes').innerHTML = _botaoSugestaoHTML(item, l, false);
+  }
+  const linha = document.querySelector(`#bloco-homologados-corpo tr[data-contagem="${l.contagemId}"][data-insumo="${item.insumoId}"]`);
+  if (linha) {
+    const preco = l.homologado?.preco;
+    const total = preco != null ? (l.comprar || 0) * preco : 0;
+    linha.querySelector('[data-total-homologado]').innerHTML = total > 0 ? `<strong>${_reais(total)}</strong>` : '<span class="text-muted">—</span>';
   }
   const total = document.querySelector(`[data-total-insumo="${item.insumoId}"]`);
   if (total) total.innerHTML = _totalCompraHTML(item);
-  const destino = document.querySelector(`[data-destino-insumo="${item.insumoId}"]`);
-  if (destino) destino.innerHTML = _destinoCompraHTML(item);
   _atualizarResumoCompraConferencia(requisicaoConferenciaAtual);
 }
+
+// "Mover pra cotação" / "Voltar pro homologado": troca o item de bloco na
+// hora, sem recarregar nem refazer a contagem.
+async function _mudarDestinoItem(contagemId, insumoId, paraCotacao) {
+  const { item, l } = _compraDaConferencia(contagemId, insumoId);
+  if (!item || !l) return;
+  try {
+    const resposta = await fetch('/api/requisicoes/conferencia/destino', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contagemId, insumoId, cotacao: paraCotacao }),
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível mover o item.');
+    l.forcarCotacao = paraCotacao;
+    _renderCompraConferencia(requisicaoConferenciaAtual);
+  } catch (erro) {
+    alert(erro.message);
+  }
+}
+
+// Link de verdade pro WhatsApp de cada fornecedor (a mensagem traz o link de
+// confirmação do pedido): clique direto num link nunca é bloqueado pelo
+// navegador, diferente de abrir aba depois de um fetch.
+async function _prepararEnviosWhatsApp() {
+  const links = [...document.querySelectorAll('#bloco-homologados-corpo .btn-enviar-whatsapp[data-pedido]')];
+  await Promise.all(links.map(async (link) => {
+    try {
+      const resposta = await fetch(`/api/pedidos/${link.dataset.pedido}/whatsapp`);
+      const dados = resposta.ok ? await resposta.json() : null;
+      const href = dados ? _linkWhatsAppTexto(dados.telefone, dados.mensagem) : null;
+      if (href) {
+        link.href = href;
+        link.removeAttribute('aria-disabled');
+      } else {
+        link.outerHTML = '<span class="grupo-pedidos">fornecedor sem telefone: envie em Pedidos</span>';
+      }
+    } catch (erro) {
+      console.error('Falha ao montar o WhatsApp do pedido:', erro);
+    }
+  }));
+}
+
+(function inicializarBlocosCompra() {
+  const tela = document.getElementById('requisicao-conferencia-view');
+  if (!tela) return;
+  tela.addEventListener('change', (evento) => {
+    if (evento.target.matches('.comprar-input')) _salvarCompraConferencia(evento.target);
+  });
+  tela.addEventListener('click', async (evento) => {
+    const alvo = evento.target.closest('[data-acao], .comprar-sugestao, .btn-enviar-whatsapp');
+    if (!alvo) return;
+    if (alvo.matches('.comprar-sugestao')) {
+      _voltarSugestaoConferencia(alvo);
+    } else if (alvo.dataset.acao === 'mover-cotacao' || alvo.dataset.acao === 'voltar-homologado') {
+      _mudarDestinoItem(parseInt(alvo.dataset.contagem, 10), parseInt(alvo.dataset.insumo, 10), alvo.dataset.acao === 'mover-cotacao');
+    } else if (alvo.dataset.acao === 'mostrar-homologados-sem-compra') {
+      mostrarHomologadosSemCompra = !mostrarHomologadosSemCompra;
+      _renderCompraConferencia(requisicaoConferenciaAtual);
+    } else if (alvo.matches('.btn-enviar-whatsapp')) {
+      if (alvo.getAttribute('aria-disabled') === 'true') {
+        evento.preventDefault();
+        return;
+      }
+      // O link abre o WhatsApp numa aba nova; aqui só marca como enviado.
+      const r = requisicaoConferenciaAtual;
+      await _marcarPedidoEnviadoWhatsApp(alvo.dataset.pedido);
+      if (r) await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+    }
+  });
+})();
 
 async function _gravarCompraConferencia(contagemId, insumoId, quantidade) {
   const resposta = await fetch('/api/requisicoes/conferencia/comprar', {
@@ -6205,114 +6445,66 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
   }
 });
 
-// Resultado de "Fazer Cotação/Pedido" (2026-09-16): o que tem fornecedor
-// homologado já sai em pedido direto; o resto vira cotação. Sem cotação (tudo
-// homologado), quem abre é a tela de Pedidos.
-function _textoResultadoRequisicao(dados) {
-  const pedidos = (dados.pedidosDiretos || []).length;
-  const partes = [];
-  if (dados.cotacaoId) partes.push('a cotação foi aberta com o que precisa de preço');
-  if (pedidos) partes.push(`${pedidos} ${pedidos > 1 ? 'pedidos diretos saíram' : 'pedido direto saiu'} pros fornecedores homologados, pra enviar pelo WhatsApp em Pedidos`);
-  return partes.join(' e ');
-}
-
-function _destinoResultadoRequisicao(dados) {
-  return dados.cotacaoId ? `cotacoes.html?abrir=${dados.cotacaoId}` : 'pedidos.html';
-}
-
-// Avisa quais insumos ficaram de fora da cotação por não terem quantidade
-// ideal calculável ainda — antes sumiam da lista sem ninguém perceber, só
-// descobrindo bem depois que aquele insumo nunca entrou num pedido.
-function _avisoInsumosSemIdeal(insumosSemIdeal) {
-  if (!insumosSemIdeal || !insumosSemIdeal.length) return '';
-  const nomes = insumosSemIdeal.map((i) => (i.loja ? `${i.nome} (${i.loja})` : i.nome)).join(', ');
-  return `\n\nAtenção: ${insumosSemIdeal.length} insumo(s) ficaram de fora por não terem estoque mínimo nem quantidade digitada em "O que comprar": ${nomes}.`;
-}
-
-// "Atualizar com os homologados" (2026-09-21): requisição já gerada, mas os
-// homologados foram acertados depois. Quem tem homologado vira pedido direto
-// e sai da cotação; o resto fica, com os preços que já chegaram.
-document.getElementById('btn-requisicao-reaplicar-homologados')?.addEventListener('click', async () => {
+// "Gerar pedidos homologados" (2026-09-22): um pedido por fornecedor e loja,
+// com o preço combinado do cadastro. Depois o bloco mostra o "Enviar por
+// WhatsApp" de cada fornecedor, com o link de confirmação dele.
+document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('click', async (evento) => {
   const r = requisicaoConferenciaAtual;
   if (!r) return;
-  // Só atualiza a tabela (pedido dela, 2026-09-21): o pedido sai no "Ver
-  // cotação/pedidos".
-  await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
-  const atual = requisicaoConferenciaAtual;
-  alert(atual?.pendentes
-    ? `Tabela atualizada. ${atual.pendentes} item(ns) mudaram de destino — veja a coluna "Vai pra". Os pedidos saem quando você clicar em "Ver cotação/pedidos".`
-    : 'Tabela atualizada. Nada mudou de destino.');
-});
-
-// "Ver cotação/pedidos" numa requisição já gerada com item que mudou de
-// destino (homologado configurado depois): confirma, grava e abre Pedidos.
-async function _aplicarMudancasDaRequisicao(r) {
-  const pedidos = new Map();
-  const cotacao = new Set();
-  r.itens.forEach((item) => item.lojas.forEach((l) => {
-    if (l.situacao?.tipo === 'vaiPraPedido') {
-      pedidos.set(l.situacao.fornecedor, [...(pedidos.get(l.situacao.fornecedor) || []), item.nome]);
-    } else if (l.situacao?.tipo === 'vaiPraCotacao') {
-      cotacao.add(item.nome);
-    }
-  }));
-  const partes = [];
-  if (pedidos.size) partes.push(`Vão sair em pedido:\n${[...pedidos].map(([f, nomes]) => `• ${f}: ${[...new Set(nomes)].join(', ')}`).join('\n')}`);
-  if (cotacao.size) partes.push(`Vão pra cotação: ${[...cotacao].join(', ')}.`);
-  if (!confirm(`${partes.join('\n\n')}\n\nConfirmar?`)) return false;
-  {
-    const resposta = await fetch('/api/requisicoes/conferencia/reaplicar-homologados', {
+  const { itensHomologados: direto } = _pendentesDaCompra(r);
+  if (!direto.length) return;
+  const fornecedores = new Set(direto.map(({ l }) => l.homologado?.fornecedorId));
+  const total = direto.reduce((t, { l }) => t + (l.comprar || 0) * (l.homologado?.preco || 0), 0);
+  if (!confirm(`Gerar os pedidos de ${_qtdTexto(direto.length, 'item', 'itens')} pra ${_qtdTexto(fornecedores.size, 'fornecedor', 'fornecedores')} (${_reais(total)}) com o preço combinado?\n\nDepois é só mandar cada um pelo WhatsApp.`)) return;
+  const botao = evento.currentTarget;
+  botao.disabled = true;
+  try {
+    const resposta = await fetch('/api/requisicoes/conferencia/gerar-pedidos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ titulo: r.titulo, prazoValidade: r.prazoValidade }),
     });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível atualizar a compra.');
-    const partes = [];
-    if (dados.pedidos.length) {
-      const linhas = dados.pedidos.map((p) => `• ${p.novo ? `Pedido novo nº ${p.id}` : `Entrou no pedido nº ${p.id}`} — ${p.fornecedor} (${p.loja}): ${p.itens.join(', ')}`);
-      partes.push(`Pedidos (envie pelo WhatsApp em Pedidos):\n${linhas.join('\n')}`);
-    }
-    if (dados.saiuDaCotacao.length) partes.push(`Saíram da cotação: ${dados.saiuDaCotacao.join(', ')}.`);
-    if (dados.entrouNaCotacao.length) partes.push(`Entraram na cotação: ${dados.entrouNaCotacao.join(', ')}. Foram pros links ainda abertos de quem vende; se ninguém for cotar, lance o preço à mão em "Lançar preço".`);
-    alert(partes.length ? `Pronto!\n\n${partes.join('\n\n')}` : 'Nada mudou: a compra já está de acordo com os homologados de agora.');
-    window.location.href = dados.pedidos.length ? 'pedidos.html' : _destinoResultadoRequisicao({ cotacaoId: dados.cotacaoId });
-    return true;
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível gerar os pedidos.');
+    await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+  } catch (erro) {
+    console.error('Falha ao gerar os pedidos homologados:', erro);
+    alert(erro.message);
+    botao.disabled = false;
   }
-}
+});
 
-document.getElementById('btn-requisicao-gerar-cotacao')?.addEventListener('click', async () => {
+// "Gerar cotação" / "Pôr na cotação": só o que está no bloco da cotação.
+document.getElementById('btn-gerar-cotacao-requisicao')?.addEventListener('click', async (evento) => {
   const r = requisicaoConferenciaAtual;
-  if (!r || !r.totalmenteAprovada) return;
-  if (r.jaGerada && r.pendentes) {
-    try {
-      await _aplicarMudancasDaRequisicao(r);
-    } catch (erro) {
-      console.error('Falha ao aplicar as mudanças da requisição:', erro);
-      alert(erro.message || 'Não foi possível gerar os pedidos.');
-    }
-    return;
-  }
-  if (!r.jaGerada) {
-    const semDecisao = r.itens.reduce((n, i) => n + i.lojas.filter((l) => l.ideal === null && !l.editado && !l.minimoGuardado).length, 0);
-    const aviso = semDecisao ? `\n\nAtenção: ${semDecisao} campo(s) em amarelo (sem estoque mínimo) estão sem quantidade; esses itens não entram por essas lojas.` : '';
-    if (!confirm(`Gerar a compra com as quantidades de "O que comprar"? O que está como "Pedido" sai direto pro fornecedor homologado; o que está como "Cotação" vai pra cotação, que ainda dá pra editar antes de mandar pros fornecedores.${aviso}`)) return;
-  }
+  if (!r) return;
+  const { itensHomologados: direto, itensParaCotacao: cotacao } = _pendentesDaCompra(r);
+  if (!cotacao.length) return;
+  const insumos = new Set(cotacao.map(({ item }) => item.insumoId)).size;
+  const semDecisao = r.itens.reduce((n, i) => n + i.lojas.filter((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l)
+    && l.ideal === null && !l.editado && !l.minimoGuardado).length, 0);
+  const avisos = [];
+  if (semDecisao) avisos.push(`Atenção: ${semDecisao} campo(s) em amarelo (sem estoque mínimo) estão sem quantidade; esses itens não entram por essas lojas.`);
+  if (direto.length) avisos.push(`Os ${_qtdTexto(direto.length, 'item homologado', 'itens homologados')} do bloco de cima não vão pra cotação: gere os pedidos deles no botão de lá.`);
+  const pergunta = r.cotacaoId
+    ? `Pôr ${_qtdTexto(insumos, 'insumo', 'insumos')} na cotação?`
+    : `Gerar a cotação com ${_qtdTexto(insumos, 'insumo', 'insumos')}? Depois você convida os fornecedores pelo WhatsApp.`;
+  if (!confirm(`${pergunta}${avisos.length ? `\n\n${avisos.join('\n\n')}` : ''}`)) return;
+  const botao = evento.currentTarget;
+  botao.disabled = true;
   try {
     const resposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ titulo: r.titulo, prazoValidade: r.prazoValidade }),
     });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar cotação');
-    const aviso = _avisoInsumosSemIdeal(dados.insumosSemIdeal);
-    const pedidosDiretos = (dados.pedidosDiretos || []).length;
-    if (pedidosDiretos || aviso) alert(`${pedidosDiretos ? `Pronto: ${_textoResultadoRequisicao(dados)}.` : ''}${aviso}`.trim());
-    window.location.href = _destinoResultadoRequisicao(dados);
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível gerar a cotação.');
+    window.location.href = `cotacoes.html?abrir=${dados.cotacaoId}`;
   } catch (erro) {
-    console.error('Falha ao gerar cotação:', erro);
-    alert(erro.message || 'Não foi possível gerar a cotação.');
+    console.error('Falha ao gerar a cotação:', erro);
+    alert(erro.message);
+    botao.disabled = false;
   }
 });
 

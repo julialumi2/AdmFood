@@ -149,6 +149,10 @@ from backend.armazenamento import (
     reaplicar_homologados_requisicao,
     motivo_para_nao_reaplicar,
     situacao_compra_requisicao,
+    definir_forcar_cotacao,
+    item_travado_na_requisicao,
+    homologados_por_insumo_loja,
+    pedidos_diretos_da_requisicao,
     tirar_item_da_cotacao,
     arredondar_quantidade_compra,
     listar_itens_cotacao,
@@ -516,6 +520,8 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/requisicoes/conferencia/aprovar'): 'Aprovou a conferência da requisição',
     ('POST', '/api/requisicoes/conferencia/gerar-cotacao'): 'Gerou a cotação a partir da requisição',
     ('PUT', '/api/requisicoes/conferencia/comprar'): 'Mudou quanto comprar na conferência',
+    ('PUT', '/api/requisicoes/conferencia/destino'): 'Mudou um item entre pedido direto e cotação',
+    ('POST', '/api/requisicoes/conferencia/gerar-pedidos'): 'Gerou os pedidos homologados da requisição',
     ('POST', '/api/requisicoes/conferencia/reaplicar-homologados'): 'Atualizou a compra com os homologados',
     ('POST', '/api/cotacoes'): 'Criou cotação',
     ('PUT', '/api/cotacoes/<int:cotacao_id>'): 'Editou a cotação',
@@ -4090,7 +4096,7 @@ def api_conferencia_requisicao():
     if not grupo:
         return jsonify({"erro": "Requisição não encontrada."}), 404
 
-    homologado_de = fornecedor_homologado_por_insumo()
+    homologado_de = homologados_por_insumo_loja()
     agregados = {}
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
@@ -4108,8 +4114,12 @@ def api_conferencia_requisicao():
             })
             # Por loja, o que a compradora vê e decide em "O que comprar"
             # (2026-09-21): sugestão do sistema e a quantidade que vale.
+            homologado = homologado_de.get((item['insumoId'], contagem['loja']))
             agregado['lojas'].append({
-                "fornecedorHomologado": homologado_de.get((item['insumoId'], contagem['loja'])),
+                "fornecedorHomologado": homologado["fornecedor"] if homologado else None,
+                # Fornecedor e preço combinado (bloco dos homologados, 2026-09-22).
+                "homologado": homologado,
+                "forcarCotacao": bool(item.get('forcarCotacao')),
                 "loja": contagem['loja'],
                 "contagemId": contagem['id'],
                 "contado": item['quantidadePreenchida'],
@@ -4167,17 +4177,31 @@ def api_conferencia_requisicao():
     resposta = _formatar_requisicao_resumo(grupo)
     resposta['itens'] = itens
     resposta['jaGerada'] = requisicao_ja_gerada(titulo, prazo_validade)
-    # "Atualizar com os homologados" só em compra em andamento.
-    resposta['podeAtualizarHomologados'] = resposta['jaGerada'] and motivo_para_nao_reaplicar(titulo, prazo_validade) is None
-    # Requisição já gerada: onde cada item está e pra onde vai no próximo
-    # "Ver cotação/pedidos" (homologado que mudou vira pedido só ali).
-    resposta['pendentes'] = 0
-    if resposta['podeAtualizarHomologados'] and resposta['totalmenteAprovada']:
+    # Dois blocos desde 2026-09-22: pedido direto dos homologados e cotação,
+    # cada um com seu botão. A situação diz, por item e loja, o que já está
+    # em pedido ou na cotação (travado) e o que falta gerar.
+    resposta['motivoPedidos'] = motivo_para_nao_reaplicar(titulo, prazo_validade, 'pedidos')
+    resposta['motivoCotacao'] = motivo_para_nao_reaplicar(titulo, prazo_validade, 'cotacao')
+    resposta['cotacaoId'] = None
+    resposta['envios'] = []
+    if resposta['totalmenteAprovada']:
         situacao = situacao_compra_requisicao(titulo, prazo_validade)
         for item in itens:
             for loja in item['lojas']:
                 loja['situacao'] = situacao.get((item['insumoId'], loja['loja']))
-        resposta['pendentes'] = sum(1 for s in situacao.values() if s['tipo'] in ('vaiPraPedido', 'vaiPraCotacao'))
+        resposta['cotacaoId'] = next((s['cotacaoId'] for s in situacao.values() if s.get('cotacaoId')), None)
+        # Um envio por WhatsApp por fornecedor (os pedidos da mesma leva
+        # dividem o token e vão numa mensagem só, "feito em conjunto").
+        envios = {}
+        for p in pedidos_diretos_da_requisicao(titulo, prazo_validade):
+            envio = envios.setdefault(p['token'] or f"pedido-{p['id']}", {
+                "fornecedorId": p['fornecedor_id'], "fornecedor": p['fornecedor_nome'],
+                "pedidoIds": [], "lojas": [], "enviado": True,
+            })
+            envio['pedidoIds'].append(p['id'])
+            envio['lojas'].append(p['loja'])
+            envio['enviado'] = envio['enviado'] and bool(p['whatsapp_enviado_em'] or p['status'] != 'enviado')
+        resposta['envios'] = list(envios.values())
     return jsonify(resposta)
 
 
@@ -4220,11 +4244,56 @@ def api_definir_quantidade_compra():
     contagem = buscar_contagem(contagem_id)
     if not contagem:
         return jsonify({"erro": "Contagem não encontrada."}), 404
-    if requisicao_ja_gerada(contagem['descricao'], contagem['prazo_validade']):
-        return jsonify({"erro": "Essa requisição já virou cotação/pedido: as quantidades não mudam mais."}), 409
+    travado = item_travado_na_requisicao(contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+    if travado:
+        return jsonify({"erro": travado}), 409
     if not definir_quantidade_compra(contagem_id, insumo_id, quantidade):
         return jsonify({"erro": "Esse item não está nessa contagem."}), 404
     return jsonify({"ok": True})
+
+
+@app.route('/api/requisicoes/conferencia/destino', methods=['PUT'])
+def api_destino_item_conferencia():
+    """"Mover pra cotação" ({cotacao: true}) ou "Voltar pro homologado"
+    ({cotacao: false}) de um item de uma loja: {contagemId, insumoId,
+    cotacao}. Só enquanto o item não está em pedido nem na cotação."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    try:
+        contagem_id = int(dados.get('contagemId'))
+        insumo_id = int(dados.get('insumoId'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Item inválido."}), 400
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+    travado = item_travado_na_requisicao(contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+    if travado:
+        return jsonify({"erro": travado}), 409
+    if not definir_forcar_cotacao(contagem_id, insumo_id, bool(dados.get('cotacao'))):
+        return jsonify({"erro": "Esse item não está nessa contagem."}), 404
+    return jsonify({"ok": True})
+
+
+@app.route('/api/requisicoes/conferencia/gerar-pedidos', methods=['POST'])
+def api_gerar_pedidos_homologados():
+    """"Gerar pedidos homologados" da Conferência: um pedido por fornecedor e
+    loja com o preço combinado, só pros itens do bloco dos homologados."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get('titulo') or '').strip()
+    prazo_validade = (dados.get('prazoValidade') or '').strip()
+    try:
+        resultado = reaplicar_homologados_requisicao(titulo, prazo_validade, 'pedidos')
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    if not resultado['pedidos']:
+        return jsonify({"erro": "Nenhum item homologado pra pedir."}), 400
+    return jsonify(resultado)
 
 
 @app.route('/api/requisicoes/conferencia/aprovar', methods=['POST'])
@@ -4267,16 +4336,15 @@ def api_gerar_cotacao_requisicao():
     if any(c['status'] != 'aprovada' for c in grupo['contagens']):
         return jsonify({"erro": "Só é possível gerar a cotação depois que todas as lojas forem aprovadas."}), 400
 
-    resultado = gerar_cotacao_do_deficit(titulo, prazo_validade)
-    if resultado["cotacaoId"] is None and not resultado["pedidosDiretos"]:
-        return jsonify({"erro": "Nenhum insumo com déficit — não há nada para cotar."}), 400
-    # cotacaoId None + pedidosDiretos: tudo que faltava tem fornecedor homologado.
-    return jsonify({
-        "ok": True,
-        "cotacaoId": resultado["cotacaoId"],
-        "pedidosDiretos": resultado["pedidosDiretos"],
-        "insumosSemIdeal": resultado["insumosSemIdeal"],
-    })
+    # Só o bloco da cotação desde 2026-09-22: os homologados saem no
+    # "Gerar pedidos homologados" (ver api_gerar_pedidos_homologados).
+    try:
+        resultado = reaplicar_homologados_requisicao(titulo, prazo_validade, 'cotacao')
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    if not resultado['entrouNaCotacao']:
+        return jsonify({"erro": "Nenhum item novo pra cotação."}), 400
+    return jsonify({"ok": True, "cotacaoId": resultado["cotacaoId"], "entrouNaCotacao": resultado["entrouNaCotacao"]})
 
 
 @app.route('/api/contagens', methods=['POST'])

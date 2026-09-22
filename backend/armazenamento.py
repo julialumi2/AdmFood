@@ -963,6 +963,10 @@ def inicializar_banco():
             # Quanto comprar, decidido na Conferência (2026-09-21): NULL = a
             # sugestão do sistema (ideal − contado); 0 = fica fora da compra.
             conn.execute("ALTER TABLE contagem_item ADD COLUMN quantidade_compra REAL")
+        if "forcar_cotacao" not in colunas_contagem_item:
+            # "Mover pra cotação" (2026-09-22): o homologado não atende nessa
+            # compra, então o item dessa loja vai pra cotação em vez de pedido.
+            conn.execute("ALTER TABLE contagem_item ADD COLUMN forcar_cotacao INTEGER NOT NULL DEFAULT 0")
         # Histórico trazido da VMarket (2026-09-16, a rede está saindo de lá):
         # o id de origem fica em cada registro importado, pra carga poder
         # rodar de novo sem duplicar. Ver importar_da_vmarket.
@@ -6505,7 +6509,7 @@ def listar_itens_contagem(contagem_id, loja):
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT ci.insumo_id, ci.quantidade_preenchida, ci.quantidade_compra,
+            SELECT ci.insumo_id, ci.quantidade_preenchida, ci.quantidade_compra, ci.forcar_cotacao,
                    i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
                    i.fator_conversao_compra, i.unidade_compra
             FROM contagem_item ci
@@ -6534,6 +6538,7 @@ def listar_itens_contagem(contagem_id, loja):
             "quantidadeIdeal": quantidade_ideal,
             "quantidadeIdealAjustada": ajustada,
             "quantidadeCompra": linha["quantidade_compra"],
+            "forcarCotacao": bool(linha["forcar_cotacao"]),
             "fatorConversaoCompra": linha["fator_conversao_compra"],
             "unidadeCompra": linha["unidade_compra"],
             "custoUnitario": (custos.get(linha["insumo_id"]) or {}).get("valor"),
@@ -6569,6 +6574,78 @@ def definir_quantidade_compra(contagem_id, insumo_id, quantidade):
             (quantidade, contagem_id, insumo_id),
         )
         return cursor.rowcount > 0
+
+
+def definir_forcar_cotacao(contagem_id, insumo_id, forcar):
+    """"Mover pra cotação" / "Voltar pro homologado" de um item de uma
+    contagem (2026-09-22). Devolve False se o item não está na contagem."""
+    with conexao() as conn:
+        cursor = conn.execute(
+            "UPDATE contagem_item SET forcar_cotacao = ? WHERE contagem_id = ? AND insumo_id = ?",
+            (1 if forcar else 0, contagem_id, insumo_id),
+        )
+        return cursor.rowcount > 0
+
+
+def item_travado_na_requisicao(titulo, prazo_validade, insumo_id, loja):
+    """Por que o item dessa loja não muda mais (já está num pedido ou na
+    cotação da requisição), ou None se ainda dá pra mexer. Desde 2026-09-22
+    a trava é por item: pedido direto e cotação saem em botões separados."""
+    with conexao() as conn:
+        cotacao = conn.execute(
+            "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND pedido_direto = 0 ORDER BY id LIMIT 1",
+            (titulo, prazo_validade),
+        ).fetchone()
+        cotacao_id = cotacao["id"] if cotacao else -1
+        pedido = conn.execute(
+            """
+            SELECT p.id FROM pedido_compra_item pi
+            JOIN pedido_compra p ON p.id = pi.pedido_id
+            WHERE pi.insumo_id = ? AND p.loja = ?
+              AND ((p.requisicao_titulo = ? AND p.requisicao_prazo = ?) OR p.cotacao_id = ?)
+            ORDER BY p.id LIMIT 1
+            """,
+            (insumo_id, loja, titulo, prazo_validade, cotacao_id),
+        ).fetchone()
+        if pedido:
+            return f"Esse item já está no pedido nº {pedido['id']}. Pra mudar, cancele o pedido em Pedidos."
+        if conn.execute(
+            "SELECT 1 FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ? AND loja = ?",
+            (cotacao_id, insumo_id, loja),
+        ).fetchone():
+            return "Esse item já está na cotação. Pra tirar, use \"tirar da cotação\" lá."
+    return None
+
+
+def homologados_por_insumo_loja():
+    """{(insumo_id, loja): {fornecedorId, fornecedor, preco}} de quem vai em
+    pedido direto (mesma regra de _homologados_validos): a Conferência mostra
+    fornecedor, preço combinado e total no bloco dos homologados."""
+    with conexao() as conn:
+        homologados = _homologados_validos(conn)
+        nomes = {linha["id"]: linha["nome"] for linha in conn.execute("SELECT id, nome FROM fornecedor")}
+    return {
+        chave: {"fornecedorId": h["fornecedor_id"], "fornecedor": nomes.get(h["fornecedor_id"], ""), "preco": h["preco"]}
+        for chave, h in homologados.items()
+    }
+
+
+def pedidos_diretos_da_requisicao(titulo, prazo_validade):
+    """Pedidos diretos que a requisição já gerou, pro bloco dos homologados
+    mostrar o envio pelo WhatsApp (um por fornecedor, pelo token)."""
+    with conexao() as conn:
+        return [
+            dict(linha)
+            for linha in conn.execute(
+                """
+                SELECT p.id, p.fornecedor_id, f.nome AS fornecedor_nome, p.loja, p.status, p.token, p.whatsapp_enviado_em
+                FROM pedido_compra p JOIN fornecedor f ON f.id = p.fornecedor_id
+                WHERE p.requisicao_titulo = ? AND p.requisicao_prazo = ?
+                ORDER BY p.id
+                """,
+                (titulo, prazo_validade),
+            )
+        ]
 
 
 def requisicao_ja_gerada(titulo, prazo_validade):
@@ -6736,11 +6813,12 @@ def gerar_cotacao_do_deficit(titulo, prazo_validade):
     return {"cotacaoId": cotacao_id, "pedidosDiretos": pedidos_diretos, "insumosSemIdeal": insumos_sem_ideal}
 
 
-def motivo_para_nao_reaplicar(titulo, prazo_validade):
-    """Por que o "Atualizar com os homologados" não vale pra essa requisição
-    (None = pode). Só serve pra compra em andamento: semana trazida da
-    VMarket ou cotação já fechada é histórico, e refazer ali pediria de novo
-    o que já chegou (revisão de 21/09)."""
+def motivo_para_nao_reaplicar(titulo, prazo_validade, parte=None):
+    """Por que não dá pra gerar (None = pode). Só serve pra compra em
+    andamento: semana trazida da VMarket é histórico, e refazer ali pediria
+    de novo o que já chegou (revisão de 21/09). Cotação já fechada trava só
+    a parte da cotação (`parte` 'cotacao' ou None): os pedidos homologados
+    saem num botão à parte desde 2026-09-22."""
     with conexao() as conn:
         if conn.execute(
             "SELECT 1 FROM contagem WHERE descricao = ? AND prazo_validade = ? AND id_vmarket IS NOT NULL LIMIT 1",
@@ -6753,7 +6831,7 @@ def motivo_para_nao_reaplicar(titulo, prazo_validade):
         ).fetchall()
     if any(c["id_vmarket"] for c in cotacoes):
         return "Essa requisição veio da VMarket: é histórico, não dá pra refazer a compra."
-    if any(c["status"] != "aberta" for c in cotacoes):
+    if parte != "pedidos" and any(c["status"] != "aberta" for c in cotacoes):
         return "A cotação dessa requisição já foi fechada. Reabra a cotação antes, se ainda for comprar."
     return None
 
@@ -6771,40 +6849,49 @@ def _grupo_requisicao_aprovado(titulo, prazo_validade):
 
 
 def _compra_da_requisicao(grupo):
-    """{(insumo_id, loja): quantidade que vale na Conferência} e {insumo_id: nome}."""
-    compra, nomes = {}, {}
+    """{(insumo_id, loja): quantidade que vale na Conferência}, {insumo_id:
+    nome} e o conjunto de (insumo_id, loja) movidos pra cotação."""
+    compra, nomes, forcados = {}, {}, set()
     for contagem in grupo['contagens']:
         for item in listar_itens_contagem(contagem['id'], contagem['loja']):
             nomes[item['insumoId']] = item['nome']
+            if item.get('forcarCotacao'):
+                forcados.add((item['insumoId'], contagem['loja']))
             quantidade = quantidade_a_comprar(item)
             if quantidade > 0:
                 compra[(item['insumoId'], contagem['loja'])] = quantidade
-    return compra, nomes
+    return compra, nomes, forcados
 
 
-def _plano_reaplicacao(conn, titulo, prazo_validade, compra):
+def _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados=frozenset()):
     """O que o "Atualizar com os homologados" faria, sem gravar nada — a
     Conferência mostra isso na coluna "Vai pra" e o "Ver cotação/pedidos"
     grava. Item já em pedido da requisição (direto ou gerado da cotação)
     fica; homologado com preço valendo vai pra pedido direto (com a
     quantidade travada na cotação, se estava nela); o resto fica ou entra
-    na cotação."""
+    na cotação. Item movido pra cotação (`forcados`, 2026-09-22) conta como
+    sem homologado; homologado já numa cotação fechada fica onde está."""
     linha = conn.execute(
-        "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND pedido_direto = 0 ORDER BY id LIMIT 1",
+        "SELECT id, status FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND pedido_direto = 0 ORDER BY id LIMIT 1",
         (titulo, prazo_validade),
     ).fetchone()
     cotacao_id = linha["id"] if linha else None
+    cotacao_aberta = bool(linha) and linha["status"] == "aberta"
     em_pedido = {}
     for l in conn.execute(
         """
-        SELECT pi.insumo_id, p.loja, p.id AS pedido_id, p.fornecedor_id FROM pedido_compra_item pi
+        SELECT pi.insumo_id, p.loja, p.id AS pedido_id, p.fornecedor_id, p.cotacao_id FROM pedido_compra_item pi
         JOIN pedido_compra p ON p.id = pi.pedido_id
         WHERE (p.requisicao_titulo = ? AND p.requisicao_prazo = ?) OR p.cotacao_id = ?
         ORDER BY p.id
         """,
         (titulo, prazo_validade, cotacao_id if cotacao_id is not None else -1),
     ):
-        em_pedido.setdefault((l["insumo_id"], l["loja"]), (l["pedido_id"], l["fornecedor_id"]))
+        # direto = pedido do homologado; senão saiu da cotação (vencedor).
+        em_pedido.setdefault(
+            (l["insumo_id"], l["loja"]),
+            (l["pedido_id"], l["fornecedor_id"], cotacao_id is None or l["cotacao_id"] != cotacao_id),
+        )
     travado = {}
     if cotacao_id is not None:
         travado = {
@@ -6816,12 +6903,14 @@ def _plano_reaplicacao(conn, titulo, prazo_validade, compra):
     homologados = _homologados_validos(conn)
     diretos, entrar = {}, {}
     for (insumo_id, loja), quantidade in tudo.items():
-        if (insumo_id, loja) in em_pedido:
+        chave = (insumo_id, loja)
+        if chave in em_pedido:
             continue
-        if (insumo_id, loja) in homologados:
-            diretos[(homologados[(insumo_id, loja)]["fornecedor_id"], loja, insumo_id)] = quantidade
-        elif (insumo_id, loja) not in travado:
-            entrar[(insumo_id, loja)] = quantidade
+        vai_direto = chave in homologados and chave not in forcados and (chave not in travado or cotacao_aberta)
+        if vai_direto:
+            diretos[(homologados[chave]["fornecedor_id"], loja, insumo_id)] = quantidade
+        elif chave not in travado:
+            entrar[chave] = quantidade
     return {
         "cotacao_id": cotacao_id, "em_pedido": em_pedido, "travado": travado,
         "homologados": homologados, "diretos": diretos, "entrar": entrar,
@@ -6832,9 +6921,9 @@ def situacao_compra_requisicao(titulo, prazo_validade):
     """Pra Conferência de uma requisição já gerada: {(insumo_id, loja):
     {"tipo": "pedido"|"vaiPraPedido"|"cotacao"|"vaiPraCotacao", ...}}."""
     grupo = _grupo_requisicao_aprovado(titulo, prazo_validade)
-    compra, _nomes = _compra_da_requisicao(grupo)
+    compra, _nomes, forcados = _compra_da_requisicao(grupo)
     with conexao() as conn:
-        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra)
+        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados)
         nome_fornecedor = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM fornecedor")}
     situacao = {}
     for chave in plano["travado"]:
@@ -6842,13 +6931,16 @@ def situacao_compra_requisicao(titulo, prazo_validade):
     for chave in plano["entrar"]:
         situacao[chave] = {"tipo": "vaiPraCotacao"}
     for (fornecedor_id, loja, insumo_id) in plano["diretos"]:
-        situacao[(insumo_id, loja)] = {"tipo": "vaiPraPedido", "fornecedor": nome_fornecedor.get(fornecedor_id, "")}
-    for chave, (pedido_id, fornecedor_id) in plano["em_pedido"].items():
-        situacao[chave] = {"tipo": "pedido", "pedidoId": pedido_id, "fornecedor": nome_fornecedor.get(fornecedor_id, "")}
+        situacao[(insumo_id, loja)] = {"tipo": "vaiPraPedido", "fornecedorId": fornecedor_id, "fornecedor": nome_fornecedor.get(fornecedor_id, "")}
+    for chave, (pedido_id, fornecedor_id, direto) in plano["em_pedido"].items():
+        situacao[chave] = {
+            "tipo": "pedido", "pedidoId": pedido_id, "direto": direto,
+            "fornecedorId": fornecedor_id, "fornecedor": nome_fornecedor.get(fornecedor_id, ""),
+        }
     return situacao
 
 
-def reaplicar_homologados_requisicao(titulo, prazo_validade):
+def reaplicar_homologados_requisicao(titulo, prazo_validade, parte=None):
     """Grava o plano de _plano_reaplicacao numa requisição já gerada
     (2026-09-21, caso da Contagem 20/09 do Açaí: homologados acertados depois
     de gerar, e a cotação já tinha preço de fornecedor). Chamado pelo "Ver
@@ -6861,18 +6953,26 @@ def reaplicar_homologados_requisicao(titulo, prazo_validade):
     - o resto que não estava entra na cotação (criada se não existir) e nos
       convites ainda abertos de quem vende o insumo — ou de todos, se ninguém
       vende.
-    Rodar de novo sem mudar nada não faz nada."""
-    motivo = motivo_para_nao_reaplicar(titulo, prazo_validade)
+    Rodar de novo sem mudar nada não faz nada.
+
+    Desde 2026-09-22 a Conferência gera em dois botões: `parte` 'pedidos'
+    grava só os pedidos dos homologados ("Gerar pedidos homologados") e
+    'cotacao' só o que vai pra cotação ("Gerar cotação"); None faz os dois."""
+    motivo = motivo_para_nao_reaplicar(titulo, prazo_validade, parte)
     if motivo:
         raise ValueError(motivo)
     grupo = _grupo_requisicao_aprovado(titulo, prazo_validade)
-    compra, nomes = _compra_da_requisicao(grupo)
+    compra, nomes, forcados = _compra_da_requisicao(grupo)
 
     agora = datetime.now().isoformat()
     with conexao() as conn:
-        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra)
+        plano = _plano_reaplicacao(conn, titulo, prazo_validade, compra, forcados)
         cotacao_id, travado = plano["cotacao_id"], plano["travado"]
         diretos, entrar, homologados = plano["diretos"], plano["entrar"], plano["homologados"]
+        if parte == "cotacao":
+            diretos = {}
+        elif parte == "pedidos":
+            entrar = {}
         for chave in travado:
             nomes.setdefault(chave[0], str(chave[0]))
         nome_fornecedor = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM fornecedor")}

@@ -3990,3 +3990,22 @@ correção na própria linha: salvar o mínimo, ligar um fornecedor (primeiro
 quem já cotou ou vendeu) ou "Não usa nesta loja" (`DELETE
 /api/insumos/<id>/lojas/<loja>`, `tirar_insumo_da_loja`: tira só da lista
 dessa loja; estoque e histórico ficam).
+
+### 6.36 "O que comprar" em dois blocos (2026-09-22)
+
+O homologado virou atalho: a Conferência da requisição mostra **Pedido direto ·
+homologados** (item × loja com homologado ativo e preço valendo, agrupado por
+fornecedor, com quantidade, preço combinado na escala do cadastro — por kg,
+litro ou unidade — e total) e **Cotação · vários fornecedores** (o resto, na
+tabela por loja). Cada bloco tem seu botão: "Gerar pedidos homologados"
+(`POST /api/requisicoes/conferencia/gerar-pedidos`) cria um pedido por
+fornecedor e loja e o bloco passa a mostrar o "Enviar por WhatsApp" de cada
+fornecedor (um por token, com o link de confirmação); "Gerar cotação" / "Pôr na
+cotação" (`/gerar-cotacao`, agora só esse bloco). "Mover pra cotação" / "voltar
+pro homologado" (`PUT /conferencia/destino`, coluna `contagem_item.forcar_cotacao`)
+troca o item de bloco sem refazer a contagem. Por trás é o mesmo motor de
+antes (`_plano_reaplicacao` + `reaplicar_homologados_requisicao(..., parte)`):
+homologado configurado depois de gerar aparece sozinho no bloco de cima, por
+isso o "Atualizar com os homologados" saiu. A trava agora é por item
+(`item_travado_na_requisicao`): só não muda o que já está num pedido ou na
+cotação. Cotação fechada trava só o bloco da cotação.

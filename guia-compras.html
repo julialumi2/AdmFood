@@ -259,19 +259,23 @@
                 digite a quantidade e o sistema pergunta se guarda como mínimo pra próxima vez.
               </p>
               <p>
-                A coluna <b>Vai pra</b> mostra o destino de cada item:
-                <span class="destino-compra pedido">Pedido · fornecedor</span> quando a loja tem
-                fornecedor homologado com preço combinado, e
-                <span class="destino-compra cotacao">Cotação</span> quando não tem.
+                A compra aparece em dois blocos. <b>Pedido direto · homologados</b>: o que tem fornecedor
+                homologado com preço combinado naquela loja, agrupado por fornecedor, com o preço e o
+                total. Clique em <span class="guia-btnref">Gerar pedidos homologados</span>: sai um pedido
+                por fornecedor e por loja, e cada fornecedor ganha o botão
+                <span class="guia-btnref">Enviar por WhatsApp</span>, com o link pra ele confirmar. Se o
+                homologado não atende nessa compra, <span class="guia-btnref">Mover pra cotação</span> leva
+                o item pro outro bloco na hora.
               </p>
               <p>
-                Tudo certo? Clique em <span class="guia-btnref">Gerar cotação</span>. O que está como
-                Pedido vai direto pra Pedidos, um por fornecedor e por loja, e o resto vira uma cotação.
+                <b>Cotação · vários fornecedores</b>: o resto. Clique em
+                <span class="guia-btnref">Gerar cotação</span> e siga na etapa 4. Os dois botões são
+                independentes: gere na ordem que quiser.
               </p>
               <div class="guia-seguranca">
                 <span class="guia-seguranca-marca">↺</span>
-                <p>Não duplica: depois de gerado, o botão vira <span class="guia-btnref">Ver cotação/pedidos</span>
-                e só abre o que já existe. As quantidades ficam travadas a partir daí.</p>
+                <p>Não duplica: o que já virou pedido ou entrou na cotação trava, e os botões só geram o
+                que ainda falta. Preço ou fornecedor errado se acerta no cadastro do insumo, não aqui.</p>
               </div>
             </div>
           </li>
@@ -374,15 +378,14 @@
         <div class="guia-passos">
           <ol>
             <li>Acerte o insumo em <b>Insumos</b>, na aba da loja: fornecedor homologado e preço combinado.</li>
-            <li>Abra a requisição e clique em <span class="guia-btnref">Atualizar com os homologados</span>.
-            Só a tabela muda: a coluna Vai pra mostra <span class="destino-compra pedido">Vai virar pedido · fornecedor</span>
-            ou <span class="destino-compra cotacao">Vai pra cotação</span>. Nada é gravado ainda.</li>
-            <li>Clique em <span class="guia-btnref">Ver cotação/pedidos</span> pra aplicar. O item que ganhou
-            homologado vira pedido (ou entra no pedido ainda não enviado do mesmo fornecedor) e sai da
-            cotação, com os preços que já chegaram guardados. O item que perdeu o homologado entra na
-            cotação e nos links ainda abertos de quem cota ele.</li>
+            <li>Abra a requisição: o item que ganhou homologado aparece sozinho no bloco
+            <b>Pedido direto · homologados</b>, e o que perdeu vai pro bloco da cotação.</li>
+            <li>Clique em <span class="guia-btnref">Gerar pedidos homologados</span>: o item vira pedido (ou
+            entra no pedido ainda não enviado do mesmo fornecedor) e sai da cotação, com os preços que já
+            chegaram guardados. Pro que foi pra cotação, <span class="guia-btnref">Pôr na cotação</span>
+            coloca ele nela e nos links ainda abertos de quem cota.</li>
           </ol>
-          <p class="guia-passos-nota">Não vale pra requisição que veio da VMarket nem com a cotação já fechada.</p>
+          <p class="guia-passos-nota">Não vale pra requisição que veio da VMarket; com a cotação já fechada, só os pedidos homologados.</p>
         </div>
 
         <h2 class="guia-secao-titulo">Onde se configura</h2>
