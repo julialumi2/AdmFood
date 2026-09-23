@@ -1031,3 +1031,15 @@
   font-weight: 600;
   color: var(--text-muted);
 }
+
+/* Preço combinado vencido ou vencendo (QA 22/09): o anel dizia "homologado"
+   sem olhar a validade, enquanto a compra só aceita com validade em dia —
+   a tela mostrava válido e o pedido não saía. */
+.fornecedor-avatar.homologado.vencido {
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--danger-texto);
+  opacity: 0.75;
+}
+
+.fornecedor-avatar.homologado.vencendo {
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--warning-texto);
+}

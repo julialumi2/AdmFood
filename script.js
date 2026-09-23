@@ -1714,6 +1714,12 @@ function _fornecedoresDoInsumo(insumo) {
   const homologadosIds = new Set(naLoja
     ? [naLoja.fornecedorHomologadoId].filter(Boolean)
     : Object.values(insumo.porLoja || {}).map((p) => p.fornecedorHomologadoId).filter(Boolean));
+  // O anel dizia "homologado" sem olhar a validade, enquanto a compra só
+  // aceita com validade em dia: a tela mostrava válido e o pedido não saía
+  // (QA 22/09). Aqui fica quem está mesmo valendo hoje.
+  const validosHoje = new Set((naLoja ? [estoqueTabAtual] : LOJAS_ESTOQUE)
+    .filter((loja) => loja && _homologadoValidoNaLoja(insumo, loja))
+    .map((loja) => insumo.porLoja[loja].fornecedorHomologadoId));
   const doCadastro = new Set([...(naLoja ? (naLoja.fornecedorIds || []) : (insumo.fornecedorIds || [])), ...homologadosIds]);
   const todos = [...doCadastro, ...(insumo.fornecedoresDoHistorico || []).filter((id) => !doCadastro.has(id))];
   const nomes = todos
@@ -1722,7 +1728,14 @@ function _fornecedoresDoInsumo(insumo) {
   const homologado = nomes.filter((f) => homologadosIds.has(f.id));
   const resto = nomes.filter((f) => !homologadosIds.has(f.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  const lista = [...homologado, ...resto].map((f) => ({ ...f, homologado: homologadosIds.has(f.id) }));
+  const lista = [...homologado, ...resto].map((f) => ({
+    ...f,
+    homologado: homologadosIds.has(f.id),
+    // Homologado com preço vencido: continua sendo o fornecedor combinado,
+    // mas não sai mais em pedido até renovar o preço.
+    vencido: homologadosIds.has(f.id) && !validosHoje.has(f.id),
+    venceEm: _diasAteVencerHomologado(insumo, f.id),
+  }));
   return LOJAS_SO_HOMOLOGADO.includes(estoqueTabAtual) ? lista.filter((f) => f.homologado) : lista;
 }
 
@@ -1740,11 +1753,13 @@ function _celulaFornecedoresHTML(insumo) {
   const visiveis = lista.slice(0, MAXIMO_BOLINHAS_FORNECEDOR);
   const escondidos = lista.slice(MAXIMO_BOLINHAS_FORNECEDOR);
   const bolinhas = visiveis.map((f) => {
-    const detalhe = f.homologado
-      ? ' — homologado, vai direto em pedido'
-      : (f.soHistorico ? ' — já cotou ou vendeu esse insumo' : '');
+    const detalhe = f.vencido
+      ? ' — homologado com PREÇO VENCIDO: não sai em pedido até renovar'
+      : f.homologado
+        ? ` — homologado, vai direto em pedido${f.venceEm !== null && f.venceEm <= DIAS_AVISO_HOMOLOGADO_VENCENDO ? ` (o preço vence em ${f.venceEm} ${f.venceEm === 1 ? 'dia' : 'dias'})` : ''}`
+        : (f.soHistorico ? ' — já cotou ou vendeu esse insumo' : '');
     return `
-    <span class="avatar avatar-sm fornecedor-avatar${f.homologado ? ' homologado' : ''}"
+    <span class="avatar avatar-sm fornecedor-avatar${f.homologado ? ' homologado' : ''}${f.vencido ? ' vencido' : ''}${f.homologado && !f.vencido && f.venceEm !== null && f.venceEm <= DIAS_AVISO_HOMOLOGADO_VENCENDO ? ' vencendo' : ''}"
           style="background-color: ${_corAvatarFornecedor(f.id)};"
           title="${escaparHtml(f.nome)}${detalhe}">
       ${escaparHtml(_iniciaisFornecedor(f.nome))}
@@ -1821,13 +1836,25 @@ function _linhasEstoqueParaTab(tab) {
         }
       });
       const ideal = _quantidadeIdealParaLinha(insumo.id, null);
+      // A soma das 4 lojas escondia a loja zerada atrás da que tem sobra, e
+      // por isso o "Nível crítico" daqui não batia com o da Home, que olha
+      // loja a loja (QA 22/09). Vale a pior situação entre as lojas.
+      const statusPorLoja = LOJAS_ESTOQUE
+        .filter((loja) => insumo.porLoja[loja]?.aplica)
+        .map((loja) => ({
+          loja,
+          status: _statusEstoqueClient(insumo.porLoja[loja].quantidadeAtual, insumo.porLoja[loja].estoqueMinimo),
+        }));
+      const pior = ['critico', 'baixo', 'ok'].find((nivel) => statusPorLoja.some((s) => s.status === nivel)) || 'ok';
+      const lojasNaPior = statusPorLoja.filter((s) => s.status === pior).map((s) => s.loja);
       return {
         insumo,
         loja: null,
         dados: {
           quantidadeAtual,
           estoqueMinimo,
-          status: _statusEstoqueClient(quantidadeAtual, estoqueMinimo),
+          status: pior,
+          lojasNoStatus: lojasNaPior,
           consumoMedio: _consumoMedioParaLinha(insumo.id, null),
           quantidadeIdeal: ideal.valor,
           quantidadeIdealAjustada: ideal.ajustado,
@@ -2117,7 +2144,8 @@ function renderEstoqueTab() {
           `}
         </td>
         ${mostrarFornecedores ? _celulaFornecedoresHTML(insumo) : ''}
-        <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"><i data-lucide="${STATUS_ICONE_ESTOQUE[dados.status]}"></i>${STATUS_LABEL_ESTOQUE[dados.status]}</span></td>
+        <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"
+              title="${dados.lojasNoStatus ? `${STATUS_LABEL_ESTOQUE[dados.status]} em ${dados.lojasNoStatus.join(', ')}` : ''}"><i data-lucide="${STATUS_ICONE_ESTOQUE[dados.status]}"></i>${STATUS_LABEL_ESTOQUE[dados.status]}${dados.lojasNoStatus && dados.lojasNoStatus.length < LOJAS_ESTOQUE.length ? ` (${dados.lojasNoStatus.length})` : ''}</span></td>
         ${isAdmin ? `
           <td class="col-acoes"><div class="acoes-linha">
             ${loja ? `
@@ -9596,6 +9624,21 @@ let fornecedoresPedidoDireto = [];
 // Preço de unidade pode ter mais de 2 casas (guardanapo a R$ 0,0525).
 function _formatarPrecoUnitario(valor) {
   return Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+// Preço combinado vencendo: a partir daqui a bolinha avisa (QA 22/09).
+const DIAS_AVISO_HOMOLOGADO_VENCENDO = 7;
+
+// Quantos dias faltam pro preço combinado desse fornecedor vencer (null =
+// sem validade, vale até mudarem).
+function _diasAteVencerHomologado(insumo, fornecedorId) {
+  const validades = Object.values(insumo.porLoja || {})
+    .filter((p) => p.fornecedorHomologadoId === fornecedorId && p.validadePrecoHomologado)
+    .map((p) => p.validadePrecoHomologado);
+  if (!validades.length) return null;
+  const maisCedo = validades.sort()[0];
+  const hoje = new Date(`${_hojeLocalISO()}T12:00:00`);
+  return Math.round((new Date(`${maisCedo}T12:00:00`) - hoje) / 86400000);
 }
 
 // Mesma regra do servidor (_homologados_validos): fornecedor, preço e validade

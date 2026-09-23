@@ -3211,6 +3211,15 @@ def distribuir_entrada_insumo(insumo_id, distribuicao, validade=None):
         for loja, quantidade in distribuicao.items():
             if not quantidade:
                 continue
+            # Loja sem linha de estoque desse insumo: a entrada era só um
+            # UPDATE, não achava linha nenhuma e o que foi digitado sumia com
+            # o modal fechando como se tivesse dado certo (QA 22/09).
+            conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, loja))
+            conn.execute(
+                "INSERT OR IGNORE INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+                "VALUES (?, ?, 0, 0, ?)",
+                (insumo_id, loja, agora),
+            )
             conn.execute(
                 """
                 UPDATE estoque_insumo

@@ -4570,3 +4570,28 @@ Cotações, onde o acabamento ainda mexia em dinheiro.
   aparece "Copiar mensagem" no lugar do botão de enviar — ela manda por onde
   falar com o fornecedor — e, depois de copiar, o sistema pergunta se marca
   como enviado.
+
+### 6.59 Insumos: entrada que não some, validade à vista e nível por loja
+
+Três achados de severidade **alta** da tela de Insumos que tinham escapado
+das levas anteriores (vistos ao começar os médios, 23/09):
+
+- **"Registrar entrada" numa loja sem linha de estoque não perde mais o que
+  foi digitado.** `distribuir_entrada_insumo` era só um UPDATE: se o insumo
+  ainda não tinha linha naquela loja, nada era gravado e o modal fechava como
+  se tivesse dado certo. Agora a linha (e o vínculo do insumo com a loja) é
+  criada antes de somar — mesma correção que `atualizar_estoque_loja` já
+  tinha.
+- **Preço combinado vencido deixou de ter cara de válido.** O anel de
+  "homologado" na coluna Fornecedores não olhava a validade, enquanto a compra
+  só aceita com validade em dia: a tela dizia válido e o pedido não saía.
+  Agora o anel fica vermelho e diz "homologado com PREÇO VENCIDO: não sai em
+  pedido até renovar", e amarelo com "o preço vence em 3 dias" nos últimos
+  7 dias.
+- **"Visão Geral (Todas)" classifica loja a loja.** O nível vinha da SOMA das
+  4 lojas, então a loja zerada ficava escondida atrás da que tem sobra — e por
+  isso o "Nível crítico" daqui não batia com o "Estoque crítico" da Home. O
+  selo agora mostra a pior situação e em quantas lojas ela está ("Crítico (1)",
+  com "Crítico em Açaí Na Lata" no hover).
+- Junto: os ícones do login também ganharam a proteção que o resto do sistema
+  já tem, pra biblioteca de fora que não carrega não derrubar a página.
