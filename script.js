@@ -6068,14 +6068,18 @@ function _prazoContagemTexto(prazo) {
 }
 
 // Um botão por pessoa da loja; sem ninguém cadastrado, o atalho pro cadastro.
+// O "Copiar link" fica sempre do lado: o link só existia no modal de
+// "Requisição criada", então quem fechou o modal (ou precisa mandar pra outro
+// número) não tinha como recuperar (QA 22/09).
 function _envioContagemHTML(loja, token, prazo) {
   const contatos = (contatosContagem || []).filter((c) => c.loja === loja);
-  if (!contatos.length) {
-    return '<button type="button" class="btn-limpar-filtro" data-acao="abrir-contatos-contagem">cadastrar quem conta</button>';
-  }
   const link = `${location.origin}/preencher_contagem.html?token=${token}`;
+  const copiar = `<button type="button" class="btn-limpar-filtro" data-acao="copiar-link-contagem" data-link="${escaparHtml(link)}" title="Copiar o link dessa contagem pra mandar por onde quiser"><i data-lucide="copy"></i> Copiar link</button>`;
+  if (!contatos.length) {
+    return `<div class="envio-contagem"><button type="button" class="btn-limpar-filtro" data-acao="abrir-contatos-contagem">cadastrar quem conta</button>${copiar}</div>`;
+  }
   const ate = _prazoContagemTexto(prazo);
-  return `<div class="envio-contagem">${contatos.map((c) => {
+  return `<div class="envio-contagem">${copiar}${contatos.map((c) => {
     const primeiroNome = c.nome.trim().split(/\s+/)[0];
     const mensagem = `Oi, ${primeiroNome}! Pode fazer a contagem de estoque da ${loja}? É só abrir o link e preencher quanto tem de cada item${ate ? ` (até ${ate})` : ''}:\n${link}`;
     const href = _linkWhatsAppTexto(c.telefone, mensagem);
@@ -6169,8 +6173,21 @@ function fecharModalContatosContagem() {
     renderContatosContagem();
   });
   // "cadastrar quem conta" nas lojas sem ninguém (requisição e links gerados).
-  document.addEventListener('click', (evento) => {
+  document.addEventListener('click', async (evento) => {
     if (evento.target.closest('[data-acao="abrir-contatos-contagem"]')) abrirModalContatosContagem();
+    const copiar = evento.target.closest('[data-acao="copiar-link-contagem"]');
+    if (copiar) {
+      try {
+        await navigator.clipboard.writeText(copiar.dataset.link);
+        const original = copiar.innerHTML;
+        copiar.textContent = 'Link copiado!';
+        setTimeout(() => { copiar.innerHTML = original; if (typeof lucide !== 'undefined') lucide.createIcons(); }, 1500);
+      } catch (erro) {
+        // Navegador sem permissão de área de transferência: mostra o link
+        // pra pessoa copiar na mão, em vez de não fazer nada.
+        prompt('Copie o link da contagem:', copiar.dataset.link);
+      }
+    }
   });
 })();
 
@@ -7131,6 +7148,36 @@ document.getElementById('btn-contagem-link-fechar-2')?.addEventListener('click',
 });
 
 // --- Tela pública de preenchimento de contagem (sem login, por token) ---
+// Rascunho da contagem no próprio aparelho (QA 22/09): o formulário só
+// existia na tela, então recarregar, trocar de app ou apertar voltar perdia
+// tudo. Guarda por token, pra dois links na mesma pessoa não se misturarem.
+const _CHAVE_RASCUNHO_CONTAGEM = 'admfood-contagem-';
+
+function _lerRascunhoContagem(token) {
+  try {
+    return JSON.parse(localStorage.getItem(_CHAVE_RASCUNHO_CONTAGEM + token) || '{}');
+  } catch (erro) {
+    return {};
+  }
+}
+
+function _salvarRascunhoContagem(token, valores) {
+  try {
+    localStorage.setItem(_CHAVE_RASCUNHO_CONTAGEM + token, JSON.stringify(valores));
+  } catch (erro) {
+    // Aparelho sem espaço ou navegação privada: o rascunho é um extra, a
+    // contagem continua funcionando sem ele.
+  }
+}
+
+function _limparRascunhoContagem(token) {
+  try {
+    localStorage.removeItem(_CHAVE_RASCUNHO_CONTAGEM + token);
+  } catch (erro) {
+    /* idem */
+  }
+}
+
 async function inicializarContagemPublica() {
   const token = new URLSearchParams(location.search).get('token');
   const elCarregando = document.getElementById('contagem-publica-carregando');
@@ -7337,6 +7384,49 @@ async function inicializarContagemPublica() {
     secoes.hidden = false;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
+    // Volta o que a pessoa já tinha digitado (rascunho no aparelho) ou o que
+    // ela mandou antes, quando a compradora reabriu a contagem pra corrigir —
+    // antes reabrir obrigava a digitar tudo de novo (QA 22/09).
+    const rascunho = _lerRascunhoContagem(token);
+    let camposVoltaram = 0;
+    form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
+      const doRascunho = rascunho[input.dataset.insumoId];
+      const jaEnviado = itensPorId.get(input.dataset.insumoId)?.quantidadePreenchida;
+      const valor = doRascunho !== undefined && doRascunho !== '' ? doRascunho
+        : (jaEnviado !== null && jaEnviado !== undefined ? String(jaEnviado) : '');
+      if (valor !== '') {
+        input.value = valor;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        camposVoltaram += 1;
+      }
+    });
+    const avisoRascunho = document.getElementById('contagem-publica-rascunho');
+    if (avisoRascunho && camposVoltaram && Object.keys(rascunho).length) {
+      avisoRascunho.textContent = `Recuperei ${camposVoltaram === 1 ? 'o item' : `os ${camposVoltaram} itens`} que você já tinha digitado neste aparelho. Confira antes de enviar.`;
+      avisoRascunho.hidden = false;
+    }
+
+    // Cada tecla vira rascunho: é o que salva o trabalho quando o celular
+    // trava ou o link fecha sem querer.
+    form.addEventListener('input', (evento) => {
+      if (!evento.target.matches('input[data-insumo-id]')) return;
+      const valores = {};
+      form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
+        if (input.value !== '') valores[input.dataset.insumoId] = input.value;
+      });
+      _salvarRascunhoContagem(token, valores);
+    });
+
+    // Fechar a aba com coisa digitada e não enviada pede confirmação (o texto
+    // é o do navegador; o que importa é o rascunho continuar lá depois).
+    window.addEventListener('beforeunload', (evento) => {
+      const preenchidos = Array.from(form.querySelectorAll('input[data-insumo-id]')).some((input) => input.value !== '');
+      if (preenchidos && form.style.display !== 'none') {
+        evento.preventDefault();
+        evento.returnValue = '';
+      }
+    });
+
     atualizarProgresso();
     elCarregando.style.display = 'none';
     form.style.display = '';
@@ -7367,6 +7457,9 @@ async function inicializarContagemPublica() {
         });
         const respDados = await resp.json();
         if (!resp.ok) throw new Error(respDados.erro || 'falha ao enviar');
+        // Só agora: enquanto o envio não confirmou, o rascunho é o que
+        // garante que ninguém digita tudo de novo.
+        _limparRascunhoContagem(token);
         form.style.display = 'none';
         elObrigado.style.display = '';
       } catch (erro) {
@@ -12175,6 +12268,20 @@ function _wireReceitaCardsEventos(conteudoEl) {
 // "Complementos" no fim, só quando a loja é Açaí Na Lata) e decide se o
 // conteúdo é a grade de receitas ou a lista de complementos, conforme o
 // que tá selecionado nesse menu.
+// Busca do Cardápio (QA 22/09): com termo digitado, a categoria escolhida
+// deixa de mandar e a tela mostra o que casa, de qualquer categoria.
+let fichaTecnicaBusca = '';
+
+function _textoBuscaCardapio(texto) {
+  // Sem acento e sem maiúscula: "açai" acha "Açaí".
+  return (texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function _casaBuscaCardapio(nome) {
+  if (!fichaTecnicaBusca) return true;
+  return _textoBuscaCardapio(nome).includes(fichaTecnicaBusca);
+}
+
 function renderFichaTecnicaConteudo() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   const acoesAdmin = document.getElementById('ficha-tecnica-acoes-admin');
@@ -12236,6 +12343,24 @@ function renderFichaTecnicaConteudo() {
   if (btnNovoTexto) btnNovoTexto.textContent = ehMistura ? 'Nova mistura' : ehComplemento ? 'Novo complemento' : 'Novo item';
   if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
 
+  if (fichaTecnicaBusca) {
+    // Com busca aberta, a categoria some da conta: o que interessa é achar o
+    // produto, esteja ele onde estiver.
+    const temBeefood = fichaTecnicaProdutos.some(p => p.beefood !== null);
+    const canais = temBeefood ? CANAIS_CARDAPIO : CANAIS_CARDAPIO.filter(c => c.chave !== 'beefood');
+    const achados = fichaTecnicaProdutos.filter(p => _casaBuscaCardapio(p.nome));
+    const total = achados.length;
+    if (!total) {
+      conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto com esse nome nesta loja. <button type="button" class="btn-limpar-filtro" data-acao="limpar-busca-cardapio">Limpar busca</button></p>`;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      return;
+    }
+    conteudoEl.innerHTML = `<p class="cardapio-busca-resumo">${total === 1 ? '1 produto encontrado' : `${total} produtos encontrados`} em todas as categorias · <button type="button" class="btn-limpar-filtro" data-acao="limpar-busca-cardapio">Limpar busca</button></p><div id="cardapio-busca-alvo"></div>`;
+    _renderProdutosConteudo(document.getElementById('cardapio-busca-alvo'), isAdmin, achados, canais);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    return;
+  }
+
   if (ehMistura) {
     _renderMisturasConteudo(conteudoEl, isAdmin);
   } else if (ehComplemento) {
@@ -12246,6 +12371,24 @@ function renderFichaTecnicaConteudo() {
     _renderProdutosConteudo(conteudoEl, isAdmin, porCategoria.get(fichaTecnicaCategoriaSelecionada) || [], canais);
   }
 }
+
+// Campo de busca: filtra enquanto digita, e o "Limpar busca" volta pra
+// categoria que estava aberta.
+(function ligarBuscaCardapio() {
+  const campo = document.getElementById('cardapio-busca');
+  if (!campo) return;
+  campo.addEventListener('input', () => {
+    fichaTecnicaBusca = _textoBuscaCardapio(campo.value.trim());
+    renderFichaTecnicaConteudo();
+  });
+  document.addEventListener('click', (evento) => {
+    if (!evento.target.closest('[data-acao="limpar-busca-cardapio"]')) return;
+    campo.value = '';
+    fichaTecnicaBusca = '';
+    renderFichaTecnicaConteudo();
+    campo.focus();
+  });
+})();
 
 // A ficha técnica de cada produto só é buscada quando o modal de detalhe é
 // aberto (clique no cartão), não antecipado pra todo mundo — ver

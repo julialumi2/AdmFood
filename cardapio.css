@@ -972,6 +972,21 @@ body.dark-mode {
 
 #cardapio-importar-status { margin: 0; }
 
+/* Buscar produto (QA 22/09): em 125 produtos, chegar num pelo carrossel de
+   categorias era o caminho mais longo. */
+.cardapio-busca {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: var(--space-3);
+}
+
+.cardapio-busca-resumo {
+  margin: 0 0 var(--space-3);
+  padding: 0 var(--space-4);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 /* Loja e o carrossel de categorias */
 .cardapio-navegacao {
   display: flex;

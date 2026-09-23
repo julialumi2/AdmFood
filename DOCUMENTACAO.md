@@ -4407,3 +4407,26 @@ celular na mão — e era a menos preparada pra isso.
 - **`quantidade` só vira "o que chegou" quando o pedido fecha** — enquanto ele
   está na fila continua sendo o que foi pedido, que é o que o detalhe e a
   mensagem de WhatsApp mostram.
+
+### 6.52 Rascunho da contagem, busca no Cardápio e link à mão (leva E, parte 2)
+
+- **Rascunho automático no link de contagem.** Cada campo é guardado no
+  próprio aparelho (`localStorage`, por token) enquanto a pessoa digita; ao
+  reabrir o link, o que estava lá volta com o aviso "Recuperei os 16 itens que
+  você já tinha digitado neste aparelho". O rascunho só é apagado depois do
+  envio confirmado, e sair da página com coisa digitada pede confirmação.
+  Antes, nada era salvo antes do "Enviar requisição": recarregar, trocar de
+  app ou apertar voltar perdia a contagem inteira — numa lista de 100 itens,
+  no celular, isso é a manhã de trabalho.
+- **Reabrir pra corrigir já vem preenchido** com o que a loja tinha mandado
+  (o servidor sempre devolveu esses valores; a tela é que os ignorava).
+- **Busca no Cardápio.** Campo "Buscar produto pelo nome" que varre todas as
+  categorias da loja, sem acento e sem maiúscula ("cha de limao" acha "Chá de
+  Limão"), com contador de resultados e "Limpar busca" pra voltar pra
+  categoria que estava aberta. Eram 125 produtos e o único caminho era lembrar
+  a categoria e ir clicando pill por pill.
+- **"Copiar link" na conferência da requisição,** ao lado do botão de WhatsApp
+  de cada loja aberta. O link só existia no modal de "Requisição criada":
+  quem fechou o modal, ou precisava mandar pra outro número, não tinha como
+  recuperar. Sem permissão de área de transferência, cai num prompt com o
+  link em vez de não fazer nada.

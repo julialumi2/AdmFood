@@ -64,6 +64,21 @@ body {
   margin: var(--space-3) 0;
 }
 
+/* Aviso de rascunho recuperado (QA 22/09): o que a pessoa já tinha digitado
+   neste aparelho volta ao reabrir o link. */
+.contagem-publica-rascunho {
+  margin: 0 0 var(--space-3);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--warning-texto);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.contagem-publica-rascunho[hidden] { display: none; }
+
 .contagem-publica-icone-ok {
   display: block;
   width: 40px;

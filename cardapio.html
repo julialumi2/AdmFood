@@ -197,6 +197,13 @@
 
         <p id="cardapio-importar-status" class="panel-subtitle" style="display:none;"></p>
 
+        <!-- Buscar produto: em 125 produtos, achar um pela categoria certa era
+             o caminho mais longo (QA 22/09). A busca varre todas as categorias. -->
+        <div class="search-box cardapio-busca">
+          <i data-lucide="search"></i>
+          <input type="text" id="cardapio-busca" placeholder="Buscar produto pelo nome..." aria-label="Buscar produto pelo nome">
+        </div>
+
         <!-- Loja e categorias (setas só quando as pills não cabem) -->
         <div class="cardapio-navegacao">
           <div class="loja-select loja-select-realce" id="ficha-tecnica-loja-select">
