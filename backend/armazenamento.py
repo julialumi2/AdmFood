@@ -5799,6 +5799,7 @@ def listar_pedidos():
         linhas = conn.execute(
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em,
+                   pc.token,
                    pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
                    pc.valor_nf, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo, pc.somou_estoque,
                    f.nome AS fornecedor_nome, f.pedido_minimo,

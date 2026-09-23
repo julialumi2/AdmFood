@@ -697,3 +697,14 @@
 }
 
 .ensaio-whatsapp[hidden] { display: none; }
+
+/* Quebra por loja no comparativo (QA 22/09): sem ela, quem escolhe o
+   vencedor não via que aquilo vira um pedido por loja. */
+.cotacao-quebra-lojas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

@@ -4052,6 +4052,29 @@ def api_buscar_pedido(pedido_id):
     return jsonify(resposta)
 
 
+@app.route('/api/pedidos/whatsapp', methods=['GET'])
+def api_mensagens_whatsapp_pedidos():
+    """As mensagens de WhatsApp de todos os pedidos ainda não recebidos, de
+    uma vez. A tela pedia uma por pedido antes de desenhar a tabela: com 20
+    pedidos na fila eram 20 idas ao servidor pra tabela aparecer (QA 22/09)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    mensagens = {}
+    for pedido in listar_pedidos():
+        if pedido["status"] != "enviado" or not pedido["token"] or not _loja_visivel(pedido["loja"]):
+            continue
+        if pedido["token"] in mensagens:
+            # Um pedido por loja pode dividir o mesmo token (mesma mensagem).
+            mensagens[pedido["id"]] = mensagens[pedido["token"]]
+            continue
+        pedidos_do_token = buscar_pedidos_por_token(pedido["token"]) or [pedido]
+        montada = _mensagem_whatsapp_pedido_token(pedido["token"], [p["id"] for p in pedidos_do_token])
+        mensagens[pedido["token"]] = montada
+        mensagens[pedido["id"]] = montada
+    return jsonify({"mensagens": {str(k): v for k, v in mensagens.items() if isinstance(k, int)}})
+
+
 @app.route('/api/pedidos/<int:pedido_id>/whatsapp', methods=['GET'])
 def api_mensagem_whatsapp_pedido(pedido_id):
     """Reconstrói a mensagem de WhatsApp (com o link de confirmação) de um

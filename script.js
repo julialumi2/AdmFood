@@ -4848,6 +4848,14 @@ document.getElementById('btn-cotacao-convidar-fornecedores')?.addEventListener('
   // já vem sugerido pra amanhã no fim da manhã.
   campoPrazo.min = _agoraParaCampo(5);
   campoPrazo.value = `${_agoraParaCampo(24 * 60).slice(0, 10)}T11:00`;
+  // O aviso dizia "nada é enviado sozinho", mas com a extensão instalada os
+  // botões mandam sozinhos, um fornecedor atrás do outro (QA 22/09).
+  const aviso = document.getElementById('convidar-aviso-envio');
+  if (aviso) {
+    aviso.innerHTML = document.documentElement.dataset.admfoodExtensao
+      ? '<strong>Com a extensão instalada, o envio é automático:</strong> "Enviar todos pelo WhatsApp" abre o WhatsApp Web e manda um fornecedor atrás do outro, sem você apertar "Enviar" em cada um. Pra conferir antes, marque "Ensaio" ao lado do botão: as conversas abrem com a mensagem e nada é enviado.'
+      : '<strong>Nada é enviado sozinho:</strong> depois, na tabela de convites logo abaixo, clique em "Enviar por WhatsApp" em cada fornecedor. O WhatsApp abre com a mensagem e o link prontos, e a mensagem só vai quando você apertar "Enviar" lá.';
+  }
   document.getElementById('modal-convidar-fornecedores').style.display = 'flex';
   renderListaConvidarFornecedores();
 });
@@ -5171,9 +5179,16 @@ function _renderTabelaComparacaoCotacao() {
       `;
     }).join('');
 
+    // A quebra por loja o servidor já manda: sem ela, quem escolhe o
+    // vencedor não vê que aquilo vai virar 3 pedidos (QA 22/09).
+    const quebra = (item?.porLoja || []).filter((l) => l.quantidade > 0);
+    const quebraHTML = quebra.length > 1
+      ? `<span class="cotacao-quebra-lojas" title="Vira um pedido por loja">${quebra.map((l) =>
+          `<span>${escaparHtml(_nomeCurtoLoja(l.loja))} ${escaparHtml(_formatarQuantidade(l.quantidade, item.unidadeMedida))}</span>`).join('')}</span>`
+      : '';
     const quantidadeCelula = catalogoCompleto
       ? `<input type="number" step="0.01" min="0" class="input-quantidade-cotacao" data-insumo-id="${linha.insumoId}" value="${item && item.quantidadeTotal !== null ? item.quantidadeTotal : ''}" placeholder="0" ${isAdmin ? '' : 'disabled'}>`
-      : (item ? `${_formatarQuantidade(item.quantidadeTotal, item.unidadeMedida)}` : '—');
+      : (item ? `${_formatarQuantidade(item.quantidadeTotal, item.unidadeMedida)}${quebraHTML}` : '—');
 
     const ultimaCompra = item?.ultimaCompra;
     const celulaUltimaCompra = ultimaCompra
@@ -5377,11 +5392,19 @@ function _rotuloEstagioPedido(p, estagio) {
   return estagio === 'enviado' && _pedidoPendenteDeEnvio(p) ? 'Pendente de envio (WhatsApp)' : ESTAGIO_LABEL_PEDIDO[estagio];
 }
 
+// "Enviado" é só o clique no link: o sistema não tem como saber se a pessoa
+// apertou Enviar no WhatsApp. Antes, além disso, erro de rede sumia em
+// silêncio e o pedido continuava em "Falta enviar" sem ninguém saber
+// (QA 22/09).
 async function _marcarPedidoEnviadoWhatsApp(pedidoId) {
   try {
-    await fetch(`/api/pedidos/${pedidoId}/whatsapp-enviado`, { method: 'POST' });
+    const resposta = await fetch(`/api/pedidos/${pedidoId}/whatsapp-enviado`, { method: 'POST' });
+    if (!resposta.ok) throw new Error(`código ${resposta.status}`);
+    return true;
   } catch (erro) {
     console.error('Falha ao marcar pedido como enviado:', erro);
+    alert(`O pedido nº ${pedidoId} foi aberto no WhatsApp, mas não deu pra marcar como enviado aqui (${erro.message}). Ele continua em "Falta enviar" — marque de novo depois de mandar.`);
+    return false;
   }
 }
 
@@ -5404,19 +5427,21 @@ let pedidosMensagensWhatsApp = {};
 async function carregarLinksWhatsAppPedidos(lista) {
   pedidosWhatsAppLinks = {};
   pedidosMensagensWhatsApp = {};
-  const pendentes = lista.filter((p) => p.status === 'enviado');
-  await Promise.all(pendentes.map(async (p) => {
-    try {
-      const resposta = await fetch(`/api/pedidos/${p.id}/whatsapp`);
-      if (!resposta.ok) return;
-      const dados = await resposta.json();
-      if (dados.mensagem) pedidosMensagensWhatsApp[p.id] = dados.mensagem;
+  if (!lista.some((p) => p.status === 'enviado')) return;
+  // Uma chamada só: era uma por pedido, e a tabela só aparecia depois de
+  // todas — com 20 pedidos na fila, 20 idas ao servidor (QA 22/09).
+  try {
+    const resposta = await fetch('/api/pedidos/whatsapp');
+    if (!resposta.ok) return;
+    const { mensagens } = await resposta.json();
+    Object.entries(mensagens || {}).forEach(([id, dados]) => {
+      if (dados.mensagem) pedidosMensagensWhatsApp[id] = dados.mensagem;
       const link = _linkWhatsAppTexto(dados.telefone, dados.mensagem);
-      if (link) pedidosWhatsAppLinks[p.id] = link;
-    } catch (erro) {
-      console.error('Falha ao montar link de WhatsApp do pedido', p.id, erro);
-    }
-  }));
+      if (link) pedidosWhatsAppLinks[id] = link;
+    });
+  } catch (erro) {
+    console.error('Falha ao montar os links de WhatsApp dos pedidos:', erro);
+  }
 }
 
 async function carregarPedidos() {

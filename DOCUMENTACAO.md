@@ -5050,3 +5050,31 @@ usavam. Fica só na tabela de insumos; lotes e datas especiais são curtas e
 continuam tabela. E **todo campo de modal no celular** passou a ter 44 px de
 altura (alvo de toque) e fonte de 16 px, que é o que impede o iPhone de dar
 zoom ao focar o campo.
+
+### 6.80 Médios do fluxo de compras: Cotações e Pedidos
+
+Dos 12 médios de Cotações e Pedidos, **8 já estavam fechados** por levas
+anteriores (cotação fechada virando leitura, vencedor de item já pedido,
+lixeira com confirmação, números dos pedidos gerados, selo "enviado" gravado,
+compra por fora duplicada, fornecedor sem telefone e o erro em língua de
+programador). Estes são os quatro que faltavam.
+
+- **O aviso do convite contradizia a extensão.** O texto dizia "nada é enviado
+  sozinho: clique em Enviar por WhatsApp em cada fornecedor" — mas, com a
+  extensão instalada, o botão manda sozinho, um fornecedor atrás do outro.
+  Agora a frase depende de ter extensão: sem ela, o texto de antes; com ela,
+  "o envio é automático", apontando o Ensaio pra quem quiser conferir antes.
+- **O comparativo escondia a quebra por loja** — que o servidor já manda.
+  Quem escolhia o vencedor não via que aquilo ia virar três pedidos. Agora a
+  linha mostra "Artesanos 300 un · Simus 540 un" embaixo da quantidade, quando
+  há mais de uma loja.
+- **A tabela de Pedidos pedia uma chamada por pedido** (o link de WhatsApp de
+  cada um) antes de aparecer. Com 23 pedidos na fila eram 23 idas ao servidor.
+  Uma rota nova devolve todas as mensagens de uma vez: medido, **23 chamadas
+  em 267 ms viraram 1 em 75 ms**, com mensagem e telefone idênticos aos da
+  rota antiga (que continua existindo, pro detalhe de um pedido só).
+- **Erro de rede ao marcar "enviado" sumia em silêncio.** O clique no link
+  abre o WhatsApp e avisa o servidor; falhando, o pedido continuava em "Falta
+  enviar" sem ninguém saber. Agora a falha aparece, dizendo que o pedido
+  segue pendente. (Que "enviado" seja só o clique continua sendo o que dá
+  pra saber: o WhatsApp Web não conta pro sistema se a mensagem saiu.)
