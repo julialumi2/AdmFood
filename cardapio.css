@@ -1192,9 +1192,14 @@ body.dark-mode {
 
 .detalhe-produto-precos {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,...): com 1fr puro o campo não encolhe abaixo do tamanho
+     natural dele e os dois preços da direita saíam da tela no celular. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2) var(--space-3);
 }
+
+.detalhe-produto-campo { min-width: 0; }
+.detalhe-produto-campo input { width: 100%; min-width: 0; box-sizing: border-box; }
 
 /* Custo do produto: o calculado pela ficha (ou o digitado, que ganha) */
 .detalhe-custo-painel {
@@ -1346,7 +1351,19 @@ body.dark-mode {
 .detalhe-produto-btn-editar svg { width: 15px; height: 15px; }
 
 @media (max-width: 820px) {
-  .detalhe-produto-grid { grid-template-columns: minmax(0, 1fr); }
+  /* Empilhado, o modal vinha na ordem foto → 4 preços → custo → insumos, e
+     a ficha ficava no fim da fila (QA 22/09). As duas colunas viram uma
+     lista só e a foto vai pro fim: no celular ela é o que menos importa. */
+  .detalhe-produto-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .detalhe-produto-coluna { display: contents; }
+  .detalhe-produto-foto { order: 3; margin: 0 auto; }
+
+  .detalhe-produto-rodape { flex-wrap: wrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1366,3 +1383,8 @@ body.dark-mode {
   border-color: var(--danger);
   background-color: var(--danger-soft);
 }
+
+/* Anterior / Próximo no rodapé do produto (QA 22/09): ajustar muitos
+   produtos obrigava a voltar pra grade e procurar o card seguinte. */
+.detalhe-produto-navegar { display: flex; gap: var(--space-2); margin-right: var(--space-4); }
+.detalhe-produto-navegar button { display: inline-flex; align-items: center; gap: 4px; }

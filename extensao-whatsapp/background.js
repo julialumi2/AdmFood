@@ -23,7 +23,10 @@ const ALARME_VIGIA = 'vigia-fila';
 // falha e a fila segue (o script do WhatsApp manda sinal de vida durante
 // as esperas longas, então isso só acontece se a página travar mesmo).
 const TRAVOU_DEPOIS_DE_MS = 3 * 60 * 1000;
-const ORIGENS_DO_SISTEMA = ['https://admfood.artesanosburger.com.br'];
+// Produção e o AdmFood rodando na máquina (qualquer porta): sem localhost,
+// testar o disparo só dava mandando mensagem de verdade pra fornecedor de
+// verdade (QA 22/09).
+const MAQUINAS_DO_SISTEMA = ['admfood.artesanosburger.com.br', 'localhost', '127.0.0.1'];
 
 async function lerFila() {
   const { fila } = await chrome.storage.local.get('fila');
@@ -40,7 +43,7 @@ function urlDoEnvio(item) {
 
 function ehDoSistema(url) {
   try {
-    return ORIGENS_DO_SISTEMA.includes(new URL(url).origin);
+    return MAQUINAS_DO_SISTEMA.includes(new URL(url).hostname);
   } catch {
     return false;
   }
@@ -54,6 +57,8 @@ function resumo(fila) {
     total: fila.itens.length,
     feitos: fila.itens.filter((i) => i.status !== 'pendente').length,
     enviados: fila.itens.filter((i) => i.status === 'enviado').length,
+    ensaio: !!fila.ensaio,
+    ensaiados: fila.itens.filter((i) => i.status === 'ensaio').length,
     falhas: fila.itens
       .filter((i) => i.status === 'falhou')
       .map((i) => ({ fornecedor: i.fornecedor, motivo: i.motivo })),
@@ -69,7 +74,7 @@ function avisarSistema(fila) {
   chrome.tabs.sendMessage(fila.abaSistema, { tipo: 'progresso', resumo: resumo(fila) }).catch(() => {});
 }
 
-async function iniciarFila(itens, remetente) {
+async function iniciarFila(itens, remetente, ensaio = false) {
   if (!remetente.tab || !ehDoSistema(remetente.url)) {
     throw new Error('Esse pedido não veio do AdmFood.');
   }
@@ -85,6 +90,9 @@ async function iniciarFila(itens, remetente) {
     itens: itens.map((item) => ({ ...item, status: 'pendente', motivo: null })),
     indice: 0,
     ativa: true,
+    // Ensaio: abre cada conversa com a mensagem escrita e NÃO clica em
+    // enviar. É como se testa o disparo sem mandar nada (QA 22/09).
+    ensaio: !!ensaio,
     abaSistema: remetente.tab.id,
     abaWhatsapp: null,
     ultimaAtividade: Date.now(),
@@ -133,7 +141,7 @@ async function envioDaAba(remetente) {
   if (!item) return null;
   fila.ultimaAtividade = Date.now();
   await salvarFila(fila);
-  return { item, indice: fila.indice, posicao: fila.indice + 1, total: fila.itens.length };
+  return { item, indice: fila.indice, posicao: fila.indice + 1, total: fila.itens.length, ensaio: !!fila.ensaio };
 }
 
 async function sinalDeVida(remetente) {
@@ -155,9 +163,12 @@ async function avancar(fila, status, motivo) {
   if (fila.indice >= fila.itens.length) {
     fila.ativa = false;
     const falhas = fila.itens.filter((i) => i.status === 'falhou').length;
-    fila.mensagemFinal = falhas
-      ? `Terminou, com ${falhas} ${falhas === 1 ? 'falha' : 'falhas'}.`
+    const oQueAconteceu = fila.ensaio
+      ? 'Ensaio terminado: as conversas abriram com a mensagem, e nada foi enviado.'
       : 'Terminou: todos os fornecedores receberam.';
+    fila.mensagemFinal = falhas
+      ? `${fila.ensaio ? 'Ensaio terminado' : 'Terminou'}, com ${falhas} ${falhas === 1 ? 'falha' : 'falhas'}.`
+      : oQueAconteceu;
     await salvarFila(fila);
     chrome.alarms.clear(ALARME_VIGIA);
     avisarSistema(fila);
@@ -194,7 +205,7 @@ async function registrarResultado({ indice, status, motivo }, remetente) {
 
 chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
   const acoes = {
-    'iniciar-fila': () => iniciarFila(mensagem.itens, remetente),
+    'iniciar-fila': () => iniciarFila(mensagem.itens, remetente, mensagem.ensaio),
     'parar-fila': () => pararFila('Parado pelo botão Parar.'),
     'estado-fila': async () => resumo(await lerFila()),
     'qual-envio': () => envioDaAba(remetente),

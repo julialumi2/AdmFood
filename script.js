@@ -4615,6 +4615,9 @@ function _atualizarEnvioWhatsappConvites() {
   fila.textContent = JSON.stringify(itens);
   const temExtensao = !!document.documentElement.dataset.admfoodExtensao;
   botao.hidden = !(temExtensao && itens.length && _possoGerir());
+  // Ensaio anda junto com o botão: só faz sentido com a extensão instalada.
+  const opcaoEnsaio = document.getElementById('ensaio-whatsapp-opcao');
+  if (opcaoEnsaio) opcaoEnsaio.hidden = botao.hidden;
   document.getElementById('btn-enviar-cotacoes-texto').textContent =
     `Enviar ${itens.length === 1 ? 'o convite' : `os ${itens.length} convites`} pelo WhatsApp`;
   document.getElementById('convites-extensao-aviso').hidden = temExtensao || !itens.length || !_possoGerir();
@@ -12408,29 +12411,55 @@ async function moverTarefa(tarefaId, novoStatus) {
   }
 }
 
-// Trocar responsável ou loja no detalhe salva na hora, sem botão.
+// Campos do card que salvam na hora, sem botão. O modal só movia status,
+// adicionava subtarefa e comentava: errar o título obrigava a apagar o card
+// e refazer, levando comentários e subtarefas junto (QA 22/09).
+const CAMPOS_EDITAVEIS_DO_CARD = [
+  ['detalheResponsavel', 'responsavelId', 'change'],
+  ['detalheLoja', 'loja', 'change'],
+  ['detalheTitulo', 'titulo', 'change'],
+  ['detalheDescricao', 'descricao', 'change'],
+  ['detalheCategoria', 'categoria', 'change'],
+  ['detalhePrioridade', 'prioridade', 'change'],
+  ['detalheData', 'dataLimite', 'change'],
+];
+
 function _ligarTrocaDeDonoDaTarefa() {
-  [['detalheResponsavel', 'responsavelId'], ['detalheLoja', 'loja']].forEach(([id, campo]) => {
+  CAMPOS_EDITAVEIS_DO_CARD.forEach(([id, campo, evento]) => {
     const seletor = document.getElementById(id);
     if (!seletor || seletor.dataset.ligado) return;
     seletor.dataset.ligado = '1';
-    seletor.addEventListener('change', async () => {
+    seletor.addEventListener(evento, async () => {
       if (!tarefaSelecionadaId) return;
+      const valor = typeof seletor.value === 'string' ? seletor.value.trim() : seletor.value;
+      // Título é o que dá nome ao card: vazio, volta o que estava.
+      if (campo === 'titulo' && !valor) {
+        seletor.value = _tituloDaTarefaAberta || '';
+        return;
+      }
       try {
         const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [campo]: seletor.value || null }),
+          body: JSON.stringify({ [campo]: valor || null }),
         });
-        if (!resposta.ok) throw new Error('falha ao salvar');
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
+        if (campo === 'titulo') _tituloDaTarefaAberta = valor;
+        if (campo === 'prioridade') {
+          seletor.className = `badge-select priority-${valor}`;
+        }
         await carregarTarefas();
       } catch (erro) {
-        console.error('Falha ao mudar o dono da tarefa:', erro);
-        alert('Não foi possível salvar essa mudança agora.');
+        console.error('Falha ao salvar o card:', erro);
+        alert(erro.message || 'Não foi possível salvar essa mudança agora.');
       }
     });
   });
 }
+
+// Guarda o título de quando o card abriu, pra devolver se apagarem tudo.
+let _tituloDaTarefaAberta = '';
 
 // --- MODAL: CRIAR TAREFA ---
 function criarNovaTarefa() {
@@ -12515,18 +12544,20 @@ function abrirDetalhesTarefa(id) {
   if (!tarefa) return;
   tarefaSelecionadaId = tarefa.id;
 
-  const badge = document.getElementById('detalheBadge');
+  const badge = document.getElementById('detalhePrioridade');
   if (badge) {
-    badge.textContent = PRIORIDADE_LABEL_TAREFA[tarefa.prioridade] || tarefa.prioridade;
-    badge.className = `badge priority-${tarefa.prioridade}`;
+    badge.value = tarefa.prioridade;
+    badge.className = `badge-select priority-${tarefa.prioridade}`;
   }
   const status = document.getElementById('detalheStatus');
   if (status) status.textContent = STATUS_LABEL_TAREFA[tarefa.status] || tarefa.status;
 
-  document.getElementById('detalheTitulo').textContent = tarefa.titulo;
-  document.getElementById('detalheCategoria').textContent = tarefa.categoria;
-  document.getElementById('detalheData').textContent = tarefa.dataLimiteFormatada || '—';
-  document.getElementById('detalheDescricao').textContent = tarefa.descricao || 'Sem descrição.';
+  _tituloDaTarefaAberta = tarefa.titulo || '';
+  document.getElementById('detalheTitulo').value = tarefa.titulo || '';
+  document.getElementById('detalheCategoria').value = tarefa.categoria || 'Geral';
+  // O campo de data fala AAAA-MM-DD; o servidor guarda assim também.
+  document.getElementById('detalheData').value = (tarefa.dataLimite || '').slice(0, 10);
+  document.getElementById('detalheDescricao').value = tarefa.descricao || '';
   // Responsável e loja dá pra trocar aqui mesmo, sem refazer o card.
   _preencherSeletorResponsavel(document.getElementById('detalheResponsavel'), tarefa.responsavelId);
   const seletorLoja = document.getElementById('detalheLoja');
@@ -13700,6 +13731,16 @@ async function abrirModalDetalheProduto(precoCardapioId) {
           <i data-lucide="circle-minus"></i>
           Tirar do cardápio desta loja
         </button>
+        <!-- Salvar e ir pro próximo, sem voltar pra grade procurar o card
+             (QA 22/09). -->
+        <div class="detalhe-produto-navegar">
+          <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-anterior" title="Salvar e ir pro produto anterior">
+            <i data-lucide="chevron-left"></i> Anterior
+          </button>
+          <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-proximo" title="Salvar e ir pro próximo produto">
+            Próximo <i data-lucide="chevron-right"></i>
+          </button>
+        </div>
         <button type="button" class="btn-secondary-sm" id="btn-detalhe-produto-cancelar">Cancelar</button>
         <button type="button" class="btn-primary-sm" id="btn-detalhe-produto-salvar">Salvar</button>
       </div>
@@ -13798,8 +13839,18 @@ async function abrirModalDetalheProduto(precoCardapioId) {
 
   document.getElementById('btn-detalhe-produto-cancelar')?.addEventListener('click', fecharModalDetalheProduto);
 
-  document.getElementById('btn-detalhe-produto-salvar')?.addEventListener('click', async (evento) => {
-    const botao = evento.currentTarget;
+  // Guardado aqui pra "Editar insumos", "Próximo" e "Anterior" poderem
+  // salvar antes de sair: antes esses caminhos jogavam fora o preço e o
+  // custo ainda não salvos (QA 22/09).
+  const temMudancaNaoSalva = () => {
+    const campoNome = document.getElementById('detalhe-produto-nome-input');
+    const nomeMudou = campoNome && !campoNome.hidden && campoNome.value.trim() && campoNome.value.trim() !== produto.nome;
+    return !!(nomeMudou || Object.keys(alteracoesPreco).length || custoAlterado !== null || porcoesAlteradas);
+  };
+
+  async function salvarDetalheProduto({ fechar = true } = {}) {
+    const botao = document.getElementById('btn-detalhe-produto-salvar');
+    if (!botao) return true;
     botao.disabled = true;
     botao.textContent = 'Salvando...';
     // Nome primeiro: se ele for recusado (já existe outro com esse nome), o
@@ -13820,7 +13871,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         ajudaNome.hidden = false;
         botao.disabled = false;
         botao.textContent = 'Salvar';
-        return;
+        return false;
       }
     }
     // Confere os preços antes de mandar: mudança fora de proporção e campo
@@ -13850,12 +13901,12 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       alert(`Não deu pra ler esse preço: ${ilegiveis.join(', ')}. Escreva só o número (ex: 32,90). Pra tirar o preço do canal, deixe o campo vazio; pra "não vendo aqui", digite 0.`);
       botao.disabled = false;
       botao.textContent = 'Salvar';
-      return;
+      return false;
     }
     if (avisosPreco.length && !confirm(`Confira antes de salvar:\n\n${avisosPreco.join('\n')}\n\nSalvar assim mesmo?`)) {
       botao.disabled = false;
       botao.textContent = 'Salvar';
-      return;
+      return false;
     }
 
     try {
@@ -13881,19 +13932,57 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         const dados = await resposta.json();
         if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar porções');
       }
-      fecharModalDetalheProduto();
+      Object.keys(alteracoesPreco).forEach((k) => delete alteracoesPreco[k]);
+      custoAlterado = null;
+      porcoesAlteradas = false;
+      delete document.getElementById('modal-detalhe-produto').dataset.mexido;
+      if (fechar) fecharModalDetalheProduto();
       renderFichaTecnicaConteudo();
+      return true;
     } catch (erro) {
       console.error('Falha ao salvar produto do cardápio:', erro);
       alert('Não foi possível salvar. Tenta de novo.');
       botao.disabled = false;
       botao.textContent = 'Salvar';
+      return false;
     }
-  });
+  }
+
+  document.getElementById('btn-detalhe-produto-salvar')?.addEventListener('click', () => salvarDetalheProduto());
+
+  // Anterior / Próximo andam pela lista que está na tela agora (a mesma
+  // ordem e o mesmo filtro que a pessoa está vendo), salvando o que ela
+  // mexeu antes de trocar de produto.
+  const _idsNaTela = () => [...document.querySelectorAll('[data-acao="detalhe-produto"][data-preco-cardapio-id]')]
+    .map((el) => el.dataset.precoCardapioId);
+
+  async function _irParaProduto(passo) {
+    if (temMudancaNaoSalva() && !(await salvarDetalheProduto({ fechar: false }))) return;
+    const ids = _idsNaTela();
+    const atual = ids.indexOf(String(precoCardapioId));
+    const alvo = ids[atual + passo];
+    if (alvo === undefined) {
+      alert(passo > 0 ? 'Esse já é o último produto da lista.' : 'Esse já é o primeiro produto da lista.');
+      return;
+    }
+    await abrirModalDetalheProduto(alvo);
+  }
+
+  document.getElementById('btn-detalhe-produto-anterior')?.addEventListener('click', () => _irParaProduto(-1));
+  document.getElementById('btn-detalhe-produto-proximo')?.addEventListener('click', () => _irParaProduto(1));
 
   // Insumos e embalagem são editados no mesmo modal da ficha técnica.
   corpo.querySelectorAll('#btn-detalhe-produto-editar-insumos, [data-acao="detalhe-editar-embalagem"]').forEach((botao) => {
-    botao.addEventListener('click', () => {
+    botao.addEventListener('click', async () => {
+      // Ir pros insumos fechava o modal e jogava fora o preço e o custo
+      // ainda não salvos, sem avisar (QA 22/09).
+      if (temMudancaNaoSalva()) {
+        if (!confirm('Você mexeu no preço ou no custo e ainda não salvou. Salvar agora e abrir os insumos?')) return;
+        if (!(await salvarDetalheProduto({ fechar: false }))) return;
+      }
+      // Salvar a ficha recarregava a tela inteira e obrigava a abrir o
+      // produto de novo pra ver a margem: agora ele volta sozinho.
+      _voltarProProdutoDepoisDaFicha = precoCardapioId;
       fecharModalDetalheProduto();
       abrirModalFichaTecnicaItem(produto.itemCardapioId);
     });
@@ -14407,9 +14496,19 @@ function processarColarListaFichaTecnica() {
 
 document.getElementById('btn-ficha-tecnica-processar-colar')?.addEventListener('click', processarColarListaFichaTecnica);
 
-function fecharModalFichaTecnicaItem() {
+// Qual produto reabrir quando a ficha fechar: salvar a ficha recarregava a
+// tela inteira e obrigava a procurar o produto de novo pra ver a margem
+// (QA 22/09). Só é preenchido por quem veio do modal do produto.
+let _voltarProProdutoDepoisDaFicha = null;
+
+function fecharModalFichaTecnicaItem({ voltarProProduto = true } = {}) {
   document.getElementById('modal-ficha-tecnica-item').style.display = 'none';
   fichaTecnicaEditandoItemId = null;
+  const volta = _voltarProProdutoDepoisDaFicha;
+  if (voltarProProduto) {
+    _voltarProProdutoDepoisDaFicha = null;
+    if (volta !== null) abrirModalDetalheProduto(volta);
+  }
 }
 
 document.getElementById('btn-ficha-tecnica-item-fechar')?.addEventListener('click', fecharModalFichaTecnicaItem);
@@ -14508,7 +14607,7 @@ Salvar assim mesmo?`)) return false;
       alert(dados.erro);
       const itemId = fichaTecnicaEditandoItemId;
       fichaTecnicaInsumosCache.delete(itemId);
-      fecharModalFichaTecnicaItem();
+      fecharModalFichaTecnicaItem({ voltarProProduto: false });
       await abrirModalFichaTecnicaItem(itemId);
       return false;
     }
@@ -14519,7 +14618,9 @@ Salvar assim mesmo?`)) return false;
   try {
     if (!(await enviar(false))) return;
     const itemId = fichaTecnicaEditandoItemId;
-    fecharModalFichaTecnicaItem();
+    const voltarPara = _voltarProProdutoDepoisDaFicha;
+    _voltarProProdutoDepoisDaFicha = null;
+    fecharModalFichaTecnicaItem({ voltarProProduto: false });
     fichaTecnicaInsumosCache.delete(itemId);
     const produto = _fichaTecnicaItensAtuais().find(p => p.itemCardapioId === itemId);
     if (produto) produto.temFichaTecnica = insumos.length > 0;
@@ -14532,6 +14633,8 @@ Salvar assim mesmo?`)) return false;
       // Recarrega a lista: o custo pela ficha muda com os insumos novos.
       await carregarFichaTecnicaAtual();
     }
+    // Volta pro produto com o custo e a margem já atualizados.
+    if (voltarPara !== null) await abrirModalDetalheProduto(voltarPara);
   } catch (erro) {
     console.error('Falha ao salvar ficha técnica:', erro);
     alert(erro.message || 'Não foi possível salvar.');

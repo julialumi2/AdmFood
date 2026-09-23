@@ -158,8 +158,8 @@
   async function enviar() {
     const tarefa = await perguntarEnvio();
     if (!tarefa) return; // não é a aba da fila: WhatsApp normal
-    const { item, indice, posicao, total } = tarefa;
-    console.info(`[AdmFood] ${posicao}/${total}: ${item.fornecedor}`);
+    const { item, indice, posicao, total, ensaio } = tarefa;
+    console.info(`[AdmFood]${ensaio ? ' (ensaio)' : ''} ${posicao}/${total}: ${item.fornecedor}`);
 
     // A cada 10 envios, uma pausa maior (45 a 90 s).
     if (posicao > 1 && (posicao - 1) % 10 === 0) {
@@ -198,6 +198,14 @@
     // 3) Segurança: só envia se a caixa tiver a mensagem DESSE fornecedor.
     if (!textoDaCaixa(acharCaixaTexto()).includes(trechoDeConferencia(item.mensagem))) {
       return avisarResultado(indice, 'falhou', 'A mensagem na caixa não era a esperada; não enviei.');
+    }
+
+    // Ensaio: chegou até aqui quer dizer que o número abriu o chat certo e a
+    // mensagem certa está escrita. É tudo o que se quer conferir — o clique
+    // em enviar não acontece (QA 22/09).
+    if (ensaio) {
+      await esperarComSinal(sortear(3000, 5000));
+      return avisarResultado(indice, 'ensaio');
     }
 
     // 4) Pausa curta antes de clicar (2,5 a 6 s), como alguém que confere

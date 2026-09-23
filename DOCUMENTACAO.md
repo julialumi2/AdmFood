@@ -4870,3 +4870,41 @@ Quatro caminhos diferentes em que um dado sumia calado.
   o resultado — **o dia que falhava só aparecia no log do servidor**. E a rota
   saiu da lista de exceções do registro de ações: agora fica gravado quem
   mandou sincronizar e quando.
+
+### 6.74 Os últimos altos: acabamento do Cardápio, card editável e ensaio
+
+Fecha a lista dos 88 problemas altos da auditoria de 22/09.
+
+**Cardápio no celular.** Empilhado, o modal do produto vinha na ordem foto →
+4 preços → custo → insumos: a ficha ficava no fim da fila. Agora as duas
+colunas viram uma lista só e a **foto vai pro fim** — no celular ela é o que
+menos importa. A grade dos preços também parou de vazar pra fora da tela (os
+dois campos da direita ficavam cortados). Esc e clique fora já fechavam o
+modal desde o QA anterior.
+
+**Ajustar muitos produtos.** Três coisas custavam clique à toa:
+- "Editar insumos" fechava o modal e **jogava fora o preço e o custo ainda
+  não salvos**, sem avisar. Agora pergunta e salva antes de abrir.
+- Salvar a ficha recarregava a tela inteira e obrigava a procurar o produto
+  de novo pra ver a margem. Agora ele **volta sozinho**, já com o custo novo.
+- Não havia "próximo produto". O rodapé ganhou **Anterior / Próximo**, que
+  salvam o que foi mexido e andam pela mesma lista que está na tela (a ordem
+  e o filtro que a pessoa está vendo).
+
+**Card do ClickUp editável.** O modal só movia status, adicionava subtarefa e
+comentava — mesmo a rota já aceitando título, descrição, categoria,
+prioridade e prazo. Errar o título obrigava a apagar o card e refazer,
+levando comentários e subtarefas junto. Agora **todos esses campos salvam
+sozinhos ao sair do campo**, igual ao responsável e à loja. Título apagado
+volta o que estava: é ele que dá nome ao card.
+
+**Ensaio do disparo pelo WhatsApp.** A extensão só reconhecia o endereço de
+produção, então testar o envio era mandar mensagem de verdade pra fornecedor
+de verdade. Duas mudanças (extensão 1.2.0):
+- ela passa a reconhecer o AdmFood rodando em **localhost**, em qualquer
+  porta — dá pra testar o fluxo inteiro na prévia;
+- **"Ensaio: abre as conversas e mostra as mensagens, sem enviar"**, uma
+  caixinha ao lado do botão de envio. No ensaio a extensão abre a conversa de
+  cada fornecedor com a mensagem escrita, confere que é a mensagem certa
+  daquele fornecedor e **não clica em enviar**. O painel diz "ENSAIO (não
+  envia)" o tempo todo, e nenhum convite é marcado como enviado.

@@ -685,3 +685,15 @@
   border-radius: var(--radius-sm);
   pointer-events: none;
 }
+
+/* Ensaio do disparo pelo WhatsApp (QA 22/09) */
+.ensaio-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ensaio-whatsapp[hidden] { display: none; }

@@ -372,6 +372,12 @@
                   <i data-lucide="send"></i>
                   <span id="btn-enviar-cotacoes-texto">Enviar todos pelo WhatsApp</span>
                 </button>
+                <!-- Sem isso, testar o disparo era mandar mensagem de verdade
+                     pra fornecedor de verdade (QA 22/09). -->
+                <label class="ensaio-whatsapp" id="ensaio-whatsapp-opcao" hidden>
+                  <input type="checkbox" id="ensaio-whatsapp">
+                  Ensaio: abre as conversas e mostra as mensagens, sem enviar
+                </label>
                 <span class="table-subtitle" id="convites-extensao-aviso" hidden>
                   Pra mandar sozinho pelo WhatsApp, <a href="instalar-extensao.html">instale a extensão</a> neste Chrome.
                 </span>

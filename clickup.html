@@ -308,8 +308,14 @@
   <div id="modalDetalhesTarefa" class="modal-overlay" style="display: none;">
     <div class="modal-content modal-large">
       <div class="modal-header">
+        <!-- Prioridade editável aqui mesmo: errar a prioridade obrigava a
+             apagar o card e refazer (QA 22/09). -->
         <div class="modal-title-status">
-          <span class="badge priority-alta" id="detalheBadge">Alta</span>
+          <select class="badge-select" id="detalhePrioridade" aria-label="Prioridade do card">
+            <option value="alta">Alta</option>
+            <option value="media">Média</option>
+            <option value="baixa">Baixa</option>
+          </select>
           <span class="status-pill" id="detalheStatus">A Fazer</span>
         </div>
         <div class="modal-header-actions">
@@ -321,16 +327,26 @@
       </div>
 
       <div class="modal-body">
-        <h2 id="detalheTitulo" class="detalhe-titulo">Título da Tarefa</h2>
+        <!-- Título, categoria, prazo e descrição salvam sozinhos ao sair do
+             campo, igual ao responsável e à loja (QA 22/09). -->
+        <input type="text" id="detalheTitulo" class="detalhe-titulo detalhe-titulo-campo" aria-label="Título do card">
 
         <div class="task-info-grid">
           <div class="info-item">
             <span class="info-label">Categoria</span>
-            <span class="info-value" id="detalheCategoria">Embalagens</span>
+            <select class="info-select" id="detalheCategoria" aria-label="Categoria do card">
+              <option value="Cozinha">Cozinha</option>
+              <option value="Estoque">Estoque</option>
+              <option value="Embalagens">Embalagens</option>
+              <option value="Cardápio">Cardápio</option>
+              <option value="Ficha técnica">Ficha técnica</option>
+              <option value="Limpeza">Limpeza</option>
+              <option value="Geral">Geral</option>
+            </select>
           </div>
           <div class="info-item">
             <span class="info-label">Data Limite</span>
-            <span class="info-value" id="detalheData">03/08/2026</span>
+            <input type="date" class="info-select" id="detalheData" aria-label="Data limite do card">
           </div>
           <div class="info-item">
             <span class="info-label">Responsável</span>
@@ -352,7 +368,7 @@
 
         <div class="detalhe-secao">
           <h3>Descrição</h3>
-          <p id="detalheDescricao" class="detalhe-descricao">Descrição detalhada do item...</p>
+          <textarea id="detalheDescricao" class="detalhe-descricao detalhe-descricao-campo" rows="3" placeholder="Sem descrição."></textarea>
         </div>
 
         <!-- SUBTAREFAS / CHECKLIST -->

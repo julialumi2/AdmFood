@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AdmFood · Cotações no WhatsApp",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "Envia pelo WhatsApp Web os links de cotação do AdmFood, um fornecedor por vez, a partir da tela da cotação.",
   "permissions": [
     "storage",
@@ -9,7 +9,9 @@
   ],
   "host_permissions": [
     "https://web.whatsapp.com/*",
-    "https://admfood.artesanosburger.com.br/*"
+    "https://admfood.artesanosburger.com.br/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -17,7 +19,9 @@
   "content_scripts": [
     {
       "matches": [
-        "https://admfood.artesanosburger.com.br/*"
+        "https://admfood.artesanosburger.com.br/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
       ],
       "js": [
         "script-sistema.js"

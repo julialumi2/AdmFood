@@ -21,6 +21,9 @@ const ID_BOTAO = 'btn-enviar-cotacoes';
 // atributo é o id do convite, que também vem em cada item de #fila-whatsapp.
 const ATRIBUTO_UM_CONVITE = 'data-admfood-envio';
 const ID_DADOS = 'fila-whatsapp';
+// Caixinha na tela da cotação: com ela marcada, a extensão abre cada
+// conversa com a mensagem escrita e não clica em enviar (QA 22/09).
+const ID_ENSAIO = 'ensaio-whatsapp';
 const MENSAGEM_PADRAO = (link) => `Olá! Segue o link pra você preencher os preços da nossa cotação:\n${link}`;
 
 // Só dígitos, com o 55 do Brasil na frente. Cuidado com o DDD 55 (RS): um
@@ -95,20 +98,30 @@ document.addEventListener('click', async (evento) => {
     return;
   }
 
-  const minutos = Math.max(1, Math.round((itens.length * 30) / 60));
-  const aviso = [
-    itens.length === 1
-      ? `Enviar a cotação pro ${itens[0].fornecedor} pelo WhatsApp?`
-      : `Enviar a cotação pra ${itens.length} fornecedores pelo WhatsApp?`,
-    '',
-    `O WhatsApp Web vai abrir e mandar um por vez (uns ${minutos} min no total).`,
-    'Deixe a aba do WhatsApp aberta e não use o WhatsApp Web enquanto isso.',
-  ];
+  const ensaio = !!document.getElementById(ID_ENSAIO)?.checked;
+  const minutos = Math.max(1, Math.round((itens.length * (ensaio ? 15 : 30)) / 60));
+  const aviso = ensaio
+    ? [
+      itens.length === 1
+        ? `ENSAIO: abrir a conversa do ${itens[0].fornecedor} sem enviar nada?`
+        : `ENSAIO: abrir a conversa de ${itens.length} fornecedores sem enviar nada?`,
+      '',
+      `O WhatsApp Web vai abrir cada conversa com a mensagem escrita (uns ${minutos} min) e NÃO vai clicar em enviar.`,
+      'Serve pra conferir número e mensagem antes de mandar de verdade.',
+    ]
+    : [
+      itens.length === 1
+        ? `Enviar a cotação pro ${itens[0].fornecedor} pelo WhatsApp?`
+        : `Enviar a cotação pra ${itens.length} fornecedores pelo WhatsApp?`,
+      '',
+      `O WhatsApp Web vai abrir e mandar um por vez (uns ${minutos} min no total).`,
+      'Deixe a aba do WhatsApp aberta e não use o WhatsApp Web enquanto isso.',
+    ];
   if (ignorados.length) aviso.push('', `Sem telefone (ficam de fora): ${ignorados.join(', ')}.`);
   if (!confirm(aviso.join('\n'))) return;
 
   try {
-    const resposta = await chrome.runtime.sendMessage({ tipo: 'iniciar-fila', itens });
+    const resposta = await chrome.runtime.sendMessage({ tipo: 'iniciar-fila', itens, ensaio });
     if (resposta?.erro) {
       alert(resposta.erro);
       return;
@@ -176,12 +189,15 @@ function criarPainel() {
 function renderizarPainel(resumo) {
   if (!resumo) return;
   const raiz = criarPainel();
+  // No ensaio nada é enviado: o painel precisa dizer isso o tempo todo, pra
+  // ninguém achar que os fornecedores receberam (QA 22/09).
+  const feitos = resumo.ensaio ? resumo.ensaiados : resumo.enviados;
   raiz.querySelector('.titulo').textContent = resumo.ativa
-    ? `Enviando cotações · ${resumo.feitos} de ${resumo.total}`
+    ? `${resumo.ensaio ? 'ENSAIO (não envia) · ' : 'Enviando cotações · '}${resumo.feitos} de ${resumo.total}`
     : (resumo.mensagemFinal || 'Envio parado.');
   raiz.querySelector('.linha').textContent = resumo.ativa
     ? `Agora: ${resumo.atual || '—'}`
-    : `${resumo.enviados} ${resumo.enviados === 1 ? 'enviado' : 'enviados'} de ${resumo.total}`;
+    : `${feitos} ${resumo.ensaio ? 'conferido(s)' : (feitos === 1 ? 'enviado' : 'enviados')} de ${resumo.total}`;
   raiz.querySelector('.barra span').style.width = `${resumo.total ? (resumo.feitos / resumo.total) * 100 : 0}%`;
   raiz.querySelector('.falhas').innerHTML = resumo.falhas
     .map((f) => `<li>${escapar(f.fornecedor)} <span>· ${escapar(f.motivo || 'falhou')}</span></li>`)

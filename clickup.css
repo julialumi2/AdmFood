@@ -365,3 +365,54 @@
   font-size: 0.85rem;
   max-width: 100%;
 }
+
+/* Card editável (QA 22/09): errar o título obrigava a apagar e refazer. */
+.detalhe-titulo-campo {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  padding: 4px 8px;
+  margin-left: -8px;
+  font: inherit;
+  color: inherit;
+}
+
+.detalhe-descricao-campo {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  padding: 6px 8px;
+  margin-left: -8px;
+  font: inherit;
+  color: inherit;
+}
+
+.detalhe-titulo-campo:hover,
+.detalhe-descricao-campo:hover { border-color: var(--surface-muted-border); }
+
+.detalhe-titulo-campo:focus,
+.detalhe-descricao-campo:focus {
+  outline: none;
+  border-color: var(--info);
+  background-color: var(--input-bg);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+/* Prioridade como seletor, com a mesma cara do selo */
+.badge-select {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.badge-select.priority-alta { background-color: var(--danger-soft); color: var(--danger); }
+.badge-select.priority-media { background-color: var(--warning-soft); color: var(--warning-texto); }
+.badge-select.priority-baixa { background-color: var(--info-soft); color: var(--info); }
