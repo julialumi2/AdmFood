@@ -4555,3 +4555,18 @@ Cotações, onde o acabamento ainda mexia em dinheiro.
   R$ 0,90 por un (+50%). Esse preço vira o custo do insumo." Acima de 10% de
   diferença. A conferência nunca comparava, então fornecedor que subiu o preço
   passava batido — e o preço novo virava o custo do insumo.
+
+### 6.58 Compra duplicada e pedido sem telefone (médios, leva C)
+
+- **Compra por fora duplicada pede confirmação.** Mesma loja e fornecedor com
+  a mesma nota — ou, sem número de nota, mesmo dia e mesmo valor — devolve 409
+  com "Já existe uma compra da Compack com a nota 12345 em 17/09 (pedido nº
+  12). É a mesma?". Se ela disser que é outra, a tela reenvia com
+  `confirmarDuplicada`. Relançar "por via das dúvidas" somava o estoque de
+  novo e gravava o preço de novo, calado.
+- **Fornecedor sem telefone não trava mais o pedido.** O botão de WhatsApp
+  sumia da linha e o pedido ficava pra sempre em "Falta enviar", com o link de
+  confirmação preso dentro de uma mensagem que não dava pra copiar. Agora
+  aparece "Copiar mensagem" no lugar do botão de enviar — ela manda por onde
+  falar com o fornecedor — e, depois de copiar, o sistema pergunta se marca
+  como enviado.

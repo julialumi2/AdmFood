@@ -5193,6 +5193,10 @@ let pedidoDetalheAtual = null;
 let pedidoEstagios = ['enviado', 'confirmado', 'a_caminho', 'recebido'];
 
 let pedidosWhatsAppLinks = {}; // { [pedidoId]: linkWhatsApp } — só pedidos ainda "enviado"
+// A mensagem existe mesmo sem telefone: fornecedor sem número deixava o
+// pedido travado em "Falta enviar" sem explicação, e o link de confirmação,
+// que só existe dentro da mensagem, não tinha como ser copiado (QA 22/09).
+let pedidosMensagensWhatsApp = {};
 
 // Reconstrói o link de WhatsApp de cada pedido pendente ANTES de renderizar
 // a tabela, pra virar um <a href> de verdade — clique direto num link nunca
@@ -5202,12 +5206,14 @@ let pedidosWhatsAppLinks = {}; // { [pedidoId]: linkWhatsApp } — só pedidos a
 // passa por um await, achado ao vivo em 2026-09-04).
 async function carregarLinksWhatsAppPedidos(lista) {
   pedidosWhatsAppLinks = {};
+  pedidosMensagensWhatsApp = {};
   const pendentes = lista.filter((p) => p.status === 'enviado');
   await Promise.all(pendentes.map(async (p) => {
     try {
       const resposta = await fetch(`/api/pedidos/${p.id}/whatsapp`);
       if (!resposta.ok) return;
       const dados = await resposta.json();
+      if (dados.mensagem) pedidosMensagensWhatsApp[p.id] = dados.mensagem;
       const link = _linkWhatsAppTexto(dados.telefone, dados.mensagem);
       if (link) pedidosWhatsAppLinks[p.id] = link;
     } catch (erro) {
@@ -5460,6 +5466,10 @@ function renderPedidosTabela() {
           <a class="btn-acao-icone btn-acao-whatsapp" href="${escaparHtml(pedidosWhatsAppLinks[p.id])}" target="_blank" rel="noopener" title="Enviar pedido por WhatsApp" aria-label="Enviar o pedido nº ${p.id} por WhatsApp" data-acao="enviar-pedido-whatsapp" data-id="${p.id}">
             <i data-lucide="send"></i>
           </a>
+        ` : pedidosMensagensWhatsApp[p.id] ? `
+          <button type="button" class="btn-acao-icone" data-acao="copiar-mensagem-pedido" data-id="${p.id}" title="Fornecedor sem telefone cadastrado: copie a mensagem (com o link de confirmação) e mande por onde falar com ele" aria-label="Copiar a mensagem do pedido nº ${p.id}">
+            <i data-lucide="copy"></i>
+          </button>
         ` : ''}
         <button type="button" class="btn-acao-icone" data-acao="abrir-pedido" data-id="${p.id}" title="Ver itens e avançar a entrega" aria-label="Abrir o pedido nº ${p.id}">
           <i data-lucide="arrow-right"></i>
@@ -5505,6 +5515,25 @@ function renderPedidosTabela() {
     link.addEventListener('click', async () => {
       await _marcarPedidoEnviadoWhatsApp(link.dataset.id);
       await carregarPedidos();
+    });
+  });
+
+  // Fornecedor sem telefone: copiar a mensagem (que leva o link de
+  // confirmação) e marcar como enviado na mão — antes o pedido ficava pra
+  // sempre em "Falta enviar", sem caminho nenhum (QA 22/09).
+  tbody.querySelectorAll('[data-acao="copiar-mensagem-pedido"]').forEach((botao) => {
+    botao.addEventListener('click', async () => {
+      const mensagem = pedidosMensagensWhatsApp[botao.dataset.id];
+      if (!mensagem) return;
+      try {
+        await navigator.clipboard.writeText(mensagem);
+      } catch (erro) {
+        prompt('Copie a mensagem do pedido:', mensagem);
+      }
+      if (confirm('Mensagem copiada (ela tem o link de confirmação). Marcar esse pedido como enviado?')) {
+        await _marcarPedidoEnviadoWhatsApp(botao.dataset.id);
+        await carregarPedidos();
+      }
     });
   });
 
@@ -10079,8 +10108,20 @@ document.getElementById('form-compra-fora')?.addEventListener('submit', async (e
   const botao = document.getElementById('btn-compra-fora-salvar');
   botao.disabled = true;
   try {
-    const resposta = await fetch('/api/pedidos/compra-fora', { method: 'POST', body: dados });
-    const resultado = await resposta.json();
+    let resposta = await fetch('/api/pedidos/compra-fora', { method: 'POST', body: dados });
+    let resultado = await resposta.json();
+    // Compra parecida já lançada (mesma nota, ou mesmo dia e valor): o
+    // servidor devolve 409 e a pessoa decide se é outra compra mesmo — antes
+    // relançar somava o estoque de novo, calado (QA 22/09).
+    if (resposta.status === 409 && resultado.duplicada) {
+      if (!confirm(`${resultado.erro} Se for outra compra, clique em OK pra lançar assim mesmo.`)) {
+        falhar('Compra não lançada — veja o pedido que já existe.');
+        return;
+      }
+      dados.append('confirmarDuplicada', '1');
+      resposta = await fetch('/api/pedidos/compra-fora', { method: 'POST', body: dados });
+      resultado = await resposta.json();
+    }
     if (!resposta.ok) throw new Error(resultado.erro || 'Não foi possível lançar a compra.');
     fecharCompraFora();
     await carregarPedidos();

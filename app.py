@@ -228,6 +228,7 @@ from backend.armazenamento import (
     previa_convites_cotacao,
     listar_convites_cotacao,
     contagem_ja_aberta,
+    compra_fora_parecida,
     item_da_cotacao_virou_pedido,
     insumo_do_preco_cotacao,
     buscar_convite_por_token,
@@ -4287,6 +4288,26 @@ def api_lancar_compra_fora():
         return jsonify({"erro": "Item inválido na lista."}), 400
     texto_fornecedor = (dados.get('fornecedorId') or '').strip()
     fornecedor = {"id": int(texto_fornecedor)} if texto_fornecedor.isdigit() else {"nome": dados.get('fornecedorNome') or ''}
+
+    # Mesma compra lançada duas vezes soma o estoque de novo e grava o preço
+    # de novo (QA 22/09). Com `confirmarDuplicada`, ela decidiu que é outra.
+    if not dados.get('confirmarDuplicada'):
+        nome_fornecedor = dados.get('fornecedorNome') or ''
+        if texto_fornecedor.isdigit():
+            cadastrado = next((f for f in listar_fornecedores() if f['id'] == int(texto_fornecedor)), None)
+            nome_fornecedor = cadastrado['nome'] if cadastrado else ''
+        parecida = compra_fora_parecida(
+            loja, nome_fornecedor, data_compra.isoformat(),
+            (dados.get('numeroNf') or '').strip() or None, valor_nf,
+        )
+        if parecida:
+            quando = datetime.fromisoformat(parecida["dia"]).strftime("%d/%m") if parecida["dia"] else "outro dia"
+            nota = f"com a nota {parecida['numeroNf']}" if parecida["numeroNf"] else f"de R$ {parecida['total']:.2f}"
+            return jsonify({
+                "erro": f"Já existe uma compra da {parecida['fornecedor']} {nota} em {quando} (pedido nº {parecida['pedidoId']}). É a mesma?",
+                "duplicada": True,
+                "pedidoId": parecida["pedidoId"],
+            }), 409
 
     nome_arquivo = None
     arquivo = request.files.get('notaFiscal')

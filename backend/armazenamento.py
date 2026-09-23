@@ -6079,6 +6079,44 @@ def _fornecedor_da_compra_fora(conn, fornecedor):
     ).lastrowid
 
 
+def compra_fora_parecida(loja, fornecedor_nome, data_compra, numero_nf=None, valor_nf=None):
+    """Compra por fora que parece a mesma que estão lançando agora: mesma
+    loja e fornecedor com a MESMA NOTA, ou (sem nota) mesmo dia e mesmo
+    valor. Relançar "por via das dúvidas" somava o estoque de novo e gravava
+    o preço de novo, sem nada avisar (QA 22/09)."""
+    nome = (fornecedor_nome or "").strip().lower()
+    if not nome:
+        return None
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT p.id, p.recebido_em, p.numero_nf, f.nome AS fornecedor,
+                   COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS total
+            FROM pedido_compra p
+            JOIN fornecedor f ON f.id = p.fornecedor_id
+            LEFT JOIN pedido_compra_item pi ON pi.pedido_id = p.id
+            WHERE p.compra_fora = 1 AND p.loja = ? AND LOWER(f.nome) = ?
+            GROUP BY p.id
+            ORDER BY p.id DESC LIMIT 50
+            """,
+            (loja, nome),
+        ).fetchall()
+    numero = (numero_nf or "").strip()
+    for linha in linhas:
+        mesma_nota = numero and (linha["numero_nf"] or "").strip() == numero
+        mesmo_dia = (linha["recebido_em"] or "")[:10] == data_compra
+        mesmo_valor = valor_nf is not None and abs((linha["total"] or 0) - valor_nf) < 0.01
+        if mesma_nota or (mesmo_dia and mesmo_valor):
+            return {
+                "pedidoId": linha["id"],
+                "fornecedor": linha["fornecedor"],
+                "numeroNf": linha["numero_nf"],
+                "dia": (linha["recebido_em"] or "")[:10],
+                "total": round(linha["total"] or 0, 2),
+            }
+    return None
+
+
 def lancar_compra_fora(fornecedor, loja, comprado_por, data_compra, itens, numero_nf=None, valor_nf=None,
                        somar_estoque=True, nota_fiscal_arquivo=None):
     """Grava a compra como pedido já recebido, numa cotação oculta própria:
