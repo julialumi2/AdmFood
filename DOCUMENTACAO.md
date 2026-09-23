@@ -4766,3 +4766,24 @@ contra 29 do 99Food e 19 do balcão.
   memória de cada processo: a produção roda com dois gunicorn, então o limite
   dobrava na prática e reiniciar zerava tudo. O login certo limpa pelo e-mail
   normalizado — antes limpava pela chave crua e as falhas ficavam lá.
+
+### 6.70 Dividir a contagem entre as pessoas da loja
+
+Na Artesanos três pessoas contam o estoque ao mesmo tempo, mas a requisição
+abria **um link por loja, com a lista inteira**. Como o link é sem login, as
+três abriam o mesmo, e quem enviasse primeiro gravava: as outras duas perdiam
+tudo — e só descobriam depois de digitar a lista toda.
+
+Agora "Nova requisição" tem **"Dividir em vários links, um por seção"**. Marcou
+as seções (Hortifruti, Embalagens, Bebidas…), sai um link por seção por loja,
+cada um só com os insumos daquela seção. Uma pessoa por link, sem se
+atropelar. Sem marcar nada, continua como era: um link com tudo.
+
+- `contagem.secoes` guarda quais seções aquele bloco cobre (vazio = todas), e
+  é o que faz a trava de duplicada saber que "Artesanos · Hortifruti" e
+  "Artesanos · Bebidas" são blocos diferentes da mesma requisição, não dois
+  cliques no mesmo botão.
+- A requisição continua sendo **uma só** (mesmo título e prazo): a conferência
+  soma os blocos, e o contador vira "0 de 3 responderam" em vez de "0 de 1".
+- Nas duas tabelas de contagem a seção aparece embaixo do nome da loja, pra
+  dar pra ver de relance quem já mandou o quê.

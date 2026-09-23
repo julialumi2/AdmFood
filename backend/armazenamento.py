@@ -1059,6 +1059,11 @@ def inicializar_banco():
             # compra, então o item dessa loja vai pra cotação em vez de pedido.
             conn.execute("ALTER TABLE contagem_item ADD COLUMN forcar_cotacao INTEGER NOT NULL DEFAULT 0")
         colunas_contagem = {c["name"] for c in conn.execute("PRAGMA table_info(contagem)").fetchall()}
+        if "secoes" not in colunas_contagem:
+            # Quais seções essa contagem cobre (QA 22/09): vazio = todas.
+            # Sem isso, duas contagens da mesma loja na mesma requisição
+            # (uma por pessoa) ficam indistinguíveis.
+            conn.execute("ALTER TABLE contagem ADD COLUMN secoes TEXT")
         if "reaberta_em" not in colunas_contagem:
             # Reabrir pra corrigir não podia esbarrar no prazo vencido: a
             # aprovação quase sempre é depois do prazo, então a loja reabria e
@@ -7013,17 +7018,26 @@ def limpar_falhas_de_login(email):
         conn.execute("DELETE FROM tentativa_login WHERE email = ?", ((email or "").strip().lower(),))
 
 
-def contagem_ja_aberta(loja, descricao, prazo_validade):
-    """Id da contagem que já existe pra essa loja com o mesmo título e prazo
-    (é o que define uma requisição), ou None. Dois cliques em "Criar" abriam
-    duas, e a cópia sem resposta prendia a requisição em "Aguardando lojas"
-    pra sempre (QA 22/09)."""
+def contagem_ja_aberta(loja, descricao, prazo_validade, categorias=None):
+    """Id da contagem que já existe pra essa loja com o mesmo título, prazo e
+    conjunto de seções, ou None. Dois cliques em "Criar" abriam duas, e a
+    cópia sem resposta prendia a requisição em "Aguardando lojas" pra sempre
+    (QA 22/09). Seções diferentes são blocos diferentes da mesma requisição
+    (uma pessoa conta hortifruti, outra conta bebida), então não contam como
+    duplicada."""
     with conexao() as conn:
         linha = conn.execute(
-            "SELECT id FROM contagem WHERE loja = ? AND descricao = ? AND prazo_validade = ? ORDER BY id LIMIT 1",
-            (loja, descricao, prazo_validade),
+            "SELECT id FROM contagem WHERE loja = ? AND descricao = ? AND prazo_validade = ? "
+            "AND COALESCE(secoes, '') = ? ORDER BY id LIMIT 1",
+            (loja, descricao, prazo_validade, _secoes_em_texto(categorias) or ""),
         ).fetchone()
     return linha["id"] if linha else None
+
+
+def _secoes_em_texto(categorias):
+    """Guarda as seções numa string só ("Hortifruti · Bebidas"); vazio = a
+    contagem cobre tudo."""
+    return " · ".join(sorted(categorias)) if categorias else None
 
 
 def criar_contagem(loja, descricao, prazo_validade, categorias=None):
@@ -7062,10 +7076,10 @@ def criar_contagem(loja, descricao, prazo_validade, categorias=None):
 
         cursor = conn.execute(
             """
-            INSERT INTO contagem (token, loja, descricao, prazo_validade, status, criado_em)
-            VALUES (?, ?, ?, ?, 'aberta', ?)
+            INSERT INTO contagem (token, loja, descricao, prazo_validade, status, criado_em, secoes)
+            VALUES (?, ?, ?, ?, 'aberta', ?, ?)
             """,
-            (token, loja, descricao, prazo_validade, agora),
+            (token, loja, descricao, prazo_validade, agora, _secoes_em_texto(categorias)),
         )
         contagem_id = cursor.lastrowid
         for linha in linhas:

@@ -396,3 +396,22 @@
 .btn-enviar-contagem svg { width: 14px; height: 14px; }
 
 .contagem-link-item .envio-contagem { margin-top: 6px; width: 100%; }
+
+/* Seção que a contagem cobre, quando a requisição foi dividida entre pessoas
+   (QA 22/09): sem isso, duas linhas da mesma loja ficam iguais na tela. */
+.contagem-secao-tag {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.form-check-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}

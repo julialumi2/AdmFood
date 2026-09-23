@@ -4580,6 +4580,9 @@ def _formatar_contagem(contagem):
         "totalItens": total,
         "itensPreenchidos": preenchidos,
         "token": contagem.get('token'),
+        # Seções que essa contagem cobre — vazio quer dizer a lista inteira
+        # (QA 22/09: a requisição pode sair em vários links por loja).
+        "secoes": contagem.get('secoes'),
     }
 
 
@@ -5019,11 +5022,13 @@ def api_criar_contagem():
     prazo_validade = (dados.get('prazoValidade') or '').strip()
     if not prazo_validade:
         return jsonify({"erro": "Informe o prazo de validade."}), 400
-    categorias = dados.get('categorias') or None
+    # Seções que essa contagem cobre (QA 22/09): a requisição pode sair em
+    # vários links por loja, um por bloco, pra três pessoas contarem juntas.
+    categorias = [str(c).strip() for c in (dados.get('categorias') or []) if str(c).strip()] or None
 
     # Mesma loja, mesmo título e mesmo prazo é a mesma requisição: o segundo
     # clique devolve a que já existe em vez de abrir uma cópia (QA 22/09).
-    ja_existe = contagem_ja_aberta(loja, descricao, prazo_validade)
+    ja_existe = contagem_ja_aberta(loja, descricao, prazo_validade, categorias)
     if ja_existe:
         contagem = buscar_contagem(ja_existe)
         return jsonify({"id": ja_existe, "token": contagem["token"], "jaExistia": True})

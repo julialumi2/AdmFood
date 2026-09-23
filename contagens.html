@@ -441,6 +441,22 @@
               <!-- Renderizado dinamicamente via JS (LOJAS_ESTOQUE) -->
             </div>
           </div>
+
+          <!-- Dividir entre pessoas (QA 22/09): na Artesanos são três
+               contando, e um link só faz quem enviar primeiro apagar o
+               trabalho dos outros. -->
+          <div class="form-group">
+            <label class="form-check-inline">
+              <input type="checkbox" id="nova-contagem-dividir">
+              <span>Dividir em vários links, um por seção</span>
+            </label>
+            <p class="panel-subtitle" id="nova-contagem-dividir-ajuda" hidden>
+              Cada seção marcada vira um link separado por loja — dá pra mandar um pra cada pessoa que conta.
+            </p>
+            <div class="form-checklist" id="nova-contagem-secoes" hidden>
+              <p class="panel-subtitle">Carregando seções...</p>
+            </div>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-nova-contagem-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm">Criar</button>

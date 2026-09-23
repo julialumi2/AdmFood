@@ -5935,7 +5935,7 @@ function renderContagensTabela() {
     const prazo = new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(c.loja)}</td>
+        <td class="font-bold">${escaparHtml(c.loja)}${c.secoes ? `<span class="contagem-secao-tag">${escaparHtml(c.secoes)}</span>` : ''}</td>
         <td class="text-muted">${escaparHtml(c.descricao) || '—'}</td>
         <td>${c.itensPreenchidos} de ${c.totalItens}</td>
         <td class="text-muted">${prazo}</td>
@@ -6469,7 +6469,7 @@ function renderConferenciaRequisicao() {
     const classe = STATUS_CLASSE_CONTAGEM[c.status];
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(c.loja)}</td>
+        <td class="font-bold">${escaparHtml(c.loja)}${c.secoes ? `<span class="contagem-secao-tag">${escaparHtml(c.secoes)}</span>` : ''}</td>
         <td>${c.itensPreenchidos} de ${c.totalItens}</td>
         <td><span class="badge-pill ${classe}">${status}</span></td>
         <td>${c.status === 'aberta' && c.token ? _envioContagemHTML(c.loja, c.token, c.prazoValidade) : '<span class="text-muted">—</span>'}</td>
@@ -7292,8 +7292,36 @@ document.getElementById('btn-gerar-cotacao-requisicao')?.addEventListener('click
 });
 
 // --- Modal: Nova requisição (abre uma contagem por loja selecionada) ---
+// Seções do catálogo, pra dividir a contagem entre pessoas (QA 22/09).
+let categoriasParaContagem = null;
+
+async function _carregarSecoesParaContagem() {
+  const alvo = document.getElementById('nova-contagem-secoes');
+  if (!alvo) return;
+  if (!categoriasParaContagem) {
+    try {
+      const resposta = await fetch('/api/insumos');
+      const insumos = resposta.ok ? ((await resposta.json()).insumos || []) : [];
+      categoriasParaContagem = [...new Set(insumos
+        .filter((i) => !i.ehMistura)
+        .map((i) => i.categoria || 'Geral'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    } catch (erro) {
+      categoriasParaContagem = [];
+    }
+  }
+  alvo.innerHTML = categoriasParaContagem.length
+    ? categoriasParaContagem.map((c) => `
+      <label><input type="checkbox" name="nova-contagem-secao" value="${escaparHtml(c)}"> ${escaparHtml(c)}</label>
+    `).join('')
+    : '<p class="panel-subtitle">Não consegui carregar as seções agora — dá pra criar a requisição inteira e dividir depois.</p>';
+}
+
 function abrirModalNovaContagem() {
   document.getElementById('form-nova-contagem').reset();
+  const secoes = document.getElementById('nova-contagem-secoes');
+  const ajuda = document.getElementById('nova-contagem-dividir-ajuda');
+  if (secoes) secoes.hidden = true;
+  if (ajuda) ajuda.hidden = true;
   const container = document.getElementById('nova-contagem-lojas');
   container.innerHTML = LOJAS_ESTOQUE.map((loja, indice) => `
     <label>
@@ -7309,6 +7337,13 @@ function fecharModalNovaContagem() {
 }
 
 document.getElementById('btn-nova-contagem')?.addEventListener('click', abrirModalNovaContagem);
+document.getElementById('nova-contagem-dividir')?.addEventListener('change', async (evento) => {
+  const secoes = document.getElementById('nova-contagem-secoes');
+  const ajuda = document.getElementById('nova-contagem-dividir-ajuda');
+  secoes.hidden = !evento.target.checked;
+  ajuda.hidden = !evento.target.checked;
+  if (evento.target.checked) await _carregarSecoesParaContagem();
+});
 document.getElementById('btn-nova-contagem-fechar')?.addEventListener('click', fecharModalNovaContagem);
 document.getElementById('btn-nova-contagem-cancelar')?.addEventListener('click', fecharModalNovaContagem);
 
@@ -7333,24 +7368,42 @@ document.getElementById('form-nova-contagem')?.addEventListener('submit', async 
     botaoCriar.textContent = 'Criando…';
   }
 
+  // Dividir entre pessoas: cada seção marcada vira um link por loja, pra
+  // três pessoas contarem ao mesmo tempo sem uma apagar a outra (QA 22/09).
+  const dividir = document.getElementById('nova-contagem-dividir')?.checked;
+  const secoesMarcadas = dividir
+    ? [...document.querySelectorAll('input[name="nova-contagem-secao"]:checked')].map((el) => el.value)
+    : [];
+  if (dividir && !secoesMarcadas.length) {
+    alert('Marque as seções que vão virar link, ou desmarque "Dividir em vários links".');
+    return;
+  }
+  // Sem divisão: um bloco só, com a lista inteira (comportamento de sempre).
+  const blocos = secoesMarcadas.length ? secoesMarcadas.map((s) => [s]) : [null];
+
   try {
     const linksGerados = [];
     for (const loja of lojas) {
-      const resposta = await fetch('/api/contagens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loja, descricao, prazoValidade }),
-      });
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || `falha ao criar contagem de ${loja}`);
-      linksGerados.push({ loja, token: dados.token, link: `${location.origin}/preencher_contagem.html?token=${dados.token}` });
+      for (const categorias of blocos) {
+        const resposta = await fetch('/api/contagens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loja, descricao, prazoValidade, categorias }),
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.erro || `falha ao criar contagem de ${loja}`);
+        linksGerados.push({
+          loja, token: dados.token, secao: categorias ? categorias[0] : null,
+          link: `${location.origin}/preencher_contagem.html?token=${dados.token}`,
+        });
+      }
     }
 
     fecharModalNovaContagem();
     await carregarContatosContagem();
     document.getElementById('contagem-link-lista').innerHTML = linksGerados.map((item, indice) => `
       <div class="contagem-link-item">
-        <span class="contagem-link-loja">${escaparHtml(item.loja)}</span>
+        <span class="contagem-link-loja">${escaparHtml(item.loja)}${item.secao ? ` · ${escaparHtml(item.secao)}` : ''}</span>
         <input type="text" readonly value="${escaparHtml(item.link)}" id="contagem-link-valor-${indice}">
         <button type="button" class="btn-secondary-sm" data-copiar="contagem-link-valor-${indice}">Copiar</button>
         ${_envioContagemHTML(item.loja, item.token, prazoValidade)}
