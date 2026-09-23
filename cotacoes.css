@@ -673,3 +673,15 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
+/* Célula gravando o vencedor (QA 22/09): entre o clique e o redesenho não
+   havia nenhum retorno visual. */
+.td-comparacao-preco.salvando { position: relative; opacity: 0.55; cursor: progress; }
+.td-comparacao-preco.salvando::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--info);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}

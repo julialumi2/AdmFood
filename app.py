@@ -581,7 +581,9 @@ def _exigir_login():
 # fez, quando, o quê e se deu certo. Rota nova já nasce registrada.
 
 CHAVES_SENSIVEIS_NO_REGISTRO = {'senha', 'senhaNova', 'senhaAtual', 'senha_hash', 'token'}
-ROTAS_SEM_REGISTRO = {'/api/logout', '/api/sincronizar-agora'}
+# "Sincronizar agora" ficava de fora do registro: ninguém sabia quem
+# disparou, nem quando (QA 22/09).
+ROTAS_SEM_REGISTRO = {'/api/logout'}
 
 DESCRICAO_DA_ACAO = {
     ('POST', '/api/login'): 'Entrou no sistema',
@@ -617,6 +619,7 @@ DESCRICAO_DA_ACAO = {
     ('PUT', '/api/requisicoes/conferencia/fornecedor-avulso'): 'Combinou um fornecedor só pra esta compra',
     ('POST', '/api/requisicoes/conferencia/gerar-pedidos'): 'Gerou os pedidos homologados da requisição',
     ('POST', '/api/requisicoes/conferencia/reaplicar-homologados'): 'Atualizou a compra com os homologados',
+    ('POST', '/api/sincronizar-agora'): 'Mandou sincronizar as vendas agora',
     ('POST', '/api/cotacoes'): 'Criou cotação',
     ('PUT', '/api/cotacoes/<int:cotacao_id>'): 'Editou a cotação',
     ('DELETE', '/api/cotacoes/<int:cotacao_id>/itens/<int:insumo_id>'): 'Tirou um item da cotação',
@@ -3541,7 +3544,10 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
         return erro_pedido
 
     selecionar_preco_cotacao(preco_id)
-    return jsonify({"ok": True})
+    # Devolve qual insumo mudou pra tela redesenhar só aquela linha: cada
+    # clique custava três idas ao servidor e o redesenho da tabela inteira
+    # (QA 22/09).
+    return jsonify({"ok": True, "insumoId": preco["insumoId"], "precoId": preco_id})
 
 
 @app.route('/api/cotacoes/<int:cotacao_id>/selecionar-melhores-precos', methods=['POST'])
@@ -5575,9 +5581,32 @@ def api_config_lojas():
     })
 
 
+# Uma sincronização manual por vez. Cada clique abria uma execução nova, e
+# duas ao mesmo tempo disputam o limite da Cardápio Web (5 chamadas por
+# minuto): as duas voltam pela metade (QA 22/09). É por processo, que é onde
+# a thread roda — o agendamento entre workers tem a trava dele
+# (_sou_o_unico_worker_a_agendar).
+_SINCRONIZACAO_MANUAL = {"rodando": False, "desde": None, "dia": None, "ultima": None}
+_TRAVA_SINCRONIZACAO_MANUAL = threading.Lock()
+
+
 def _sincronizar_lojas_em_segundo_plano(dia_alvo):
-    # Mesmo caminho da sincronização automática (segunda sem pedido não grava).
-    sincronizar_dia(dia_alvo)
+    erro = None
+    try:
+        # Mesmo caminho da sincronização automática (segunda sem pedido não grava).
+        sincronizar_dia(dia_alvo)
+    except Exception as falha:  # noqa: BLE001 — o resultado precisa chegar na tela
+        erro = str(falha)
+        import traceback
+        traceback.print_exc()
+    finally:
+        with _TRAVA_SINCRONIZACAO_MANUAL:
+            _SINCRONIZACAO_MANUAL["rodando"] = False
+            _SINCRONIZACAO_MANUAL["ultima"] = {
+                "dia": dia_alvo.isoformat(),
+                "terminouEm": datetime.now().isoformat(),
+                "erro": erro,
+            }
 
 
 # Pedidos que o faturamento não conta (2026-09-18): a semana do Artesanos não
@@ -5712,12 +5741,39 @@ def api_sincronizar_agora():
     # por uma resposta, derrubando a conexão no meio do processo (e deixando
     # dado só parcialmente atualizado). O resultado final aparece na tela de
     # Configurações/Home assim que a atualização automática buscar de novo.
+    with _TRAVA_SINCRONIZACAO_MANUAL:
+        if _SINCRONIZACAO_MANUAL["rodando"]:
+            return jsonify({
+                "erro": f"Já tem uma sincronização rodando (de {_formatar_data_br(_SINCRONIZACAO_MANUAL['dia'])}, "
+                        f"começou às {_SINCRONIZACAO_MANUAL['desde'][11:16]}). Espere ela terminar: duas ao mesmo "
+                        "tempo disputam o limite da Cardápio Web e as duas voltam pela metade.",
+                "jaRodando": True,
+            }), 409
+        _SINCRONIZACAO_MANUAL.update(rodando=True, desde=datetime.now().isoformat(), dia=dia_alvo.isoformat())
+
     threading.Thread(target=_sincronizar_lojas_em_segundo_plano, args=(dia_alvo,), daemon=True).start()
 
     return jsonify({
         "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
         "fechado": False,
         "iniciado": True,
+    })
+
+
+@app.route('/api/sincronizar-agora', methods=['GET'])
+def api_estado_sincronizacao():
+    """Se ainda está rodando e como terminou a última — o dia que falhava só
+    aparecia no log do servidor (QA 22/09)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    with _TRAVA_SINCRONIZACAO_MANUAL:
+        estado = dict(_SINCRONIZACAO_MANUAL)
+    return jsonify({
+        "rodando": estado["rodando"],
+        "dia": estado["dia"],
+        "desde": estado["desde"],
+        "ultima": estado["ultima"],
     })
 
 

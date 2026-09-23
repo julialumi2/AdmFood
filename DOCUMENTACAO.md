@@ -4845,3 +4845,28 @@ Quatro caminhos diferentes em que um dado sumia calado.
   que vai junto, e o registro de ações grava `Excluiu o card "X" (levou 2
   comentário(s) e 3 subtarefa(s))` em vez de só "Excluiu tarefa" — pra isso a
   rota agora pode anotar a própria descrição no registro (`_anotar_no_registro`).
+
+### 6.73 A tela disparando no servidor sem dizer
+
+- **Escolher vencedor na cotação** custava **quatro idas ao servidor por
+  clique**: a escolha, mais o recarregamento do detalhe, dos convites e da
+  prévia de órfãos — e a tabela inteira redesenhada. Numa cotação de 40 itens
+  são 160 chamadas, sem nenhum retorno visual entre o clique e o redesenho.
+  Agora é **uma chamada**: a célula mostra que está gravando, a marca de
+  vencedor anda na hora e só aquela linha é atualizada. Clique repetido na
+  mesma célula é ignorado enquanto a primeira não volta, e se o servidor
+  recusar (cotação fechada, item que já virou pedido) a tela recarrega antes
+  do aviso — assim um alerta bloqueado pelo navegador não deixa a tela
+  mentindo.
+- **Curva ABC**: dois cliques rápidos em loja ou período podiam deixar na tela
+  o resultado do primeiro, porque a resposta que chega por último nem sempre é
+  a do último clique. Agora cada busca leva um número e só a mais recente tem
+  direito de desenhar. A tabela grande também passou a mostrar "Carregando..."
+  (antes só as duas listas laterais eram limpas).
+- **"Sincronizar agora"**: cada clique abria uma execução nova. Duas ao mesmo
+  tempo disputam o limite da Cardápio Web (5 chamadas por minuto) e as duas
+  voltam pela metade. Agora o servidor recusa a segunda dizendo de que dia é a
+  que está rodando e a que horas começou. A tela acompanha até o fim e mostra
+  o resultado — **o dia que falhava só aparecia no log do servidor**. E a rota
+  saiu da lista de exceções do registro de ações: agora fica gravado quem
+  mandou sincronizar e quando.

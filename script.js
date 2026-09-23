@@ -4909,6 +4909,49 @@ function _linkWhatsAppTexto(telefone, mensagem) {
   return `https://wa.me/${numeroCompleto}?text=${encodeURIComponent(mensagem)}`;
 }
 
+// Escolher vencedor custava quatro idas ao servidor por clique (a escolha
+// mais o recarregamento inteiro do detalhe, dos convites e da prévia) e não
+// dava nenhum retorno entre o clique e o redesenho: em 40 itens, 160
+// chamadas em silêncio (QA 22/09). Agora é uma chamada só, a marca anda na
+// hora e a célula mostra que está gravando.
+const _vencedoresEmVoo = new Set();
+
+async function _escolherVencedorCotacao(td) {
+  const precoId = Number(td.dataset.id);
+  if (_vencedoresEmVoo.has(precoId)) return;
+  _vencedoresEmVoo.add(precoId);
+  td.classList.add('salvando');
+  try {
+    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${precoId}/selecionar`, { method: 'PUT' });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) {
+      // Falhando (cotação fechada, item que já virou pedido), a tela se
+      // redesenhava como estava e ninguém entendia por quê.
+      // Recarrega antes de avisar: o aviso não pode ser o que impede a tela
+      // de voltar pro que o servidor tem.
+      await recarregarCotacaoDetalhe();
+      alert(dados.erro || 'Não foi possível escolher esse vencedor.');
+      return;
+    }
+    // O vencedor é um por insumo: marca este e desmarca os irmãos da linha,
+    // sem buscar a cotação inteira de novo.
+    let mudou = false;
+    (cotacaoComparacaoDados.grupos || []).forEach((linha) => {
+      if (!(linha.precos || []).some((p) => p.id === precoId)) return;
+      linha.precos.forEach((p) => { p.selecionado = p.id === precoId; });
+      mudou = true;
+    });
+    if (mudou) _renderTabelaComparacaoCotacao();
+    else await recarregarCotacaoDetalhe();
+  } catch (erro) {
+    console.error('Falha ao escolher vencedor:', erro);
+    alert('Não foi possível escolher esse vencedor. Tente de novo em instantes.');
+  } finally {
+    _vencedoresEmVoo.delete(precoId);
+    td.classList.remove('salvando');
+  }
+}
+
 function _renderTabelaComparacaoCotacao() {
   const { grupos, isAdmin, itens, catalogoCompleto, recusas } = cotacaoComparacaoDados;
   const container = document.getElementById('cotacao-comparacao-lista');
@@ -5125,15 +5168,7 @@ function _renderTabelaComparacaoCotacao() {
     container.querySelectorAll('[data-acao="selecionar-preco"]').forEach(td => {
       td.addEventListener('click', async (evento) => {
         if (evento.target.closest('[data-acao="excluir-preco"]')) return;
-        // Escolher vencedor era uma ação muda: falhando (cotação fechada, ou
-        // item que já virou pedido), a tela se redesenhava como estava e
-        // ninguém entendia por quê (QA 22/09).
-        const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${td.dataset.id}/selecionar`, { method: 'PUT' });
-        if (!resposta.ok) {
-          alert((await resposta.json().catch(() => ({}))).erro || 'Não foi possível escolher esse vencedor.');
-          return;
-        }
-        await recarregarCotacaoDetalhe();
+        await _escolherVencedorCotacao(td);
       });
     });
     // "tirar da cotação" (2026-09-21): item que ninguém vai cotar (ex.: a lata).
@@ -11135,24 +11170,66 @@ async function sincronizarAgora() {
 
   try {
     const resposta = await fetch('/api/sincronizar-agora', { method: 'POST' });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
-    const dados = await resposta.json();
+    const dados = await resposta.json().catch(() => ({}));
+    // Duas sincronizações ao mesmo tempo disputam o limite da Cardápio Web e
+    // as duas voltam pela metade: agora o servidor recusa a segunda (QA 22/09).
+    if (resposta.status === 409 && dados.jaRodando) {
+      if (resultadoElem) resultadoElem.innerHTML = `<div class="sync-resultado-item erro">${escaparHtml(dados.erro)}</div>`;
+      _acompanharSincronizacao();
+      return;
+    }
+    if (!resposta.ok) throw new Error(dados.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
 
     if (resultadoElem) {
       resultadoElem.innerHTML = `<div class="sync-resultado-item">Sincronização de ${dados.diaLabel} iniciada em segundo plano — pode levar alguns minutos. Os números atualizam sozinhos aqui.</div>`;
     }
+    _acompanharSincronizacao();
 
     carregarConfigLojas();
     if (document.getElementById('home-sync-indicador')) carregarStatusSincronizacaoHome();
   } catch (erro) {
     console.error('Falha ao sincronizar:', erro);
     if (resultadoElem) {
-      resultadoElem.innerHTML = `<div class="sync-resultado-item erro">Não foi possível sincronizar. Tente de novo em instantes.</div>`;
+      resultadoElem.innerHTML = `<div class="sync-resultado-item erro">${escaparHtml(erro.message || 'Não foi possível sincronizar. Tente de novo em instantes.')}</div>`;
     }
   } finally {
     botao.disabled = false;
     botao.innerHTML = htmlOriginal;
   }
+}
+
+// Acompanha a sincronização em segundo plano até acabar. Antes, o dia que
+// falhava só aparecia no log do servidor — na tela ficava o "iniciada" pra
+// sempre (QA 22/09).
+let _relogioSincronizacao = null;
+
+function _acompanharSincronizacao() {
+  const resultadoElem = document.getElementById('sync-resultado');
+  const botao = document.getElementById('btn-sincronizar-agora');
+  if (_relogioSincronizacao) clearInterval(_relogioSincronizacao);
+  const olhar = async () => {
+    try {
+      const resposta = await fetch('/api/sincronizar-agora');
+      if (!resposta.ok) throw new Error('sem estado');
+      const estado = await resposta.json();
+      if (botao) botao.disabled = !!estado.rodando;
+      if (estado.rodando) return;
+      clearInterval(_relogioSincronizacao);
+      _relogioSincronizacao = null;
+      if (resultadoElem && estado.ultima) {
+        resultadoElem.innerHTML = estado.ultima.erro
+          ? `<div class="sync-resultado-item erro">A sincronização de ${escaparHtml(_dataBR(estado.ultima.dia))} falhou: ${escaparHtml(estado.ultima.erro)}</div>`
+          : `<div class="sync-resultado-item">Sincronização de ${escaparHtml(_dataBR(estado.ultima.dia))} terminada.</div>`;
+      }
+      carregarConfigLojas();
+      if (document.getElementById('home-sync-indicador')) carregarStatusSincronizacaoHome();
+    } catch (erro) {
+      clearInterval(_relogioSincronizacao);
+      _relogioSincronizacao = null;
+    }
+  };
+  _relogioSincronizacao = setInterval(olhar, 5000);
+  olhar();
 }
 
 function _formatarMoedaBRL(valor) {
@@ -14474,7 +14551,13 @@ let curvaAbcLoja = 'Hamburgueria Artesanos';
 let curvaAbcDias = 30;
 let curvaAbcDados = null;
 
+// Dois cliques rápidos em loja ou período: a resposta que chega por último
+// nem sempre é a do último clique, e a tela podia ficar com o resultado do
+// primeiro (QA 22/09). Só a busca mais recente tem direito de desenhar.
+let _curvaAbcBuscaAtual = 0;
+
 async function carregarCurvaAbc() {
+  const minhaBusca = ++_curvaAbcBuscaAtual;
   // Trocar de loja ou período deixava os números da loja anterior na tela até
   // a resposta chegar — e pra sempre, se desse erro (QA 22/09).
   const subtituloAbc = document.getElementById('curva-tabela-subtitulo');
@@ -14483,15 +14566,19 @@ async function carregarCurvaAbc() {
     const corpo = document.getElementById(id);
     if (corpo) corpo.innerHTML = '';
   });
+  const corpoTabela = document.getElementById('curva-tabela-body');
+  if (corpoTabela) corpoTabela.innerHTML = '<tr><td colspan="8" class="panel-subtitle">Carregando...</td></tr>';
   const avisoAbc = document.getElementById('curva-aviso');
   if (avisoAbc) avisoAbc.style.display = 'none';
   try {
     const resposta = await fetch(`/api/curva-abc?loja=${encodeURIComponent(curvaAbcLoja)}&dias=${curvaAbcDias}`);
     const dados = await resposta.json();
+    if (minhaBusca !== _curvaAbcBuscaAtual) return;
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
     curvaAbcDados = dados;
     renderCurvaAbc();
   } catch (erro) {
+    if (minhaBusca !== _curvaAbcBuscaAtual) return;
     console.error('Falha ao carregar Curva ABC:', erro);
     // O erro aparecia só na tabela grande: as duas listas e o subtítulo
     // ficavam com os números da loja/período anteriores (QA 22/09).
