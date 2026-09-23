@@ -229,11 +229,17 @@
         <div class="metrics-grid">
           <div class="metric-card">
             <div class="card-header">
-              <span class="card-label">Tempo Médio do Pedido</span>
+              <!-- Mediana, não média: um pedido esquecido aberto o dia todo
+                   puxava a média sozinho (QA 22/09). E é o tempo do pedido
+                   inteiro, não só da cozinha — a API não marca o preparo. -->
+              <span class="card-label" title="Do pedido recebido até ele ser fechado ou entregue. A Cardápio Web não marca quando a cozinha terminou, então esse tempo inclui a entrega.">Tempo do pedido (mediana)</span>
               <div class="card-icon"><i data-lucide="timer"></i></div>
             </div>
             <div class="card-value" id="preparo-val-tempo-medio">—</div>
-            <div class="card-trend"><span class="trend-sub" id="preparo-periodo-label"></span></div>
+            <div class="card-trend">
+              <span class="trend-sub" id="preparo-media-label"></span>
+              <span class="trend-sub" id="preparo-periodo-label"></span>
+            </div>
           </div>
 
           <div class="metric-card">

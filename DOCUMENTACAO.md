@@ -4709,3 +4709,26 @@ quantos entraram, quantos foram atualizados e quantos saíram.
   qualquer aba — antes só na Visão Geral e na Tradiça Simus, então a tela
   mostrava "portal" cru enquanto o relatório de WhatsApp dizia "Presencial"
   pro mesmo número.
+
+### 6.67 Preparo honesto, receita estimada rotulada e lojas por perfil
+
+- **Preparo mostra a mediana**, com a média ao lado. Um pedido esquecido
+  aberto o dia inteiro puxava a média sozinho: nos dados de teste a média dá
+  52 min e a mediana 36,4 — 43% de diferença. O rótulo também parou de
+  prometer o que não mede: "Tempo do pedido (mediana)", com o hover
+  explicando que vai do pedido recebido até ele ser fechado ou entregue,
+  porque a Cardápio Web não marca quando a cozinha terminou.
+- **Cobertura do período no Preparo:** "5 de 23 dias do período têm dado", em
+  laranja. Com a sincronização parada, a média dos dias que existem aparecia
+  como se fosse o período inteiro.
+- **A rota do Preparo respeita a loja do funcionário.** Ela devolvia as 4
+  lojas pra qualquer perfil de gestão e quem limitava era só o navegador
+  apagando as abas; agora gerente de uma loja recebe só a dele.
+- **Mais Vendidos diz que a receita é estimada:** o valor no ranking vira
+  "R$ 1.234 est.", o "preço médio" vira "preço de tabela" e o subtítulo
+  fecha com "valores estimados pelo preço de tabela". O único número real da
+  tela é o faturamento do comparativo entre lojas.
+- **Configurações não mostra mais a rede inteira pra quem não é admin:**
+  `/api/config/lojas` passou a filtrar por `_loja_visivel`, então as pílulas
+  do topo ("4 lojas conectadas", nomes das atrasadas) param de vazar as
+  outras lojas pra gerente e operação.

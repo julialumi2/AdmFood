@@ -18,3 +18,7 @@
   font-weight: 700;
   color: var(--text-dark);
 }
+
+/* Período sem todos os dias sincronizados (QA 22/09): a média dos dias que
+   existem não é a média do período. */
+.periodo-incompleto { color: var(--warning-texto); font-weight: 600; }

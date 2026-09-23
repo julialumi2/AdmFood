@@ -5436,7 +5436,11 @@ def _mascarar_token(token):
 def api_config_lojas():
     ultimo_dia = buscar_ultima_sincronizacao()
     lojas = []
+    # Gerente e operação viam "4 lojas conectadas" e o nome das outras nas
+    # pílulas do topo de Configurações: a rota não olhava o perfil (QA 22/09).
     for nome, cfg in LOJAS.items():
+        if not _loja_visivel(nome):
+            continue
         ultimo_dia_loja = buscar_ultima_sincronizacao(nome)
         lojas.append({
             "nome": nome,
@@ -6050,11 +6054,21 @@ def api_insights_automaticos():
 # backend/cardapio_web.py:_duracao_minutos e seção 6.2 da documentação).
 
 def _agregar_duracoes(pedidos):
+    """Mediana e média do tempo do pedido. A mediana é o número que a tela
+    mostra: um pedido esquecido aberto o dia inteiro puxava a média sozinho e
+    fazia o dia parecer lento (QA 22/09). A média fica do lado, pra dar pra
+    ver quando as duas se afastam."""
     if not pedidos:
-        return {"tempoMedioMinutos": None, "totalPedidos": 0}
-    total = len(pedidos)
-    media = sum(p["duracao_minutos"] for p in pedidos) / total
-    return {"tempoMedioMinutos": round(media, 1), "totalPedidos": total}
+        return {"tempoMedioMinutos": None, "tempoMedianaMinutos": None, "totalPedidos": 0}
+    duracoes = sorted(p["duracao_minutos"] for p in pedidos)
+    total = len(duracoes)
+    meio = total // 2
+    mediana = duracoes[meio] if total % 2 else (duracoes[meio - 1] + duracoes[meio]) / 2
+    return {
+        "tempoMedioMinutos": round(sum(duracoes) / total, 1),
+        "tempoMedianaMinutos": round(mediana, 1),
+        "totalPedidos": total,
+    }
 
 
 def _montar_bloco_preparo(pedidos):
@@ -6120,21 +6134,34 @@ def api_preparo():
         inicio = fim - timedelta(days=29)
 
     pedidos = buscar_pedidos_preparo_periodo(inicio.isoformat(), fim.isoformat())
+    # A tela apagava as abas das outras lojas, mas a rota devolvia as 4 pra
+    # qualquer perfil (QA 22/09).
+    pedidos = [p for p in pedidos if _loja_visivel(p["unidade"])]
+    lojas_visiveis = [nome for nome in LOJAS.keys() if _loja_visivel(nome)]
 
     resposta = {"geral": _montar_bloco_preparo(pedidos)}
     resposta["geral"]["porLoja"] = sorted(
         [
             {"loja": unidade, **_agregar_duracoes([p for p in pedidos if p["unidade"] == unidade])}
-            for unidade in LOJAS.keys()
+            for unidade in lojas_visiveis
             if any(p["unidade"] == unidade for p in pedidos)
         ],
         key=lambda l: l["tempoMedioMinutos"],
         reverse=True,
     )
 
-    for nome_unidade in LOJAS.keys():
+    for nome_unidade in lojas_visiveis:
         resposta[nome_unidade] = _montar_bloco_preparo([p for p in pedidos if p["unidade"] == nome_unidade])
 
+    # Cobertura: com a sincronização parada, a média dos dias que existem
+    # aparecia como se fosse o período inteiro (QA 22/09).
+    dias_no_periodo = (fim - inicio).days + 1
+    dias_com_dado = len({p["criado_em"][:10] for p in pedidos})
+    resposta["cobertura"] = {
+        "diasNoPeriodo": dias_no_periodo,
+        "diasComDado": dias_com_dado,
+        "lojas": lojas_visiveis,
+    }
     return jsonify(resposta)
 
 

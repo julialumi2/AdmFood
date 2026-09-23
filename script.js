@@ -1446,13 +1446,39 @@ async function carregarPreparo() {
   }
 }
 
+// Sincronização parada deixava a média dos dias existentes parecendo o
+// período inteiro (QA 22/09).
+function _avisarCoberturaPreparo() {
+  const alvo = document.getElementById('preparo-periodo-label');
+  const cobertura = preparoData?.cobertura;
+  if (!alvo || !cobertura) return;
+  const faltam = (cobertura.diasNoPeriodo || 0) - (cobertura.diasComDado || 0);
+  if (faltam > 0) {
+    alvo.textContent = `· ${cobertura.diasComDado} de ${cobertura.diasNoPeriodo} dias do período têm dado`;
+    alvo.classList.add('periodo-incompleto');
+  } else {
+    alvo.textContent = '';
+    alvo.classList.remove('periodo-incompleto');
+  }
+}
+
 function renderPreparoTab(tab) {
   const dados = preparoData[tab];
   if (!dados) return;
   preparoTabAtual = tab;
 
-  document.getElementById('preparo-val-tempo-medio').textContent = _formatarMinutos(dados.tempoMedioMinutos);
+  // Mediana no card, média ao lado: quando as duas se afastam muito, é
+  // sinal de pedido esquecido aberto, não de cozinha lenta (QA 22/09).
+  document.getElementById('preparo-val-tempo-medio').textContent = _formatarMinutos(
+    dados.tempoMedianaMinutos != null ? dados.tempoMedianaMinutos : dados.tempoMedioMinutos
+  );
+  const mediaEl = document.getElementById('preparo-media-label');
+  if (mediaEl) {
+    mediaEl.textContent = dados.tempoMedioMinutos != null ? `média ${_formatarMinutos(dados.tempoMedioMinutos)}` : '';
+    mediaEl.title = 'A média sobe com pedido esquecido aberto; a mediana é o tempo do pedido do meio.';
+  }
   document.getElementById('preparo-val-pedidos').textContent = (dados.totalPedidos || 0).toLocaleString('pt-BR');
+  _avisarCoberturaPreparo();
 
   const picoEl = document.getElementById('preparo-val-pico');
   const picoSubEl = document.getElementById('preparo-pico-sub');
@@ -3053,8 +3079,10 @@ function _renderMvRanking() {
   produtos.sort(ordens[mvOrdem] || ordens.quantidade);
 
   const onde = mvLojaFiltro === 'todas' ? 'todas as lojas' : mvLojaFiltro;
+  // "R$" no ranking é estimativa (unidades × preço de tabela), não
+  // faturamento: só o comparativo entre lojas é número real (QA 22/09).
   document.getElementById('mv-ranking-subtitulo').textContent =
-    `${total} ${total === 1 ? 'produto' : 'produtos'} · ${onde}${busca ? ` · ${produtos.length} com "${mvBusca.trim()}"` : ''}`;
+    `${total} ${total === 1 ? 'produto' : 'produtos'} · ${onde}${busca ? ` · ${produtos.length} com "${mvBusca.trim()}"` : ''} · valores estimados pelo preço de tabela`;
 
   const admin = window.usuarioLogado?.papel === 'admin';
   const visiveis = produtos.slice(0, mvRankingLimite);
@@ -3113,10 +3141,10 @@ function _mvLinhaRanking(p, maximo, admin, rotuloComparado, indice) {
         </div>
       </div>
       <div class="mv-volume">
-        <span class="mv-volume-texto"><strong>${_formatarQuantidadeVendida(p.quantidade)} un.</strong>${temReceita ? ` · ${_mvMoeda(p.receita)}` : ''}</span>
+        <span class="mv-volume-texto"><strong>${_formatarQuantidadeVendida(p.quantidade)} un.</strong>${temReceita ? ` · <span title="Receita estimada: unidades × preço de tabela do canal. O único número real desta tela é o faturamento do comparativo entre lojas.">${_mvMoeda(p.receita)} est.</span>` : ''}</span>
         <span class="mv-volume-trilho"><span class="mv-volume-barra" style="width: ${Math.max(2, (p.quantidade / maximo) * 100).toFixed(1)}%; animation-delay: ${Math.min(indice, 12) * 25}ms;"></span></span>
       </div>
-      <span class="mv-preco">${temReceita && p.quantidade ? _mvMoeda(p.receita / p.quantidade) : '—'}<small>preço médio</small></span>
+      <span class="mv-preco" title="Preço de tabela do canal, não o que entrou de fato (a venda por item não traz preço).">${temReceita && p.quantidade ? _mvMoeda(p.receita / p.quantidade) : '—'}<small>preço de tabela</small></span>
       ${tendencia}
     </li>`;
 }
