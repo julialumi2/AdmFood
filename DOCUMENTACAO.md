@@ -4991,3 +4991,29 @@ Agora operação abre na Home e vê **o que é dela**:
 - Os atalhos do topo "Ver Insights", "Lançar venda presencial" e "Sincronizar"
   viraram `data-so-admin` — **o gerente também via os três**, e as três telas
   recusam ele.
+
+### 6.78 Médios de Insumos: o lote que sumia sem baixar, e a busca pesada
+
+Dos 6 médios de Insumos, dois já estavam fechados por levas anteriores — o
+selo de status depois de salvar o mínimo (a tela recarrega inteira desde a
+trava do "Editar estoque") e o erro em língua de programador com a sessão
+vencida. Estes são quatro dos outros; sobram três, que pedem tela nova e
+ficam pra próxima leva.
+
+- **"Marcar como resolvido" no lote vencido não perguntava nada.** O lote
+  pode ter sido usado a tempo ou ter ido pro lixo, e o botão fazia a mesma
+  coisa nos dois casos: sumir da lista. Quando foi pro lixo, o estoque seguia
+  contando mercadoria que não existe. Agora o botão pergunta — **OK = foi pro
+  lixo** (a quantidade sai do estoque da loja) e **Cancelar = foi usado** (o
+  estoque não muda) — e o lote já resolvido não desconta de novo se alguém
+  clicar duas vezes.
+- **Lote vencendo tinha dois prazos.** A Home contava os que vencem em 3 dias
+  e a tela de Insumos os de 7: dois números para a mesma coisa em duas telas.
+  Agora é uma constante só (`DIAS_LOTE_VENCENDO`, 7 dias).
+- **Sem "carregando" em Insumos.** Os cartões nasciam "0" e a tabela vazia
+  dizia "Nenhum insumo encontrado", igualzinho a uma loja que de fato não tem
+  nada. Na primeira carga os cartões mostram "—" e a tabela, "Carregando…".
+- **A busca redesenhava tudo a cada tecla** — a tabela inteira e, junto, os
+  ícones do documento todo (`createIcons()` sem alvo varre a página). Agora a
+  busca espera 180 ms de silêncio e os ícones são regerados só dentro da
+  tabela. Medido: digitar "bacon!" causava 6 redesenhos, agora causa **1**.

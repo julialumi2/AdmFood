@@ -2854,8 +2854,12 @@ def api_resolver_lote(lote_id):
     if erro_admin:
         return erro_admin
 
-    marcar_lote_resolvido(lote_id)
-    return jsonify({"ok": True})
+    # "perdeu": o lote foi pro lixo e a quantidade dele sai do estoque. Sem
+    # isso o botão fazia a mesma coisa pra usado e pra perdido, e o estoque
+    # seguia contando mercadoria que não existe (QA 22/09).
+    dados = request.get_json(silent=True) or {}
+    baixa = marcar_lote_resolvido(lote_id, perdeu=bool(dados.get('perdeu')))
+    return jsonify({"ok": True, "baixa": baixa})
 
 
 # --- FICHA TÉCNICA (insumos que cada item do cardápio consome) -------------

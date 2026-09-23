@@ -3473,7 +3473,12 @@ def buscar_insumo_por_nome(nome):
         return dict(linha) if linha else None
 
 
-def listar_lotes_vencendo(dias=7):
+# Janela de "lote vencendo", a mesma na Home e em Insumos: eram 3 dias numa
+# tela e 7 na outra, dois números pra mesma coisa (QA 22/09).
+DIAS_LOTE_VENCENDO = 7
+
+
+def listar_lotes_vencendo(dias=DIAS_LOTE_VENCENDO):
     """Lotes não resolvidos com validade nos próximos `dias` dias (inclui os
     já vencidos — validade no passado também entra). Ordenado do mais
     urgente pro menos, pra virar lista de aviso direto."""
@@ -3495,12 +3500,30 @@ def listar_lotes_vencendo(dias=7):
         return [dict(linha) for linha in linhas]
 
 
-def marcar_lote_resolvido(lote_id):
+def marcar_lote_resolvido(lote_id, perdeu=False):
+    """Tira o lote da lista. `perdeu` = foi pro lixo, e aí a quantidade dele
+    sai do estoque da loja — antes o botão fazia a mesma coisa nos dois casos
+    e o estoque continuava contando mercadoria que não existe (QA 22/09).
+    Devolve o que saiu do estoque, ou None."""
     with conexao() as conn:
+        travar_para_escrita(conn)
+        lote = conn.execute(
+            "SELECT insumo_id, loja, quantidade, resolvido_em FROM lote_insumo WHERE id = ?", (lote_id,)
+        ).fetchone()
+        if not lote or lote["resolvido_em"]:
+            return None
         conn.execute(
             "UPDATE lote_insumo SET resolvido_em = ? WHERE id = ?",
             (datetime.now().isoformat(), lote_id),
         )
+        if not perdeu or not lote["quantidade"]:
+            return None
+        conn.execute(
+            "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual - ?, atualizado_em = ? "
+            "WHERE insumo_id = ? AND loja = ?",
+            (lote["quantidade"], datetime.now().isoformat(), lote["insumo_id"], lote["loja"]),
+        )
+        return {"insumoId": lote["insumo_id"], "loja": lote["loja"], "quantidade": lote["quantidade"]}
 
 
 def listar_itens_cardapio_todos():
@@ -8552,7 +8575,7 @@ def faturamento_por_loja_nos_dias(dias):
     return total
 
 
-DIAS_DE_LOTE_NA_ROTINA = 3
+DIAS_DE_LOTE_NA_ROTINA = DIAS_LOTE_VENCENDO
 
 
 def numeros_da_rotina(lojas, usuario_id, dia_ontem, dia_hoje):

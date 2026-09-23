@@ -235,7 +235,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    document.getElementById('estoque-busca')?.addEventListener('input', () => renderEstoqueTab());
+    // Cada tecla redesenhava a tabela inteira e regerava os ícones do
+    // documento todo: em lista grande e celular fraco, travava (QA 22/09).
+    let relogioBuscaEstoque = null;
+    document.getElementById('estoque-busca')?.addEventListener('input', () => {
+      clearTimeout(relogioBuscaEstoque);
+      relogioBuscaEstoque = setTimeout(() => renderEstoqueTab(), 180);
+    });
     document.getElementById('estoque-filtro-categoria')?.addEventListener('change', () => renderEstoqueTab());
     document.getElementById('estoque-filtro-fornecedor')?.addEventListener('change', () => renderEstoqueTab());
 
@@ -1601,6 +1607,15 @@ function _janelaConsumoRecente() {
 }
 
 async function carregarInsumos() {
+  // Os cartões nasciam "0" e a tabela vazia dizia "Nenhum insumo encontrado":
+  // igualzinho a uma loja que de fato não tem nada cadastrado (QA 22/09).
+  const primeiraCarga = !estoqueInsumos.length;
+  if (primeiraCarga) {
+    const corpo = document.getElementById('estoque-tabela-body');
+    if (corpo) corpo.innerHTML = _linhaCarregando(8);
+    ['estoque-val-cadastrados', 'estoque-val-ok', 'estoque-val-baixo', 'estoque-val-critico']
+      .forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+  }
   try {
     const { inicio: inicioRecente, fim: fimRecente } = _janelaConsumoRecente();
     const [respostaInsumos, respostaConsumo, respostaConsumoRecente, ...respostasAjustes] = await Promise.all([
@@ -2225,7 +2240,9 @@ function renderEstoqueTab() {
   }).join('');
 
   if (isAdmin) wireEstoqueTableEvents();
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  // Só os ícones da tabela: createIcons() sem alvo varre o documento inteiro,
+  // e isso rodava a cada tecla da busca (QA 22/09).
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nameAttr: 'data-lucide', attrs: {}, elements: [tbody] });
 }
 
 // --- RECEITA DA MISTURA (insumo feito na casa: tempero, molho...) ---
@@ -3308,7 +3325,10 @@ function renderLotesVencendo() {
         </td>
         ${isAdmin ? `
           <td class="col-acoes"><div class="acoes-linha">
-            <button type="button" class="btn-acao-icone" data-acao="resolver-lote" data-lote-id="${lote.id}" title="Marcar como resolvido">
+            <button type="button" class="btn-acao-icone" data-acao="resolver-lote" data-lote-id="${lote.id}"
+              data-nome="${escaparHtml(lote.insumoNome)}" data-loja="${escaparHtml(lote.loja)}"
+              data-quantidade="${escaparHtml(_formatarQuantidade(lote.quantidade, lote.unidadeMedida))}"
+              title="Marcar como resolvido: usado ou perdido">
               <i data-lucide="check"></i>
             </button>
           </div></td>
@@ -3320,10 +3340,25 @@ function renderLotesVencendo() {
   if (isAdmin) {
     document.querySelectorAll('[data-acao="resolver-lote"]').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        // "Usei" e "foi pro lixo" davam na mesma: o lote sumia da lista e o
+        // estoque seguia contando mercadoria que não existe (QA 22/09).
+        const perdeu = confirm(
+          `${btn.dataset.nome} — ${btn.dataset.quantidade} em ${btn.dataset.loja}.`
+          + '\n\nOK = foi pro lixo (sai do estoque da loja).'
+          + '\nCancelar = foi usado a tempo (o estoque não muda).'
+          + '\n\nPra não marcar nada, feche esta janela com Esc.');
         try {
-          const resposta = await fetch(`/api/lotes/${btn.dataset.loteId}/resolver`, { method: 'PUT' });
+          const resposta = await fetch(`/api/lotes/${btn.dataset.loteId}/resolver`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ perdeu }),
+          });
           if (!resposta.ok) throw new Error('falha ao resolver lote');
+          const dados = await resposta.json().catch(() => ({}));
           await carregarLotesVencendo();
+          if (dados.baixa) {
+            await carregarInsumos();
+          }
         } catch (erro) {
           console.error('Falha ao resolver lote:', erro);
           alert('Não foi possível marcar o lote como resolvido.');
