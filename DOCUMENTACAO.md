@@ -4936,3 +4936,32 @@ Conferido na prévia com texto do tamanho que ela usa: a 1400 px e a 1200 px,
 nenhuma linha vaza da célula nem encosta na coluna de ações (antes vazava
 26 px), e nada fica cortado. A altura da linha vai de 53 a 71 px conforme a
 rota use uma ou duas linhas.
+
+### 6.76 Médios da Home: a mesma semana, o carregando e o alerta eterno
+
+Começo dos 123 problemas médios da auditoria. Dos 6 da Home, dois já tinham
+saído com a leva da sincronização (6.73); estes são os outros três. O sexto —
+o perfil operação não ver a Home — é decisão dela, não bug, e ficou esperando.
+
+- **Os dois gráficos diziam "últimos 7 dias" e podiam ser semanas
+  diferentes.** O de faturamento pede a janela ao servidor; o de canais
+  montava a dele no navegador com `toISOString()`, que é **UTC** — passadas as
+  21h no Brasil, a janela andava um dia. Agora o servidor devolve o período
+  que usou e o gráfico de canais pede exatamente esse (sem ele, monta um igual
+  pela data local, nunca por UTC).
+- **Dia sem venda sumia do gráfico** em vez de virar zero, então a queda não
+  aparecia: a linha só ligava os dias que existiam no banco. A rota agora
+  preenche o intervalo inteiro, com 0 no dia sem movimento.
+- **A Home nascia dizendo "R$ 0,00".** Num 4G ruim, os primeiros segundos
+  pareciam "a rede vendeu zero ontem". Agora o valor nasce "carregando…" em
+  cinza e o ranking diz "Carregando as lojas…" — só na primeira carga; nas
+  atualizações de 2 em 2 minutos os números que estão na tela continuam.
+- **Loja fechada em feriado aparecia como atrasada.** A conta de "em dia"
+  usava o último dia **com venda**, e feriado sincroniza com zero. Agora usa o
+  último dia que a sincronização gravou, com venda ou sem
+  (`ultimo_dia_sincronizado`).
+- **Pedido nunca recebido contava como entrega atrasada pra sempre**, sem
+  ninguém poder tirar do alerta. Passando de 30 dias ele sai dessa conta e
+  ganha a própria linha — "Confirmar ou cancelar N pedidos parados há mais de
+  30 dias" —, que é o que de fato precisa ser feito: já não é cobrar o
+  fornecedor.

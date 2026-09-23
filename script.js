@@ -10833,6 +10833,12 @@ const TOOLTIP_HOME = {
  * linha da Home — antes disso era um mock com números inventados.
  */
 let graficoRedeInstance = null;
+// A janela de 7 dias que o servidor usou no gráfico de faturamento. O de
+// canais montava a dele no navegador, com toISOString() (que é UTC): depois
+// das 21h ela andava um dia e os dois gráficos mostravam semanas diferentes
+// (QA 22/09).
+let periodoGraficoHome = null;
+
 async function carregarGraficoRede() {
   if (await _semFaturamentoNaTela()) return;
   const canvas = document.getElementById('salesChart');
@@ -10843,6 +10849,7 @@ async function carregarGraficoRede() {
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     const dias = dados.dias || [];
+    if (dados.periodo) periodoGraficoHome = dados.periodo;
 
     if (graficoRedeInstance) {
       graficoRedeInstance.destroy();
@@ -10911,15 +10918,19 @@ async function carregarCanalRedeHome() {
   const legenda = document.getElementById('home-canal-legend');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const hoje = new Date();
-  const fim = new Date(hoje);
-  fim.setDate(hoje.getDate() - 1);
-  const inicio = new Date(fim);
-  inicio.setDate(fim.getDate() - 6);
-  const paraIso = d => d.toISOString().slice(0, 10);
+  // Mesma janela do gráfico de cima. Sem ela (ainda carregando), monta uma
+  // igual pela data local — nunca por toISOString(), que é UTC.
+  const janela = periodoGraficoHome || (() => {
+    const fimLocal = new Date();
+    fimLocal.setDate(fimLocal.getDate() - 1);
+    const inicioLocal = new Date(fimLocal);
+    inicioLocal.setDate(fimLocal.getDate() - 6);
+    const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return { inicio: iso(inicioLocal), fim: iso(fimLocal) };
+  })();
 
   try {
-    const resposta = await fetch(`/api/insights?inicio=${paraIso(inicio)}&fim=${paraIso(fim)}`);
+    const resposta = await fetch(`/api/insights?inicio=${encodeURIComponent(janela.inicio)}&fim=${encodeURIComponent(janela.fim)}`);
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     const canaisBrutos = (dados.geral && dados.geral.canais) || [];
@@ -11277,6 +11288,17 @@ async function carregarDadosLojas() {
   if (!container) return;
   if (await _semFaturamentoNaTela()) return;
 
+  // Só na primeira carga: nas atualizações de 2 em 2 minutos os números que
+  // estão na tela continuam valendo até os novos chegarem.
+  if (totalRedeElem && !totalRedeElem.dataset.jaCarregou) {
+    totalRedeElem.textContent = 'carregando…';
+    totalRedeElem.classList.add('carregando-valor');
+    const listaRanking = document.getElementById('ranking-lojas');
+    if (listaRanking && !listaRanking.children.length) {
+      listaRanking.innerHTML = '<p class="panel-subtitle">Carregando as lojas…</p>';
+    }
+  }
+
   try {
     // dias=90 pra garantir que o mês passado inteiro sempre caiba na janela
     // buscada, mesmo no pior caso (hoje é o último dia de um mês longo).
@@ -11331,6 +11353,11 @@ async function carregarDadosLojas() {
     renderRankingLojasHome(dadosOntem.lojas);
 
     // Reativa os ícones da biblioteca Lucide nos novos elementos criados dinamicamente
+    if (totalRedeElem) {
+      totalRedeElem.dataset.jaCarregou = '1';
+      totalRedeElem.classList.remove('carregando-valor');
+    }
+
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
     }
@@ -11342,7 +11369,14 @@ async function carregarDadosLojas() {
     // (QA 22/09).
     marcarSemConexao('home-atualizado-em');
     const valorRede = document.getElementById('total-rede-valor');
-    if (valorRede) valorRede.textContent = '—';
+    if (valorRede && !valorRede.dataset.jaCarregou) {
+      valorRede.textContent = '—';
+      valorRede.classList.remove('carregando-valor');
+    }
+    const listaRanking = document.getElementById('ranking-lojas');
+    if (listaRanking && !listaRanking.querySelector('.ranking-item')) {
+      listaRanking.innerHTML = '<p class="panel-subtitle">Não foi possível carregar o ranking das lojas.</p>';
+    }
   }
 }
 

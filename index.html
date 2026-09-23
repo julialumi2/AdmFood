@@ -205,7 +205,9 @@
           <div class="hero-eyebrow">Visão geral da rede — Ontem, <span id="data-ontem">...</span></div>
           <div class="hero-main">
             <div>
-              <div class="hero-value"><span id="total-rede-valor">R$ 0,00</span></div>
+              <!-- Nascia "R$ 0,00": num 4G ruim os primeiros segundos pareciam
+                   "a rede vendeu zero ontem" (QA 22/09). -->
+              <div class="hero-value"><span id="total-rede-valor" class="carregando-valor">carregando…</span></div>
               <div class="hero-sub">Faturamento total da rede</div>
               <!-- Loja que não sincronizou entrava como zero e sumia do
                    ranking: o total aparecia menor, sem nenhuma marca (QA 22/09) -->

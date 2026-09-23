@@ -1316,6 +1316,19 @@ def salvar_historico_se_ausente(unidade, dia_iso, faturamento):
         return True
 
 
+def ultimo_dia_sincronizado(unidade):
+    """Último dia em que a sincronização gravou esse dia da loja, com venda ou
+    sem. Diferente de buscar_ultima_sincronizacao, que só olha dia com venda:
+    loja fechada em feriado sincroniza com zero e aparecia como atrasada
+    (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT MAX(dia) AS ultimo_dia FROM faturamento_diario WHERE unidade = ?",
+            (unidade,),
+        ).fetchone()
+    return linha["ultimo_dia"] if linha else None
+
+
 def dias_sem_pedidos_contados():
     """Dias com faturamento real mas sem contagem de pedidos (ex: importados
     de planilha, que não trazem esse dado)."""
@@ -6584,11 +6597,17 @@ def pendencias_compras():
     parados = {par[0] for par in cotados - com_vencedor}
     parados |= {par[0] for par in (com_vencedor & com_quebra_por_loja) - ja_pedidos}
 
-    nao_enviados = atrasadas = no_prazo = 0
+    # Pedido que nunca foi recebido ficava como "entrega atrasada" pra
+    # sempre, engordando o alerta da Home sem ninguém poder tirar de lá
+    # (QA 22/09). Passando de DIAS_PENDENCIA_COMPRAS ele vira uma pendência
+    # de outra natureza: não é cobrar o fornecedor, é confirmar ou cancelar.
+    nao_enviados = atrasadas = no_prazo = abandonadas = 0
     for pedido in pedidos:
         dias = dias_esperando_entrega(pedido["status"], pedido["criado_em"], pedido["whatsapp_enviado_em"], agora)
         if dias is None:
             nao_enviados += 1
+        elif dias > DIAS_PENDENCIA_COMPRAS:
+            abandonadas += 1
         elif dias > DIAS_ENTREGA_ATRASADA:
             atrasadas += 1
         else:
@@ -6604,7 +6623,9 @@ def pendencias_compras():
         "pedidosNaoEnviados": nao_enviados,
         "entregasAtrasadas": atrasadas,
         "entregasNoPrazo": no_prazo,
+        "entregasAbandonadas": abandonadas,
         "diasEntregaAtrasada": DIAS_ENTREGA_ATRASADA,
+        "diasEntregaAbandonada": DIAS_PENDENCIA_COMPRAS,
     }
 
 

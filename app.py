@@ -25,6 +25,7 @@ from backend.armazenamento import (
     buscar_presencial_periodo,
     buscar_presencial_por_unidade,
     buscar_ultima_sincronizacao,
+    ultimo_dia_sincronizado,
     salvar_resumo_do_dia,
     salvar_pedidos_do_dia,
     salvar_itens_vendidos_do_dia,
@@ -1625,6 +1626,13 @@ def _atividades_do_dia(lojas, usuario):
         (compras["cotacoesParadas"], "Fechar {n} cotação parada", "Fechar {n} cotações paradas", "cotacoes.html"),
         (compras["pedidosNaoEnviados"], "Enviar {n} pedido ao fornecedor", "Enviar {n} pedidos aos fornecedores", "pedidos.html"),
         (compras["entregasAtrasadas"], "Cobrar {n} entrega atrasada", "Cobrar {n} entregas atrasadas", "recebimentos.html"),
+        # Pedido nunca recebido ficava contando como "entrega atrasada" pra
+        # sempre. Depois de um mês não é mais cobrar o fornecedor: é
+        # confirmar que chegou ou cancelar (QA 22/09).
+        (compras["entregasAbandonadas"],
+         "Confirmar ou cancelar {n} pedido parado há mais de " + str(compras["diasEntregaAbandonada"]) + " dias",
+         "Confirmar ou cancelar {n} pedidos parados há mais de " + str(compras["diasEntregaAbandonada"]) + " dias",
+         "pedidos.html"),
     ]
     for quantidade, singular, plural, link in tarefas_compras:
         if quantidade:
@@ -5521,12 +5529,22 @@ def api_faturamento_rede_diario():
         buscar_presencial_periodo(inicio.isoformat(), fim.isoformat()),
     )
 
-    por_dia = {}
+    # Dia sem venda nenhuma entra como zero: sumindo do gráfico, a queda não
+    # aparecia — a linha só ligava os dias que existiam (QA 22/09).
+    por_dia = {
+        (inicio + timedelta(days=i)).isoformat(): 0.0
+        for i in range((fim - inicio).days + 1)
+    }
     for l in linhas:
-        por_dia[l["dia"]] = por_dia.get(l["dia"], 0.0) + l["faturamento_dia"]
+        if l["dia"] in por_dia:
+            por_dia[l["dia"]] += l["faturamento_dia"]
 
     dias_ordenados = sorted(por_dia.keys())
     return jsonify({
+        # A tela de canais montava a própria janela de 7 dias no navegador,
+        # em UTC: depois das 21h ela andava um dia e os dois gráficos da Home
+        # mostravam semanas diferentes (QA 22/09). Agora ela usa esta.
+        "periodo": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
         "dias": [
             {
                 "dia": _formatar_data_br(d),
@@ -5573,9 +5591,12 @@ def api_config_lojas():
     return jsonify({
         "ultimaSincronizacao": _formatar_data_br(ultimo_dia) if ultimo_dia else None,
         "sincronizadoEm": rodou_em,
+        # Pela data que a sincronização gravou, não pela última com venda:
+        # loja fechada em feriado grava zero e aparecia como atrasada
+        # (QA 22/09).
         "lojasAtrasadas": [
             l["nome"] for l in lojas
-            if not _sincronizacao_em_dia(buscar_ultima_sincronizacao(l["nome"]), date.today())
+            if not _sincronizacao_em_dia(ultimo_dia_sincronizado(l["nome"]), date.today())
         ],
         "lojas": lojas,
     })
