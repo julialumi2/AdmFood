@@ -4595,3 +4595,14 @@ das levas anteriores (vistos ao começar os médios, 23/09):
   com "Crítico em Açaí Na Lata" no hover).
 - Junto: os ícones do login também ganharam a proteção que o resto do sistema
   já tem, pra biblioteca de fora que não carrega não derrubar a página.
+
+### 6.60 Cancelar pedido recebido: bloqueado no servidor (alto que faltava)
+
+A lixeira sumia da lista pra pedido recebido, mas o botão "Cancelar pedido" do
+detalhe continuava aparecendo e o servidor não barrava: o estoque ficava
+inflado com mercadoria sem origem, o histórico de compra sumia (o custo do
+insumo voltava pro anterior) e a foto da nota era apagada do disco. Agora o
+servidor responde 409 — "Esse pedido já foi recebido e somou no estoque. Pra
+desfazer, ajuste a quantidade em Insumos" —, o botão some do detalhe e a nota
+fiscal deixou de ser apagada junto com qualquer cancelamento. Compra por fora
+segue excluível: ela devolve as quantidades ao estoque.

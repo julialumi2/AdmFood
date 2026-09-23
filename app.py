@@ -4005,8 +4005,19 @@ def api_excluir_pedido(pedido_id):
         return jsonify({"erro": "Pedido não encontrado."}), 404
     if not _loja_visivel(pedido['loja']):
         return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+    # Pedido já recebido somou no estoque: cancelar aqui deixava a mercadoria
+    # inflada, sumia com o histórico de compra (o custo voltava pro anterior)
+    # e ainda apagava a foto da nota. A lixeira da lista já escondia isso, mas
+    # o botão do detalhe continuava aparecendo e o servidor não barrava
+    # (QA 22/09). Compra por fora é a exceção: ela devolve as quantidades.
+    if pedido["status"] == ESTAGIOS_PEDIDO[-1] and not pedido["compra_fora"]:
+        return jsonify({
+            "erro": "Esse pedido já foi recebido e somou no estoque. Pra desfazer, ajuste a quantidade em Insumos "
+                    "(a nota fiscal e o histórico de compra ficam guardados)."
+        }), 409
     excluir_pedido(pedido_id)
-    _apagar_nota_fiscal(pedido["nota_fiscal_arquivo"])
+    # A nota fiscal fica: é documento da compra, e apagar o arquivo junto com
+    # o pedido não tinha como ser desfeito (QA 22/09).
     return jsonify({"ok": True})
 
 

@@ -5669,7 +5669,11 @@ function renderPedidoDetalhe() {
 
   const isAdmin = _possoGerir();
   const btnCancelar = document.getElementById('btn-pedido-cancelar');
-  btnCancelar.style.display = isAdmin ? '' : 'none';
+  // Recebido só sai pela compra por fora (que devolve as quantidades): a
+  // lixeira da lista já escondia, mas aqui o botão continuava aparecendo e o
+  // estoque ficava inflado (QA 22/09).
+  const podeCancelar = isAdmin && (p.compraFora || p.status !== 'recebido');
+  btnCancelar.style.display = podeCancelar ? '' : 'none';
   btnCancelar.textContent = p.compraFora ? 'Excluir compra' : 'Cancelar pedido';
 
   const btnAvancar = document.getElementById('btn-pedido-avancar');
