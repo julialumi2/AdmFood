@@ -227,6 +227,8 @@ from backend.armazenamento import (
     criar_convites_cotacao,
     previa_convites_cotacao,
     listar_convites_cotacao,
+    item_da_cotacao_virou_pedido,
+    insumo_do_preco_cotacao,
     buscar_convite_por_token,
     responder_convite_cotacao,
     listar_recusas_cotacao,
@@ -3332,11 +3334,41 @@ def api_excluir_cotacao(cotacao_id):
     return jsonify({"ok": True})
 
 
+def _cotacao_fechada(cotacao_id):
+    """Cotação que não está mais aberta vira leitura: o servidor não conferia
+    o status em ação nenhuma, então dava pra lançar preço, escolher vencedor,
+    convidar e gerar pedido numa cotação já fechada — e a aba Compras passava
+    a contar outra coisa (QA 22/09). Pedido direto e carga da VMarket nascem
+    fechados e não passam por aqui."""
+    cotacao = buscar_cotacao(cotacao_id)
+    if not cotacao:
+        return jsonify({"erro": "Cotação não encontrada."}), 404
+    if cotacao["status"] != "aberta":
+        return jsonify({
+            "erro": "Essa cotação já foi fechada. Reabra ela antes de mexer nos preços ou nos convites."
+        }), 409
+    return None
+
+
+def _item_ja_pedido(cotacao_id, insumo_id):
+    """Item que já virou pedido não muda mais de vencedor (QA 22/09)."""
+    pedido_id = item_da_cotacao_virou_pedido(cotacao_id, insumo_id)
+    if pedido_id:
+        return jsonify({
+            "erro": f"Esse item já virou o pedido nº {pedido_id}. Pra trocar o fornecedor, cancele o pedido primeiro."
+        }), 409
+    return None
+
+
 @app.route('/api/cotacoes/<int:cotacao_id>/precos', methods=['POST'])
 def api_adicionar_preco_cotacao(cotacao_id):
     erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
+
+    erro_fechada = _cotacao_fechada(cotacao_id)
+    if erro_fechada:
+        return erro_fechada
 
     dados = request.get_json(silent=True) or {}
     try:
@@ -3357,6 +3389,14 @@ def api_excluir_preco_cotacao(cotacao_id, preco_id):
     erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
+    erro_fechada = _cotacao_fechada(cotacao_id)
+    if erro_fechada:
+        return erro_fechada
+    preco = insumo_do_preco_cotacao(preco_id)
+    if preco:
+        erro_pedido = _item_ja_pedido(cotacao_id, preco["insumoId"])
+        if erro_pedido:
+            return erro_pedido
 
     excluir_preco_cotacao(preco_id)
     return jsonify({"ok": True})
@@ -3367,6 +3407,15 @@ def api_selecionar_preco_cotacao(cotacao_id, preco_id):
     erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
+    erro_fechada = _cotacao_fechada(cotacao_id)
+    if erro_fechada:
+        return erro_fechada
+    preco = insumo_do_preco_cotacao(preco_id)
+    if not preco:
+        return jsonify({"erro": "Preço não encontrado."}), 404
+    erro_pedido = _item_ja_pedido(cotacao_id, preco["insumoId"])
+    if erro_pedido:
+        return erro_pedido
 
     selecionar_preco_cotacao(preco_id)
     return jsonify({"ok": True})
@@ -3377,6 +3426,9 @@ def api_selecionar_melhores_precos_cotacao(cotacao_id):
     erro_admin = _exigir_gestao()
     if erro_admin:
         return erro_admin
+    erro_fechada = _cotacao_fechada(cotacao_id)
+    if erro_fechada:
+        return erro_fechada
 
     total = selecionar_melhores_precos_cotacao(cotacao_id)
     return jsonify({"ok": True, "total": total})
@@ -3465,6 +3517,9 @@ def api_criar_convites_cotacao(cotacao_id):
     cotacao = buscar_cotacao(cotacao_id)
     if not cotacao:
         return jsonify({"erro": "Cotação não encontrada."}), 404
+    erro_fechada = _cotacao_fechada(cotacao_id)
+    if erro_fechada:
+        return erro_fechada
 
     dados = request.get_json(silent=True) or {}
     prazo_validade = (dados.get('prazoValidade') or '').strip()
@@ -3553,6 +3608,10 @@ def api_buscar_convite_por_token(token):
     convite = buscar_convite_por_token(token)
     if not convite:
         return jsonify({"erro": "Link inválido."}), 404
+    # Fornecedor desativado no meio da cotação continuava com o link vivo,
+    # aparecia no comparativo e podia virar pedido (QA 22/09).
+    if not convite["fornecedor_ativo"]:
+        return jsonify({"erro": "Esse fornecedor não está mais ativo na rede. Fale com a compradora."}), 410
 
     resposta = _formatar_convite(convite)
     resposta.pop('token', None)
@@ -3579,10 +3638,17 @@ def api_responder_convite_cotacao(token):
     convite = buscar_convite_por_token(token)
     if not convite:
         return jsonify({"erro": "Link inválido."}), 404
+    if not convite["fornecedor_ativo"]:
+        return jsonify({"erro": "Esse fornecedor não está mais ativo na rede. Fale com a compradora."}), 410
     if convite['status'] != 'aberta':
         return jsonify({"erro": "Essa cotação já foi respondida."}), 400
     if _prazo_vencido(convite['prazo_validade']):
         return jsonify({"erro": "O prazo pra responder essa cotação já venceu."}), 400
+    # Cotação fechada continuava aceitando preço pelo link, e esse preço
+    # virava custo do insumo sem ninguém ver (QA 22/09).
+    cotacao_do_convite = buscar_cotacao(convite['cotacao_id'])
+    if cotacao_do_convite and cotacao_do_convite["status"] != "aberta":
+        return jsonify({"erro": "Essa cotação já foi encerrada. Fale com a compradora se ainda quiser mandar preço."}), 409
 
     dados = request.get_json(silent=True) or {}
     precos_brutos = dados.get('precos') or {}

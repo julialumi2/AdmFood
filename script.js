@@ -4961,7 +4961,7 @@ function _renderTabelaComparacaoCotacao() {
             ${preco.selecionado ? '<i data-lucide="check-circle" class="icone-preco-selecionado"></i>' : ''}
             <span class="comparacao-preco-valor">${escaparHtml(_formatarCustoPorUnidade(preco.preco, item?.unidadeMedida))}</span>
           </div>
-          ${isAdmin ? `<button type="button" class="btn-acao-icone btn-excluir btn-remover-preco-comparacao" data-acao="excluir-preco" data-id="${preco.id}" title="Remover preço"><i data-lucide="trash-2"></i></button>` : ''}
+          ${isAdmin ? `<button type="button" class="btn-acao-icone btn-excluir btn-remover-preco-comparacao" data-acao="excluir-preco" data-id="${preco.id}" data-fornecedor="${escaparHtml(f.nome)}" data-insumo="${escaparHtml(item?.nome || linha.nome || '')}" title="Remover preço"><i data-lucide="trash-2"></i></button>` : ''}
         </td>
       `;
     }).join('');
@@ -5012,7 +5012,14 @@ function _renderTabelaComparacaoCotacao() {
     container.querySelectorAll('[data-acao="selecionar-preco"]').forEach(td => {
       td.addEventListener('click', async (evento) => {
         if (evento.target.closest('[data-acao="excluir-preco"]')) return;
-        await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${td.dataset.id}/selecionar`, { method: 'PUT' });
+        // Escolher vencedor era uma ação muda: falhando (cotação fechada, ou
+        // item que já virou pedido), a tela se redesenhava como estava e
+        // ninguém entendia por quê (QA 22/09).
+        const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${td.dataset.id}/selecionar`, { method: 'PUT' });
+        if (!resposta.ok) {
+          alert((await resposta.json().catch(() => ({}))).erro || 'Não foi possível escolher esse vencedor.');
+          return;
+        }
         await recarregarCotacaoDetalhe();
       });
     });
@@ -5034,7 +5041,14 @@ function _renderTabelaComparacaoCotacao() {
     container.querySelectorAll('[data-acao="excluir-preco"]').forEach(btn => {
       btn.addEventListener('click', async (evento) => {
         evento.stopPropagation();
-        await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${btn.dataset.id}`, { method: 'DELETE' });
+        // A lixeira fica dentro da célula que escolhe o vencedor: um toque
+        // errado apagava o preço do fornecedor sem perguntar nada (QA 22/09).
+        if (!confirm(`Apagar o preço de ${btn.dataset.fornecedor || 'esse fornecedor'} para ${btn.dataset.insumo || 'esse item'}? Ele sai do comparativo.`)) return;
+        const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/precos/${btn.dataset.id}`, { method: 'DELETE' });
+        if (!resposta.ok) {
+          alert((await resposta.json().catch(() => ({}))).erro || 'Não foi possível apagar esse preço.');
+          return;
+        }
         await recarregarCotacaoDetalhe();
       });
     });

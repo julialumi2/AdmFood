@@ -4508,3 +4508,28 @@ tipo de erro que só se descobre depois de decidir alguma coisa em cima dele.
   nos últimos 90 dias pela primeira vez, sem preço anterior pra comparar
   (Bacon, Queijo…)". Item novo e troca de fornecedor sumiam das duas listas e
   a tela parecia dizer que o preço deles não mudou.
+
+### 6.56 Cotação fechada vira leitura (QA "médios", leva A — 2026-09-23)
+
+Os médios são acabamento de tela, então vão por tela. Esta leva é a de
+Cotações, onde o acabamento ainda mexia em dinheiro.
+
+- **Cotação fechada não aceita mais mudança.** O servidor não conferia o
+  status em ação nenhuma: dava pra lançar preço, escolher vencedor, apagar
+  preço, "Selecionar os melhores", convidar fornecedor e — pelo link — o
+  fornecedor ainda mandava preço, que virava custo. Todas essas ações passam
+  por `_cotacao_fechada` e respondem 409 com "Essa cotação já foi fechada.
+  Reabra ela antes de mexer nos preços ou nos convites". Cotação de pedido
+  direto e a carga da VMarket nascem fechadas e não passam por aqui.
+- **Item que já virou pedido não troca de vencedor** (`_item_ja_pedido`):
+  "Esse item já virou o pedido nº 10017. Pra trocar o fornecedor, cancele o
+  pedido primeiro." Antes, trocar o vencedor depois de gerar fazia a tela
+  mentir — o pedido continuava com o fornecedor antigo, mas "Valor Pedido",
+  "Economia" e a aba Compras passavam a mostrar o novo.
+- **Fornecedor desativado perde o link** (410, "esse fornecedor não está mais
+  ativo na rede"): antes o link continuava vivo, ele seguia no comparativo,
+  podia ser escolhido vencedor e virar pedido.
+- **Acabamento do comparativo:** apagar preço pergunta antes, com o nome do
+  fornecedor e do item ("Apagar o preço de GN para Bacon? Ele sai do
+  comparativo"), e escolher vencedor deixou de ser ação muda — falhando, a
+  tela diz por quê em vez de se redesenhar como estava.

@@ -5196,6 +5196,34 @@ def marcar_convite_enviado(convite_id):
     return linha["enviado_em"] if linha else None
 
 
+def item_da_cotacao_virou_pedido(cotacao_id, insumo_id):
+    """Número do pedido em que esse item da cotação já saiu, ou None. Trocar
+    o vencedor depois disso fazia a tela mentir: o pedido continuava com o
+    fornecedor antigo e a cotação passava a mostrar o novo (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute(
+            """
+            SELECT p.id FROM pedido_compra p
+            JOIN pedido_compra_item pi ON pi.pedido_id = p.id
+            WHERE p.cotacao_id = ? AND pi.insumo_id = ?
+            ORDER BY p.id LIMIT 1
+            """,
+            (cotacao_id, insumo_id),
+        ).fetchone()
+    return linha["id"] if linha else None
+
+
+def insumo_do_preco_cotacao(preco_id):
+    """{cotacaoId, insumoId, fornecedorId} de uma linha de preço, ou None."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT cotacao_id, insumo_id, fornecedor_id FROM cotacao_preco WHERE id = ?", (preco_id,)
+        ).fetchone()
+    if not linha:
+        return None
+    return {"cotacaoId": linha["cotacao_id"], "insumoId": linha["insumo_id"], "fornecedorId": linha["fornecedor_id"]}
+
+
 def listar_convites_cotacao(cotacao_id):
     with conexao() as conn:
         linhas = conn.execute(
@@ -5217,7 +5245,8 @@ def buscar_convite_por_token(token):
         linha = conn.execute(
             """
             SELECT cc.id, cc.cotacao_id, cc.fornecedor_id, cc.token, cc.prazo_validade, cc.status, cc.criado_em, cc.respondida_em,
-                   f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone, c.titulo AS cotacao_titulo
+                   f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone, f.ativo AS fornecedor_ativo,
+                   c.titulo AS cotacao_titulo
             FROM cotacao_convite cc
             JOIN fornecedor f ON f.id = cc.fornecedor_id
             JOIN cotacao c ON c.id = cc.cotacao_id
