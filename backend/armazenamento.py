@@ -6726,6 +6726,19 @@ def _mapa_minimo_loja(loja):
     return {linha["insumo_id"]: linha["estoque_minimo"] for linha in linhas}
 
 
+def contagem_ja_aberta(loja, descricao, prazo_validade):
+    """Id da contagem que já existe pra essa loja com o mesmo título e prazo
+    (é o que define uma requisição), ou None. Dois cliques em "Criar" abriam
+    duas, e a cópia sem resposta prendia a requisição em "Aguardando lojas"
+    pra sempre (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT id FROM contagem WHERE loja = ? AND descricao = ? AND prazo_validade = ? ORDER BY id LIMIT 1",
+            (loja, descricao, prazo_validade),
+        ).fetchone()
+    return linha["id"] if linha else None
+
+
 def criar_contagem(loja, descricao, prazo_validade, categorias=None):
     """Abre uma contagem pra uma loja — gera um token opaco (o link que vai
     pro funcionário, sem precisar de login) e já grava uma linha só pros

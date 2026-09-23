@@ -4533,3 +4533,25 @@ Cotações, onde o acabamento ainda mexia em dinheiro.
   fornecedor e do item ("Apagar o preço de GN para Bacon? Ele sai do
   comparativo"), e escolher vencedor deixou de ser ação muda — falhando, a
   tela diz por quê em vez de se redesenhar como estava.
+
+### 6.57 Requisição duplicada e conferência de nota (médios, leva B)
+
+- **Dois cliques em "Criar" não abrem mais duas contagens da mesma loja.** O
+  botão trava ("Criando…") e o servidor trata mesma loja + mesmo título +
+  mesmo prazo como a mesma requisição, devolvendo a que já existe (com o
+  mesmo link) em vez de criar uma cópia. A cópia sem resposta prendia a
+  requisição em "Aguardando lojas" e não havia como apagar uma contagem
+  sozinha.
+- **As duas tabelas recarregam depois de criar** (a de requisições e a de
+  contagens por loja) — a requisição nova só aparecia recarregando a página.
+- **"Carregando…" ao abrir a conferência**, que antes ficava igual até a
+  resposta chegar.
+- **Valor da Nota Fiscal entra em branco,** com o total do pedido como
+  referência no campo ("o pedido deu R$ 60,00"). Vinha preenchido com o
+  total, então aceitar o que estava na tela nunca gerava divergência e a
+  conferência de nota existia só no nome.
+- **Preço cobrado acima do combinado pede confirmação:** "O fornecedor cobrou
+  mais caro do que o combinado: Saco delivery: combinado R$ 0,60, cobrado
+  R$ 0,90 por un (+50%). Esse preço vira o custo do insumo." Acima de 10% de
+  diferença. A conferência nunca comparava, então fornecedor que subiu o preço
+  passava batido — e o preço novo virava o custo do insumo.

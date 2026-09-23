@@ -227,6 +227,7 @@ from backend.armazenamento import (
     criar_convites_cotacao,
     previa_convites_cotacao,
     listar_convites_cotacao,
+    contagem_ja_aberta,
     item_da_cotacao_virou_pedido,
     insumo_do_preco_cotacao,
     buscar_convite_por_token,
@@ -4905,6 +4906,13 @@ def api_criar_contagem():
     if not prazo_validade:
         return jsonify({"erro": "Informe o prazo de validade."}), 400
     categorias = dados.get('categorias') or None
+
+    # Mesma loja, mesmo título e mesmo prazo é a mesma requisição: o segundo
+    # clique devolve a que já existe em vez de abrir uma cópia (QA 22/09).
+    ja_existe = contagem_ja_aberta(loja, descricao, prazo_validade)
+    if ja_existe:
+        contagem = buscar_contagem(ja_existe)
+        return jsonify({"id": ja_existe, "token": contagem["token"], "jaExistia": True})
 
     resultado = criar_contagem(loja, descricao, prazo_validade, categorias)
     return jsonify(resultado)

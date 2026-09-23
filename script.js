@@ -6247,6 +6247,10 @@ function fecharModalContatosContagem() {
 })();
 
 async function abrirConferenciaRequisicao(titulo, prazoValidade) {
+  // Abrir a conferência não mostrava nada até a resposta chegar, e a
+  // compradora clicava de novo achando que não tinha pegado (QA 22/09).
+  const corpoLojas = document.getElementById('requisicao-conferencia-lojas-body');
+  if (corpoLojas && !requisicaoConferenciaAtual) corpoLojas.innerHTML = _linhaCarregando(5);
   try {
     const [resposta] = await Promise.all([
       fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(titulo)}&prazoValidade=${encodeURIComponent(prazoValidade)}`),
@@ -7152,6 +7156,16 @@ document.getElementById('form-nova-contagem')?.addEventListener('submit', async 
     return;
   }
 
+  // Dois cliques abriam duas contagens da mesma loja, e a cópia sem resposta
+  // prendia a requisição em "Aguardando lojas" (QA 22/09). O servidor também
+  // devolve a que já existe em vez de criar outra.
+  const botaoCriar = evento.submitter || document.querySelector('#form-nova-contagem button[type="submit"]');
+  const textoCriar = botaoCriar ? botaoCriar.textContent : '';
+  if (botaoCriar) {
+    botaoCriar.disabled = true;
+    botaoCriar.textContent = 'Criando…';
+  }
+
   try {
     const linksGerados = [];
     for (const loja of lojas) {
@@ -7188,10 +7202,16 @@ document.getElementById('form-nova-contagem')?.addEventListener('submit', async 
       });
     });
     document.getElementById('modal-contagem-link').style.display = 'flex';
-    await carregarContagens();
+    // As duas tabelas: a requisição nova só aparecia recarregando a página.
+    await Promise.all([carregarContagens(), carregarRequisicoes()]);
   } catch (erro) {
     console.error('Falha ao criar requisição:', erro);
     alert(erro.message || 'Não foi possível criar a requisição.');
+  } finally {
+    if (botaoCriar) {
+      botaoCriar.disabled = false;
+      botaoCriar.textContent = textoCriar;
+    }
   }
 });
 
@@ -8833,6 +8853,9 @@ let recebimentoAtual = null; // detalhe completo (com itens) do pedido aberto no
 // Entrega incompleta (QA 22/09): null = ainda não perguntamos; true = deixar o
 // resto pendente; false = encerrar o pedido e cobrar o que faltou.
 let recebimentoManterPendente = null;
+// Acima disso, a diferença entre o preço cobrado e o combinado pede
+// confirmação na conferência (QA 22/09).
+const PRECO_ACIMA_DO_COMBINADO = 0.1;
 
 // "2026-09-14T15:01:07" → "14/09/2026", direto do texto: new Date() num
 // "AAAA-MM-DD" sem hora lê como UTC e mostraria o dia anterior.
@@ -9209,7 +9232,7 @@ function _linhaRecebimentoItemHTML(item) {
   const preco = Math.round(item.precoUnitario * fator * 100) / 100;
   const emNumero = (valor) => (valor / fator).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
   return `
-    <tr data-insumo-id="${item.insumoId}" data-fator="${fator}" data-nome="${escaparHtml(item.nome)}" data-falta="${quantidade}">
+    <tr data-insumo-id="${item.insumoId}" data-fator="${fator}" data-nome="${escaparHtml(item.nome)}" data-falta="${quantidade}" data-preco-combinado="${preco}" data-unidade="${escaparHtml(rotulo)}">
       <td class="font-bold" data-rotulo="Insumo">${escaparHtml(item.nome)}</td>
       <td class="text-muted" data-rotulo="Qtd. pedida">${emNumero(falta)} ${escaparHtml(rotulo)}
         ${jaRecebida > 0 ? `<span class="recebimento-ja-veio">já chegaram ${emNumero(jaRecebida)} de ${emNumero(pedida)}</span>` : ''}
@@ -9321,7 +9344,13 @@ async function abrirModalRecebimento(pedidoId) {
     campoData.max = _hojeLocalISO();
     campoData.value = campoData.max;
     document.getElementById('recebimento-data-pedido').textContent = `Pedido feito em ${_dataBR(dados.criadoEm)}`;
-    document.getElementById('recebimento-valor-nf').value = dados.valorTotal;
+    // O valor da nota vinha preenchido com o total do pedido: aceitar o que
+    // estava na tela nunca gerava divergência, e a conferência de nota
+    // existia só no nome (QA 22/09). Agora entra em branco, com o total do
+    // pedido escrito do lado como referência.
+    const campoNf = document.getElementById('recebimento-valor-nf');
+    campoNf.value = '';
+    campoNf.placeholder = `o pedido deu ${_formatarMoedaBRL(dados.valorTotal)}`;
     document.getElementById('recebimento-numero-nf').value = '';
     document.getElementById('recebimento-nota-arquivo').value = '';
     document.getElementById('recebimento-erro').style.display = 'none';
@@ -9437,6 +9466,20 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
     erro.style.display = '';
     return;
   }
+
+  // Preço cobrado acima do combinado passava batido: a conferência nunca
+  // comparava, e o preço novo ainda virava o custo do insumo (QA 22/09).
+  const acimaDoCombinado = Array.from(document.querySelectorAll('#recebimento-itens-body tr'))
+    .map((linha) => {
+      const combinado = parseFloat(linha.dataset.precoCombinado);
+      const cobrado = parseFloat(linha.querySelector('.recebimento-input-preco')?.value);
+      if (!Number.isFinite(combinado) || !Number.isFinite(cobrado) || combinado <= 0) return null;
+      const alta = (cobrado - combinado) / combinado;
+      if (alta <= PRECO_ACIMA_DO_COMBINADO) return null;
+      return `${linha.dataset.nome}: combinado ${_formatarMoedaBRL(combinado)}, cobrado ${_formatarMoedaBRL(cobrado)} por ${linha.dataset.unidade} (+${Math.round(alta * 100)}%)`;
+    })
+    .filter(Boolean);
+  if (acimaDoCombinado.length && !confirm(`O fornecedor cobrou mais caro do que o combinado: ${acimaDoCombinado.join(' · ')}. Esse preço vira o custo do insumo. Confirmar assim mesmo?`)) return;
 
   // Veio menos do que foi pedido: antes zerar a quantidade fechava o pedido e
   // apagava o que tinha sido pedido, sem pendência pra cobrar (QA 22/09).
