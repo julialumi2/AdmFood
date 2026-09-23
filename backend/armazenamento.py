@@ -988,6 +988,15 @@ def inicializar_banco():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS tentativa_login (
+                email TEXT NOT NULL,
+                quando TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tentativa_login_email ON tentativa_login(email)")
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS pedido_cancelado (
                 token TEXT NOT NULL,
                 pedido_id INTEGER NOT NULL,
@@ -6955,6 +6964,53 @@ def _mapa_minimo_loja(loja):
             (loja,),
         ).fetchall()
     return {linha["insumo_id"]: linha["estoque_minimo"] for linha in linhas}
+
+
+def insumo_com_mesmo_nome(nome, ignorando_id=None):
+    """{id, nome} do insumo que já existe com esse nome (normalizado: sem
+    acento, sem maiúscula, sem espaço sobrando), ou None. O cadastro pela
+    tela não conferia, e dois "Bacon" dividiam preço, ficha e contagem
+    (QA 22/09)."""
+    alvo = _normalizar_nome_insumo(nome)
+    if not alvo:
+        return None
+    with conexao() as conn:
+        for linha in conn.execute("SELECT id, nome FROM insumo"):
+            if linha["id"] == ignorando_id:
+                continue
+            if _normalizar_nome_insumo(linha["nome"]) == alvo:
+                return {"id": linha["id"], "nome": linha["nome"]}
+    return None
+
+
+def contar_falhas_de_login(email, desde_iso):
+    """Quantas senhas erradas esse e-mail teve desde `desde_iso`. Fica no
+    banco porque o contador em memória valia por processo — com dois gunicorn
+    no ar, o limite dobrava na prática (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT COUNT(*) AS n FROM tentativa_login WHERE email = ? AND quando >= ?",
+            ((email or "").strip().lower(), desde_iso),
+        ).fetchone()
+    return linha["n"] if linha else 0
+
+
+def registrar_falha_de_login(email, quando_iso, limpar_antes_de=None):
+    """Grava uma senha errada e aproveita pra limpar o que já saiu da
+    janela."""
+    with conexao() as conn:
+        conn.execute(
+            "INSERT INTO tentativa_login (email, quando) VALUES (?, ?)",
+            ((email or "").strip().lower(), quando_iso),
+        )
+        if limpar_antes_de:
+            conn.execute("DELETE FROM tentativa_login WHERE quando < ?", (limpar_antes_de,))
+
+
+def limpar_falhas_de_login(email):
+    """Login certo zera o contador daquele e-mail."""
+    with conexao() as conn:
+        conn.execute("DELETE FROM tentativa_login WHERE email = ?", ((email or "").strip().lower(),))
 
 
 def contagem_ja_aberta(loja, descricao, prazo_validade):

@@ -4495,10 +4495,26 @@ function _textoContagemConvite(n) {
 // prontos, sem copiar/colar; quem manda de verdade continua sendo a
 // pessoa, apertando "Enviar" dentro do WhatsApp (é assim que o próprio
 // WhatsApp evita automação de spam, não dá pra pular esse clique).
-function _linkWhatsAppConvite(telefone, fornecedorNome, link) {
-  const digitos = (telefone || '').replace(/\D/g, '');
+// Número que dá pra mandar no WhatsApp: DDD + 8 ou 9 dígitos, com o país
+// na frente. "0" da operadora, número curto e DDD 55 (Rio Grande do Sul, que
+// tem os mesmos dois dígitos do país) montavam link quebrado (QA 22/09).
+function _telefoneWhatsApp(telefone) {
+  let digitos = (telefone || '').replace(/\D/g, '');
   if (!digitos) return null;
-  const numeroCompleto = digitos.startsWith('55') ? digitos : `55${digitos}`;
+  // 0 da operadora antes do DDD.
+  if (digitos.length === 11 && digitos.startsWith('0')) digitos = digitos.slice(1);
+  if (digitos.length === 12 && digitos.startsWith('0')) digitos = digitos.slice(1);
+  // Já veio com país (55 + 10 ou 11 dígitos). Só 55 na frente de um número
+  // de 10/11 dígitos é país; "55 9xxxx-xxxx" gaúcho tem 10 ou 11 no total e
+  // precisa do país mesmo assim.
+  if (digitos.length >= 12 && digitos.startsWith('55')) return digitos;
+  if (digitos.length < 10 || digitos.length > 11) return null;
+  return `55${digitos}`;
+}
+
+function _linkWhatsAppConvite(telefone, fornecedorNome, link) {
+  const numeroCompleto = _telefoneWhatsApp(telefone);
+  if (!numeroCompleto) return null;
   const mensagem = `Olá! Segue o link pra você preencher os preços da nossa cotação:\n${link}`;
   return `https://wa.me/${numeroCompleto}?text=${encodeURIComponent(mensagem)}`;
 }
@@ -4684,12 +4700,14 @@ function renderConvitesCotacao(convites) {
               <i data-lucide="${comExtensao ? 'external-link' : 'send'}"></i>
               ${comExtensao ? 'Abrir no WhatsApp' : 'Enviar por WhatsApp'}
             </a>
-          ` : `
-            <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}" title="Fornecedor sem telefone cadastrado">
-              <i data-lucide="copy"></i>
-              Copiar link
-            </button>
-          `}
+          ` : ''}
+          <!-- O "Copiar link" some quando o fornecedor tem telefone, e era
+               o único plano B quando o número está errado (QA 22/09). -->
+          <button type="button" class="btn-secondary-sm" data-acao="copiar-link-convite" data-link="${escaparHtml(link)}"
+                  title="${linkWhatsApp ? 'Copiar o link pra mandar por outro caminho' : 'Fornecedor sem telefone que dê pra usar no WhatsApp'}">
+            <i data-lucide="copy"></i>
+            Copiar link
+          </button>
           ${c.status === 'respondida' ? `
             <button type="button" class="btn-secondary-sm" data-acao="reabrir-convite" data-id="${c.id}" title="Deixar o fornecedor corrigir o preço enviado">
               <i data-lucide="rotate-ccw"></i>
@@ -5970,7 +5988,19 @@ function renderContagemDetalhe() {
     btnAprovar.disabled = c.status === 'aberta';
     btnAprovar.textContent = c.status === 'aprovada' ? 'Conferir a compra' : 'Aprovar e conferir a compra';
   }
-  if (btnReabrir) btnReabrir.style.display = (isAdmin && c.status !== 'aberta') ? '' : 'none';
+  // O botão ficava escondido justamente no caso que ele existe pra resolver:
+  // contagem aberta com prazo vencido, em que a loja não respondeu a tempo e
+  // ficou sem como responder, travando a requisição inteira (QA 22/09). O
+  // servidor já aceita reabrir nesse caso (dá +24 h).
+  const prazoVencido = c.prazoValidade && new Date(c.prazoValidade) < new Date();
+  if (btnReabrir) {
+    const podeReabrir = isAdmin && (c.status !== 'aberta' || prazoVencido);
+    btnReabrir.style.display = podeReabrir ? '' : 'none';
+    btnReabrir.textContent = c.status === 'aberta' ? 'Dar mais prazo' : 'Reabrir pra corrigir';
+    btnReabrir.title = c.status === 'aberta'
+      ? 'O prazo venceu e a loja ficou sem responder: dá mais 24 horas pra ela preencher pelo mesmo link'
+      : 'Deixa a loja corrigir o que enviou, com 24 horas de prazo';
+  }
 
   const thAcoes = document.getElementById('contagem-detalhe-th-acoes');
   if (thAcoes) thAcoes.style.display = isAdmin ? '' : 'none';
@@ -8520,6 +8550,14 @@ document.getElementById('form-entrada-insumo')?.addEventListener('submit', async
     return;
   }
   const validade = document.getElementById('entrada-validade').value || null;
+  // Entrada soma no estoque: dois toques somavam duas vezes, e no celular o
+  // segundo toque sai fácil (QA 22/09).
+  const botao = evento.submitter || evento.currentTarget.querySelector('button[type="submit"]');
+  const textoBotao = botao ? botao.textContent : '';
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = 'Registrando…';
+  }
   try {
     const resposta = await fetch(`/api/insumos/${insumoId}/entrada`, {
       method: 'POST',
@@ -8534,6 +8572,11 @@ document.getElementById('form-entrada-insumo')?.addEventListener('submit', async
   } catch (erro) {
     console.error('Falha ao registrar entrada:', erro);
     alert(erro.message || 'Não foi possível registrar a entrada.');
+  } finally {
+    if (botao) {
+      botao.disabled = false;
+      botao.textContent = textoBotao;
+    }
   }
 });
 

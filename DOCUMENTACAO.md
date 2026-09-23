@@ -4741,3 +4741,28 @@ média só — e entrega não leva o mesmo tempo que balcão. A resposta ganhou
 como o mesmo balcão) e a tela um painel "Tempo por canal". Nos dados de teste
 ele mostra de cara o que a média escondia: Cardápio Web 59 min de mediana
 contra 29 do 99Food e 19 do balcão.
+
+### 6.69 Risco de operação: prazo, insumo repetido, telefone e tentativas
+
+- **"Reabrir" aparece quando o prazo vence.** O botão só existia pra contagem
+  já respondida — justamente o caso em que ele não é preciso. Na situação real
+  (loja começou 17h50, prazo 18h, ninguém enviou) ele ficava escondido e a
+  requisição inteira travava. Agora, com a contagem aberta e o prazo vencido,
+  o botão aparece como "Dar mais prazo" (o servidor já dava +24 h).
+- **Insumo repetido barrado no cadastro.** Só a importação em lote conferia
+  nome repetido; o "Cadastrar" da tela deixava criar outro "Bacon", e a
+  história do insumo se dividia em dois (preço num, ficha no outro, contagem
+  no terceiro). Agora responde 409 dizendo qual já existe — comparando sem
+  acento, sem maiúscula e sem espaço sobrando.
+- **Telefone que gera link quebrado.** `_telefoneWhatsApp` passou a limpar o
+  "0" da operadora, exigir DDD + 8 ou 9 dígitos e só considerar "55" como
+  país quando o número tem 12+ dígitos — o DDD 55 (Rio Grande do Sul) recebia
+  o país que faltava. Número que não dá pra usar não vira link. E o **"Copiar
+  link" ficou sempre visível**: ele sumia quando o fornecedor tinha telefone,
+  que é exatamente quando o número errado deixa a pessoa sem saída.
+- **Entrada de estoque com botão travado** enquanto grava: a entrada soma no
+  estoque e dois toques somavam duas vezes.
+- **Tentativas de senha contadas no banco** (`tentativa_login`), não na
+  memória de cada processo: a produção roda com dois gunicorn, então o limite
+  dobrava na prática e reiniciar zerava tudo. O login certo limpa pelo e-mail
+  normalizado — antes limpava pela chave crua e as falhas ficavam lá.

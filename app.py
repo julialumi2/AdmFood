@@ -230,6 +230,10 @@ from backend.armazenamento import (
     previa_convites_cotacao,
     listar_convites_cotacao,
     contagem_ja_aberta,
+    insumo_com_mesmo_nome,
+    contar_falhas_de_login,
+    registrar_falha_de_login,
+    limpar_falhas_de_login,
     compra_fora_parecida,
     item_da_cotacao_virou_pedido,
     insumo_do_preco_cotacao,
@@ -1137,7 +1141,6 @@ def _formatar_usuario(usuario):
 # Gunicorn, não compartilhado entre eles), suficiente pra travar um script
 # tentando milhares de senhas contra uma conta específica, sem precisar de
 # Redis ou outra dependência nova pra um sistema desse tamanho.
-_TENTATIVAS_LOGIN_FALHAS = {}
 JANELA_RATE_LIMIT_LOGIN_SEGUNDOS = 5 * 60
 MAX_TENTATIVAS_LOGIN_NA_JANELA = 5
 
@@ -1146,15 +1149,20 @@ def _login_bloqueado(email):
     # Sempre em minúsculas: a contagem usava o e-mail como foi digitado e a
     # busca no banco é minúscula, então trocar uma letra pra maiúscula zerava
     # o bloqueio (QA 22/09).
-    email = (email or '').strip().lower()
-    agora = time.time()
-    tentativas = [t for t in _TENTATIVAS_LOGIN_FALHAS.get(email, []) if agora - t < JANELA_RATE_LIMIT_LOGIN_SEGUNDOS]
-    _TENTATIVAS_LOGIN_FALHAS[email] = tentativas
-    return len(tentativas) >= MAX_TENTATIVAS_LOGIN_NA_JANELA
+    # As tentativas moram no banco: em memória, o contador valia por
+    # processo, e a produção roda com dois gunicorn — o limite dobrava
+    # (QA 22/09).
+    desde = (datetime.now() - timedelta(seconds=JANELA_RATE_LIMIT_LOGIN_SEGUNDOS)).isoformat()
+    return contar_falhas_de_login(email, desde) >= MAX_TENTATIVAS_LOGIN_NA_JANELA
 
 
 def _registrar_falha_login(email):
-    _TENTATIVAS_LOGIN_FALHAS.setdefault((email or '').strip().lower(), []).append(time.time())
+    agora = datetime.now()
+    registrar_falha_de_login(
+        email,
+        agora.isoformat(),
+        limpar_antes_de=(agora - timedelta(seconds=JANELA_RATE_LIMIT_LOGIN_SEGUNDOS * 10)).isoformat(),
+    )
 
 
 @app.route('/api/login', methods=['POST'])
@@ -1191,7 +1199,7 @@ def api_login():
         _registrar_falha_login(email)
         return jsonify({"erro": "E-mail ou senha incorretos."}), 401
 
-    _TENTATIVAS_LOGIN_FALHAS.pop(email, None)
+    limpar_falhas_de_login(email)
     session.clear()
     session['usuario_id'] = usuario['id']
     session.permanent = True
@@ -2207,6 +2215,15 @@ def api_criar_insumo():
         return jsonify({"erro": "Informe o nome do insumo."}), 400
     if unidade_medida not in UNIDADES_INSUMO:
         return jsonify({"erro": "A unidade de medida precisa ser g, ml ou un."}), 400
+    # Insumo repetido divide a história em dois cadastros (preço num, ficha
+    # no outro, contagem no terceiro). A importação em lote já barrava; o
+    # "Cadastrar" da tela, não (QA 22/09).
+    ja_existe = insumo_com_mesmo_nome(nome)
+    if ja_existe:
+        return jsonify({
+            "erro": f"Já existe um insumo chamado \"{ja_existe['nome']}\". Use o que existe (ou renomeie ele) em vez de criar outro.",
+            "insumoId": ja_existe["id"],
+        }), 409
 
     # Tudo validado ANTES de criar: um erro depois do INSERT deixava o insumo
     # criado pela metade, e tentar de novo cadastrava ele duas vezes.
