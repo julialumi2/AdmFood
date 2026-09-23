@@ -1891,6 +1891,47 @@ def excluir_usuario(usuario_id):
 
 # --- COMPARATIVO DE PREÇOS DO CARDÁPIO (importado de planilha, editável) --
 
+def previa_da_planilha_de_precos(linhas):
+    """O que a reimportação faria, sem gravar nada: quantos produtos entram,
+    quantos são atualizados e QUAIS SAEM (com o preço que tinham). Reimportar
+    apagava em silêncio todo produto que não estivesse na planilha — inclusive
+    o que sumiu dela por um erro de digitação no nome — e o resumo só dizia
+    "Importado com sucesso: N produtos" (QA 22/09)."""
+    por_loja = {}
+    for linha in linhas:
+        por_loja.setdefault(linha["loja"], set()).add(linha["produto"])
+    novos = atualizados = 0
+    removidos = []
+    with conexao() as conn:
+        for loja, produtos in por_loja.items():
+            existentes = {
+                l["produto"]: l for l in conn.execute(
+                    "SELECT produto, manual, cardapio_web, ifood FROM preco_cardapio WHERE loja = ?", (loja,)
+                )
+            }
+            for produto in produtos:
+                if produto in existentes:
+                    atualizados += 1
+                else:
+                    novos += 1
+            for produto, l in existentes.items():
+                # Produto criado na tela (manual) nunca sai: ele não veio da
+                # planilha.
+                if l["manual"] or produto in produtos:
+                    continue
+                removidos.append({
+                    "loja": loja,
+                    "produto": produto,
+                    "preco": l["cardapio_web"] if l["cardapio_web"] is not None else l["ifood"],
+                })
+    return {
+        "novos": novos,
+        "atualizados": atualizados,
+        "removidos": sorted(removidos, key=lambda r: (r["loja"], r["produto"])),
+        "lojas": sorted(por_loja),
+    }
+
+
 def sincronizar_precos_cardapio(linhas):
     """Atualiza a partir de uma planilha reimportada, SEM apagar tudo — um
     produto que já existe (mesma loja + nome) tem categoria/preços/ordem

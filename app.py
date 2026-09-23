@@ -52,6 +52,7 @@ from backend.armazenamento import (
     excluir_usuario,
     listar_precos_cardapio,
     sincronizar_precos_cardapio,
+    previa_da_planilha_de_precos,
     buscar_preco_cardapio_por_id,
     atualizar_preco_cardapio,
     PASTA_FOTOS_CARDAPIO,
@@ -1819,8 +1820,16 @@ def api_importar_precos_cardapio():
     except Exception as erro_leitura:
         return jsonify({"erro": f"Não foi possível ler a planilha: {erro_leitura}"}), 400
 
+    # Reimportar apaga todo produto que não está na planilha. Antes isso
+    # acontecia calado e o resumo só dizia "Importado com sucesso: N
+    # produtos": a tela agora mostra a prévia e só grava com `confirmar`
+    # (QA 22/09).
+    previa = previa_da_planilha_de_precos(linhas)
+    if previa["removidos"] and not request.form.get('confirmar'):
+        return jsonify({"previa": True, "totalProdutos": len(linhas), **previa}), 409
+
     sincronizar_precos_cardapio(linhas)
-    return jsonify({"sucesso": True, "totalProdutos": len(linhas)})
+    return jsonify({"sucesso": True, "totalProdutos": len(linhas), **previa})
 
 
 CAMPOS_PRECO_CARDAPIO_PERMITIDOS = {'ifood', 'food99', 'beefood', 'cardapioWeb'}

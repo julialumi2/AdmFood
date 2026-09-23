@@ -12377,10 +12377,33 @@ async function importarPlanilhaCardapio(event) {
   statusEl.textContent = `Importando "${arquivo.name}"...`;
 
   try {
-    const formData = new FormData();
-    formData.append('planilha', arquivo);
-    const resposta = await fetch('/api/precos-cardapio/importar', { method: 'POST', body: formData });
-    const dados = await resposta.json();
+    const enviar = async (confirmar) => {
+      const formData = new FormData();
+      formData.append('planilha', arquivo);
+      if (confirmar) formData.append('confirmar', '1');
+      const resposta = await fetch('/api/precos-cardapio/importar', { method: 'POST', body: formData });
+      return { resposta, dados: await resposta.json() };
+    };
+
+    let { resposta, dados } = await enviar(false);
+
+    // A planilha manda embora todo produto que não está nela: a prévia diz
+    // quem vai sair antes de gravar (QA 22/09).
+    if (resposta.status === 409 && dados.previa) {
+      const quebra = String.fromCharCode(10);
+      const lista = dados.removidos.slice(0, 12)
+        .map((r) => `${r.produto} (${r.loja}${r.preco ? `, R$ ${_formatarMoedaBR(r.preco)}` : ''})`).join(quebra);
+      const resto = dados.removidos.length > 12 ? `${quebra}… e mais ${dados.removidos.length - 12}` : '';
+      const texto = `Essa planilha tem ${dados.totalProdutos} produto(s): ${dados.novos} novo(s) e ${dados.atualizados} atualizado(s).${quebra}${quebra}`
+        + `${dados.removidos.length} produto(s) do cardápio NÃO estão nela e vão ser apagados:${quebra}${lista}${resto}${quebra}${quebra}`
+        + 'Se algum deles sumiu da planilha por engano (nome digitado diferente, aba errada), cancele e conserte a planilha antes. Apagar mesmo assim?';
+      if (!confirm(texto)) {
+        statusEl.style.color = '';
+        statusEl.textContent = 'Importação cancelada — nada foi alterado.';
+        return;
+      }
+      ({ resposta, dados } = await enviar(true));
+    }
 
     if (!resposta.ok) {
       statusEl.style.color = 'var(--danger)';
@@ -12389,7 +12412,8 @@ async function importarPlanilhaCardapio(event) {
     }
 
     statusEl.style.color = 'var(--success)';
-    statusEl.textContent = `Importado com sucesso: ${dados.totalProdutos} produtos.`;
+    statusEl.textContent = `Importado: ${dados.totalProdutos} produto(s) na planilha · ${dados.novos || 0} novo(s), ${dados.atualizados || 0} atualizado(s)`
+      + `${dados.removidos && dados.removidos.length ? `, ${dados.removidos.length} apagado(s)` : ''}.`;
     await carregarFichaTecnicaAtual();
   } catch (erro) {
     console.error('Falha ao importar planilha do cardápio:', erro);

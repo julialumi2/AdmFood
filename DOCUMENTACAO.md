@@ -4675,3 +4675,15 @@ das 4 ocorrências anteriores) e, se o dia comparado tem menos da metade disso,
 manda `comparadoParcial`: a coluna da loja mostra "sem base" em vez de um
 −70% falso, com o motivo no hover ("2 pedidos, contra os 85 que essa loja
 costuma fazer nesse dia"). Sem histórico pra comparar, não arrisca marcar.
+
+### 6.65 Reimportar a planilha do Cardápio mostra o que vai apagar
+
+`sincronizar_precos_cardapio` apaga todo produto da loja que não está na
+planilha (o criado na tela, `manual`, fica) — e isso acontecia calado, com o
+resumo dizendo só "Importado com sucesso: N produtos". Uma aba errada ou um
+nome digitado diferente levava produto junto. Agora a importação passa por uma
+prévia: o servidor responde 409 com `{novos, atualizados, removidos}` e a tela
+lista quem vai sair ("Combo Família NaLata (Açaí, R$ 39,90)…"), avisando que
+nome digitado diferente também faz o produto sumir da planilha. Só com o
+"Apagar mesmo assim?" confirmado é que grava, e o resumo final passa a dizer
+quantos entraram, quantos foram atualizados e quantos saíram.
