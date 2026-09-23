@@ -1476,7 +1476,14 @@ def _semanas_do_faturamento_diario(unidade):
         por_dia.setdefault(linha["dia"], {})[linha["canal"]] = linha["faturamento"]
     for ajuste in ajustes:
         por_dia.setdefault(ajuste["dia"], {})[ajuste["canal"]] = ajuste["faturamento"]
+    # Ajuste manual do Presencial é o número final daquele dia: somar o
+    # lançamento avulso por cima contava o presencial duas vezes na semana
+    # (e certo no Vendas Diárias), que é o número que o chefe dela olha
+    # (QA 22/09).
+    dias_com_ajuste_presencial = {a["dia"] for a in ajustes if a["canal"] == "portal"}
     for venda in presencial:
+        if venda["dia"] in dias_com_ajuste_presencial:
+            continue
         canais = por_dia.setdefault(venda["dia"], {})
         canais["portal"] = round(canais.get("portal", 0.0) + venda["valor"], 2)
     return por_dia
@@ -3949,11 +3956,16 @@ def custo_em_uso_por_insumo():
         # escolhido (o que foi comprado), não o último fornecedor lançado:
         # na VMarket o escolhido nem sempre é o mais barato, e fornecedores
         # diferentes cotam em unidades diferentes (2026-09-16).
+        # Cotação ainda ABERTA só entra no custo pelo preço escolhido como
+        # vencedor: enquanto ela está em andamento, um preço qualquer que um
+        # fornecedor mandou (ou que foi lançado na mão) virava o custo do
+        # insumo no CMV, sem ninguém ter decidido comprar dele (QA 22/09).
         linhas = conn.execute(
             """
             SELECT p.insumo_id, p.preco, p.criado_em
             FROM cotacao_preco p
             JOIN cotacao c ON c.id = p.cotacao_id
+            WHERE c.status != 'aberta' OR p.selecionado = 1
             ORDER BY c.criado_em, p.selecionado, p.criado_em
             """
         ).fetchall()
@@ -7929,10 +7941,20 @@ def variacoes_de_preco(dias=90):
         por_insumo.setdefault(linha["insumo_id"], []).append(linha)
 
     saida = []
+    # Quem ficou de fora por não ter os dois lados da comparação: insumo
+    # comprado só agora (item novo, troca de fornecedor) sumia da tela sem
+    # nenhum contador, e dava pra achar que "nada mudou" (QA 22/09).
+    sem_comparacao = {"soAntes": [], "soAgora": []}
     for insumo_id, compras in por_insumo.items():
         antes = [c for c in compras if c["data"] < corte]
         depois = [c for c in compras if c["data"] >= corte]
         if not antes or not depois:
+            (sem_comparacao["soAgora"] if depois else sem_comparacao["soAntes"]).append({
+                "insumoId": insumo_id,
+                "nome": compras[0]["nome"],
+                "preco": round((depois or antes)[-1]["preco"], 4),
+                "data": (depois or antes)[-1]["data"][:10],
+            })
             continue
         preco_antes = antes[-1]["preco"]
         preco_agora = depois[-1]["preco"]
@@ -7951,7 +7973,9 @@ def variacoes_de_preco(dias=90):
             "suspeito": not (1 / FATOR_PRECO_SUSPEITO < preco_agora / preco_antes < FATOR_PRECO_SUSPEITO),
         })
     saida.sort(key=lambda v: -v["variacaoPct"])
-    return saida
+    for lista in sem_comparacao.values():
+        lista.sort(key=lambda i: i["nome"])
+    return {"variacoes": saida, "semComparacao": sem_comparacao}
 
 
 # Alta de custo que pesa na margem (Home, 2026-09-18): o insumo que ficou
@@ -7968,7 +7992,7 @@ def alertas_de_custo_na_margem(lojas, dias=30, limite=3):
     produto sem preço de venda e alta que mexe menos de 0,1 ponto ficam de
     fora. `margemAntes`/`margemAgora` só vêm quando o produto tem custo."""
     altas = {
-        v["insumoId"]: v for v in variacoes_de_preco(dias)
+        v["insumoId"]: v for v in variacoes_de_preco(dias)["variacoes"]
         if v["variacaoPct"] >= ALTA_MINIMA_PARA_ALERTA_PCT and not v["suspeito"]
     }
     if not altas:
@@ -8240,9 +8264,13 @@ def gerar_backup(caminho_destino=None):
         PASTA_BACKUPS, f"admfood-{datetime.now():%Y-%m-%d}.db"
     )
     parcial = destino + ".parcial"
-    for caminho in (parcial, destino):
-        if os.path.exists(caminho):
-            os.remove(caminho)
+    # Só o arquivo pela metade de uma tentativa anterior sai daqui. A cópia
+    # boa do dia fica onde está até a nova terminar: apagar antes de gerar
+    # deixava o dia SEM backup nenhum se a geração falhasse no meio (disco
+    # cheio, permissão, servidor reiniciado) — o os.replace lá embaixo troca
+    # uma pela outra de uma vez (QA 22/09).
+    if os.path.exists(parcial):
+        os.remove(parcial)
 
     conn = sqlite3.connect(CAMINHO_BANCO, isolation_level=None)
     try:

@@ -1183,7 +1183,14 @@ async function montarRelatorioWhatsApp() {
     bloco += `💵 Presencial: R$ ${valorPorNome['Presencial'] || '0,00'}\n`;
     bloco += `📱 iFood: R$ ${valorPorNome['IFood'] || '0,00'}\n`;
     bloco += `🌐 Cardápio Web: R$ ${valorPorNome['Cardápio Web'] || '0,00'}\n`;
-    bloco += `🛵 99 Food: R$ ${valorPorNome['99Food'] || '0,00'}\n\n`;
+    bloco += `🛵 99 Food: R$ ${valorPorNome['99Food'] || '0,00'}\n`;
+    // Canal fora dos quatro (foi o caso do totem) entrava no total e não
+    // tinha linha: as contas não fechavam e ninguém avisava (QA 22/09).
+    const conhecidosNoRelatorio = ['Presencial', 'IFood', 'Cardápio Web', '99Food'];
+    canaisMesclados
+      .filter((c) => !conhecidosNoRelatorio.includes(c.canal) && c.faturamentoNumero)
+      .forEach((c) => { bloco += `🧾 ${c.canal}: R$ ${c.faturamento}\n`; });
+    bloco += '\n';
     bloco += `Total ${rotulo}: R$ ${_formatarMoedaBR(totalPeriodo)}`;
 
     // A comparação "1ª/2ª/3ª/4ª [dia da semana] do mês" só faz sentido pra
@@ -2805,7 +2812,7 @@ function renderMaisVendidos(animar = true) {
   const rotuloComparado = _mvRotuloComparado();
   _renderMvTopProdutos(lojas);
   _renderMvCategorias(lojas);
-  _renderMvComparativo(dados.lojas, rotuloComparado);
+  _renderMvComparativo(dados.lojas, rotuloComparado, ehHoje);
   _renderMvRanking();
 }
 
@@ -2916,10 +2923,13 @@ function _renderMvCategorias(lojas) {
 }
 
 // --- Comparativo entre lojas (colunas) ---
-function _renderMvComparativo(lojas, rotuloComparado) {
+function _renderMvComparativo(lojas, rotuloComparado, diaParcial) {
   const alvo = document.getElementById('mv-comparativo-grafico');
-  document.getElementById('mv-comparativo-subtitulo').textContent =
-    `Faturamento do dia · variação contra ${rotuloComparado}`;
+  // Hoje é um dia pela metade: comparar com um dia inteiro fazia todas as
+  // lojas aparecerem despencando às 11h da manhã (QA 22/09).
+  document.getElementById('mv-comparativo-subtitulo').textContent = diaParcial
+    ? `Hoje até agora · comparando com o dia inteiro de ${rotuloComparado}`
+    : `Faturamento do dia · variação contra ${rotuloComparado}`;
   // Folga no topo pro valor em cima da coluna mais alta.
   const escala = _mvEscala(Math.max(...lojas.map((l) => l.faturamento || 0)) * 1.15);
   const marcas = _mvMarcas(escala);
@@ -2928,8 +2938,10 @@ function _renderMvComparativo(lojas, rotuloComparado) {
 
   const rotulos = lojas.map((l) => {
     const variacao = _mvVariacao(l.faturamento || 0, l.faturamentoComparado);
-    let delta = '<span class="mv-coluna-delta trend-sub">—</span>';
-    if (variacao !== null && isFinite(variacao)) {
+    let delta = diaParcial
+      ? '<span class="mv-coluna-delta trend-sub" title="O dia ainda está correndo: a comparação com um dia inteiro só apareceria como queda">parcial</span>'
+      : '<span class="mv-coluna-delta trend-sub">—</span>';
+    if (!diaParcial && variacao !== null && isFinite(variacao)) {
       const valor = Math.round(variacao * 100);
       delta = `<span class="mv-coluna-delta ${valor > 0 ? 'trend-up' : valor < 0 ? 'trend-down' : 'trend-sub'}">${valor > 0 ? '+' : ''}${valor}%</span>`;
     }
@@ -3660,7 +3672,10 @@ const ORIGEM_LABEL_COTACAO = { vmarket: 'VMarket', requisicao: 'Requisição', m
 // Barra de respostas verde a partir de 60% dos convites respondidos; abaixo, laranja.
 const RESPOSTAS_AVANCADAS_PCT = 60;
 // Fornecedores participantes e taxa de resposta olham a mesma janela.
-const DIAS_INDICADORES_COTACOES = 30;
+// Mesma janela em que o preço da cotação ainda vale como custo do insumo
+// (DIAS_PRECO_RECENTE no servidor): com 30 aqui, havia dois meses de preço
+// invisível na tela e ativo no CMV (QA 22/09).
+const DIAS_INDICADORES_COTACOES = 90;
 
 let cotacoesLista = [];
 let cotacaoAtualId = null;
@@ -10733,6 +10748,7 @@ async function carregarDadosLojas() {
     if (totalRedeElem) {
       totalRedeElem.textContent = _formatarMoedaBRL(dadosOntem.total_rede);
     }
+    _mostrarCoberturaDoTotal(dadosOntem);
 
     // A lista `dias` traz a data já formatada "dd/mm/aaaa" — converte de
     // volta pra Date pra poder comparar com os recortes de calendário.
@@ -10788,13 +10804,46 @@ async function carregarDadosLojas() {
  * mesmos dados já buscados pra montar os cards de "Desempenho por Unidade"
  * — sem precisar de uma segunda chamada ao backend.
  */
+// "3 de 4 lojas — Açaí sem sincronizar": o total da rede é a soma do que
+// chegou, e loja sem dado entrava como zero, sumia do ranking e ninguém via
+// que o número estava menor (QA 22/09).
+function _mostrarCoberturaDoTotal(dados) {
+  const alvo = document.getElementById('home-cobertura-lojas');
+  if (!alvo) return;
+  const semDado = dados.semDado || [];
+  const comDado = dados.lojasComDado != null ? dados.lojasComDado : (dados.lojas || []).filter((l) => l.sucesso).length;
+  const total = dados.lojasNoTotal != null ? dados.lojasNoTotal : (dados.lojas || []).length;
+  if (!semDado.length) {
+    alvo.hidden = true;
+    return;
+  }
+  alvo.textContent = `${comDado} de ${total} ${total === 1 ? 'loja' : 'lojas'} — ${semDado.join(', ')} sem sincronizar`;
+  alvo.hidden = false;
+}
+
 function renderRankingLojasHome(lojas) {
   const lista = document.getElementById('ranking-lojas');
   if (!lista) return;
 
   const ranking = (lojas || []).filter(l => l.sucesso).sort((a, b) => b.total - a.total);
-  if (!ranking.length) {
+  // Loja sem dado fica no fim, em cinza: antes sumia da lista como se não
+  // existisse (QA 22/09).
+  const semDado = (lojas || []).filter(l => !l.sucesso);
+  if (!ranking.length && !semDado.length) {
     lista.innerHTML = `<p class="panel-subtitle">Nenhum dado disponível.</p>`;
+    return;
+  }
+  if (!ranking.length) {
+    lista.innerHTML = semDado.map((loja) => `
+      <div class="ranking-item ranking-sem-dado">
+        <span class="ranking-posicao">—</span>
+        <div class="ranking-info">
+          <div class="ranking-nome-valor">
+            <span class="nome">${escaparHtml(loja.nome)}</span>
+            <span class="valor">sem sincronizar</span>
+          </div>
+        </div>
+      </div>`).join('');
     return;
   }
 
@@ -10816,7 +10865,16 @@ function renderRankingLojasHome(lojas) {
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') + semDado.map((loja) => `
+      <div class="ranking-item ranking-sem-dado" title="Essa loja não sincronizou: o total da rede está sem ela">
+        <span class="ranking-posicao">—</span>
+        <div class="ranking-info">
+          <div class="ranking-nome-valor">
+            <span class="nome">${escaparHtml(loja.nome)}</span>
+            <span class="valor">sem sincronizar</span>
+          </div>
+        </div>
+      </div>`).join('');
 }
 
 // --- HOME: GESTÃO OPERACIONAL (2026-09-18) ---
@@ -10898,6 +10956,9 @@ function _renderCustosEmAltaHome(alertas) {
 }
 
 const VEREDITO_CMV_HOME = { otimo: 'Ótimo', bom: 'Bom', ruim: 'Ruim' };
+// Abaixo disso o CMV é de uma fatia pequena demais das vendas pra virar
+// veredito: vira "parcial" com a cobertura escrita (QA 22/09).
+const COBERTURA_MINIMA_CMV = 80;
 
 // Saúde financeira: CMV do mês (ficha técnica × custo das compras) com a
 // mesma régua do Vendas Semanais (<31% ótimo, 31-34% bom, acima ruim).
@@ -10914,12 +10975,18 @@ function _renderSaudeFinanceiraHome(saude) {
     document.getElementById('home-saude-periodo').textContent = saude.periodo || '';
     return;
   }
-  card.classList.add(saude.classificacao);
+  // Cobertura baixa: o veredito colorido some e vira "parcial" (QA 22/09).
+  // "CMV 28% — Ótimo" calculado sobre metade das vendas não é um veredito,
+  // é um palpite com cara de número fechado.
+  const parcial = (saude.coberturaPercent || 0) < COBERTURA_MINIMA_CMV;
+  card.classList.add(parcial ? 'parcial' : saude.classificacao);
   document.getElementById('home-saude-cmv').textContent = `CMV ${num(saude.cmvPercent)}%`;
   veredito.hidden = false;
-  veredito.textContent = VEREDITO_CMV_HOME[saude.classificacao] || '';
-  veredito.className = `home-veredito ${saude.classificacao}`;
-  document.getElementById('home-saude-margem').textContent = `Margem bruta ${num(saude.margemBrutaPercent)}%`;
+  veredito.textContent = parcial ? `parcial (${saude.coberturaPercent}% das vendas)` : (VEREDITO_CMV_HOME[saude.classificacao] || '');
+  veredito.className = `home-veredito ${parcial ? 'parcial' : saude.classificacao}`;
+  document.getElementById('home-saude-margem').textContent = parcial
+    ? 'Falta custo em boa parte do que foi vendido'
+    : `Margem bruta ${num(saude.margemBrutaPercent)}%`;
   const periodo = document.getElementById('home-saude-periodo');
   periodo.textContent = `${saude.periodo} · ${saude.coberturaPercent}% das vendas com custo`;
   periodo.title = 'O CMV é calculado só sobre os produtos que têm ficha técnica com todos os insumos custeados. '
@@ -14221,11 +14288,41 @@ async function _salvarResultadoSemana(semana, campo, valor) {
   }
 }
 
+// O que não é um dos quatro canais conhecidos (o totem da Simus foi o caso
+// real): a coluna "Outros" só aparece quando existe, e a linha volta a fechar
+// com o total (QA 22/09).
+function _outrosCanaisDaSemana(semana) {
+  const conhecidos = new Set(CANAIS_VENDAS_SEMANAIS.map((c) => c.chave));
+  return Object.entries(semana.canais || {})
+    .filter(([chave, valor]) => !conhecidos.has(chave) && valor)
+    .reduce((soma, [, valor]) => soma + valor, 0);
+}
+
+function _nomesDosOutrosCanais(semanas) {
+  const conhecidos = new Set(CANAIS_VENDAS_SEMANAIS.map((c) => c.chave));
+  const nomes = new Set();
+  semanas.forEach((s) => Object.entries(s.canais || {})
+    .forEach(([chave, valor]) => { if (!conhecidos.has(chave) && valor) nomes.add(chave); }));
+  return [...nomes];
+}
+
 function renderVendasSemanaisTabela(semanas) {
   const tbody = document.getElementById('vendas-semanais-tabela-body');
   if (!tbody) return;
 
+  const outrosNomes = _nomesDosOutrosCanais(semanas);
+  const colunaOutros = document.getElementById('th-outros-canais');
+  if (colunaOutros) {
+    colunaOutros.hidden = !outrosNomes.length;
+    colunaOutros.textContent = outrosNomes.length === 1 ? outrosNomes[0] : 'Outros';
+    colunaOutros.title = outrosNomes.length ? `Canais fora dos quatro principais: ${outrosNomes.join(', ')}` : '';
+  }
+
   tbody.innerHTML = semanas.map((semana) => {
+    const outros = _outrosCanaisDaSemana(semana);
+    const celulaOutros = outrosNomes.length
+      ? (outros ? `<td class="num-mono">R$ ${_formatarMoedaBR(outros)}</td>` : '<td class="text-muted">—</td>')
+      : '';
     const celulas = CANAIS_VENDAS_SEMANAIS.map((canal) => {
       const valor = semana.canais[canal.chave];
       // Canal sem linha naquela semana (ex: 99Food antes da loja operar
@@ -14244,7 +14341,7 @@ function renderVendasSemanaisTabela(semanas) {
         <td class="font-bold num-mono">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)}
           <span class="text-muted" style="font-weight:400;">${semana.periodoInicio.slice(0, 4)}</span>
           ${semana.emAndamento ? `<span class="tag-em-andamento" title="Só ${semana.diasComDadoDiario} de ${semana.diasNoPeriodo} dias entraram">em andamento</span>` : ''}</td>
-        ${celulas}
+        ${celulas}${celulaOutros}
         <td class="font-bold num-mono col-atual-destaque">R$ ${_formatarMoedaBR(semana.total)}</td>
         <td class="num-mono">${semana.cmv !== null ? 'R$ ' + _formatarMoedaBR(semana.cmv) : '<span class="text-muted">—</span>'}</td>
         <td>${chipPct}</td>
@@ -14446,6 +14543,11 @@ function _linhaRankingPreco(v) {
     </li>`;
 }
 
+// Insumo que não tem os dois lados da comparação (comprado só agora, ou só
+// antes do período) ficava fora das duas listas sem contador nenhum — e a
+// tela parecia dizer que o preço dele não mudou (QA 22/09).
+let precosSemComparacao = { soAgora: [], soAntes: [] };
+
 function renderVariacoesPreco() {
   // Preço 4x diferente quase sempre é unidade trocada, não aumento: vai pro
   // fim da lista pra não esconder a variação de verdade.
@@ -14459,16 +14561,41 @@ function renderVariacoesPreco() {
   const periodo = precosDias >= 365 ? 'no último ano' : `nos últimos ${precosDias} dias`;
   document.getElementById('precos-altas-sub').textContent = `${precosVariacoes.filter((v) => v.variacaoPct > 0).length} de ${total} insumos comprados ${periodo}`;
   document.getElementById('precos-quedas-sub').textContent = `${precosVariacoes.filter((v) => v.variacaoPct < 0).length} de ${total} insumos comprados ${periodo}`;
+  _mostrarInsumosSemComparacao(periodo);
   document.querySelectorAll('.precos-ranking-item').forEach((botao) => {
     botao.addEventListener('click', () => abrirHistoricoPreco(parseInt(botao.dataset.insumoId, 10)));
   });
+}
+
+// "… e 7 insumos sem preço anterior pra comparar": item novo e troca de
+// fornecedor ficavam invisíveis nas duas listas.
+function _mostrarInsumosSemComparacao(periodo) {
+  const alvo = document.getElementById('precos-sem-comparacao');
+  if (!alvo) return;
+  const soAgora = precosSemComparacao.soAgora || [];
+  const soAntes = precosSemComparacao.soAntes || [];
+  if (!soAgora.length && !soAntes.length) {
+    alvo.hidden = true;
+    return;
+  }
+  const partes = [];
+  if (soAgora.length) {
+    partes.push(`${soAgora.length === 1 ? '1 insumo foi comprado' : `${soAgora.length} insumos foram comprados`} ${periodo} pela primeira vez, sem preço anterior pra comparar (${soAgora.slice(0, 5).map((i) => escaparHtml(i.nome)).join(', ')}${soAgora.length > 5 ? '…' : ''})`);
+  }
+  if (soAntes.length) {
+    partes.push(`${soAntes.length === 1 ? '1 insumo não foi comprado' : `${soAntes.length} insumos não foram comprados`} ${periodo} (o preço deles é o de antes)`);
+  }
+  alvo.innerHTML = partes.join('. ') + '.';
+  alvo.hidden = false;
 }
 
 async function carregarVariacoesPreco() {
   try {
     const resposta = await fetch(`/api/precos/variacoes?dias=${precosDias}`);
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
-    precosVariacoes = (await resposta.json()).variacoes || [];
+    const dados = await resposta.json();
+    precosVariacoes = dados.variacoes || [];
+    precosSemComparacao = dados.semComparacao || { soAgora: [], soAntes: [] };
     renderVariacoesPreco();
   } catch (erro) {
     console.error('Falha ao carregar variações de preço:', erro);

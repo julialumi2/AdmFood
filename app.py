@@ -1618,7 +1618,7 @@ def api_variacoes_de_preco():
     if erro:
         return erro
     dias = max(7, min(request.args.get('dias', 90, type=int), 730))
-    return jsonify({"dias": dias, "variacoes": variacoes_de_preco(dias)})
+    return jsonify({"dias": dias, **variacoes_de_preco(dias)})
 
 
 @app.route('/api/precos/insumo/<int:insumo_id>', methods=['GET'])

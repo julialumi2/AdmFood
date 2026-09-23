@@ -246,7 +246,7 @@
                   <i data-lucide="users" class="metric-icon"></i>
                 </div>
                 <span class="store-value" id="cotacoes-kpi-fornecedores">—</span>
-                <span class="kpi-sub">com preço nos últimos 30 dias</span>
+                <span class="kpi-sub">com preço nos últimos 90 dias</span>
               </div>
               <div class="store-card">
                 <div class="kpi-topo">
@@ -295,8 +295,11 @@
                   <select id="cotacoes-filtro-dias">
                     <option value="7">Últimos 7</option>
                     <option value="15">Últimos 15</option>
-                    <option value="30" selected>Últimos 30</option>
-                    <option value="90">Últimos 90</option>
+                    <option value="30">Últimos 30</option>
+                    <!-- 90 dias é a janela em que o preço da cotação ainda
+                         vale como custo do insumo: com o filtro em 30, havia
+                         dois meses de preço invisível e ativo (QA 22/09) -->
+                    <option value="90" selected>Últimos 90</option>
                     <option value="365">Últimos 365</option>
                     <option value="">Todos</option>
                   </select>

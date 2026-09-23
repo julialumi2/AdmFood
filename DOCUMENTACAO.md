@@ -4463,3 +4463,48 @@ disponível (o `precos_insumo_em_uso` já era carregado ali).
   WhatsApp quanto o envio pela extensão marcam, e a linha passa a mostrar
   "enviado em 23/09 14:30". O selo vivia só na memória da página e sumia ao
   atualizar; reenviar não reescreve a data do primeiro envio.
+
+### 6.55 Números que decidem (QA "altos", leva F — 2026-09-23)
+
+A leva F é sobre número que aparece certo na tela e foi calculado errado — o
+tipo de erro que só se descobre depois de decidir alguma coisa em cima dele.
+
+- **Total da rede honesto.** Loja que não sincronizou entrava como zero e
+  sumia do ranking: o total aparecia menor, sem marca nenhuma. Agora o quadro
+  preto escreve "3 de 4 lojas — Açaí sem sincronizar" e a loja faltante fica
+  no fim do ranking, em cinza, com "sem sincronizar".
+- **CMV com cobertura.** Abaixo de 80% das vendas com custo, o veredito
+  colorido ("Ótimo/Bom/Ruim") vira "parcial (45% das vendas)" em cinza, e a
+  linha de baixo diz "falta custo em boa parte do que foi vendido". "CMV 28% —
+  Ótimo" calculado sobre metade das vendas não é veredito, é palpite com cara
+  de número fechado.
+- **Presencial contado duas vezes na semana.** Quando o dia tinha ajuste
+  manual do canal Presencial E lançamento avulso de venda presencial, o
+  semanal somava os dois (e o Vendas Diárias mostrava só um). Agora o ajuste é
+  o número final do dia: o lançamento avulso não entra por cima.
+- **Canal novo não some mais.** A tabela de Vendas Semanais ganhou a coluna
+  "Outros" (com o nome do canal quando é um só), que aparece só quando existe
+  — antes o total somava todos os canais e a linha tinha 4 colunas, então o
+  totem da Simus entrava no total sem coluna. O relatório de WhatsApp também
+  lista o canal desconhecido em vez de deixá-lo só no total.
+- **Hoje é um dia pela metade.** Em Mais Vendidos, comparar "hoje até agora"
+  com um dia inteiro fazia todas as lojas aparecerem despencando às 11h. Agora
+  o subtítulo diz "Hoje até agora · comparando com o dia inteiro de ter.
+  15/09" e a variação de cada loja vira "parcial" em vez de um −70% falso.
+- **Cotação aberta não vira mais custo.** Um preço qualquer lançado numa
+  cotação em andamento (por fornecedor ou pelo "Lançar preço") virava o custo
+  do insumo no CMV, sem ninguém ter decidido comprar. Agora, em cotação
+  aberta, só o preço marcado como **vencedor** conta; cotação fechada (e o
+  histórico da VMarket) segue como antes. Junto disso, o filtro e os
+  indicadores da tela de Cotações passaram de 30 pra 90 dias, a mesma janela
+  em que o preço ainda vale como custo (`DIAS_PRECO_RECENTE`) — havia dois
+  meses de preço invisível na tela e ativo no CMV.
+- **Backup não apaga a cópia boa antes de gerar a nova.** `gerar_backup`
+  removia o arquivo do dia e só então gerava; falhando no meio (disco cheio,
+  permissão, servidor reiniciado), o dia ficava sem backup nenhum. Agora só o
+  ".parcial" de uma tentativa anterior é removido, e o `os.replace` troca uma
+  cópia pela outra de uma vez.
+- **Evolução do preço conta quem ficou de fora:** "3 insumos foram comprados
+  nos últimos 90 dias pela primeira vez, sem preço anterior pra comparar
+  (Bacon, Queijo…)". Item novo e troca de fornecedor sumiam das duas listas e
+  a tela parecia dizer que o preço deles não mudou.

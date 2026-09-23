@@ -361,6 +361,14 @@
 .home-veredito.otimo { background-color: var(--success-soft); color: var(--success-texto); }
 .home-veredito.bom { background-color: var(--warning-soft); color: var(--warning-texto); }
 .home-veredito.ruim { background-color: var(--danger-soft); color: var(--danger-texto); }
+/* Cobertura baixa: nem ótimo nem ruim — a conta é de um pedaço das vendas
+   e o veredito colorido enganava (QA 22/09). */
+.home-veredito.parcial {
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  text-transform: none;
+}
+.home-card-saude.parcial #home-saude-cmv { color: var(--text-muted); }
 .home-card-saude.ruim #home-saude-cmv { color: var(--danger-texto); }
 
 /* Atividades do dia: checklist enxuto, pendente com o caminho pra resolver. */
@@ -462,3 +470,17 @@
 @media (max-width: 640px) {
   .home-linha-rotina .cards-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Cobertura do total da rede (QA 22/09): loja que não sincronizou entrava
+   como zero e sumia do ranking, e o total aparecia menor sem nenhuma marca. */
+.hero-cobertura {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--warning-texto);
+}
+
+.hero-cobertura[hidden] { display: none; }
+
+.ranking-item.ranking-sem-dado { opacity: 0.6; }
+.ranking-item.ranking-sem-dado .valor { font-style: italic; color: var(--text-muted); font-weight: 500; }
