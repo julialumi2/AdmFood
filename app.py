@@ -6074,6 +6074,23 @@ def _agregar_duracoes(pedidos):
 def _montar_bloco_preparo(pedidos):
     bloco = _agregar_duracoes(pedidos)
 
+    # O canal está gravado em pedido_preparo desde sempre, mas a tela juntava
+    # iFood e balcão na mesma média — e entrega e retirada no balcão não têm
+    # o mesmo tempo (QA 22/09).
+    por_canal = {}
+    for p in pedidos:
+        # "portal" e "totem" são o mesmo balcão: sem juntar, apareciam duas
+        # linhas "Presencial" na tabela.
+        canal = (p["canal"] or "outros").lower()
+        por_canal.setdefault("portal" if canal in ("portal", "totem") else canal, []).append(p)
+    bloco["porCanal"] = sorted(
+        [
+            {"canal": canal, **_agregar_duracoes(lista)}
+            for canal, lista in por_canal.items()
+        ],
+        key=lambda c: -c["totalPedidos"],
+    )
+
     por_hora = {h: [] for h in range(24)}
     for p in pedidos:
         por_hora[int(p["criado_em"][11:13])].append(p["duracao_minutos"])

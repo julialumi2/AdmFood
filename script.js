@@ -1532,6 +1532,24 @@ function renderPreparoTab(tab) {
     painelPorLoja.classList.add('oculto');
   }
 
+  // Tempo por canal: iFood, 99Food, Cardápio Web e balcão na mesma média
+  // escondiam que a entrega é o que demora (QA 22/09).
+  const corpoPorCanal = document.getElementById('preparo-por-canal-body');
+  const painelPorCanal = document.getElementById('preparo-panel-por-canal');
+  if (corpoPorCanal) {
+    const canais = dados.porCanal || [];
+    painelPorCanal?.classList.toggle('oculto', !canais.length);
+    corpoPorCanal.innerHTML = canais.length
+      ? canais.map((c) => `
+        <tr>
+          <td>${escaparHtml(nomeExibicaoCanal(c.canal))}</td>
+          <td>${c.totalPedidos}</td>
+          <td>${_formatarMinutos(c.tempoMedianaMinutos)}</td>
+          <td class="text-muted">${_formatarMinutos(c.tempoMedioMinutos)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" class="panel-subtitle">Sem dados de canal nesse período.</td></tr>';
+  }
+
   const corpoGargalos = document.getElementById('preparo-gargalos-body');
   corpoGargalos.innerHTML = (dados.gargalos && dados.gargalos.length)
     ? dados.gargalos.map(g => `

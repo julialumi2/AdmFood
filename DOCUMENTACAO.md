@@ -4732,3 +4732,12 @@ quantos entraram, quantos foram atualizados e quantos saíram.
   `/api/config/lojas` passou a filtrar por `_loja_visivel`, então as pílulas
   do topo ("4 lojas conectadas", nomes das atrasadas) param de vazar as
   outras lojas pra gerente e operação.
+
+### 6.68 Preparo separado por canal
+
+O canal já estava gravado em `pedido_preparo`, mas a tela juntava tudo numa
+média só — e entrega não leva o mesmo tempo que balcão. A resposta ganhou
+`porCanal` (mediana, média e total por canal, com "portal" e "totem" contados
+como o mesmo balcão) e a tela um painel "Tempo por canal". Nos dados de teste
+ele mostra de cara o que a média escondia: Cardápio Web 59 min de mediana
+contra 29 do 99Food e 19 do balcão.
