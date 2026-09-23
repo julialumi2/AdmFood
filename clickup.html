@@ -258,6 +258,27 @@
           </select>
         </div>
 
+        <!-- Quem cuida e de qual loja (QA 22/09): sem dono, card automático
+             (divergência de NF, cobrança do que faltou) ficava sem ninguém. -->
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="responsavelTarefa">Responsável</label>
+            <select id="responsavelTarefa">
+              <option value="">Sem responsável</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="lojaTarefa">Loja</label>
+            <select id="lojaTarefa">
+              <option value="">Todas / rede</option>
+              <option value="Hamburgueria Artesanos">Hamburgueria Artesanos</option>
+              <option value="Açaí Na Lata">Açaí Na Lata</option>
+              <option value="Tradiça ZN">Tradiça ZN</option>
+              <option value="Tradiça Simus">Tradiça Simus</option>
+            </select>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="descricaoTarefa">Descrição</label>
           <textarea id="descricaoTarefa" rows="3" placeholder="Detalhes da atividade..."></textarea>
@@ -310,6 +331,22 @@
           <div class="info-item">
             <span class="info-label">Data Limite</span>
             <span class="info-value" id="detalheData">03/08/2026</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Responsável</span>
+            <select class="info-select" id="detalheResponsavel" aria-label="Responsável pela tarefa">
+              <option value="">Sem responsável</option>
+            </select>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Loja</span>
+            <select class="info-select" id="detalheLoja" aria-label="Loja da tarefa">
+              <option value="">Todas / rede</option>
+              <option value="Hamburgueria Artesanos">Hamburgueria Artesanos</option>
+              <option value="Açaí Na Lata">Açaí Na Lata</option>
+              <option value="Tradiça ZN">Tradiça ZN</option>
+              <option value="Tradiça Simus">Tradiça Simus</option>
+            </select>
           </div>
         </div>
 

@@ -567,6 +567,23 @@
   .detalhe-produto-grid { grid-template-columns: 1fr; }
   .detalhe-produto-foto { margin: 0 auto; }
   .detalhe-produto-linha { grid-template-columns: 1fr; }
+
+  /* A linha da ficha mantinha 4 colunas fixas e cortava o nome do insumo
+     (QA 22/09): no celular o nome ganha a linha inteira e quantidade,
+     unidade, custo e remover ficam embaixo. */
+  .ficha-tecnica-linha {
+    grid-template-columns: 1fr 64px auto auto;
+    grid-template-areas:
+      "insumo insumo insumo insumo"
+      "qtd unidade custo remover";
+    row-gap: 6px;
+  }
+
+  .ficha-tecnica-linha .ficha-tecnica-select-insumo { grid-area: insumo; }
+  .ficha-tecnica-linha .ficha-tecnica-input-quantidade { grid-area: qtd; }
+  .ficha-tecnica-linha .ficha-tecnica-select-unidade { grid-area: unidade; }
+  .ficha-tecnica-linha .ficha-tecnica-custo-linha { grid-area: custo; text-align: left; }
+  .ficha-tecnica-linha [data-acao="remover-linha-ficha-tecnica"] { grid-area: remover; justify-self: end; }
 }
 
 .receita-precos-edicao {

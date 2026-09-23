@@ -231,6 +231,7 @@ from backend.armazenamento import (
     responder_convite_cotacao,
     listar_recusas_cotacao,
     reabrir_convite_cotacao,
+    marcar_convite_enviado,
     estender_prazo_convite,
 )
 from backend.precos_cardapio import ler_precos_da_planilha
@@ -611,6 +612,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/cotacoes/<int:cotacao_id>/convites'): 'Gerou os convites da cotação',
     ('POST', '/api/cotacoes/convites/<int:convite_id>/reabrir'): 'Reabriu o convite de um fornecedor',
     ('PUT', '/api/cotacoes/convites/<int:convite_id>/prazo'): 'Estendeu o prazo do convite de um fornecedor',
+    ('POST', '/api/cotacoes/convites/<int:convite_id>/enviado'): 'Mandou o convite de cotação pro fornecedor',
     ('POST', '/api/cotacoes/convite/<token>/responder'): 'O fornecedor respondeu a cotação pelo link',
     ('POST', '/api/cotacoes/<int:cotacao_id>/gerar-pedidos'): 'Gerou os pedidos da cotação',
     ('POST', '/api/pedidos/direto'): 'Criou pedido direto',
@@ -3421,6 +3423,8 @@ def _formatar_convite(convite):
         "status": convite["status"],
         "criadoEm": convite["criado_em"],
         "respondidaEm": convite["respondida_em"],
+        # Quando o link foi mandado pro fornecedor (QA 22/09).
+        "enviadoEm": convite["enviado_em"] if "enviado_em" in convite.keys() else None,
         "token": convite["token"],
     }
 
@@ -3509,6 +3513,20 @@ def api_reabrir_convite_cotacao(convite_id):
         return erro_admin
     prazo = reabrir_convite_cotacao(convite_id)
     return jsonify({"ok": True, "prazoValidade": prazo})
+
+
+@app.route('/api/cotacoes/convites/<int:convite_id>/enviado', methods=['POST'])
+def api_marcar_convite_enviado(convite_id):
+    """Registra que o convite foi mandado pro fornecedor — pelo clique no
+    WhatsApp ou pela extensão. O selo "enviado" vivia só na memória da
+    página e sumia ao atualizar (QA 22/09)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    enviado_em = marcar_convite_enviado(convite_id)
+    if enviado_em is None:
+        return jsonify({"erro": "Convite não encontrado."}), 404
+    return jsonify({"ok": True, "enviadoEm": enviado_em})
 
 
 @app.route('/api/cotacoes/convites/<int:convite_id>/prazo', methods=['PUT'])
@@ -5955,6 +5973,10 @@ def _formatar_tarefa(tarefa):
             for c in tarefa["comentarios"]
         ],
         "particular": tarefa.get("visivel_para") is not None,
+        # De quem é o card e de qual loja (QA 22/09).
+        "responsavelId": tarefa.get("responsavel_id"),
+        "responsavelNome": tarefa.get("responsavel_nome"),
+        "loja": tarefa.get("loja"),
     }
 
 
@@ -5998,6 +6020,13 @@ def api_criar_tarefa():
     prioridade = dados.get('prioridade') or 'media'
     if prioridade not in PRIORIDADES_TAREFA_VALIDAS:
         return jsonify({"erro": "Prioridade inválida."}), 400
+    try:
+        responsavel_id = int(dados['responsavelId']) if dados.get('responsavelId') else None
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Responsável inválido."}), 400
+    loja_tarefa = (dados.get('loja') or '').strip() or None
+    if loja_tarefa and loja_tarefa not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
     tarefa_id = criar_tarefa(
         titulo,
         dados.get('descricao') or '',
@@ -6006,6 +6035,8 @@ def api_criar_tarefa():
         dados.get('dataLimite') or None,
         # "Só eu vejo este card": fica visível só pra quem criou.
         visivel_para=_id_usuario_logado() if dados.get('particular') else None,
+        responsavel_id=responsavel_id,
+        loja=loja_tarefa,
     )
     # Checklist já na criação (um item por linha no formulário).
     for item in dados.get('subtarefas') or []:
@@ -6022,6 +6053,9 @@ CAMPOS_TAREFA_PERMITIDOS = {
     'prioridade': 'prioridade',
     'status': 'status',
     'dataLimite': 'data_limite',
+    # Quem cuida do card e de qual loja ele é (QA 22/09).
+    'responsavelId': 'responsavel_id',
+    'loja': 'loja',
 }
 
 

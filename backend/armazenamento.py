@@ -1008,6 +1008,18 @@ def inicializar_banco():
             )
             """
         )
+        colunas_convite = {c["name"] for c in conn.execute("PRAGMA table_info(cotacao_convite)").fetchall()}
+        if "enviado_em" not in colunas_convite:
+            # Quando o convite foi mandado pro fornecedor (QA 22/09): o selo
+            # "enviado" vivia só na memória da página e sumia ao atualizar.
+            conn.execute("ALTER TABLE cotacao_convite ADD COLUMN enviado_em TEXT")
+        colunas_tarefa = {c["name"] for c in conn.execute("PRAGMA table_info(tarefa)").fetchall()}
+        if "responsavel_id" not in colunas_tarefa:
+            # Responsável e loja no card (QA 22/09): sem dono, tarefa
+            # automática (divergência de NF, cobrança do que faltou) ficava
+            # sem ninguém pra olhar.
+            conn.execute("ALTER TABLE tarefa ADD COLUMN responsavel_id INTEGER")
+            conn.execute("ALTER TABLE tarefa ADD COLUMN loja TEXT")
         colunas_pedido_item = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra_item)").fetchall()}
         if "quantidade_pedida" not in colunas_pedido_item:
             # Recebimento parcial (QA 22/09): `quantidade` era sobrescrita
@@ -1722,7 +1734,12 @@ def listar_tarefas(usuario_id=None):
     """Cards da equipe toda + os particulares de `usuario_id`."""
     with conexao() as conn:
         tarefas = [dict(t) for t in conn.execute(
-            "SELECT * FROM tarefa WHERE visivel_para IS NULL OR visivel_para = ? ORDER BY criado_em DESC",
+            """
+            SELECT t.*, u.nome AS responsavel_nome
+            FROM tarefa t LEFT JOIN usuario u ON u.id = t.responsavel_id
+            WHERE t.visivel_para IS NULL OR t.visivel_para = ?
+            ORDER BY t.criado_em DESC
+            """,
             (usuario_id,),
         ).fetchall()]
         for tarefa in tarefas:
@@ -1741,17 +1758,21 @@ def listar_tarefas(usuario_id=None):
         return tarefas
 
 
-def criar_tarefa(titulo, descricao, categoria, prioridade, data_limite, visivel_para=None):
+def criar_tarefa(titulo, descricao, categoria, prioridade, data_limite, visivel_para=None,
+                 responsavel_id=None, loja=None):
     """`visivel_para`: id do usuário, pra card particular ("Só eu vejo este
-    card"); None = a equipe toda."""
+    card"); None = a equipe toda. `responsavel_id` e `loja` dizem de quem é o
+    card (QA 22/09)."""
     agora = datetime.now().isoformat()
     with conexao() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite, criado_em, atualizado_em, visivel_para)
-            VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?)
+            INSERT INTO tarefa (titulo, descricao, categoria, prioridade, status, data_limite,
+                                criado_em, atualizado_em, visivel_para, responsavel_id, loja)
+            VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?)
             """,
-            (titulo, descricao, categoria, prioridade, data_limite, agora, agora, visivel_para),
+            (titulo, descricao, categoria, prioridade, data_limite, agora, agora, visivel_para,
+             responsavel_id, loja),
         )
         return cursor.lastrowid
 
@@ -5150,12 +5171,25 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None, iten
     }
 
 
+def marcar_convite_enviado(convite_id):
+    """Guarda quando o convite foi mandado pro fornecedor (a primeira vez
+    vale; reenviar não reescreve a data). Devolve a data que ficou."""
+    agora = datetime.now().isoformat(timespec="minutes")
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE cotacao_convite SET enviado_em = COALESCE(enviado_em, ?) WHERE id = ?",
+            (agora, convite_id),
+        )
+        linha = conn.execute("SELECT enviado_em FROM cotacao_convite WHERE id = ?", (convite_id,)).fetchone()
+    return linha["enviado_em"] if linha else None
+
+
 def listar_convites_cotacao(cotacao_id):
     with conexao() as conn:
         linhas = conn.execute(
             """
             SELECT cc.id, cc.fornecedor_id, cc.token, cc.prazo_validade, cc.status, cc.criado_em, cc.respondida_em,
-                   f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone
+                   cc.enviado_em, f.nome AS fornecedor_nome, f.contato_telefone AS fornecedor_telefone
             FROM cotacao_convite cc
             JOIN fornecedor f ON f.id = cc.fornecedor_id
             WHERE cc.cotacao_id = ?

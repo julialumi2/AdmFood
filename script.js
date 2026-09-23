@@ -4509,15 +4509,28 @@ document.addEventListener('admfood:extensao-pronta', () => {
   if (convitesCotacaoAtuais.length) renderConvitesCotacao(convitesCotacaoAtuais);
   else _atualizarEnvioWhatsappConvites();
 });
-document.addEventListener('admfood:envio-whatsapp', (evento) => {
+document.addEventListener('admfood:envio-whatsapp', async (evento) => {
   try {
     const resumo = JSON.parse(evento.detail);
-    (resumo.itens || []).filter((i) => i.status === 'enviado' && i.id).forEach((i) => enviadosPeloWhatsapp.add(i.id));
+    const enviados = (resumo.itens || []).filter((i) => i.status === 'enviado' && i.id).map((i) => i.id);
+    enviados.forEach((id) => enviadosPeloWhatsapp.add(id));
     if (convitesCotacaoAtuais.length) renderConvitesCotacao(convitesCotacaoAtuais);
+    // Fica gravado: antes o selo vivia só aqui na página e sumia ao
+    // atualizar, então ninguém sabia quem já tinha recebido o link (QA 22/09).
+    await Promise.all(enviados.map((id) => _registrarConviteEnviado(id)));
+    if (cotacaoAtualId) await carregarConvitesCotacao();
   } catch (erro) {
     console.error('Resumo do envio pelo WhatsApp inválido:', erro);
   }
 });
+
+async function _registrarConviteEnviado(conviteId) {
+  try {
+    await fetch(`/api/cotacoes/convites/${conviteId}/enviado`, { method: 'POST' });
+  } catch (erro) {
+    console.error('Falha ao registrar o envio do convite:', erro);
+  }
+}
 
 function renderConvitesCotacao(convites) {
   convitesCotacaoAtuais = convites;
@@ -4542,7 +4555,9 @@ function renderConvitesCotacao(convites) {
     const linkWhatsApp = _linkWhatsAppConvite(c.fornecedorTelefone, c.fornecedorNome, link);
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(c.fornecedorNome)}${enviadosPeloWhatsapp.has(c.id) ? ' <span class="badge-pill pos" title="Mandado agora pela extensão do WhatsApp">enviado</span>' : ''}</td>
+        <td class="font-bold">${escaparHtml(c.fornecedorNome)}${c.enviadoEm || enviadosPeloWhatsapp.has(c.id)
+          ? ` <span class="badge-pill pos" title="O link foi mandado pro fornecedor">${c.enviadoEm ? `enviado em ${_prazoContagemTexto(c.enviadoEm)}` : 'enviado'}</span>`
+          : ''}</td>
         <td><span class="badge-pill ${statusClasse}">${statusTexto}</span></td>
         <td class="text-muted">${new Date(c.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
         <td class="col-acoes"><div class="acoes-linha">
@@ -4554,6 +4569,7 @@ function renderConvitesCotacao(convites) {
             </button>
           ` : linkWhatsApp ? `
             <a class="btn-secondary-sm" href="${escaparHtml(linkWhatsApp)}" target="_blank" rel="noopener"
+               data-acao="convite-whatsapp-manual" data-convite="${c.id}"
                title="Abre a conversa com a mensagem pronta; você aperta enviar no WhatsApp">
               <i data-lucide="${comExtensao ? 'external-link' : 'send'}"></i>
               ${comExtensao ? 'Abrir no WhatsApp' : 'Enviar por WhatsApp'}
@@ -4580,6 +4596,16 @@ function renderConvitesCotacao(convites) {
       </tr>
     `;
   }).join('');
+
+  // Abrir a conversa no WhatsApp conta como enviado: é o que o pedido de
+  // compra já fazia, e o convite não (QA 22/09).
+  tbody.querySelectorAll('[data-acao="convite-whatsapp-manual"]').forEach((link) => {
+    link.addEventListener('click', async () => {
+      enviadosPeloWhatsapp.add(parseInt(link.dataset.convite, 10));
+      await _registrarConviteEnviado(link.dataset.convite);
+      await carregarConvitesCotacao();
+    });
+  });
 
   tbody.querySelectorAll('[data-acao="copiar-link-convite"]').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -11715,10 +11741,18 @@ function renderKanban() {
             <div class="card-bottom">
               <span class="task-meta">
                 ${escaparHtml(t.categoria)}
+                ${t.loja ? ` · ${escaparHtml(LOJA_CURTA[t.loja] || t.loja)}` : ''}
                 ${t.subtarefas.length ? ` · ${t.subtarefas.filter(s => s.concluida).length}/${t.subtarefas.length}` : ''}
                 ${t.particular ? ' · <span class="task-particular" title="Card particular: só você vê"><i data-lucide="lock"></i> só você</span>' : ''}
               </span>
               <span class="task-date">${t.dataLimiteFormatada || ''}</span>
+            </div>
+            <!-- Quem cuida do card: sem isso, num time de 4 lojas, tarefa
+                 automática ficava sem dono (QA 22/09). -->
+            <div class="task-responsavel${t.responsavelNome ? '' : ' sem-dono'}">
+              ${t.responsavelNome
+                ? `<span class="avatar avatar-sm">${escaparHtml(_iniciaisFornecedor(t.responsavelNome))}</span><span>${escaparHtml(t.responsavelNome)}</span>`
+                : '<i data-lucide="user-plus"></i><span>sem responsável</span>'}
             </div>
           </div>
         `).join('')
@@ -11772,10 +11806,36 @@ async function moverTarefa(tarefaId, novoStatus) {
   }
 }
 
+// Trocar responsável ou loja no detalhe salva na hora, sem botão.
+function _ligarTrocaDeDonoDaTarefa() {
+  [['detalheResponsavel', 'responsavelId'], ['detalheLoja', 'loja']].forEach(([id, campo]) => {
+    const seletor = document.getElementById(id);
+    if (!seletor || seletor.dataset.ligado) return;
+    seletor.dataset.ligado = '1';
+    seletor.addEventListener('change', async () => {
+      if (!tarefaSelecionadaId) return;
+      try {
+        const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [campo]: seletor.value || null }),
+        });
+        if (!resposta.ok) throw new Error('falha ao salvar');
+        await carregarTarefas();
+      } catch (erro) {
+        console.error('Falha ao mudar o dono da tarefa:', erro);
+        alert('Não foi possível salvar essa mudança agora.');
+      }
+    });
+  });
+}
+
 // --- MODAL: CRIAR TAREFA ---
 function criarNovaTarefa() {
   const modal = document.getElementById('modalCriarTarefa');
   if (modal) modal.style.display = 'flex';
+  // Lista de quem pode ficar com o card (QA 22/09).
+  _preencherSeletorResponsavel(document.getElementById('responsavelTarefa'), null);
 }
 
 function fecharModalCriar() {
@@ -11783,6 +11843,35 @@ function fecharModalCriar() {
   if (modal) modal.style.display = 'none';
   const form = document.getElementById('formNovaTarefa');
   if (form) form.reset();
+}
+
+// Quem pode ser responsável: a lista de funcionários. Gerente não enxerga a
+// rota de usuários (é de admin), então o seletor fica só com ele mesmo — o
+// card continua funcionando, apenas sem escolher outra pessoa.
+let pessoasParaTarefa = null;
+
+async function _carregarPessoasParaTarefa() {
+  if (pessoasParaTarefa) return pessoasParaTarefa;
+  try {
+    const resposta = await fetch('/api/usuarios');
+    pessoasParaTarefa = resposta.ok
+      ? ((await resposta.json()).usuarios || []).filter((u) => u.ativo !== false)
+      : [];
+  } catch (erro) {
+    pessoasParaTarefa = [];
+  }
+  if (!pessoasParaTarefa.length && window.usuarioLogado) {
+    pessoasParaTarefa = [{ id: window.usuarioLogado.id, nome: window.usuarioLogado.nome }];
+  }
+  return pessoasParaTarefa;
+}
+
+async function _preencherSeletorResponsavel(seletor, selecionado) {
+  if (!seletor) return;
+  const pessoas = await _carregarPessoasParaTarefa();
+  seletor.innerHTML = '<option value="">Sem responsável</option>'
+    + pessoas.map((p) => `<option value="${p.id}">${escaparHtml(p.nome)}</option>`).join('');
+  seletor.value = selecionado ? String(selecionado) : '';
 }
 
 async function salvarNovaTarefa(event) {
@@ -11796,6 +11885,8 @@ async function salvarNovaTarefa(event) {
     categoria: document.getElementById('categoriaTarefa').value,
     dataLimite: document.getElementById('dataLimiteTarefa').value,
     descricao: document.getElementById('descricaoTarefa').value,
+    responsavelId: document.getElementById('responsavelTarefa')?.value || null,
+    loja: document.getElementById('lojaTarefa')?.value || null,
     particular: !!document.getElementById('particularTarefa')?.checked,
     subtarefas: (document.getElementById('checklistTarefa')?.value || '')
       .split('\n').map(linha => linha.trim()).filter(Boolean),
@@ -11834,6 +11925,11 @@ function abrirDetalhesTarefa(id) {
   document.getElementById('detalheCategoria').textContent = tarefa.categoria;
   document.getElementById('detalheData').textContent = tarefa.dataLimiteFormatada || '—';
   document.getElementById('detalheDescricao').textContent = tarefa.descricao || 'Sem descrição.';
+  // Responsável e loja dá pra trocar aqui mesmo, sem refazer o card.
+  _preencherSeletorResponsavel(document.getElementById('detalheResponsavel'), tarefa.responsavelId);
+  const seletorLoja = document.getElementById('detalheLoja');
+  if (seletorLoja) seletorLoja.value = tarefa.loja || '';
+  _ligarTrocaDeDonoDaTarefa();
 
   renderChecklist(tarefa);
   renderComentarios(tarefa);
@@ -12268,6 +12364,42 @@ function _wireReceitaCardsEventos(conteudoEl) {
 // "Complementos" no fim, só quando a loja é Açaí Na Lata) e decide se o
 // conteúdo é a grade de receitas ou a lista de complementos, conforme o
 // que tá selecionado nesse menu.
+// Esc e clique fora fecham o modal (QA 22/09): sair de um modal que ocupa a
+// tela toda no celular dependia de mirar o "×" do canto. Usa o botão de
+// fechar de cada tela quando ele existe, pra manter a limpeza de estado que
+// cada uma faz; e pergunta antes quando a pessoa digitou algo ali dentro.
+(function fecharModalPorEscOuFora() {
+  const visivel = (modal) => modal.style.display && modal.style.display !== 'none';
+
+  // Digitou dentro do modal = tem coisa pra perder.
+  document.addEventListener('input', (evento) => {
+    const modal = evento.target.closest('.modal-overlay');
+    if (modal) modal.dataset.mexido = '1';
+  }, true);
+
+  function fecharModal(modal) {
+    if (!modal || !visivel(modal)) return;
+    if (modal.dataset.mexido === '1'
+        && !confirm('Fechar sem salvar? O que você digitou aqui vai ser perdido.')) return;
+    delete modal.dataset.mexido;
+    const botao = modal.querySelector('.btn-close') || modal.querySelector('[id$="-cancelar"]');
+    if (botao) botao.click();
+    else modal.style.display = 'none';
+  }
+
+  document.addEventListener('keydown', (evento) => {
+    if (evento.key !== 'Escape') return;
+    const abertos = [...document.querySelectorAll('.modal-overlay')].filter(visivel);
+    fecharModal(abertos[abertos.length - 1]);
+  });
+
+  // mousedown no próprio fundo (não no conteúdo): clicar e arrastar de
+  // dentro pra fora não fecha sem querer.
+  document.addEventListener('mousedown', (evento) => {
+    if (evento.target.classList?.contains('modal-overlay')) fecharModal(evento.target);
+  });
+})();
+
 // Busca do Cardápio (QA 22/09): com termo digitado, a categoria escolhida
 // deixa de mandar e a tela mostra o que casa, de qualquer categoria.
 let fichaTecnicaBusca = '';

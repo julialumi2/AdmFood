@@ -4441,3 +4441,25 @@ Insumo sem preço aparece como "sem preço" em laranja e o rodapé avisa que a
 conta está incompleta — é o mesmo motivo que deixa o produto "sem custo" na
 Curva ABC. A rota da ficha passou a mandar `custoUnitario` de cada insumo
 disponível (o `precos_insumo_em_uso` já era carregado ali).
+
+### 6.54 Esc, responsável na tarefa e envio do convite (leva E, parte 4)
+
+- **Modal fecha com Esc e clicando fora.** Nenhum modal do sistema fechava
+  assim: no celular, sair de um que ocupa a tela toda dependia de mirar o "×"
+  do canto. Usa o botão de fechar de cada tela (mantendo a limpeza de estado
+  que cada uma faz) e, se a pessoa digitou algo ali dentro, pergunta antes —
+  o modal é marcado como "mexido" no primeiro `input`.
+- **Linha da ficha técnica no celular** deixou de cortar o nome do insumo: o
+  nome ocupa a linha inteira e quantidade, unidade, custo e remover ficam
+  embaixo.
+- **Responsável e loja na tarefa** (`tarefa.responsavel_id` e `tarefa.loja`).
+  O card mostra quem cuida (ou "sem responsável" em cinza) e a loja; dá pra
+  trocar os dois no detalhe, sem botão de salvar. "Num time de 4 lojas,
+  ninguém era dono de nada" — e tarefa automática (divergência de NF,
+  cobrança do que faltou) nascia sem ninguém pra olhar. Gerente não enxerga a
+  rota de usuários (é de admin), então o seletor fica com ele mesmo.
+- **Envio do convite de cotação fica registrado** (`cotacao_convite.enviado_em`,
+  `POST /api/cotacoes/convites/<id>/enviado`): tanto o clique manual no
+  WhatsApp quanto o envio pela extensão marcam, e a linha passa a mostrar
+  "enviado em 23/09 14:30". O selo vivia só na memória da página e sumia ao
+  atualizar; reenviar não reescreve a data do primeiro envio.
