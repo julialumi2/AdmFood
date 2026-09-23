@@ -156,23 +156,89 @@ body {
 
 .contagem-stepper button:active { background-color: var(--info-soft); }
 
+/* Campo + unidade num bloco só: a unidade morava numa coluna à parte
+   chamada "Gramatura", longe de quem digita (QA 22/09). */
+.contagem-campo-unidade {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  overflow: hidden;
+}
+
+.contagem-campo-unidade:focus-within {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
 .contagem-stepper input {
   min-width: 0;
+  flex: 1;
   padding: 12px;
-  border: 1px solid var(--input-border);
-  background-color: var(--input-bg);
+  border: none;
+  background-color: transparent;
   color: var(--text-dark);
-  border-radius: var(--radius-sm);
   font-size: 1.05rem;
   text-align: center;
   outline: none;
   -moz-appearance: textfield;
 }
 
+.contagem-unidade-fixa,
+.contagem-unidade-escolha {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border: none;
+  border-left: 1px solid var(--input-border);
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.contagem-unidade-escolha {
+  cursor: pointer;
+  padding-right: 26px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 13px center, right 8px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Coluna "Unidade": o que o campo espera, e quanto rende a caixa */
+.contagem-unidade { display: flex; flex-direction: column; gap: 2px; }
+.contagem-unidade strong { color: var(--text-dark); font-size: 1rem; }
+.contagem-unidade small { font-size: 0.8rem; }
+
+/* Contando em caixa: quanto dá na unidade do estoque */
+.contagem-equivalente {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Resultado, não campo: a sugestão ficava com a cara de um campo de
+   digitar, colada no de verdade (QA 22/09). */
+.contagem-sugestao {
+  padding: 10px var(--space-3);
+  border-left: 3px solid var(--info);
+  background-color: var(--info-soft);
+  color: var(--text-dark);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .contagem-stepper input::-webkit-outer-spin-button,
 .contagem-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-.contagem-stepper input:focus { border-color: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
+
 
 /* Número fora de qualquer proporção com o que a loja tinha (QA 22/09) */
 .contagem-aviso-unidade {
@@ -453,7 +519,7 @@ body {
   .contagem-cabecalho,
   .contagem-card {
     display: grid;
-    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.2fr) 130px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.2fr) 170px minmax(0, 1fr);
     gap: var(--space-3);
     align-items: center;
   }
@@ -482,15 +548,28 @@ body {
 
   .contagem-card .contagem-rotulo,
   .contagem-card .contagem-previsao-bloco,
-  .contagem-card .contagem-conversao,
   .contagem-card .contagem-proximo,
   .contagem-stepper button { display: none; }
+
+  /* Cada campo na sua coluna da primeira linha; aviso e equivalência
+     ocupam a linha inteira embaixo, em vez de empurrar a sugestão. */
+  .contagem-card .contagem-nome { grid-column: 1; grid-row: 1; }
+  .contagem-card .contagem-unidade { grid-column: 2; grid-row: 1; }
+  .contagem-card .contagem-marca { grid-column: 3; grid-row: 1; }
+  .contagem-card .contagem-stepper { grid-column: 4; grid-row: 1; }
+  .contagem-card .contagem-sugestao { grid-column: 5; grid-row: 1; }
+  .contagem-card .contagem-equivalente { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+  .contagem-card .contagem-aviso-unidade { grid-column: 1 / -1; grid-row: 3; text-align: left; }
+  .contagem-card .contagem-sugestao { padding: 8px var(--space-3); font-size: 0.85rem; }
 
   .contagem-card .contagem-nome { padding: 0; border: none; background: none; color: var(--text-dark); font-weight: 700; font-size: 0.9rem; }
   .contagem-card .contagem-campo-leitura:not(.contagem-nome) { padding: 8px 10px; font-size: 0.85rem; }
 
   .contagem-stepper { display: block; }
-  .contagem-stepper input { width: 110px; padding: 8px 10px; font-size: 0.9rem; text-align: left; }
+  .contagem-campo-unidade { width: 100%; }
+  .contagem-stepper input { min-width: 0; padding: 8px 10px; font-size: 0.9rem; text-align: left; }
+  .contagem-unidade-fixa,
+  .contagem-unidade-escolha { font-size: 0.85rem; padding: 0 8px; }
 
   #btn-contagem-publica-enviar { margin: var(--space-4) 0 0; }
 }

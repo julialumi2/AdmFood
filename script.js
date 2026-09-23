@@ -6500,6 +6500,9 @@ const minimosJaPerguntados = new Set();
 const _numeroBR = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 // No campo, sem ponto de milhar ("1000", "7,5"), pra editar sem confusão.
 const _numeroCampo = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2, useGrouping: false });
+// Quantidade num campo que fala kg/L enquanto o sistema guarda g/ml: 1 g é
+// 0,001 kg, e as duas casas de _numeroCampo zerariam o valor.
+const _numeroCampoQtd = (valor) => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 6, useGrouping: false });
 
 // "7,5" e "7.5" = 7,5 (o ponto do teclado numérico é decimal: "0.250" é
 // 0,25, nunca 250). Com vírgula, os pontos são de milhar ("1.000,5").
@@ -6516,22 +6519,35 @@ function _lerNumeroBR(texto) {
   return Number(limpo);
 }
 
-function _valorCampoCompra(l) {
+// Toda a linha da conferência fala a mesma unidade — a do preço (kg, L,
+// un). Antes o campo era em grama enquanto a referência ao lado dizia
+// "ideal 10 kg" e o preço "R$ 40,00 / kg": quem digitava 5 pensando em
+// quilo comprava 5 gramas (QA 22/09). E _formatarQuantidade troca de
+// unidade conforme o tamanho do número (500 g, 4,95 kg), então a mesma
+// coluna piscava entre as duas — aqui a escala é fixa.
+function _qtdNaEscala(valor, escala) {
+  if (valor === null || valor === undefined) return '—';
+  const emEscala = (valor / escala.fator).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+  return `${emEscala} ${escala.rotulo}`;
+}
+
+function _valorCampoCompra(l, item) {
   if (l.ideal === null && !l.editado && !l.minimoGuardado) return '';
-  return _numeroCampo(l.comprar);
+  const fator = item ? _escalaDeCusto(item.unidadeMedida).fator : 1;
+  return _numeroCampoQtd(l.comprar / fator);
 }
 
 function _referenciaCompra(item, l) {
-  const unidade = item.unidadeMedida;
-  const contado = l.contado === null ? 'não contou' : `contou ${_formatarQuantidade(l.contado, unidade)}`;
-  if (l.minimoGuardado) return `${contado} · mínimo ${_formatarQuantidade(l.minimoGuardado, unidade)} guardado`;
+  const escala = _escalaDeCusto(item.unidadeMedida);
+  const contado = l.contado === null ? 'não contou' : `contou ${_qtdNaEscala(l.contado, escala)}`;
+  if (l.minimoGuardado) return `${contado} · mínimo ${_qtdNaEscala(l.minimoGuardado, escala)} guardado`;
   if (l.ideal === null) return `${contado} · sem estoque mínimo`;
-  return `${contado} · ideal ${_formatarQuantidade(l.ideal, unidade)}`;
+  return `${contado} · ideal ${_qtdNaEscala(l.ideal, escala)}`;
 }
 
 function _botaoSugestaoHTML(item, l, bloqueado) {
   if (bloqueado || !l.editado || l.sugestao === null || l.comprar === l.sugestao) return '';
-  return `<button type="button" class="comprar-sugestao" tabindex="-1" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">usar sugestão (${_formatarQuantidade(l.sugestao, item.unidadeMedida)})</button>`;
+  return `<button type="button" class="comprar-sugestao" tabindex="-1" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">usar sugestão (${_qtdNaEscala(l.sugestao, _escalaDeCusto(item.unidadeMedida))})</button>`;
 }
 
 function _celulaCompraHTML(item, l, bloqueado) {
@@ -6539,10 +6555,10 @@ function _celulaCompraHTML(item, l, bloqueado) {
   return `
     <div class="comprar-cel${semMinimo ? ' sem-minimo' : ''}${l.editado ? ' editado' : ''}" data-contagem="${l.contagemId}" data-insumo="${item.insumoId}">
       <label class="comprar-campo">
-        <input type="text" inputmode="decimal" class="comprar-input" value="${_valorCampoCompra(l)}" placeholder="${semMinimo ? 'quanto?' : '0'}"
+        <input type="text" inputmode="decimal" class="comprar-input" value="${_valorCampoCompra(l, item)}" placeholder="${semMinimo ? 'quanto?' : '0'}"
           data-contagem="${l.contagemId}" data-insumo="${item.insumoId}" ${bloqueado ? 'disabled' : ''}
-          aria-label="Comprar ${escaparHtml(item.nome)} para ${escaparHtml(l.loja)}">
-        <span>${escaparHtml(item.unidadeMedida || '')}</span>
+          aria-label="Comprar ${escaparHtml(item.nome)} para ${escaparHtml(l.loja)}, em ${escaparHtml(_escalaDeCusto(item.unidadeMedida).rotulo)}">
+        <span>${escaparHtml(_escalaDeCusto(item.unidadeMedida).rotulo)}</span>
       </label>
       <span class="comprar-ref">${escaparHtml(_referenciaCompra(item, l))}</span>
       <span class="comprar-acoes">${_botaoSugestaoHTML(item, l, bloqueado)}</span>
@@ -6554,7 +6570,7 @@ function _totalCompraHTML(item) {
   const total = Math.round((item.lojas || []).filter((l) => _blocoDaLoja(l) === 'cotacao')
     .reduce((soma, l) => soma + (l.comprar || 0), 0) * 100) / 100;
   return total > 0
-    ? `<span class="badge-pill neg">${_formatarQuantidade(total, item.unidadeMedida)}</span>`
+    ? `<span class="badge-pill neg">${_qtdNaEscala(total, _escalaDeCusto(item.unidadeMedida))}</span>`
     : '<span class="text-muted">não compra</span>';
 }
 
@@ -6974,7 +6990,7 @@ function _atualizarCelulaCompra(item, l) {
     celula.classList.toggle('editado', l.editado);
     celula.classList.toggle('sem-minimo', l.ideal === null && !l.minimoGuardado);
     const input = celula.querySelector('.comprar-input');
-    if (document.activeElement !== input) input.value = _valorCampoCompra(l);
+    if (document.activeElement !== input) input.value = _valorCampoCompra(l, item);
     celula.querySelector('.comprar-ref').textContent = _referenciaCompra(item, l);
     celula.querySelector('.comprar-acoes').innerHTML = _botaoSugestaoHTML(item, l, false);
   }
@@ -7077,28 +7093,36 @@ async function _salvarCompraConferencia(input) {
   const insumoId = parseInt(input.dataset.insumo, 10);
   const { item, l } = _compraDaConferencia(contagemId, insumoId);
   if (!item || !l) return;
-  const quantidade = _lerNumeroBR(input.value);
-  if (!Number.isFinite(quantidade) || quantidade < 0) {
+  const escala = _escalaDeCusto(item.unidadeMedida);
+  const digitado = _lerNumeroBR(input.value);
+  if (!Number.isFinite(digitado) || digitado < 0) {
     alert('Digite uma quantidade de 0 pra cima.');
-    input.value = _valorCampoCompra(l);
+    input.value = _valorCampoCompra(l, item);
     return;
   }
+  // O campo fala kg/L/un; o sistema guarda em g/ml/un.
+  const quantidade = Math.round(digitado * escala.fator * 1000) / 1000;
   const referencia = Math.max(l.ideal || 0, l.sugestao || 0, l.contado || 0);
-  if (referencia > 0 && quantidade > referencia * 10
-    && !confirm(`Comprar ${_numeroBR(quantidade)} ${item.unidadeMedida || ''} de "${item.nome}" em ${l.loja}? É bem mais que o normal pra esse item (${_numeroBR(referencia)}).`)) {
-    input.value = _valorCampoCompra(l);
+  // Só existia trava pra quantidade alta demais; digitar 5 onde eram 5000
+  // (quilo lido como grama) passava direto e a compra vinha quase vazia.
+  const desproporcao = referencia <= 0 || quantidade === 0 ? null
+    : (quantidade > referencia * 10 ? 'bem mais' : (quantidade * 10 < referencia ? 'bem menos' : null));
+  if (desproporcao && !confirm(
+    `Comprar ${_qtdNaEscala(quantidade, escala)} de "${item.nome}" em ${l.loja}?`
+    + ` É ${desproporcao} que o normal pra esse item (${_qtdNaEscala(referencia, escala)}).`)) {
+    input.value = _valorCampoCompra(l, item);
     return;
   }
   try {
     await _gravarCompraConferencia(contagemId, insumoId, quantidade);
   } catch (erro) {
     alert(erro.message);
-    input.value = _valorCampoCompra(l);
+    input.value = _valorCampoCompra(l, item);
     return;
   }
   l.comprar = quantidade;
   l.editado = true;
-  input.value = _valorCampoCompra(l);
+  input.value = _valorCampoCompra(l, item);
   _atualizarCelulaCompra(item, l);
   if (l.ideal === null && !l.minimoGuardado && quantidade > 0) {
     await _perguntarMinimoConferencia(item, l);
@@ -7129,21 +7153,26 @@ async function _perguntarMinimoConferencia(item, l) {
   const chave = `${l.loja}|${item.insumoId}`;
   if (minimosJaPerguntados.has(chave)) return;
   minimosJaPerguntados.add(chave);
+  const escala = _escalaDeCusto(item.unidadeMedida);
   const contado = l.contado || 0;
   const sugerido = Math.round((contado + l.comprar) * 100) / 100;
+  // Na mesma unidade do campo ao lado (kg/L/un), senão o mínimo entra mil
+  // vezes menor do que a pessoa quis.
+  const naEscala = (v) => v / escala.fator;
   const resposta = prompt(
     `"${item.nome}" não tem estoque mínimo em ${l.loja}.\n\n`
-    + 'Quer guardar um mínimo? Assim ele já entra na sugestão das próximas contagens.\n'
-    + `Sugestão: ${_numeroBR(sugerido)} (${_numeroBR(contado)} contados + ${_numeroBR(l.comprar)} que você vai comprar).\n\n`
+    + `Quer guardar um mínimo, em ${escala.rotulo}? Assim ele já entra na sugestão das próximas contagens.\n`
+    + `Sugestão: ${_qtdNaEscala(sugerido, escala)} (${_qtdNaEscala(contado, escala)} contados + ${_qtdNaEscala(l.comprar, escala)} que você vai comprar).\n\n`
     + 'Deixe o número que quiser e clique em OK, ou em Cancelar pra não guardar.',
-    _numeroCampo(sugerido),
+    _numeroCampoQtd(naEscala(sugerido)),
   );
   if (resposta === null) return;
-  const minimo = _lerNumeroBR(resposta);
-  if (!Number.isFinite(minimo) || minimo <= 0) {
+  const digitado = _lerNumeroBR(resposta);
+  if (!Number.isFinite(digitado) || digitado <= 0) {
     alert('O mínimo não foi guardado: digite um número maior que 0.');
     return;
   }
+  const minimo = Math.round(digitado * escala.fator * 1000) / 1000;
   try {
     const respostaMinimo = await fetch(`/api/insumos/${item.insumoId}/estoque/${encodeURIComponent(l.loja)}`, {
       method: 'PUT',
@@ -7473,6 +7502,33 @@ function _limparRascunhoContagem(token) {
   }
 }
 
+// A pessoa digita na unidade comercial (kg, L, un) — o sistema guarda em
+// g/ml/un. Antes o campo era em grama e a tela nunca dizia isso: a unidade
+// morava numa coluna chamada "Gramatura", longe do campo (QA 22/09). Quem
+// conta caixa escolhe caixa no próprio campo.
+function _unidadesDeContagem(item) {
+  const escala = _escalaDeCusto(item.unidadeMedida);
+  const opcoes = [{ rotulo: escala.rotulo, fator: escala.fator }];
+  if (item.fatorConversaoCompra > 0) {
+    opcoes.push({ rotulo: item.unidadeCompra || 'caixa', fator: item.fatorConversaoCompra });
+  }
+  return opcoes;
+}
+
+// Quanto vale 1 do que está escolhido no campo, na unidade que o sistema guarda.
+function _fatorDoCampoContagem(input) {
+  const escolha = input.closest('.contagem-stepper')?.querySelector('.contagem-unidade-escolha');
+  return Number(escolha ? escolha.value : input.dataset.fator) || 1;
+}
+
+// Valor digitado convertido pra g/ml/un; null quando o campo está vazio ou
+// não é número.
+function _valorBaseContagem(input) {
+  if (input.value.trim() === '') return null;
+  const numero = _lerNumeroBR(input.value);
+  return Number.isFinite(numero) ? numero * _fatorDoCampoContagem(input) : null;
+}
+
 async function inicializarContagemPublica() {
   const token = new URLSearchParams(location.search).get('token');
   const elCarregando = document.getElementById('contagem-publica-carregando');
@@ -7534,36 +7590,44 @@ async function inicializarContagemPublica() {
         <h3 class="contagem-publica-secao-titulo">Seção: ${escaparHtml(categoria)}</h3>
         <!-- Cabeçalho da tabela: só no computador, onde cada card vira uma linha -->
         <div class="contagem-cabecalho" aria-hidden="true">
-          <span>Nome do Produto</span><span>Gramatura</span><span>Marca</span><span>Qtde em Estoque</span><span>Sugestão</span>
+          <span>Nome do Produto</span><span>Unidade</span><span>Marca</span><span>Qtde em estoque</span><span>Sugestão de compra</span>
         </div>
-        ${itens.map((item) => `
+        ${itens.map((item) => {
+          const unidades = _unidadesDeContagem(item);
+          return `
           <div class="contagem-card" data-nome-busca="${escaparHtml(item.nome.toLowerCase())}">
             <span class="contagem-rotulo">Nome</span>
             <div class="contagem-campo-leitura contagem-nome">${escaparHtml(item.nome)}</div>
-            <span class="contagem-rotulo">Gramatura</span>
-            <div class="contagem-campo-leitura">${escaparHtml(item.unidadeMedida)}</div>
+            <span class="contagem-rotulo">Unidade</span>
+            <div class="contagem-campo-leitura contagem-unidade">
+              <strong>${escaparHtml(unidades[0].rotulo)}</strong>
+              ${unidades.length > 1 ? `<small>1 ${escaparHtml(unidades[1].rotulo)} = ${escaparHtml(_formatarQuantidade(item.fatorConversaoCompra, item.unidadeMedida))}</small>` : ''}
+            </div>
             <span class="contagem-rotulo">Marca</span>
-            <div class="contagem-campo-leitura">${escaparHtml(item.marcaHomologada || '—')}</div>
-            <label class="contagem-rotulo" for="contagem-qtd-${item.insumoId}">Qtde em estoque</label>
+            <div class="contagem-campo-leitura contagem-marca">${escaparHtml(item.marcaHomologada || '—')}</div>
+            <label class="contagem-rotulo" for="contagem-qtd-${item.insumoId}">Quanto tem em estoque?</label>
             <div class="contagem-stepper">
               <button type="button" data-passo="-1" aria-label="Diminuir">−</button>
-              <input type="number" step="any" min="0" inputmode="decimal" placeholder="0" id="contagem-qtd-${item.insumoId}" data-insumo-id="${item.insumoId}" required>
+              <div class="contagem-campo-unidade">
+                <input type="text" inputmode="decimal" placeholder="0" id="contagem-qtd-${item.insumoId}" data-insumo-id="${item.insumoId}" data-fator="${unidades[0].fator}" required>
+                ${unidades.length > 1
+                  ? `<select class="contagem-unidade-escolha" data-fator-anterior="${unidades[0].fator}" aria-label="Unidade em que você está contando ${escaparHtml(item.nome)}">${unidades.map((u) => `<option value="${u.fator}">${escaparHtml(u.rotulo)}</option>`).join('')}</select>`
+                  : `<span class="contagem-unidade-fixa">${escaparHtml(unidades[0].rotulo)}</span>`}
+              </div>
               <button type="button" data-passo="1" aria-label="Aumentar">+</button>
             </div>
+            <p class="contagem-equivalente" data-equivalente-insumo-id="${item.insumoId}" hidden></p>
             <p class="contagem-aviso-unidade" data-aviso-insumo-id="${item.insumoId}" hidden></p>
-            <span class="contagem-rotulo">Sugestão</span>
-            <div class="contagem-campo-leitura" data-sugestao-insumo-id="${item.insumoId}">${item.quantidadeIdeal !== null ? item.quantidadeIdeal : '—'}</div>
+            <span class="contagem-rotulo">Sugestão de compra</span>
+            <div class="contagem-sugestao" data-sugestao-insumo-id="${item.insumoId}">—</div>
             ${item.custoUnitario != null ? `
               <div class="contagem-previsao-bloco" data-previsao-bloco="${item.insumoId}">
                 <span class="contagem-rotulo">Previsão compra</span>
                 <div class="contagem-previsao"><span class="contagem-previsao-pill" data-previsao-insumo-id="${item.insumoId}"></span></div>
               </div>` : ''}
-            ${item.fatorConversaoCompra ? `
-              <span class="contagem-rotulo">Conversão</span>
-              <div class="contagem-conversao">1 ${escaparHtml(item.unidadeCompra || 'embalagem')} = ${escaparHtml(String(item.fatorConversaoCompra).replace('.', ','))} ${escaparHtml(item.unidadeMedida)}</div>` : ''}
             <button type="button" class="contagem-proximo"><i data-lucide="chevron-down"></i> Próximo</button>
           </div>
-        `).join('')}
+        `; }).join('')}
       </section>
     `).join('');
 
@@ -7585,11 +7649,24 @@ async function inicializarContagemPublica() {
       const item = itensPorId.get(input.dataset.insumoId);
       const aviso = container.querySelector(`[data-aviso-insumo-id="${input.dataset.insumoId}"]`);
       if (!aviso) return;
-      const problema = input.value === '' ? null : _foraDeProporcao(item, parseFloat(input.value));
+      const base = _valorBaseContagem(input);
+      const problema = base === null ? null : _foraDeProporcao(item, base);
       aviso.hidden = !problema;
       if (problema) {
-        aviso.textContent = `Confira a unidade: você digitou ${_formatarQuantidade(parseFloat(input.value), item.unidadeMedida)} e da última vez tinha ${_formatarQuantidade(item.estoqueAtual, item.unidadeMedida)}.`;
+        aviso.textContent = `Confira a unidade: você digitou ${_formatarQuantidade(base, item.unidadeMedida)} e da última vez tinha ${_formatarQuantidade(item.estoqueAtual, item.unidadeMedida)}.`;
       }
+    }
+
+    // Contando em caixa, mostra quanto dá na unidade do estoque: é o que
+    // deixa a pessoa conferir que escolheu a unidade certa.
+    function atualizarEquivalente(input) {
+      const item = itensPorId.get(input.dataset.insumoId);
+      const el = container.querySelector(`[data-equivalente-insumo-id="${input.dataset.insumoId}"]`);
+      if (!el) return;
+      const base = _valorBaseContagem(input);
+      const mostrar = base !== null && _fatorDoCampoContagem(input) !== _escalaDeCusto(item.unidadeMedida).fator;
+      el.hidden = !mostrar;
+      if (mostrar) el.textContent = `= ${_formatarQuantidade(base, item.unidadeMedida)} em estoque`;
     }
 
     // Sugestão = ideal − o que tem (arredondado pra embalagem); previsão =
@@ -7599,11 +7676,14 @@ async function inicializarContagemPublica() {
       const elSugestao = container.querySelector(`[data-sugestao-insumo-id="${input.dataset.insumoId}"]`);
       let sugestao = null;
       if (item.quantidadeIdeal !== null) {
-        sugestao = input.value === ''
+        const base = _valorBaseContagem(input);
+        sugestao = base === null
           ? item.quantidadeIdeal
-          : arredondarQuantidadeCompra(item.quantidadeIdeal - parseFloat(input.value), item.fatorConversaoCompra || null);
+          : arredondarQuantidadeCompra(item.quantidadeIdeal - base, item.fatorConversaoCompra || null);
       }
-      elSugestao.textContent = sugestao === null ? '—' : sugestao;
+      // Antes saía o número cru, sem unidade e com ponto do inglês: "4.48"
+      // se lia como quatro mil e quarenta e oito (QA 22/09).
+      elSugestao.textContent = sugestao === null ? '—' : _qtdNaEscala(sugestao, _escalaDeCusto(item.unidadeMedida));
       // Sem sugestão (ou nada a comprar), a previsão some em vez de mostrar R$ 0,00.
       const blocoPrevisao = container.querySelector(`[data-previsao-bloco="${input.dataset.insumoId}"]`);
       if (blocoPrevisao) {
@@ -7619,16 +7699,30 @@ async function inicializarContagemPublica() {
       const input = card.querySelector('input[data-insumo-id]');
       atualizarSugestao(input);
       atualizarAviso(input);
+      atualizarEquivalente(input);
       input.addEventListener('input', () => {
         atualizarAviso(input);
         card.classList.toggle('preenchido', input.value !== '');
         atualizarSugestao(input);
+        atualizarEquivalente(input);
         atualizarProgresso();
       });
+      // Trocar kg ↔ caixa mantém a mesma quantidade física: quem digitou
+      // 2 kg e percebeu que contou em caixa não perde o que digitou.
+      card.querySelector('.contagem-unidade-escolha')?.addEventListener('change', (evento) => {
+        const anterior = Number(evento.target.dataset.fatorAnterior) || Number(input.dataset.fator);
+        const novo = Number(evento.target.value);
+        if (input.value.trim() !== '' && anterior && novo) {
+          const digitado = _lerNumeroBR(input.value);
+          if (Number.isFinite(digitado)) input.value = _numeroCampoQtd(digitado * anterior / novo);
+        }
+        evento.target.dataset.fatorAnterior = String(novo);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
       card.querySelectorAll('[data-passo]').forEach((botao) => botao.addEventListener('click', () => {
-        const atual = parseFloat(input.value) || 0;
-        input.value = Math.max(0, Math.round((atual + parseFloat(botao.dataset.passo)) * 1000) / 1000);
-        input.dispatchEvent(new Event('input'));
+        const atual = _lerNumeroBR(input.value) || 0;
+        input.value = _numeroCampoQtd(Math.max(0, atual + parseFloat(botao.dataset.passo)));
+        input.dispatchEvent(new Event('input', { bubbles: true }));
       }));
       // Próximo: vai pro card seguinte visível (a busca pode ter escondido
       // alguns) e já abre o teclado nele; no último, vai pro botão de enviar.
@@ -7684,13 +7778,15 @@ async function inicializarContagemPublica() {
     // antes reabrir obrigava a digitar tudo de novo (QA 22/09).
     const rascunho = _lerRascunhoContagem(token);
     let camposVoltaram = 0;
+    // Rascunho e resposta anterior ficam guardados em g/ml/un; o campo fala
+    // kg/L/un, então voltam divididos pelo fator do campo.
     form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
       const doRascunho = rascunho[input.dataset.insumoId];
       const jaEnviado = itensPorId.get(input.dataset.insumoId)?.quantidadePreenchida;
-      const valor = doRascunho !== undefined && doRascunho !== '' ? doRascunho
-        : (jaEnviado !== null && jaEnviado !== undefined ? String(jaEnviado) : '');
-      if (valor !== '') {
-        input.value = valor;
+      const base = doRascunho !== undefined && doRascunho !== '' ? Number(doRascunho)
+        : (jaEnviado !== null && jaEnviado !== undefined ? Number(jaEnviado) : null);
+      if (base !== null && Number.isFinite(base)) {
+        input.value = _numeroCampoQtd(base / _fatorDoCampoContagem(input));
         input.dispatchEvent(new Event('input', { bubbles: true }));
         camposVoltaram += 1;
       }
@@ -7707,7 +7803,8 @@ async function inicializarContagemPublica() {
       if (!evento.target.matches('input[data-insumo-id]')) return;
       const valores = {};
       form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
-        if (input.value !== '') valores[input.dataset.insumoId] = input.value;
+        const base = _valorBaseContagem(input);
+        if (base !== null) valores[input.dataset.insumoId] = base;
       });
       _salvarRascunhoContagem(token, valores);
     });
@@ -7730,13 +7827,24 @@ async function inicializarContagemPublica() {
       evento.preventDefault();
       const valores = {};
       const conferir = [];
+      const ilegiveis = [];
       form.querySelectorAll('input[data-insumo-id]').forEach((input) => {
-        valores[input.dataset.insumoId] = input.value;
         const item = itensPorId.get(input.dataset.insumoId);
-        if (item && input.value !== '' && _foraDeProporcao(item, parseFloat(input.value))) {
-          conferir.push(`${item.nome}: ${_formatarQuantidade(parseFloat(input.value), item.unidadeMedida)} (da última vez, ${_formatarQuantidade(item.estoqueAtual, item.unidadeMedida)})`);
+        if (input.value.trim() === '') return;
+        const base = _valorBaseContagem(input);
+        if (base === null || !(base >= 0)) {
+          ilegiveis.push(item ? item.nome : input.dataset.insumoId);
+          return;
+        }
+        valores[input.dataset.insumoId] = base;
+        if (item && _foraDeProporcao(item, base)) {
+          conferir.push(`${item.nome}: ${_formatarQuantidade(base, item.unidadeMedida)} (da última vez, ${_formatarQuantidade(item.estoqueAtual, item.unidadeMedida)})`);
         }
       });
+      if (ilegiveis.length) {
+        alert('Confira a quantidade destes itens — não deu pra ler o número: ' + ilegiveis.slice(0, 8).join(', '));
+        return;
+      }
       if (conferir.length) {
         const lista = conferir.slice(0, 8).join('\n');
         const resto = conferir.length > 8 ? `\n… e mais ${conferir.length - 8}` : '';

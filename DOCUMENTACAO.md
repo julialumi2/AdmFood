@@ -4787,3 +4787,32 @@ atropelar. Sem marcar nada, continua como era: um link com tudo.
   soma os blocos, e o contador vira "0 de 3 responderam" em vez de "0 de 1".
 - Nas duas tabelas de contagem a seção aparece embaixo do nome da loja, pra
   dar pra ver de relance quem já mandou o quê.
+
+### 6.71 Uma unidade só: o campo fala a mesma língua do resto da linha
+
+O sistema guarda tudo em g/ml/un, mas mostra em kg/L/un — e os campos de
+digitar ficaram no meio do caminho. Na conferência da requisição, a mesma
+linha dizia "contou 4,95 kg · ideal 10 kg" e "R$ 40,00 / kg" com o campo
+marcado "g": quem digitava 5 pensando em quilo comprava 5 gramas. Na tela de
+contar, o campo era em grama e a tela nunca dizia isso — a unidade morava
+numa coluna chamada "Gramatura", longe de quem digita.
+
+Agora **todo campo de quantidade fala a unidade comercial** (kg, L, un), com
+ela escrita dentro do próprio campo.
+
+- **Tela de contar**: a coluna "Gramatura" virou "Unidade" e mostra o que o
+  campo espera; quando o insumo vem em caixa, aparece "1 caixa = 5 kg" ali
+  mesmo (antes esse texto sumia no computador). No campo dá pra **escolher
+  kg ou caixa** — quem conta caixa digita caixa, e a tela mostra quanto dá em
+  estoque embaixo. Trocar a unidade converte o que já estava digitado.
+- **Sugestão** saía como número cru: "4.48" se lia como quatro mil e quarenta
+  e oito. Agora sai "4,48 kg", e com cara de resultado em vez de campo — ela
+  ficava colada no campo de digitar, parecendo dizer "digite isto aqui".
+- **Conferência**: campo, referência, preço e total todos em kg. A referência
+  também parou de trocar de unidade sozinha conforme o tamanho do número (a
+  mesma coluna mostrava "500 g" numa linha e "4,95 kg" na outra).
+- **Trava pros dois lados**: só existia aviso pra quantidade alta demais (10×
+  a referência). Digitar 5 onde eram 5.000 — o erro de unidade — passava
+  direto e a compra vinha quase vazia. Agora avisa também quando é 10× menos.
+- O rascunho no aparelho e a resposta anterior continuam guardados em g/ml/un
+  e voltam convertidos, então nada do que já foi digitado se perde.
