@@ -5714,6 +5714,7 @@ function renderPedidoDetalhe() {
     linkNota.href = p.notaFiscalUrl || '#';
     linkNota.style.display = p.notaFiscalUrl ? '' : 'none';
   }
+  _mostrarNotasSubstituidas(p.id);
   // A nota costuma chegar depois da entrega: pedido já recebido aceita anexo
   // (ou troca do que está lá) a qualquer momento.
   const btnAnexarNota = document.getElementById('btn-pedido-anexar-nota');
@@ -12562,9 +12563,49 @@ async function enviarComentario() {
   }
 }
 
+// Fotos de nota que já foram trocadas nesse pedido: elas não são mais
+// apagadas do disco, então quem fotografou a nota errada por cima da certa
+// consegue voltar na certa (QA 22/09).
+async function _mostrarNotasSubstituidas(pedidoId) {
+  const bloco = document.getElementById('pedido-notas-substituidas');
+  if (!bloco) return;
+  bloco.hidden = true;
+  bloco.innerHTML = '';
+  if (!_possoGerir()) return;
+  try {
+    const resposta = await fetch(`/api/pedidos/${pedidoId}/notas-substituidas`);
+    if (!resposta.ok) return;
+    const { notas } = await resposta.json();
+    if (!notas.length) return;
+    bloco.innerHTML = `<span class="text-muted">Notas trocadas:</span> ` + notas.map((n) => {
+      const quando = new Date(n.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `<a href="${n.url}" target="_blank" rel="noopener">${escaparHtml(quando)}${n.quem ? ' · ' + escaparHtml(n.quem) : ''}</a>`;
+    }).join(' · ');
+    bloco.hidden = false;
+  } catch (erro) {
+    /* a nota atual continua acessível do mesmo jeito */
+  }
+}
+
 async function excluirTarefa() {
   if (!tarefaSelecionadaId) return;
-  if (!confirm('Excluir essa tarefa? Essa ação não pode ser desfeita.')) return;
+  // O aviso era só "tem certeza?" e não dizia que comentários e subtarefas
+  // iam junto (QA 22/09).
+  let junto = null;
+  try {
+    const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}/o-que-vai-junto`);
+    if (resposta.ok) junto = await resposta.json();
+  } catch (erro) {
+    /* sem a contagem, o aviso continua sendo dado — só mais genérico */
+  }
+  const leva = junto
+    ? [junto.comentarios ? _qtdTexto(junto.comentarios, 'comentário', 'comentários') : null,
+       junto.subtarefas ? _qtdTexto(junto.subtarefas, 'subtarefa', 'subtarefas') : null].filter(Boolean)
+    : [];
+  const aviso = junto
+    ? `Excluir o card "${junto.titulo}"?${leva.length ? ` Vai junto: ${leva.join(' e ')}.` : ''} Essa ação não pode ser desfeita.`
+    : 'Excluir essa tarefa? Comentários e subtarefas vão junto. Essa ação não pode ser desfeita.';
+  if (!confirm(aviso)) return;
   try {
     const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, { method: 'DELETE' });
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
@@ -12619,6 +12660,18 @@ function _custoEmUsoProduto(p) {
 }
 
 // Margem sobre o preço (1 - custo/preço), sem a comissão do app.
+// Sentinela pra "tem texto no campo, mas não é número": diferente de null,
+// que quer dizer "apagou o preço de propósito".
+const _PRECO_ILEGIVEL = Symbol('preço ilegível');
+
+function _precoDoCampo(campo) {
+  const texto = String(campo.value || '').trim();
+  if (texto === '') return { valor: null, ilegivel: false };
+  const valor = _lerNumeroBR(texto);
+  if (!Number.isFinite(valor) || valor < 0) return { valor: null, ilegivel: true };
+  return { valor: Math.round(valor * 100) / 100, ilegivel: false };
+}
+
 function _margemProduto(custo, preco) {
   return custo != null && typeof preco === 'number' && preco > 0 ? 1 - custo / preco : null;
 }
@@ -13476,7 +13529,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
           <div class="detalhe-produto-campo">
             <label${isAdmin ? ` for="detalhe-preco-${c.chave}"` : ''}>${c.label}</label>
             ${isAdmin
-              ? `<input type="number" step="0.01" min="0" id="detalhe-preco-${c.chave}" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] ?? ''}" placeholder="—">`
+              ? `<input type="text" inputmode="decimal" id="detalhe-preco-${c.chave}" data-acao="detalhe-editar-preco" data-canal="${c.chave}" value="${produto[c.chave] != null ? _numeroCampo(produto[c.chave]) : ''}" placeholder="—">`
               : `<span class="cardapio-preco-valor">${_formatarPrecoCardapio(produto[c.chave]) ?? '<span class="cardapio-preco-vazio">—</span>'}</span>`}
             <span class="detalhe-margem" data-margem-canal="${c.chave}">
               <span class="detalhe-margem-barra" aria-hidden="true"><span></span></span>
@@ -13486,6 +13539,10 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         `).join('')}
       </div>
       <p class="detalhe-margens-nota">Margem sobre o preço, sem a comissão do app e sem a embalagem.</p>
+      <details class="detalhe-preco-historico" data-historico-produto="${produto.precoCardapioId || ''}">
+        <summary>O que já mudou de preço aqui</summary>
+        <div class="detalhe-preco-historico-lista">Carregando...</div>
+      </details>
     </section>
   `;
 
@@ -13600,7 +13657,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     campoOrigem.classList.toggle('alerta', alerta);
     canais.forEach((c) => {
       const campo = corpo.querySelector(`[data-acao="detalhe-editar-preco"][data-canal="${c.chave}"]`);
-      const preco = campo ? (campo.value === '' ? null : parseFloat(campo.value)) : produto[c.chave];
+      const preco = campo ? _precoDoCampo(campo).valor : produto[c.chave];
       const margem = _margemProduto(custo, preco);
       const bloco = corpo.querySelector(`[data-margem-canal="${c.chave}"]`);
       if (!bloco) return;
@@ -13612,14 +13669,42 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   corpo.querySelectorAll('[data-acao="detalhe-editar-preco"], #detalhe-produto-input-custo').forEach((campo) => {
     campo.addEventListener('input', atualizarCustoEMargens);
   });
+
+  // Histórico de preço (QA 22/09): sem isso, um preço apagado ou digitado
+  // errado não tinha como ser conferido depois. Só busca quando abre.
+  const blocoHistorico = corpo.querySelector('.detalhe-preco-historico');
+  blocoHistorico?.addEventListener('toggle', async () => {
+    if (!blocoHistorico.open || blocoHistorico.dataset.carregado) return;
+    blocoHistorico.dataset.carregado = '1';
+    const lista = blocoHistorico.querySelector('.detalhe-preco-historico-lista');
+    try {
+      const resposta = await fetch(`/api/precos-cardapio/${blocoHistorico.dataset.historicoProduto}/historico`);
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'falha');
+      lista.innerHTML = dados.historico.length
+        ? dados.historico.map((h) => {
+          const nomeCanal = (CANAIS_CARDAPIO.find((c) => c.chave === h.canal) || {}).label || h.canal;
+          const de = h.de == null ? 'sem preço' : _formatarMoedaBRL(h.de);
+          const para = h.para == null ? 'sem preço' : _formatarMoedaBRL(h.para);
+          const quando = new Date(h.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `<p><strong>${escaparHtml(nomeCanal)}</strong> ${escaparHtml(de)} → ${escaparHtml(para)} <span class="text-muted">${escaparHtml(quando)}${h.quem ? ' · ' + escaparHtml(h.quem) : ''}</span></p>`;
+        }).join('')
+        : '<p class="text-muted">Nenhuma mudança de preço registrada ainda.</p>';
+    } catch (erro) {
+      lista.textContent = 'Não foi possível carregar o histórico.';
+      blocoHistorico.dataset.carregado = '';
+    }
+  });
   atualizarCustoEMargens();
 
   corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
     // Guarda o preço que estava lá: é a régua pra avisar de 3,90 virando
     // 39,00 e pra perguntar antes de deixar o canal sem preço (QA 22/09).
-    input.dataset.precoAnterior = input.value;
+    input.dataset.precoAnterior = String(produto[input.dataset.canal] ?? '');
     input.addEventListener('input', (evento) => {
-      alteracoesPreco[evento.target.dataset.canal] = evento.target.value === '' ? null : evento.target.value;
+      const lido = _precoDoCampo(evento.target);
+      evento.target.classList.toggle('campo-ilegivel', lido.ilegivel);
+      alteracoesPreco[evento.target.dataset.canal] = lido.ilegivel ? _PRECO_ILEGIVEL : lido.valor;
     });
   });
 
@@ -13664,18 +13749,32 @@ async function abrirModalDetalheProduto(precoCardapioId) {
     // Confere os preços antes de mandar: mudança fora de proporção e campo
     // apagado passavam direto, e só a cor da margem denunciava (QA 22/09).
     const avisosPreco = [];
+    const ilegiveis = [];
     corpo.querySelectorAll('[data-acao="detalhe-editar-preco"]').forEach((input) => {
       const canal = input.dataset.canal;
       if (!(canal in alteracoesPreco)) return;
       const anterior = parseFloat(input.dataset.precoAnterior);
-      const novo = alteracoesPreco[canal] === null ? null : parseFloat(alteracoesPreco[canal]);
       const nomeCanal = (CANAIS_CARDAPIO.find((c) => c.chave === canal) || {}).label || canal;
+      // Antes o campo era type=number: "1.234,56" o navegador não lia e
+      // entregava vazio, e vazio significa "tirar o preço" — um erro de
+      // digitação apagava o preço em silêncio (QA 22/09).
+      if (alteracoesPreco[canal] === _PRECO_ILEGIVEL) {
+        ilegiveis.push(`${nomeCanal}: "${input.value}"`);
+        return;
+      }
+      const novo = alteracoesPreco[canal];
       if (novo === null && anterior > 0) {
         avisosPreco.push(`${nomeCanal}: vai ficar SEM preço (estava ${_formatarMoedaBRL(anterior)}). Se é "não vendo nesse canal", digite 0.`);
       } else if (novo !== null && anterior > 0 && novo > 0 && (novo >= anterior * 3 || novo * 3 <= anterior)) {
         avisosPreco.push(`${nomeCanal}: ${_formatarMoedaBRL(anterior)} → ${_formatarMoedaBRL(novo)}`);
       }
     });
+    if (ilegiveis.length) {
+      alert(`Não deu pra ler esse preço: ${ilegiveis.join(', ')}. Escreva só o número (ex: 32,90). Pra tirar o preço do canal, deixe o campo vazio; pra "não vendo aqui", digite 0.`);
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+      return;
+    }
     if (avisosPreco.length && !confirm(`Confira antes de salvar:\n\n${avisosPreco.join('\n')}\n\nSalvar assim mesmo?`)) {
       botao.disabled = false;
       botao.textContent = 'Salvar';
@@ -14252,6 +14351,31 @@ function _adicionarLinhaFichaTecnica(idContainer) {
 document.getElementById('btn-ficha-tecnica-add-linha')?.addEventListener('click', () => _adicionarLinhaFichaTecnica('ficha-tecnica-item-linhas'));
 document.getElementById('btn-ficha-tecnica-add-embalagem')?.addEventListener('click', () => _adicionarLinhaFichaTecnica('ficha-tecnica-embalagem-linhas'));
 
+// Quais linhas têm insumo escolhido mas ficaram sem quantidade.
+function _linhasSemQuantidadeFicha() {
+  const faltando = [];
+  ['ficha-tecnica-item-linhas', 'ficha-tecnica-embalagem-linhas'].forEach((id) => {
+    const secao = document.getElementById(id);
+    // A embalagem some em complemento, e nesse caso a lista nem é enviada.
+    if (!secao || document.getElementById('ficha-tecnica-embalagem-secao')?.contains(secao)
+      && document.getElementById('ficha-tecnica-embalagem-secao').style.display === 'none') return;
+    secao.querySelectorAll('.ficha-tecnica-linha').forEach((linha) => {
+      const select = linha.querySelector('.ficha-tecnica-select-insumo');
+      const campo = linha.querySelector('.ficha-tecnica-input-quantidade');
+      if (!select?.value) return;
+      const quantidade = _quantidadeBaseDaLinhaFicha(linha);
+      if (quantidade === null || quantidade === '' || !(Number(quantidade) > 0)) {
+        linha.classList.add('linha-incompleta');
+        faltando.push(select.options[select.selectedIndex]?.text || 'insumo');
+      } else {
+        linha.classList.remove('linha-incompleta');
+      }
+      if (campo) campo.classList.toggle('campo-ilegivel', !(Number(quantidade) > 0));
+    });
+  });
+  return faltando;
+}
+
 function _linhasDaListaFichaTecnica(idContainer) {
   return [...document.querySelectorAll(`#${idContainer} .ficha-tecnica-linha`)]
     // Linha aberta e não preenchida ("Escolha o insumo...") não vai pro banco.
@@ -14265,6 +14389,14 @@ function _linhasDaListaFichaTecnica(idContainer) {
 document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
   if (!fichaTecnicaEditandoItemId) return;
+
+  // Linha com insumo escolhido e quantidade em branco: o servidor recusa,
+  // mas quem está na tela precisa ver QUAL linha (QA 22/09).
+  const semQuantidade = _linhasSemQuantidadeFicha();
+  if (semQuantidade.length) {
+    alert(`Falta a quantidade de: ${semQuantidade.join(', ')}. Preencha ou tire a linha antes de salvar.`);
+    return;
+  }
 
   const insumos = _linhasDaListaFichaTecnica('ficha-tecnica-item-linhas');
   // A assinatura de quando o modal abriu vai junto: o servidor recusa se

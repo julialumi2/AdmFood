@@ -4816,3 +4816,32 @@ ela escrita dentro do próprio campo.
   direto e a compra vinha quase vazia. Agora avisa também quando é 10× menos.
 - O rascunho no aparelho e a resposta anterior continuam guardados em g/ml/un
   e voltam convertidos, então nada do que já foi digitado se perde.
+
+### 6.72 O que apagava dado sem ninguém ver
+
+Quatro caminhos diferentes em que um dado sumia calado.
+
+- **Preço do cardápio apagado por digitação.** O campo era do tipo número, e
+  "1.234,56" — do jeito que qualquer pessoa escreve preço aqui — o navegador
+  não consegue ler: ele entrega vazio. Vazio quer dizer "tirar o preço desse
+  canal", então o erro de digitação **apagava o preço** em vez de dar erro.
+  Agora o campo é de texto e lê em pt-BR; o que não dá pra ler fica vermelho
+  e o Salvar recusa, explicando que vazio tira o preço e 0 é "não vendo aqui".
+- **Histórico do preço.** Toda mudança manual grava de quanto pra quanto,
+  quando e quem (`preco_cardapio_historico`), e o produto mostra a lista em
+  "O que já mudou de preço aqui". Antes não havia como conferir um preço que
+  sumiu ou entrou errado.
+- **Ficha técnica com quantidade em branco.** Insumo escolhido e quantidade
+  vazia era gravado como nulo: a linha entrava na ficha, mas não descontava
+  estoque e o custo do produto nunca fechava — e o aviso só aparecia depois,
+  ao reabrir. Agora a tela diz qual linha está faltando, e o servidor recusa
+  (inclusive quantidade 0, que é "tire a linha").
+- **Foto da nota trocada.** Anexar outra nota apagava o arquivo anterior do
+  disco na hora: quem fotografasse a nota errada por cima da certa perdia a
+  certa. Agora a antiga continua guardada (`nota_fiscal_substituida`) e
+  aparece no pedido como "Notas trocadas", com data e quem trocou.
+- **Excluir card do ClickUp.** Levava comentários e subtarefas junto com só
+  um "tem certeza?" que não dizia isso. Agora o aviso nomeia o card e conta o
+  que vai junto, e o registro de ações grava `Excluiu o card "X" (levou 2
+  comentário(s) e 3 subtarefa(s))` em vez de só "Excluiu tarefa" — pra isso a
+  rota agora pode anotar a própria descrição no registro (`_anotar_no_registro`).

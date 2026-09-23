@@ -41,6 +41,7 @@ from backend.armazenamento import (
     criar_tarefa,
     atualizar_tarefa,
     excluir_tarefa,
+    o_que_vai_junto_com_a_tarefa,
     adicionar_subtarefa,
     alternar_subtarefa,
     adicionar_comentario,
@@ -55,6 +56,10 @@ from backend.armazenamento import (
     previa_da_planilha_de_precos,
     buscar_preco_cardapio_por_id,
     atualizar_preco_cardapio,
+    historico_de_preco_cardapio,
+    guardar_nota_fiscal_substituida,
+    notas_fiscais_substituidas,
+    nota_fiscal_substituida,
     PASTA_FOTOS_CARDAPIO,
     criar_insumo,
     criar_insumos_em_lote,
@@ -677,6 +682,12 @@ def _detalhes_da_requisicao():
         return None
 
 
+def _anotar_no_registro(descricao):
+    """Descrição melhor pro registro dessa requisição — pra ação em que o
+    nome da rota não diz o que se perdeu."""
+    g.descricao_da_acao = descricao
+
+
 @app.after_request
 def _registrar_acao_da_requisicao(resposta):
     """Nunca derruba a resposta: se o registro falhar, o que a pessoa pediu
@@ -687,7 +698,8 @@ def _registrar_acao_da_requisicao(resposta):
         if not request.path.startswith('/api/') or request.path in ROTAS_SEM_REGISTRO:
             return resposta
         regra = request.url_rule.rule if request.url_rule else request.path
-        descricao = DESCRICAO_DA_ACAO.get((request.method, regra)) or f"{request.method} {regra}"
+        descricao = getattr(g, 'descricao_da_acao', None) \
+            or DESCRICAO_DA_ACAO.get((request.method, regra)) or f"{request.method} {regra}"
         if request.path == '/api/login' and resposta.status_code != 200:
             descricao = 'Tentativa de login que não entrou'
         registrar_acao(
@@ -1867,6 +1879,7 @@ def api_importar_precos_cardapio():
 
 CAMPOS_PRECO_CARDAPIO_PERMITIDOS = {'ifood', 'food99', 'beefood', 'cardapioWeb'}
 CAMPO_PRECO_CARDAPIO_PARA_COLUNA = {'ifood': 'ifood', 'food99': 'food99', 'beefood': 'beefood', 'cardapioWeb': 'cardapio_web'}
+COLUNA_PARA_CAMPO_PRECO_CARDAPIO = {coluna: campo for campo, coluna in CAMPO_PRECO_CARDAPIO_PARA_COLUNA.items()}
 
 
 @app.route('/api/precos-cardapio/<int:item_id>', methods=['PUT'])
@@ -1903,8 +1916,36 @@ def api_atualizar_preco_cardapio(item_id):
     if not campos:
         return jsonify({"erro": "Nada para atualizar."}), 400
 
-    atualizar_preco_cardapio(item_id, campos)
-    return jsonify(_formatar_item_cardapio(buscar_preco_cardapio_por_id(item_id)))
+    usuario = _usuario_logado()
+    atualizar_preco_cardapio(item_id, campos, quem=(usuario or {}).get('nome'))
+    resposta = _formatar_item_cardapio(buscar_preco_cardapio_por_id(item_id))
+    resposta["historico"] = _historico_preco_formatado(item_id)
+    return jsonify(resposta)
+
+
+def _historico_preco_formatado(item_id):
+    return [
+        {
+            "canal": COLUNA_PARA_CAMPO_PRECO_CARDAPIO.get(l["canal"], l["canal"]),
+            "de": l["preco_anterior"],
+            "para": l["preco_novo"],
+            "quando": l["quando"],
+            "quem": l["quem"],
+        }
+        for l in historico_de_preco_cardapio(item_id)
+    ]
+
+
+@app.route('/api/precos-cardapio/<int:item_id>/historico', methods=['GET'])
+def api_historico_preco_cardapio(item_id):
+    """O que já mudou de preço nesse produto — a régua pra conferir um
+    preço que sumiu ou entrou errado (QA 22/09)."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+    if not buscar_preco_cardapio_por_id(item_id):
+        return jsonify({"erro": "Item não encontrado."}), 404
+    return jsonify({"historico": _historico_preco_formatado(item_id)})
 
 
 @app.route('/api/precos-cardapio/<int:item_id>/nome', methods=['PUT'])
@@ -3054,13 +3095,17 @@ def _links_de_insumo(brutos):
             return None, "O mesmo insumo está duas vezes na lista."
         vistos.add(insumo_id)
         quantidade = link.get('quantidade')
-        if quantidade not in (None, ''):
-            try:
-                quantidade = float(quantidade)
-            except (TypeError, ValueError):
-                return None, "Quantidade inválida."
-        else:
-            quantidade = None
+        # Insumo escolhido sem quantidade era aceito como nulo: a linha
+        # entrava na ficha, mas não descontava estoque e o custo do produto
+        # nunca fechava — e o aviso só aparecia ao reabrir (QA 22/09).
+        if quantidade in (None, ''):
+            return None, "Tem insumo na ficha sem quantidade. Preencha a quantidade ou tire a linha."
+        try:
+            quantidade = float(quantidade)
+        except (TypeError, ValueError):
+            return None, "Quantidade inválida."
+        if quantidade <= 0:
+            return None, "Quantidade precisa ser maior que 0 (pra não usar o insumo, tire a linha)."
         links.append({"insumoId": insumo_id, "quantidade": quantidade})
     return links, None
 
@@ -4468,14 +4513,55 @@ def api_anexar_nota_fiscal(pedido_id):
     except Exception:
         _apagar_nota_fiscal(nome_arquivo)
         raise
-    # Só apaga o arquivo antigo depois que o banco já aponta pro novo.
-    _apagar_nota_fiscal(anterior)
+    # A foto que saiu não é apagada: fica guardada e listada, porque
+    # fotografar a nota errada por cima da certa acabava com a certa
+    # (QA 22/09).
+    guardar_nota_fiscal_substituida(pedido_id, anterior, (_usuario_logado() or {}).get('nome'))
 
     return jsonify({
         "ok": True,
         "numeroNf": numero_nf if numero_nf is not None else pedido["numero_nf"],
         "notaFiscalUrl": f"/api/pedidos/{pedido_id}/nota-fiscal" if (nome_arquivo or pedido["nota_fiscal_arquivo"]) else None,
     })
+
+
+@app.route('/api/pedidos/<int:pedido_id>/notas-substituidas', methods=['GET'])
+def api_notas_substituidas(pedido_id):
+    """Fotos de nota que já foram trocadas nesse pedido — elas continuam
+    no disco em vez de sumirem (QA 22/09)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+    return jsonify({"notas": [
+        {
+            "id": n["id"],
+            "quando": n["trocado_em"],
+            "quem": n["trocado_por"],
+            "url": f"/api/pedidos/{pedido_id}/notas-substituidas/{n['id']}",
+        }
+        for n in notas_fiscais_substituidas(pedido_id)
+    ]})
+
+
+@app.route('/api/pedidos/<int:pedido_id>/notas-substituidas/<int:nota_id>', methods=['GET'])
+def api_abrir_nota_substituida(pedido_id, nota_id):
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+    nota = nota_fiscal_substituida(nota_id)
+    if not nota or nota["pedido_id"] != pedido_id:
+        return jsonify({"erro": "Nota não encontrada."}), 404
+    return send_from_directory(PASTA_NOTAS_FISCAIS, nota["arquivo"])
 
 
 @app.route('/api/pedidos/<int:pedido_id>/nota-fiscal', methods=['GET'])
@@ -6335,6 +6421,22 @@ def api_atualizar_tarefa(tarefa_id):
     return jsonify({"ok": True})
 
 
+@app.route('/api/tarefas/<int:tarefa_id>/o-que-vai-junto', methods=['GET'])
+def api_o_que_vai_junto_com_a_tarefa(tarefa_id):
+    """Quantos comentários e subtarefas somem junto com o card, pro aviso
+    de exclusão dizer o que está em jogo (QA 22/09)."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    erro = _tarefa_inacessivel(tarefa_id)
+    if erro:
+        return erro
+    junto = o_que_vai_junto_com_a_tarefa(tarefa_id)
+    if not junto:
+        return jsonify({"erro": "Card não encontrado."}), 404
+    return jsonify(junto)
+
+
 @app.route('/api/tarefas/<int:tarefa_id>', methods=['DELETE'])
 def api_excluir_tarefa(tarefa_id):
     erro_admin = _exigir_admin()
@@ -6343,6 +6445,14 @@ def api_excluir_tarefa(tarefa_id):
     erro = _tarefa_inacessivel(tarefa_id)
     if erro:
         return erro
+    # O registro dizia só "Excluiu tarefa": sem o título e sem o que foi
+    # junto, não dava pra saber o que se perdeu (QA 22/09).
+    junto = o_que_vai_junto_com_a_tarefa(tarefa_id)
+    if junto:
+        _anotar_no_registro(
+            f'Excluiu o card "{junto["titulo"]}"'
+            f' (levou {junto["comentarios"]} comentário(s) e {junto["subtarefas"]} subtarefa(s))'
+        )
     excluir_tarefa(tarefa_id)
     return jsonify({"ok": True})
 

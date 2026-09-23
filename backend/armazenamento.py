@@ -988,6 +988,36 @@ def inicializar_banco():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS nota_fiscal_substituida (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pedido_id INTEGER NOT NULL,
+                arquivo TEXT NOT NULL,
+                trocado_em TEXT NOT NULL,
+                trocado_por TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_nf_substituida ON nota_fiscal_substituida(pedido_id, id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS preco_cardapio_historico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                preco_cardapio_id INTEGER NOT NULL,
+                canal TEXT NOT NULL,
+                preco_anterior REAL,
+                preco_novo REAL,
+                quando TEXT NOT NULL,
+                quem TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_preco_cardapio_hist ON preco_cardapio_historico(preco_cardapio_id, quando)"
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS tentativa_login (
                 email TEXT NOT NULL,
                 quando TEXT NOT NULL
@@ -1818,6 +1848,23 @@ def atualizar_tarefa(tarefa_id, campos):
         conn.execute(f"UPDATE tarefa SET {colunas} WHERE id = ?", valores)
 
 
+def o_que_vai_junto_com_a_tarefa(tarefa_id):
+    """Título, quantos comentários e quantas subtarefas somem junto com o
+    card. A tela só perguntava "tem certeza?", sem dizer o que ia junto
+    (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute("SELECT titulo FROM tarefa WHERE id = ?", (tarefa_id,)).fetchone()
+        if not linha:
+            return None
+        comentarios = conn.execute(
+            "SELECT COUNT(*) AS n FROM tarefa_comentario WHERE tarefa_id = ?", (tarefa_id,)
+        ).fetchone()["n"]
+        subtarefas = conn.execute(
+            "SELECT COUNT(*) AS n FROM tarefa_subtarefa WHERE tarefa_id = ?", (tarefa_id,)
+        ).fetchone()["n"]
+    return {"titulo": linha["titulo"], "comentarios": comentarios, "subtarefas": subtarefas}
+
+
 def excluir_tarefa(tarefa_id):
     with conexao() as conn:
         conn.execute("DELETE FROM tarefa_comentario WHERE tarefa_id = ?", (tarefa_id,))
@@ -2014,13 +2061,71 @@ def buscar_preco_cardapio_por_id(item_id):
         return dict(linha) if linha else None
 
 
-def atualizar_preco_cardapio(item_id, campos):
+def atualizar_preco_cardapio(item_id, campos, quem=None):
+    """Grava os preços e guarda o que estava lá antes. Sem o histórico, um
+    preço apagado ou digitado errado não tinha como ser conferido depois
+    (QA 22/09)."""
     if not campos:
         return
+    agora = datetime.now().isoformat()
     colunas = ", ".join(f"{campo} = ?" for campo in campos)
     valores = list(campos.values()) + [item_id]
     with conexao() as conn:
+        travar_para_escrita(conn)
+        anterior = conn.execute(
+            "SELECT ifood, food99, beefood, cardapio_web FROM preco_cardapio WHERE id = ?",
+            (item_id,),
+        ).fetchone()
         conn.execute(f"UPDATE preco_cardapio SET {colunas} WHERE id = ?", valores)
+        for coluna, novo in campos.items():
+            velho = anterior[coluna] if anterior is not None else None
+            if velho == novo:
+                continue
+            conn.execute(
+                "INSERT INTO preco_cardapio_historico "
+                "(preco_cardapio_id, canal, preco_anterior, preco_novo, quando, quem) VALUES (?, ?, ?, ?, ?, ?)",
+                (item_id, coluna, velho, novo, agora, quem),
+            )
+
+
+def guardar_nota_fiscal_substituida(pedido_id, arquivo, quem=None):
+    """A foto que saiu do pedido continua no disco e fica listada aqui.
+    Antes ela era apagada na hora: fotografar a nota errada por cima da certa
+    acabava com a certa (QA 22/09)."""
+    if not arquivo:
+        return
+    with conexao() as conn:
+        conn.execute(
+            "INSERT INTO nota_fiscal_substituida (pedido_id, arquivo, trocado_em, trocado_por) VALUES (?, ?, ?, ?)",
+            (pedido_id, arquivo, datetime.now().isoformat(), quem),
+        )
+
+
+def notas_fiscais_substituidas(pedido_id):
+    with conexao() as conn:
+        return [dict(l) for l in conn.execute(
+            "SELECT id, arquivo, trocado_em, trocado_por FROM nota_fiscal_substituida "
+            "WHERE pedido_id = ? ORDER BY id DESC",
+            (pedido_id,),
+        )]
+
+
+def nota_fiscal_substituida(nota_id):
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT pedido_id, arquivo FROM nota_fiscal_substituida WHERE id = ?", (nota_id,)
+        ).fetchone()
+    return dict(linha) if linha else None
+
+
+def historico_de_preco_cardapio(item_id, limite=12):
+    """Últimas mudanças de preço desse produto, da mais nova pra mais velha."""
+    with conexao() as conn:
+        return [dict(l) for l in conn.execute(
+            "SELECT canal, preco_anterior, preco_novo, quando, quem FROM preco_cardapio_historico "
+            "WHERE preco_cardapio_id = ? ORDER BY id DESC LIMIT ?",
+            (item_id, limite),
+        )]
 
 
 def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):

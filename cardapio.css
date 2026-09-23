@@ -1352,3 +1352,17 @@ body.dark-mode {
 @media (prefers-reduced-motion: reduce) {
   .detalhe-margem-barra span { transition: none; }
 }
+
+/* Histórico de preço do produto (QA 22/09): um preço apagado ou digitado
+   errado não tinha como ser conferido depois. */
+.detalhe-preco-historico { margin-top: var(--space-2); font-size: 0.85rem; }
+.detalhe-preco-historico summary { cursor: pointer; color: var(--text-muted); }
+.detalhe-preco-historico summary:hover { color: var(--text-dark); }
+.detalhe-preco-historico-lista { margin-top: var(--space-2); display: flex; flex-direction: column; gap: 4px; }
+.detalhe-preco-historico-lista p { margin: 0; }
+
+/* Campo com texto que não dá pra ler como preço */
+.detalhe-produto-campo input.campo-ilegivel {
+  border-color: var(--danger);
+  background-color: var(--danger-soft);
+}

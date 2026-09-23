@@ -1015,3 +1015,8 @@ body.dark-mode {
   #modal-confirmar-recebimento .modal-actions button { width: 100%; padding: 14px; }
   .recebimento-falta-acoes button { width: 100%; }
 }
+
+/* Notas de um pedido que já foram trocadas (QA 22/09) */
+.pedido-notas-substituidas { margin: calc(var(--space-4) * -1) 0 var(--space-4); font-size: 0.85rem; }
+.pedido-notas-substituidas a { color: var(--info); text-decoration: underline; }
+.pedido-notas-substituidas[hidden] { display: none; }
