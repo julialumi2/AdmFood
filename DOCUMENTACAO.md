@@ -5017,3 +5017,36 @@ ficam pra próxima leva.
   ícones do documento todo (`createIcons()` sem alvo varre a página). Agora a
   busca espera 180 ms de silêncio e os ícones são regerados só dentro da
   tabela. Medido: digitar "bacon!" causava 6 redesenhos, agora causa **1**.
+
+### 6.79 Os três últimos médios de Insumos
+
+Fecha os 6 médios da tela de Insumos.
+
+**"Registrar entrada", a tela mais perigosa e a menos guiada.** Ela soma no
+estoque e não tem como desfazer num clique, e mesmo assim:
+
+- a lista vinha com **o catálogo inteiro, sem busca e já com o primeiro item
+  escolhido** — um "Registrar" distraído somava mercadoria no insumo errado.
+  Agora tem campo de busca, a lista filtra enquanto se digita e **nada vem
+  pré-escolhido**: sem escolher o insumo, não registra;
+- apareciam **as 4 lojas**, inclusive as que não usam o insumo. Agora só as
+  que usam, com um link pra mostrar as outras quando for preciso;
+- os botões − e + andavam **de grama em grama**. O campo passou a falar
+  kg/L/un (com a unidade escrita dentro dele), então +1 é 1 kg;
+- **nada mostrava o estoque atual.** Cada loja agora mostra "tem 4,95 kg", e
+  antes de gravar aparece o resumo do que vai acontecer: "Artesanos: 0 kg +
+  2 kg".
+
+**Recebimento de pedido não criava lote de validade.** "Registrar entrada" na
+mão pergunta a validade e o que chega aparece em "Lotes vencendo"; mercadoria
+que entra pelo recebimento de um pedido — que é a maior parte — nunca criava
+lote nenhum. A conferência do recebimento ganhou uma coluna **Validade**
+(opcional, por item), e o que for preenchido vira lote. Conferido: recebendo
+um pedido com validade, o lote aparece na lista.
+
+**No celular a tabela de 8 colunas só rolava de lado.** Cada linha virou um
+card com os rótulos à esquerda — o mesmo padrão que Pedidos e Recebimentos já
+usavam. Fica só na tabela de insumos; lotes e datas especiais são curtas e
+continuam tabela. E **todo campo de modal no celular** passou a ter 44 px de
+altura (alvo de toque) e fonte de 16 px, que é o que impede o iPhone de dar
+zoom ao focar o campo.

@@ -1043,3 +1043,116 @@
 .fornecedor-avatar.homologado.vencendo {
   box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--warning-texto);
 }
+
+/* "Registrar entrada" guiada (QA 22/09): busca, unidade no campo e o
+   estoque atual de cada loja à vista. */
+.entrada-insumo-lista {
+  width: 100%;
+  margin-top: var(--space-2);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font: inherit;
+  padding: 4px;
+}
+
+.entrada-insumo-lista option { padding: 6px 8px; border-radius: 4px; }
+
+.estoque-entrada-linha label small {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.estoque-entrada-linha.nao-usa label { color: var(--text-muted); }
+
+.entrada-campo-unidade {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  overflow: hidden;
+}
+
+.entrada-campo-unidade:focus-within {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+.entrada-campo-unidade input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dark);
+  font: inherit;
+  text-align: center;
+  padding: 8px;
+  outline: none;
+}
+
+.entrada-unidade {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-left: 1px solid var(--input-border);
+  background-color: var(--surface-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+/* No celular a tabela de 8 colunas só rolava de lado (QA 22/09): cada linha
+   vira um card, mesmo padrão já usado em Pedidos/Recebimentos. */
+@media (max-width: 768px) {
+  #estoque-tabela-scroll { overflow-x: visible; }
+  #estoque-tabela-scroll .inventory-table thead { display: none; }
+
+  #estoque-tabela-scroll .inventory-table tbody tr {
+    display: block;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td {
+    border: 0;
+    padding: 5px 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    text-align: right;
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td::before {
+    content: attr(data-rotulo);
+    flex: none;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: left;
+  }
+
+  /* O nome é o título do card: sem rótulo e sem alinhar à direita. */
+  #estoque-tabela-scroll .inventory-table tbody td.estoque-td-nome {
+    display: block;
+    padding: 0 0 var(--space-2);
+    text-align: left;
+    border-bottom: 1px dashed var(--surface-muted-border);
+    margin-bottom: var(--space-2);
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td.estoque-td-nome::before { content: none; }
+  #estoque-tabela-scroll .inventory-table tbody td.col-acoes .acoes-linha { justify-content: flex-end; }
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel { flex-direction: column; align-items: flex-end; }
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel::before { align-self: flex-start; }
+}

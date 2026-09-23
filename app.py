@@ -4345,6 +4345,8 @@ def api_confirmar_recebimento(pedido_id):
                 "insumoId": int(item['insumoId']),
                 "quantidade": float(item['quantidade']),
                 "precoUnitario": float(item['precoUnitario']),
+                # Opcional, por item: vira lote em "Lotes vencendo" (QA 22/09).
+                "validade": (item.get('validade') or '').strip() or None,
             }
             for item in itens_brutos
         ]

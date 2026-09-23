@@ -1989,3 +1989,14 @@ tr:hover { background-color: var(--surface-muted); }
   color: var(--danger-texto);
   font-weight: 600;
 }
+
+/* Campo de modal no celular (QA 22/09): 44px é o alvo de toque mínimo e 16px
+   é o que impede o iPhone de dar zoom ao focar o campo. */
+@media (max-width: 768px) {
+  .modal-content input:not([type="checkbox"]):not([type="radio"]),
+  .modal-content select,
+  .modal-content textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

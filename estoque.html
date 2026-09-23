@@ -914,9 +914,14 @@
           <button type="button" class="btn-close" id="btn-entrada-fechar" aria-label="Fechar">&times;</button>
         </div>
         <form id="form-entrada-insumo">
+          <!-- A lista vinha com o catálogo inteiro, sem busca e já com o
+               primeiro item escolhido: um "Registrar" distraído somava
+               mercadoria no insumo errado (QA 22/09). -->
           <div class="form-group">
-            <label for="entrada-insumo-select">Insumo</label>
-            <select id="entrada-insumo-select" required></select>
+            <label for="entrada-insumo-busca">Insumo</label>
+            <input type="search" id="entrada-insumo-busca" placeholder="Busque pelo nome..." autocomplete="off">
+            <select id="entrada-insumo-select" required size="6" class="entrada-insumo-lista"></select>
+            <p class="panel-subtitle" id="entrada-insumo-ajuda">Escolha o insumo pra ver a unidade e o estoque de cada loja.</p>
           </div>
           <div class="form-group">
             <label for="entrada-validade">Validade (opcional)</label>
@@ -928,6 +933,8 @@
           <div id="entrada-distribuicao-lojas" class="estoque-entrada-lojas">
             <!-- Renderizado dinamicamente via JS, uma linha por loja -->
           </div>
+          <!-- Só as lojas que usam o insumo; as outras entram por aqui. -->
+          <button type="button" class="btn-limpar-filtro" id="btn-entrada-todas-lojas" hidden></button>
           <div class="modal-actions">
             <button type="button" class="btn-secondary-sm" id="btn-entrada-cancelar">Cancelar</button>
             <button type="submit" class="btn-primary-sm">Registrar entrada</button>

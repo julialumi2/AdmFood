@@ -6181,6 +6181,15 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
                 "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual + ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
                 (quantidade, agora, insumo_id, pedido["loja"]),
             )
+            # Validade anotada na conferência vira lote, igual ao que entra
+            # pelo "Registrar entrada". Mercadoria de pedido — que é a maior
+            # parte — nunca aparecia em "Lotes vencendo" (QA 22/09).
+            validade = (item.get("validade") or "").strip() or None
+            if validade and quantidade > 0:
+                conn.execute(
+                    "INSERT INTO lote_insumo (insumo_id, loja, quantidade, validade, criado_em) VALUES (?, ?, ?, ?, ?)",
+                    (insumo_id, pedido["loja"], quantidade, validade, agora),
+                )
 
         # O que foi pedido e ainda não chegou (item nem conferido conta inteiro).
         nomes = {

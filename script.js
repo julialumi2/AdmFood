@@ -81,9 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById(botao.dataset.target);
     if (!input) return;
     const delta = botao.dataset.delta === '-1' ? -1 : 1;
-    const atual = parseFloat(input.value) || 0;
+    // Lê "1,5" como um e meio: o campo fala pt-BR desde que passou a ser em
+    // kg/L/un em vez de grama (QA 22/09).
+    const atual = _lerNumeroBR(input.value) || 0;
     const novoValor = Math.max(0, atual + delta);
-    input.value = Math.round(novoValor * 100) / 100;
+    input.value = _numeroCampoQtd(Math.round(novoValor * 1000) / 1000);
   });
 
   // 3. LÓGICA DE RECOLHER A SIDEBAR (TOGGLE MENU) — no desktop, recolhe pra
@@ -1848,7 +1850,7 @@ function _celulaFornecedoresHTML(insumo) {
   const adicionar = `<button type="button" class="avatar avatar-sm fornecedor-avatar adicionar"
     data-acao="editar-insumo" data-insumo-id="${insumo.id}"
     title="Ligar outro fornecedor a esse insumo">+</button>`;
-  return `<td class="col-fornecedores">${bolinhas}${resto}${adicionar}</td>`;
+  return `<td data-rotulo="Fornecedores" class="col-fornecedores">${bolinhas}${resto}${adicionar}</td>`;
 }
 
 // Lista inteira de quem fornece o insumo — o "+N" da coluna abre isso, que é
@@ -2184,7 +2186,7 @@ function renderEstoqueTab() {
       : (insumo.favorito ? '<i data-lucide="star" fill="currentColor" class="icone-favorito"></i>' : '');
     return `
       <tr>
-        <td>
+        <td class="estoque-td-nome" data-rotulo="Insumo">
           <div class="insumo-nome-cell">
             ${estrela}
             <div>
@@ -2194,12 +2196,12 @@ function renderEstoqueTab() {
             </div>
           </div>
         </td>
-        <td><span class="badge tag-categoria" data-cor="${_corDaCategoria(insumo.categoria)}">${escaparHtml(insumo.categoria)}</span></td>
-        <td class="font-bold col-atual-destaque${dados.quantidadeAtual < 0 ? ' estoque-negativo' : ''}"${dados.quantidadeAtual < 0 ? ' title="Saiu mais do que entrou: confira a contagem ou a ficha técnica"' : ''}>${_formatarQuantidade(dados.quantidadeAtual, insumo.unidadeMedida)}</td>
-        <td class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
+        <td data-rotulo="Categoria"><span class="badge tag-categoria" data-cor="${_corDaCategoria(insumo.categoria)}">${escaparHtml(insumo.categoria)}</span></td>
+        <td data-rotulo="Atual" class="font-bold col-atual-destaque${dados.quantidadeAtual < 0 ? ' estoque-negativo' : ''}"${dados.quantidadeAtual < 0 ? ' title="Saiu mais do que entrou: confira a contagem ou a ficha técnica"' : ''}>${_formatarQuantidade(dados.quantidadeAtual, insumo.unidadeMedida)}</td>
+        <td data-rotulo="Consumo/dia" class="text-muted" ${dados.consumoMedio === null ? 'title="Sem dado suficiente — depende da Ficha Técnica do prato estar cadastrada e ter vendas registradas"' : ''}>
           ${dados.consumoMedio === null ? '—' : `${_formatarQuantidade(Math.round(dados.consumoMedio * 100) / 100, insumo.unidadeMedida)}/dia`}
         </td>
-        <td class="col-nivel" ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
+        <td data-rotulo="Mínimo e compra" class="col-nivel" ${quantidadeIdeal === null ? 'title="Sem estoque mínimo cadastrado pra esse insumo/loja"' : ''}>
           ${quantidadeIdeal === null ? '<span class="text-muted">—</span>' : `
             <div class="nivel-cell">
               <div class="nivel-gauge" title="Estoque atual em relação ao mínimo — o traço marca o limite mínimo">
@@ -2218,10 +2220,10 @@ function renderEstoqueTab() {
           `}
         </td>
         ${mostrarFornecedores ? _celulaFornecedoresHTML(insumo) : ''}
-        <td><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"
+        <td data-rotulo="Status"><span class="badge-pill ${STATUS_CLASSE_BADGE_ESTOQUE[dados.status]}"
               title="${dados.lojasNoStatus ? `${STATUS_LABEL_ESTOQUE[dados.status]} em ${dados.lojasNoStatus.join(', ')}` : ''}"><i data-lucide="${STATUS_ICONE_ESTOQUE[dados.status]}"></i>${STATUS_LABEL_ESTOQUE[dados.status]}${dados.lojasNoStatus && dados.lojasNoStatus.length < LOJAS_ESTOQUE.length ? ` (${dados.lojasNoStatus.length})` : ''}</span></td>
         ${isAdmin ? `
-          <td class="col-acoes"><div class="acoes-linha">
+          <td data-rotulo="Ações" class="col-acoes"><div class="acoes-linha">
             ${loja ? `
               <button type="button" class="btn-acao-icone" data-acao="editar-estoque" data-insumo-id="${insumo.id}" data-loja="${escaparHtml(loja)}" title="Editar estoque">
                 <i data-lucide="pencil"></i>
@@ -8750,28 +8752,101 @@ document.getElementById('btn-importar-insumos-confirmar')?.addEventListener('cli
 });
 
 // --- Modal: Registrar entrada (distribuição entre lojas) ---
-function abrirModalEntradaInsumo() {
-  const select = document.getElementById('entrada-insumo-select');
-  select.innerHTML = estoqueInsumos.map(i => `<option value="${i.id}">${escaparHtml(i.nome)}</option>`).join('');
-  document.getElementById('entrada-validade').value = '';
+// "Registrar entrada" soma no estoque e era a tela menos guiada do sistema
+// (QA 22/09): catálogo inteiro num select sem busca e já com o primeiro item
+// escolhido, as 4 lojas mesmo as que não usam o insumo, − e + andando de
+// grama em grama, e nenhuma unidade nem estoque atual à vista.
+let entradaMostrarTodasLojas = false;
 
+function _insumoDaEntrada() {
+  const id = parseInt(document.getElementById('entrada-insumo-select').value, 10);
+  return estoqueInsumos.find((i) => i.id === id) || null;
+}
+
+function _renderListaInsumosEntrada() {
+  const select = document.getElementById('entrada-insumo-select');
+  const termo = _textoBuscaCardapio((document.getElementById('entrada-insumo-busca')?.value || '').trim());
+  const escolhido = select.value;
+  const achados = estoqueInsumos
+    .filter((i) => !i.ehMistura)
+    .filter((i) => !termo || _textoBuscaCardapio(i.nome).includes(termo));
+  select.innerHTML = achados.length
+    ? achados.map((i) => `<option value="${i.id}"${String(i.id) === escolhido ? ' selected' : ''}>${escaparHtml(i.nome)}</option>`).join('')
+    : '<option value="" disabled>Nenhum insumo com esse nome</option>';
+  // Nada pré-escolhido: quem não escolheu não registra.
+  if (![...select.options].some((o) => o.selected && o.value)) select.value = '';
+}
+
+function _renderLojasDaEntrada() {
   const container = document.getElementById('entrada-distribuicao-lojas');
-  container.innerHTML = LOJAS_ESTOQUE.map(loja => {
-    const inputId = `entrada-loja-${escaparHtml(loja)}`;
+  const botaoTodas = document.getElementById('btn-entrada-todas-lojas');
+  const insumo = _insumoDaEntrada();
+  const ajuda = document.getElementById('entrada-insumo-ajuda');
+  if (!insumo) {
+    container.innerHTML = '<p class="panel-subtitle">Escolha o insumo primeiro.</p>';
+    if (botaoTodas) botaoTodas.hidden = true;
+    if (ajuda) ajuda.textContent = 'Escolha o insumo pra ver a unidade e o estoque de cada loja.';
+    return;
+  }
+  const escala = _escalaDeCusto(insumo.unidadeMedida);
+  if (ajuda) ajuda.textContent = `As quantidades abaixo são em ${escala.rotulo}.`;
+
+  const usam = LOJAS_ESTOQUE.filter((loja) => insumo.porLoja[loja]?.aplica);
+  const deFora = LOJAS_ESTOQUE.filter((loja) => !insumo.porLoja[loja]?.aplica);
+  const lojas = entradaMostrarTodasLojas ? LOJAS_ESTOQUE : (usam.length ? usam : LOJAS_ESTOQUE);
+
+  container.innerHTML = lojas.map((loja) => {
+    const inputId = `entrada-loja-${loja.replace(/\s+/g, '-')}`;
+    const dados = insumo.porLoja[loja];
+    // Na mesma unidade do campo ao lado: _formatarQuantidade troca sozinho
+    // conforme o tamanho ("0 g" num campo em kg).
+    const atual = dados ? _qtdNaEscala(dados.quantidadeAtual, escala) : '—';
     return `
-    <div class="estoque-entrada-linha">
-      <label for="${inputId}">${escaparHtml(loja)}</label>
+    <div class="estoque-entrada-linha${dados?.aplica ? '' : ' nao-usa'}">
+      <label for="${inputId}">
+        ${escaparHtml(loja)}
+        <small>tem ${escaparHtml(atual)}${dados?.aplica ? '' : ' · não usa este insumo'}</small>
+      </label>
       <div class="stepper">
         <button type="button" class="stepper-btn" data-target="${inputId}" data-delta="-1" aria-label="Diminuir">&minus;</button>
-        <input type="number" step="0.01" min="0" id="${inputId}" data-loja="${escaparHtml(loja)}" value="0">
+        <div class="entrada-campo-unidade">
+          <input type="text" inputmode="decimal" id="${inputId}" data-loja="${escaparHtml(loja)}" placeholder="0">
+          <span class="entrada-unidade">${escaparHtml(escala.rotulo)}</span>
+        </div>
         <button type="button" class="stepper-btn" data-target="${inputId}" data-delta="1" aria-label="Aumentar">+</button>
       </div>
     </div>
   `;
   }).join('');
 
-  document.getElementById('modal-entrada-insumo').style.display = 'flex';
+  if (botaoTodas) {
+    botaoTodas.hidden = !deFora.length || !usam.length;
+    botaoTodas.textContent = entradaMostrarTodasLojas
+      ? 'Mostrar só as lojas que usam este insumo'
+      : `Mostrar também ${_qtdTexto(deFora.length, 'loja que não usa', 'lojas que não usam')} este insumo`;
+  }
 }
+
+function abrirModalEntradaInsumo() {
+  entradaMostrarTodasLojas = false;
+  const busca = document.getElementById('entrada-insumo-busca');
+  if (busca) busca.value = '';
+  document.getElementById('entrada-validade').value = '';
+  _renderListaInsumosEntrada();
+  _renderLojasDaEntrada();
+  document.getElementById('modal-entrada-insumo').style.display = 'flex';
+  busca?.focus();
+}
+
+document.getElementById('entrada-insumo-busca')?.addEventListener('input', () => {
+  _renderListaInsumosEntrada();
+  _renderLojasDaEntrada();
+});
+document.getElementById('entrada-insumo-select')?.addEventListener('change', _renderLojasDaEntrada);
+document.getElementById('btn-entrada-todas-lojas')?.addEventListener('click', () => {
+  entradaMostrarTodasLojas = !entradaMostrarTodasLojas;
+  _renderLojasDaEntrada();
+});
 
 function fecharModalEntradaInsumo() {
   document.getElementById('modal-entrada-insumo').style.display = 'none';
@@ -8783,16 +8858,40 @@ document.getElementById('btn-entrada-cancelar')?.addEventListener('click', fecha
 
 document.getElementById('form-entrada-insumo')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
-  const insumoId = document.getElementById('entrada-insumo-select').value;
+  const insumo = _insumoDaEntrada();
+  if (!insumo) {
+    alert('Escolha o insumo que chegou.');
+    return;
+  }
+  const insumoId = insumo.id;
+  // O campo fala kg/L/un; o sistema guarda em g/ml/un.
+  const fator = _escalaDeCusto(insumo.unidadeMedida).fator;
   const distribuicao = {};
+  const ilegiveis = [];
   document.querySelectorAll('#entrada-distribuicao-lojas input').forEach(input => {
-    const valor = parseFloat(input.value);
-    if (valor > 0) distribuicao[input.dataset.loja] = valor;
+    if (input.value.trim() === '') return;
+    const digitado = _lerNumeroBR(input.value);
+    if (!Number.isFinite(digitado) || digitado < 0) {
+      ilegiveis.push(input.dataset.loja);
+      return;
+    }
+    if (digitado > 0) distribuicao[input.dataset.loja] = Math.round(digitado * fator * 1000) / 1000;
   });
+  if (ilegiveis.length) {
+    alert(`Não deu pra ler a quantidade de: ${ilegiveis.join(', ')}.`);
+    return;
+  }
   if (!Object.keys(distribuicao).length) {
     alert('Informe a quantidade recebida em pelo menos uma loja.');
     return;
   }
+  // Entrada soma no estoque e não tem como desfazer num clique: confere o
+  // que vai acontecer antes.
+  const SALTO = String.fromCharCode(10);
+  const resumo = Object.entries(distribuicao)
+    .map(([loja, q]) => `${loja}: ${_qtdNaEscala(insumo.porLoja[loja]?.quantidadeAtual || 0, _escalaDeCusto(insumo.unidadeMedida))} + ${_qtdNaEscala(q, _escalaDeCusto(insumo.unidadeMedida))}`)
+    .join(SALTO);
+  if (!confirm(`Somar no estoque de "${insumo.nome}"?` + SALTO + SALTO + resumo)) return;
   const validade = document.getElementById('entrada-validade').value || null;
   // Entrada soma no estoque: dois toques somavam duas vezes, e no celular o
   // segundo toque sai fácil (QA 22/09).
@@ -9669,6 +9768,7 @@ function _linhaRecebimentoItemHTML(item) {
         <input type="number" step="any" min="0" class="recebimento-input-preco" value="${preco}">
         <span>R$/${escaparHtml(rotulo)}</span>
       </div></td>
+      <td data-rotulo="Validade"><input type="date" class="recebimento-input-validade" aria-label="Validade de ${escaparHtml(item.nome)} (opcional)"></td>
     </tr>
   `;
 }
@@ -9692,6 +9792,7 @@ function _linhaRecebimentoItemNovoHTML(insumos) {
         <input type="number" step="any" min="0" class="recebimento-input-preco" value="">
         <span class="recebimento-unidade-preco-nova">R$/un</span>
       </div></td>
+      <td data-rotulo="Validade"><input type="date" class="recebimento-input-validade" aria-label="Validade do item que veio a mais (opcional)"></td>
     </tr>
   `;
 }
@@ -9877,6 +9978,8 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
         insumoId: parseInt(linha.dataset.insumoId, 10),
         quantidade: (parseFloat(campoQuantidade.value) || 0) * fator,
         precoUnitario: (parseFloat(campoPreco.value) || 0) / fator,
+        // Vira lote em "Lotes vencendo"; em branco, nada muda (QA 22/09).
+        validade: linha.querySelector('.recebimento-input-validade')?.value || null,
       };
     })
     .filter(Boolean);
