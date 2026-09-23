@@ -133,22 +133,57 @@
 
 .tag-loja.resto { color: var(--text-muted); }
 
+/* Pagamento e mínimo numa linha, dia de entrega na outra. O texto era
+   "nowrap" dentro de uma caixa de 240px sem corte: quando ela escrevia a
+   rota junto com o dia ("Terça e quinta de manhã — rota Zona Norte"), a
+   frase saía da célula e passava por baixo dos botões de ação, cortada. */
 .fornecedor-condicoes {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px 12px;
-  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 300px;
+  min-width: 0;
   font-size: 0.78rem;
   color: var(--text-dark);
   font-variant-numeric: tabular-nums;
 }
 
-.fornecedor-condicoes span {
+.fornecedor-condicoes .condicoes-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  min-width: 0;
+}
+
+.fornecedor-condicoes > span,
+.fornecedor-condicoes .condicoes-linha > span {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* min-width:0 + corte: é o que impede um texto comprido de esticar a
+     caixa e vazar pra cima da coluna vizinha. */
+  min-width: 0;
+}
+
+.fornecedor-condicoes .texto {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* O dia de entrega é onde ela escreve a rota, então essa linha pode usar
+   duas linhas antes de cortar; as outras duas dividem espaço e ficam numa. */
+.fornecedor-condicoes > span > .texto {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}
+
+.fornecedor-condicoes > span { align-items: flex-start; }
+.fornecedor-condicoes > span > svg { margin-top: 2px; }
 
 .fornecedor-condicoes span.vazio { color: var(--text-faint); }
 

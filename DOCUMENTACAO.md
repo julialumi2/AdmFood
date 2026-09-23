@@ -4908,3 +4908,31 @@ de verdade. Duas mudanças (extensão 1.2.0):
   cada fornecedor com a mensagem escrita, confere que é a mensagem certa
   daquele fornecedor e **não clica em enviar**. O painel diz "ENSAIO (não
   envia)" o tempo todo, e nenhum convite é marcado como enviado.
+
+### 6.75 Condições comerciais que passavam por baixo dos botões
+
+Na lista de Fornecedores, as três condições (prazo de pagamento, pedido
+mínimo e dia de entrega) ficavam numa linha só, dentro de uma caixa de 240 px
+com `white-space: nowrap` e **sem corte**. Quando ela escreve a rota junto com
+o dia — "Terça e quinta de manhã — rota Zona Norte" — a frase não tinha como
+quebrar nem como ser cortada: ela simplesmente saía da célula e ia por baixo
+da coluna de ações, ficando ilegível embaixo dos botões.
+
+O que mudou:
+
+- **Duas linhas em vez de uma.** Pagamento e pedido mínimo (que são curtos)
+  dividem a primeira; o dia de entrega fica sozinho na segunda, com a largura
+  inteira pra ele.
+- **Nada estica a caixa.** Cada item ganhou `min-width: 0` com corte por
+  reticência — é isso que impede um texto comprido de empurrar a caixa pra
+  cima da coluna vizinha. Antes o `nowrap` sem corte transbordava calado.
+- **A rota pode usar duas linhas** antes de cortar, já que é o campo em que
+  ela escreve frase. A coluna foi de 240 para 300 px de teto.
+- O `title` de cada item agora leva **rótulo e valor** ("Dia de entrega:
+  Terça e quinta…"), então o que sobrar em reticência aparece ao passar o
+  mouse.
+
+Conferido na prévia com texto do tamanho que ela usa: a 1400 px e a 1200 px,
+nenhuma linha vaza da célula nem encosta na coluna de ações (antes vazava
+26 px), e nada fica cortado. A altura da linha vai de 53 a 71 px conforme a
+rota use uma ou duas linhas.

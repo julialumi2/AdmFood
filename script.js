@@ -3553,10 +3553,19 @@ function _pedidoMinimoTexto(valor) {
 }
 
 function _condicoesComerciaisHTML(f) {
-  const item = (icone, rotulo, texto, vazio) => `<span class="${texto ? '' : 'vazio'}" title="${rotulo}"><i data-lucide="${icone}"></i>${escaparHtml(texto || vazio)}</span>`;
+  // Pagamento e mínimo numa linha (são curtos), dia de entrega na outra: ela
+  // escreve a rota ali ("Terça e quinta de manhã — rota Zona Norte") e o
+  // texto era comprido demais pra dividir a linha com os outros dois. O
+  // title leva o valor inteiro, pra quando sobrar reticência.
+  const item = (icone, rotulo, texto, vazio) => {
+    const valor = texto || vazio;
+    return `<span class="${texto ? '' : 'vazio'}" title="${escaparHtml(`${rotulo}: ${valor}`)}"><i data-lucide="${icone}"></i><span class="texto">${escaparHtml(valor)}</span></span>`;
+  };
   return `<span class="fornecedor-condicoes">
-    ${item('credit-card', 'Prazo de pagamento', f.prazoPagamento, 'Não informado')}
-    ${item('shopping-basket', 'Pedido mínimo', f.pedidoMinimo ? _pedidoMinimoTexto(f.pedidoMinimo) : '', 'Sem mínimo')}
+    <span class="condicoes-linha">
+      ${item('credit-card', 'Prazo de pagamento', f.prazoPagamento, 'Não informado')}
+      ${item('shopping-basket', 'Pedido mínimo', f.pedidoMinimo ? _pedidoMinimoTexto(f.pedidoMinimo) : '', 'Sem mínimo')}
+    </span>
     ${item('calendar-days', 'Dia de entrega', f.diasEntrega, 'Não informado')}
   </span>`;
 }
