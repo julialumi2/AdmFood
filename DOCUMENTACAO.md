@@ -4664,3 +4664,14 @@ unidades pelo preço cheio de tabela inflaria a receita e a margem, que é
 justamente o erro que o QA apontou. Como nem a receita nem o custo dessas
 unidades entram, os dois lados seguem coerentes; quando o combo ganhar preço
 próprio na lista, dá pra rateá-lo entre os componentes.
+
+### 6.64 Dia comparado pela metade em Mais Vendidos
+
+A comparação é sempre com o mesmo dia da semana anterior, mas esse dia pode
+ter sincronizado só em parte (a sincronização caiu no meio da tarde). Comparar
+com ele mostrava uma queda enorme com cara de queda real. Agora o servidor
+olha quantos pedidos aquela loja costuma fazer nesse dia da semana (mediana
+das 4 ocorrências anteriores) e, se o dia comparado tem menos da metade disso,
+manda `comparadoParcial`: a coluna da loja mostra "sem base" em vez de um
+−70% falso, com o motivo no hover ("2 pedidos, contra os 85 que essa loja
+costuma fazer nesse dia"). Sem histórico pra comparar, não arrisca marcar.

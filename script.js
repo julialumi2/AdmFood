@@ -2968,10 +2968,16 @@ function _renderMvComparativo(lojas, rotuloComparado, diaParcial) {
 
   const rotulos = lojas.map((l) => {
     const variacao = _mvVariacao(l.faturamento || 0, l.faturamentoComparado);
+    // O dia comparado também pode estar pela metade (a sincronização dele
+    // caiu no meio): comparar com ele mostrava uma queda que nunca existiu
+    // (QA 22/09).
+    const comparadoIncompleto = l.comparadoParcial;
     let delta = diaParcial
       ? '<span class="mv-coluna-delta trend-sub" title="O dia ainda está correndo: a comparação com um dia inteiro só apareceria como queda">parcial</span>'
-      : '<span class="mv-coluna-delta trend-sub">—</span>';
-    if (!diaParcial && variacao !== null && isFinite(variacao)) {
+      : comparadoIncompleto
+        ? `<span class="mv-coluna-delta trend-sub" title="O dia comparado sincronizou só em parte (${l.pedidosComparado || 0} pedidos, contra os ${l.pedidosTipicos} que essa loja costuma fazer nesse dia da semana) — comparar com ele mostraria uma queda que não existiu">sem base</span>`
+        : '<span class="mv-coluna-delta trend-sub">—</span>';
+    if (!diaParcial && !comparadoIncompleto && variacao !== null && isFinite(variacao)) {
       const valor = Math.round(variacao * 100);
       delta = `<span class="mv-coluna-delta ${valor > 0 ? 'trend-up' : valor < 0 ? 'trend-down' : 'trend-sub'}">${valor > 0 ? '+' : ''}${valor}%</span>`;
     }

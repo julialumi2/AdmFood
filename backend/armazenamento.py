@@ -2583,6 +2583,34 @@ def produtos_mais_vendidos_do_dia(lojas, dia_iso=None):
         ).fetchone()["dia"]
         for loja in lojas:
             _recasar_vendas_sem_item(conn, loja)
+        # O dia de comparação é sempre o mesmo dia da semana da semana
+        # passada — mas ele pode ter sincronizado pela metade (a sincronização
+        # caiu no meio da tarde). Comparar com um dia truncado mostra uma
+        # queda enorme que nunca existiu, com cara de queda real (QA 22/09).
+        # A régua é o próprio histórico da loja: quantos pedidos ela costuma
+        # ter nesse dia da semana.
+        pedidos_comparado = {
+            linha["unidade"]: linha["quantidade_pedidos"]
+            for linha in conn.execute(
+                "SELECT unidade, quantidade_pedidos FROM faturamento_diario WHERE dia = ?", (comparado,)
+            )
+        }
+        tipico_do_dia_da_semana = {}
+        for loja in lojas:
+            historico = [
+                linha["quantidade_pedidos"]
+                for linha in conn.execute(
+                    """
+                    SELECT quantidade_pedidos FROM faturamento_diario
+                    WHERE unidade = ? AND dia < ? AND quantidade_pedidos > 0
+                      AND CAST(strftime('%w', dia) AS INTEGER) = CAST(strftime('%w', ?) AS INTEGER)
+                    ORDER BY dia DESC LIMIT 4
+                    """,
+                    (loja, comparado, comparado),
+                )
+            ]
+            if historico:
+                tipico_do_dia_da_semana[loja] = sorted(historico)[len(historico) // 2]
         linhas = conn.execute(
             """
             SELECT v.dia, v.unidade, v.canal, v.item_cardapio_id,
@@ -2676,11 +2704,32 @@ def produtos_mais_vendidos_do_dia(lojas, dia_iso=None):
                 "loja": loja,
                 "itens": sum(p["quantidade"] for p in lista),
                 "itensComparado": itens_comparado.get(loja, 0),
+                # Dia de comparação incompleto: a tela esconde a variação em
+                # vez de mostrar uma queda que não existiu (QA 22/09).
+                "comparadoParcial": _dia_parece_incompleto(
+                    pedidos_comparado.get(loja), tipico_do_dia_da_semana.get(loja)
+                ),
+                "pedidosComparado": pedidos_comparado.get(loja),
+                "pedidosTipicos": tipico_do_dia_da_semana.get(loja),
                 "produtos": sorted(lista, key=lambda p: (-p["quantidade"], p["nome"])),
             }
             for loja, lista in por_loja.items()
         ],
     }
+
+
+# Abaixo desta fração do típico daquele dia da semana, o dia comparado é
+# tratado como incompleto (sincronização caiu no meio).
+FRACAO_DIA_INCOMPLETO = 0.5
+
+
+def _dia_parece_incompleto(pedidos_no_dia, tipico):
+    """True quando o dia tem pedidos de menos pro que aquela loja costuma
+    fazer nesse dia da semana — ou nenhum registro. Sem histórico pra
+    comparar, não arrisca dizer que está incompleto."""
+    if not tipico:
+        return False
+    return (pedidos_no_dia or 0) < tipico * FRACAO_DIA_INCOMPLETO
 
 
 def listar_porcoes_complemento(produto_item_id, loja):
