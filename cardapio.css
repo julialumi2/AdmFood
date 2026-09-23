@@ -122,11 +122,31 @@
 
 .ficha-tecnica-linha {
   display: grid;
-  /* insumo | quantidade | unidade (g/un quando o insumo tem conteúdo) | remover */
-  grid-template-columns: minmax(0, 1fr) 96px 64px auto;
+  /* insumo | quantidade | unidade (g/un quando o insumo tem conteúdo) | custo | remover */
+  grid-template-columns: minmax(0, 1fr) 96px 64px 72px auto;
   gap: var(--space-2);
   align-items: center;
 }
+
+/* Quanto o insumo custa nesse produto, atualizado enquanto se digita */
+.ficha-tecnica-custo-linha {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ficha-tecnica-custo-linha.sem-preco { color: var(--warning-texto); font-weight: 600; }
+
+.ficha-tecnica-custo-total {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.ficha-tecnica-custo-total.incompleto { color: var(--warning-texto); }
 
 /* Embalagem pra viagem, embaixo dos insumos no modal da ficha técnica */
 .ficha-tecnica-embalagem {

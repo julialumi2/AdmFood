@@ -4430,3 +4430,14 @@ celular na mão — e era a menos preparada pra isso.
   quem fechou o modal, ou precisava mandar pra outro número, não tinha como
   recuperar. Sem permissão de área de transferência, cai num prompt com o
   link em vez de não fazer nada.
+
+### 6.53 Custo na linha da ficha técnica (leva E, parte 3)
+
+Montar a ficha era às cegas: o custo do produto só aparecia depois de salvar,
+no card fechado, e não dava pra saber qual insumo pesava. Agora cada linha
+mostra quanto aquele insumo custa no produto (atualizando enquanto se digita,
+respeitando o seletor g/un) e o rodapé soma: "Custo do produto: R$ 18,49".
+Insumo sem preço aparece como "sem preço" em laranja e o rodapé avisa que a
+conta está incompleta — é o mesmo motivo que deixa o produto "sem custo" na
+Curva ABC. A rota da ficha passou a mandar `custoUnitario` de cada insumo
+disponível (o `precos_insumo_em_uso` já era carregado ali).

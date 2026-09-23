@@ -348,10 +348,12 @@
           <div id="ficha-tecnica-item-linhas" class="ficha-tecnica-linhas">
             <!-- Renderizado dinamicamente via JS -->
           </div>
-          <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-add-linha" style="margin-bottom: var(--space-4);">
+          <button type="button" class="btn-secondary-sm" id="btn-ficha-tecnica-add-linha">
             <i data-lucide="plus"></i>
             Adicionar insumo
           </button>
+          <!-- Soma dos insumos com a ficha aberta (QA 22/09) -->
+          <p class="ficha-tecnica-custo-total" id="ficha-tecnica-custo-total"></p>
           <!-- Só sai nos pedidos de delivery e retirada (SQL_INSUMOS_CONSUMIDOS
                no backend). Escondida nos complementos. -->
           <div class="ficha-tecnica-embalagem" id="ficha-tecnica-embalagem-secao">

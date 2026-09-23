@@ -2804,9 +2804,12 @@ def api_buscar_ficha_tecnica_item(item_id):
             for i in linhas
         ]
 
+    # O custo vai junto (QA 22/09): a linha da ficha mostra quanto aquele
+    # insumo pesa no produto, e dá pra ver na hora o que mudou o custo.
     insumos_disponiveis = [
         {"id": i['id'], "nome": i['nome'], "unidadeMedida": i['unidade_medida'],
-         "conteudoPorUnidade": i['conteudo_por_unidade'], "unidadeConteudo": i['unidade_conteudo']}
+         "conteudoPorUnidade": i['conteudo_por_unidade'], "unidadeConteudo": i['unidade_conteudo'],
+         "custoUnitario": precos.get(i['id'])}
         for i in _insumos_unicos(listar_insumos())
     ]
     return jsonify({

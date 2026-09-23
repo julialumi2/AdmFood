@@ -13302,6 +13302,7 @@ function _linhaFichaTecnicaHTML(insumoId, quantidade) {
       <select class="ficha-tecnica-select-insumo">${opcoes}</select>
       <input type="number" step="any" min="0" class="ficha-tecnica-input-quantidade" placeholder="Qtd.">
       <select class="ficha-tecnica-select-unidade" aria-label="Unidade da quantidade"></select>
+      <span class="ficha-tecnica-custo-linha" aria-live="polite"></span>
       <button type="button" class="btn-acao-icone btn-excluir" data-acao="remover-linha-ficha-tecnica" title="Remover">
         <i data-lucide="x"></i>
       </button>
@@ -13368,23 +13369,80 @@ function _quantidadeBaseDaLinhaFicha(linha) {
 }
 
 // Liga as linhas novas das duas listas do modal: insumos e embalagem pra viagem.
+// Quanto cada insumo custa no produto, com a ficha aberta (QA 22/09): antes
+// só o card fechado mostrava o custo, e depois de salvar — quem montava a
+// ficha não via qual insumo pesava nem quando o custo estava incompleto.
+function _atualizarCustosFichaTecnica() {
+  const modal = document.getElementById('modal-ficha-tecnica-item');
+  if (!modal || modal.style.display === 'none') return;
+  let total = 0;
+  let semPreco = 0;
+  modal.querySelectorAll('.ficha-tecnica-linha').forEach((linha) => {
+    const alvo = linha.querySelector('.ficha-tecnica-custo-linha');
+    if (!alvo) return;
+    const insumo = _insumoDaLinhaFicha(linha);
+    const quantidade = _quantidadeBaseDaLinhaFicha(linha);
+    if (!insumo || quantidade === null) {
+      alvo.textContent = '';
+      alvo.classList.remove('sem-preco');
+      return;
+    }
+    if (insumo.custoUnitario == null) {
+      alvo.textContent = 'sem preço';
+      alvo.classList.add('sem-preco');
+      semPreco += 1;
+      return;
+    }
+    alvo.classList.remove('sem-preco');
+    const custo = quantidade * insumo.custoUnitario;
+    total += custo;
+    alvo.textContent = _reais(custo);
+  });
+  const rodape = document.getElementById('ficha-tecnica-custo-total');
+  if (rodape) {
+    rodape.textContent = semPreco
+      ? `Custo até aqui: ${_reais(total)} — ${semPreco === 1 ? '1 insumo sem preço' : `${semPreco} insumos sem preço`} de fora da conta`
+      : `Custo do produto: ${_reais(total)}`;
+    rodape.classList.toggle('incompleto', semPreco > 0);
+  }
+}
+
+// A quantidade da linha na unidade do banco (g/ml/un), seja qual for a
+// unidade escolhida no seletor.
+function _quantidadeBaseDaLinhaFicha(linha) {
+  const campo = linha.querySelector('.ficha-tecnica-input-quantidade');
+  const valor = parseFloat(campo?.value);
+  if (!Number.isFinite(valor)) return null;
+  const insumo = _insumoDaLinhaFicha(linha);
+  const seletor = linha.querySelector('.ficha-tecnica-select-unidade');
+  if (seletor?.value === 'conteudo' && insumo?.conteudoPorUnidade) return valor / insumo.conteudoPorUnidade;
+  return valor;
+}
+
 function _wireLinhasFichaTecnica() {
   document.querySelectorAll('#form-ficha-tecnica-item .ficha-tecnica-linha:not([data-ligada])').forEach(linha => {
     linha.dataset.ligada = '1';
     const base = linha.dataset.quantidadeBase;
     _prepararUnidadeLinhaFicha(linha, base === '' ? null : parseFloat(base));
-    linha.querySelector('[data-acao="remover-linha-ficha-tecnica"]').addEventListener('click', () => linha.remove());
+    linha.querySelector('[data-acao="remover-linha-ficha-tecnica"]').addEventListener('click', () => {
+      linha.remove();
+      _atualizarCustosFichaTecnica();
+    });
     // Trocou o insumo: a quantidade digitada fica, a unidade volta pro padrão dele.
     linha.querySelector('.ficha-tecnica-select-insumo').addEventListener('change', () => {
       const valor = linha.querySelector('.ficha-tecnica-input-quantidade').value;
       _prepararUnidadeLinhaFicha(linha, null);
       linha.querySelector('.ficha-tecnica-input-quantidade').value = valor;
+      _atualizarCustosFichaTecnica();
     });
+    linha.querySelector('.ficha-tecnica-input-quantidade').addEventListener('input', _atualizarCustosFichaTecnica);
     const seletor = linha.querySelector('.ficha-tecnica-select-unidade');
     seletor.addEventListener('change', () => {
       _converterAoTrocarUnidade(seletor, linha.querySelector('.ficha-tecnica-input-quantidade'), _insumoDaLinhaFicha(linha));
+      _atualizarCustosFichaTecnica();
     });
   });
+  _atualizarCustosFichaTecnica();
 }
 
 async function abrirModalFichaTecnicaItem(itemId) {
@@ -13428,6 +13486,7 @@ async function abrirModalFichaTecnicaItem(itemId) {
   _wireLinhasFichaTecnica();
 
   document.getElementById('modal-ficha-tecnica-item').style.display = 'flex';
+  _atualizarCustosFichaTecnica();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
