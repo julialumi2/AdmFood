@@ -658,7 +658,9 @@ function renderHistoricoDiario(diario) {
             </td>
             <td>${item.unidade}</td>
             <td>${item.pedidos}</td>
-            <td>R$ ${item.ticket}</td>
+            <td>R$ ${item.ticket}${item.presencialSemQuantidade
+              ? `<span class="ticket-incompleto" title="Tem R$ ${_formatarMoedaBR(item.presencialSemQuantidade)} de venda presencial lançada sem quantidade: esse valor entra no faturamento mas não tem pedido, então o ticket do dia fica maior do que foi">*</span>`
+              : ''}</td>
             <td class="font-bold">R$ ${item.faturamento}</td>
           </tr>
         `;
@@ -12399,6 +12401,7 @@ let fichaTecnicaProdutos = [];
 let fichaTecnicaComplementos = [];
 let fichaTecnicaMisturas = [];
 let fichaTecnicaInsumosDisponiveis = [];
+let fichaTecnicaAssinatura = null;
 let fichaTecnicaEditandoItemId = null;
 const fichaTecnicaExpandidos = new Set();
 // Complemento com o nome aberto pra edição (lápis ao lado do nome).
@@ -13808,6 +13811,9 @@ async function abrirModalFichaTecnicaItem(itemId) {
     return;
   }
   fichaTecnicaInsumosDisponiveis = dados.insumosDisponiveis;
+  // Guarda como a ficha estava ao abrir: se alguém salvar no meio, o Salvar
+  // é recusado em vez de apagar o trabalho do outro (QA 22/09).
+  fichaTecnicaAssinatura = dados.assinatura || null;
   if (!fichaTecnicaInsumosDisponiveis.length) {
     alert('Cadastre pelo menos um insumo no Estoque antes de montar a ficha técnica.');
     return;
@@ -13936,7 +13942,9 @@ document.getElementById('form-ficha-tecnica-item')?.addEventListener('submit', a
   if (!fichaTecnicaEditandoItemId) return;
 
   const insumos = _linhasDaListaFichaTecnica('ficha-tecnica-item-linhas');
-  const corpo = { loja: fichaTecnicaLojaAtual, insumos };
+  // A assinatura de quando o modal abriu vai junto: o servidor recusa se
+  // alguém salvou essa ficha no meio (QA 22/09).
+  const corpo = { loja: fichaTecnicaLojaAtual, insumos, assinatura: fichaTecnicaAssinatura };
   // Seção escondida (complemento) não manda a lista: a embalagem gravada fica.
   if (document.getElementById('ficha-tecnica-embalagem-secao').style.display !== 'none') {
     corpo.embalagemViagem = _linhasDaListaFichaTecnica('ficha-tecnica-embalagem-linhas');
@@ -13960,6 +13968,15 @@ ${lista}
 
 Salvar assim mesmo?`)) return false;
       return enviar(true);
+    }
+    // Outra pessoa salvou a mesma ficha enquanto esta estava aberta.
+    if (resposta.status === 409 && dados.conflito) {
+      alert(dados.erro);
+      const itemId = fichaTecnicaEditandoItemId;
+      fichaTecnicaInsumosCache.delete(itemId);
+      fecharModalFichaTecnicaItem();
+      await abrirModalFichaTecnicaItem(itemId);
+      return false;
     }
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
     return true;

@@ -4,6 +4,7 @@ Evita ter que buscar pedido por pedido a cada carregamento da página —
 a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 """
 
+import hashlib
 import math
 import os
 import re
@@ -3579,6 +3580,19 @@ def _substituir_insumos_do_item(tabela, item_id, loja, links):
                     f"INSERT INTO {tabela} (item_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
                     (item_id, link["insumoId"], loja_do_grupo, link.get("quantidade")),
                 )
+
+
+def assinatura_da_ficha(item_id, loja):
+    """Impressão digital do que está gravado pro item nessa loja (ficha +
+    embalagem). A tela recebe isso ao abrir e devolve no Salvar: se não
+    bater, alguém mexeu no meio e a gravação é recusada — antes o salvar
+    apagava tudo e inseria a lista da tela, então o último a salvar
+    apagava a receita do outro sem ninguém ver (QA 22/09)."""
+    partes = []
+    for tabela in ("ficha_tecnica", "embalagem_viagem"):
+        for link in _buscar_insumos_do_item(tabela, item_id, loja):
+            partes.append(f"{tabela}:{link['insumo_id']}:{link['quantidade']}")
+    return hashlib.sha1("|".join(sorted(partes)).encode("utf-8")).hexdigest()[:12]
 
 
 def buscar_ficha_tecnica_item(item_id, loja):

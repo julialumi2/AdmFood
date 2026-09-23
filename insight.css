@@ -227,3 +227,13 @@
 }
 
 .link-detalhe:hover { text-decoration: underline; }
+
+/* Ticket do dia com venda presencial lançada sem quantidade (QA 22/09): o
+   valor entra no faturamento e nenhum pedido entra, então o ticket sai maior
+   do que foi de verdade. */
+.ticket-incompleto {
+  margin-left: 2px;
+  color: var(--warning-texto);
+  font-weight: 700;
+  cursor: help;
+}

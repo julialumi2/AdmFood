@@ -84,6 +84,7 @@ from backend.armazenamento import (
     listar_complementos_por_loja,
     definir_ficha_tecnica,
     buscar_ficha_tecnica_item,
+    assinatura_da_ficha,
     definir_embalagem_viagem,
     buscar_embalagem_viagem_item,
     salvar_custo_item_cardapio,
@@ -820,6 +821,11 @@ UNIDADES_COM_PRESENCIAL = {"Hamburgueria Artesanos", "Tradiça ZN"}
 
 
 def _aplicar_presencial(linhas, linhas_presencial):
+    """Soma a venda presencial lançada à mão no dia da loja. Lançamento sem
+    quantidade entra no faturamento mas não tem pedido pra somar, e o ticket
+    médio do dia (faturamento ÷ pedidos) sai inflado — a linha passa a
+    carregar `presencialSemQuantidade` pra tela poder marcar isso em vez de
+    mostrar um ticket que ninguém consegue explicar (QA 22/09)."""
     por_chave = {(l["unidade"], l["dia"]): l for l in linhas}
     for p in linhas_presencial:
         chave = (p["unidade"], p["dia"])
@@ -832,6 +838,8 @@ def _aplicar_presencial(linhas, linhas_presencial):
                 linha["faturamento_dia"] / linha["quantidade_pedidos"]
                 if linha["quantidade_pedidos"] else 0.0
             )
+            if not qtd_presencial and p["valor"]:
+                linha["presencial_sem_quantidade"] = round(p["valor"], 2)
         else:
             por_chave[chave] = {
                 "unidade": p["unidade"],
@@ -839,6 +847,7 @@ def _aplicar_presencial(linhas, linhas_presencial):
                 "faturamento_dia": p["valor"],
                 "ticket_medio": p["valor"] / qtd_presencial if qtd_presencial else 0.0,
                 "quantidade_pedidos": qtd_presencial,
+                "presencial_sem_quantidade": round(p["valor"], 2) if not qtd_presencial and p["valor"] else None,
             }
     return list(por_chave.values())
 
@@ -999,6 +1008,10 @@ def _formatar_diario(linhas):
             "pedidos": _formatar_numero(l["quantidade_pedidos"]),
             "ticket": _formatar_moeda(l["ticket_medio"]),
             "faturamento": _formatar_moeda(l["faturamento_dia"]),
+            # Venda presencial lançada sem quantidade: o valor entra no
+            # faturamento e nenhum pedido entra, então o ticket do dia fica
+            # inflado — a tela marca em vez de mentir (QA 22/09).
+            "presencialSemQuantidade": l.get("presencial_sem_quantidade"),
         }
         for l in linhas
     ]
@@ -2822,6 +2835,8 @@ def api_buscar_ficha_tecnica_item(item_id):
         "insumos": formatar(buscar_ficha_tecnica_item(item_id, loja)),
         "embalagemViagem": formatar(buscar_embalagem_viagem_item(item_id, loja)),
         "insumosDisponiveis": insumos_disponiveis,
+        # Volta no Salvar pra detectar que alguém mexeu no meio (QA 22/09).
+        "assinatura": assinatura_da_ficha(item_id, loja),
     })
 
 
@@ -2925,6 +2940,16 @@ def api_definir_ficha_tecnica(item_id):
     loja = _loja_no_escopo(dados.get('loja'))
     if loja not in LOJAS:
         return jsonify({"erro": "Loja inválida."}), 400
+
+    # Alguém salvou essa mesma ficha enquanto o modal estava aberto: gravar
+    # por cima apagaria a receita da outra pessoa sem aviso (QA 22/09).
+    assinatura_recebida = dados.get('assinatura')
+    if assinatura_recebida and assinatura_recebida != assinatura_da_ficha(item_id, loja):
+        return jsonify({
+            "erro": "Essa ficha mudou enquanto você editava — alguém salvou antes. Feche e abra de novo pra ver "
+                    "o que está valendo agora, senão o trabalho da outra pessoa é apagado.",
+            "conflito": True,
+        }), 409
 
     gravacoes = []
     for chave, gravar in (('insumos', definir_ficha_tecnica), ('embalagemViagem', definir_embalagem_viagem)):

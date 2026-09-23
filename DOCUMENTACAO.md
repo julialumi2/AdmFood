@@ -4631,3 +4631,18 @@ mexem em número que decide compra.
   avisa: "20 unidade(s) vendidas não entram nesta conta porque o produto não
   está na lista de preços desta loja: BATATA MÉDIA (8)…", e o subtítulo mostra
   "+20 fora da lista de preços".
+
+### 6.62 Ficha com trava de conflito e ticket honesto no presencial
+
+- **Duas pessoas editando a mesma ficha técnica.** O salvar apagava tudo e
+  inseria a lista da tela, sem versão: quem salvasse por último apagava a
+  receita do outro, sem ninguém saber. Agora o GET devolve uma assinatura do
+  que está gravado (ficha + embalagem), o Salvar manda ela de volta e, se não
+  bater, o servidor recusa com 409 — "Essa ficha mudou enquanto você editava
+  — alguém salvou antes" — e a tela reabre o modal já com o que está valendo.
+- **Venda presencial lançada sem quantidade** continua entrando (ela usa isso
+  quando não tem a contagem de pedidos), mas o dia passa a carregar
+  `presencialSemQuantidade`: a tabela de Vendas Diárias mostra um asterisco no
+  ticket com "tem R$ 900,00 de venda presencial lançada sem quantidade: esse
+  valor entra no faturamento mas não tem pedido, então o ticket do dia fica
+  maior do que foi". Antes o ticket saía inflado sem nenhuma marca.
