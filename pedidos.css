@@ -791,3 +791,227 @@ body.dark-mode {
 @media (prefers-reduced-motion: reduce) {
   .receb-itens-total svg { transition: none; }
 }
+
+/* Recebimento no celular (QA 22/09): a fila era uma tabela de 6 colunas que
+   rolava pro lado, com o "Confirmar recebimento" escondido na última — e é a
+   tela que a operação usa de pé, na porta da loja, com uma mão só. Abaixo de
+   720px cada pedido vira um card, com o botão ocupando a largura toda. */
+@media (max-width: 720px) {
+  .recebimentos-tabela,
+  .recebimentos-tabela tbody,
+  .recebimentos-tabela tr,
+  .recebimentos-tabela td { display: block; width: 100%; }
+
+  .recebimentos-tabela thead { display: none; }
+
+  .recebimentos-tabela .receb-linha {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+
+  /* Card aberto e o romaneio dele viram uma peça só. */
+  .recebimentos-tabela .receb-linha.aberta {
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: 0;
+  }
+
+  .recebimentos-tabela .receb-itens-linha {
+    display: block;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    margin-bottom: var(--space-3);
+  }
+
+  .recebimentos-tabela .receb-itens-linha td { padding: 0 var(--space-4) var(--space-3); }
+
+  .recebimentos-tabela td {
+    border: 0;
+    padding: 5px 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    text-align: right;
+  }
+
+  .recebimentos-tabela td::before {
+    content: attr(data-rotulo);
+    flex: none;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: left;
+  }
+
+  /* Fornecedor é o título do card: sem rótulo e sem alinhar à direita. */
+  .recebimentos-tabela td.receb-td-fornecedor {
+    display: block;
+    padding: 0 0 var(--space-2);
+    text-align: left;
+  }
+
+  .recebimentos-tabela td.receb-td-fornecedor::before { content: none; }
+
+  .recebimentos-tabela td.receb-td-fornecedor .pedido-fornecedor { font-size: 1.05rem; }
+
+  /* O que a pessoa veio fazer aqui: botão largo, no fim do card. */
+  .recebimentos-tabela td.col-acao-receb {
+    display: block;
+    padding: var(--space-3) 0 0;
+    margin-top: var(--space-2);
+    border-top: 1px dashed var(--border-color);
+  }
+
+  .recebimentos-tabela td.col-acao-receb::before { content: none; }
+
+  .recebimentos-tabela td.col-acao-receb .btn-primary-sm {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    font-size: 1rem;
+  }
+
+  .recebimentos-tabela td.col-acao-receb .acoes-linha { justify-content: flex-start; }
+
+  /* Linha de "nenhum pedido": sem rótulo e sem card. */
+  .recebimentos-tabela .pedidos-vazio { text-align: left; }
+  .recebimentos-tabela .pedidos-vazio::before { content: none; }
+}
+
+/* Entrega incompleta (QA 22/09): antes, zerar a quantidade fechava o pedido
+   como recebido e apagava o que tinha sido pedido. Agora a tela mostra o que
+   faltou e pergunta o que fazer. */
+.recebimento-falta {
+  margin: var(--space-3) 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--warning-texto);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+}
+
+.recebimento-falta-titulo {
+  margin: 0 0 var(--space-2);
+  font-weight: 700;
+  color: var(--warning-texto);
+}
+
+.recebimento-falta-lista {
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recebimento-falta-lista li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.9rem;
+}
+
+.recebimento-falta-lista strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.recebimento-falta-ajuda {
+  margin: 0 0 var(--space-3);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.recebimento-falta-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* "Já chegaram X de Y" embaixo da quantidade, na segunda entrega */
+.recebimento-ja-veio {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--warning-texto);
+}
+
+.recebimento-select-insumo {
+  width: 100%;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.receb-parcial {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--warning-texto);
+}
+
+/* O modal é preenchido de pé, na porta da loja: no celular os campos deixam
+   de ficar dois a dois e a tabela de itens vira card por item (QA 22/09). */
+@media (max-width: 720px) {
+  #modal-confirmar-recebimento .form-group-row { grid-template-columns: 1fr; gap: 0; }
+
+  #modal-confirmar-recebimento .inventory-table,
+  #modal-confirmar-recebimento .inventory-table tbody,
+  #modal-confirmar-recebimento .inventory-table tr,
+  #modal-confirmar-recebimento .inventory-table td { display: block; width: 100%; }
+
+  #modal-confirmar-recebimento .inventory-table thead { display: none; }
+
+  #modal-confirmar-recebimento .inventory-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  #modal-confirmar-recebimento .inventory-table td {
+    border: 0;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  #modal-confirmar-recebimento .inventory-table td::before {
+    content: attr(data-rotulo);
+    flex: none;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  #modal-confirmar-recebimento .inventory-table td.font-bold {
+    display: block;
+    font-size: 1rem;
+    padding-bottom: var(--space-2);
+  }
+
+  #modal-confirmar-recebimento .inventory-table td.font-bold::before { content: none; }
+
+  #modal-confirmar-recebimento .recebimento-campo-unidade input { width: 100%; padding: 12px; font-size: 1rem; }
+
+  #modal-confirmar-recebimento .modal-actions { flex-direction: column-reverse; }
+  #modal-confirmar-recebimento .modal-actions button { width: 100%; padding: 14px; }
+  .recebimento-falta-acoes button { width: 100%; }
+}

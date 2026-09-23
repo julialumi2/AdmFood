@@ -8682,6 +8682,9 @@ document.getElementById('btn-insumos-loja-salvar')?.addEventListener('click', as
 // diferente, e isso já atualiza o estoque de verdade) ---
 let recebimentosLista = [];
 let recebimentoAtual = null; // detalhe completo (com itens) do pedido aberto no modal
+// Entrega incompleta (QA 22/09): null = ainda não perguntamos; true = deixar o
+// resto pendente; false = encerrar o pedido e cobrar o que faltou.
+let recebimentoManterPendente = null;
 
 // "2026-09-14T15:01:07" → "14/09/2026", direto do texto: new Date() num
 // "AAAA-MM-DD" sem hora lê como UTC e mostraria o dia anterior.
@@ -8857,6 +8860,19 @@ function _itensCelulaRecebimentoHTML(p, aberto) {
     </button>`;
 }
 
+// Na fila, o que interessa é o que ainda tem que chegar; no histórico, o que
+// chegou. Entrega parcial mostra os dois (QA 22/09).
+function _quantidadeRomaneioRecebimento(item) {
+  const pedida = item.quantidadePedida != null ? item.quantidadePedida : item.quantidade;
+  const recebida = item.quantidadeRecebida || 0;
+  if (recebimentosModo === 'recebidos' || recebida <= 0) {
+    return _formatarQuantidade(recebimentosModo === 'recebidos' ? item.quantidade : pedida, item.unidadeMedida);
+  }
+  const falta = Math.round((pedida - recebida) * 1000) / 1000;
+  if (falta <= 0.001) return _formatarQuantidade(recebida, item.unidadeMedida);
+  return `falta ${_formatarQuantidade(falta, item.unidadeMedida)} de ${_formatarQuantidade(pedida, item.unidadeMedida)}`;
+}
+
 function _romaneioRecebimentoHTML(p) {
   const itens = p.itens || [];
   return `
@@ -8869,7 +8885,7 @@ function _romaneioRecebimentoHTML(p) {
               <li>
                 <span class="receb-romaneio-nome" title="${escaparHtml(item.nome)}">${escaparHtml(item.nome)}</span>
                 <span class="receb-romaneio-pontos" aria-hidden="true"></span>
-                <span class="receb-romaneio-qtd">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</span>
+                <span class="receb-romaneio-qtd">${_quantidadeRomaneioRecebimento(item)}</span>
               </li>`).join('')}
           </ul>
         </div>
@@ -8877,21 +8893,26 @@ function _romaneioRecebimentoHTML(p) {
     </tr>`;
 }
 
+// No celular cada linha vira um card (CSS em pedidos.css, ≤720px): é a tela
+// que a operação usa de pé, na porta da loja, e a tabela de 6 colunas rolava
+// pro lado com o "Confirmar recebimento" escondido na última (QA 22/09). O
+// `data-rotulo` é o título de cada campo dentro do card.
 function _linhaAguardandoHTML(p, aberto) {
   return `
     <tr class="receb-linha${aberto ? ' aberta' : ''}" data-id="${p.id}">
-      <td>
+      <td class="receb-td-fornecedor">
         <span class="pedido-fornecedor">${escaparHtml(p.fornecedorNome)}</span>
         <span class="pedido-numero">Pedido nº ${p.id}</span>
       </td>
-      <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
-      <td>
+      <td data-rotulo="Loja"><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
+      <td data-rotulo="Pedido em">
         <span class="receb-data">${_dataBR(p.criadoEm)}</span>
+        ${p.parcial ? '<span class="receb-parcial">entrega parcial: falta chegar o resto</span>' : ''}
         ${p.atrasado ? `<span class="receb-atraso">enviado ${_haQuantoTempo(p.diasEsperando)}</span>` : ''}
         ${p.pendenteDeEnvio ? '<span class="receb-nao-enviado">ainda não enviado</span>' : ''}
       </td>
-      <td>${_itensCelulaRecebimentoHTML(p, aberto)}</td>
-      <td class="col-dinheiro"><strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong></td>
+      <td data-rotulo="Itens">${_itensCelulaRecebimentoHTML(p, aberto)}</td>
+      <td class="col-dinheiro" data-rotulo="Valor"><strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong></td>
       <td class="col-acao-receb">
         <button type="button" class="btn-primary-sm" data-acao="confirmar-recebimento" data-id="${p.id}">Confirmar recebimento</button>
       </td>
@@ -8901,21 +8922,21 @@ function _linhaAguardandoHTML(p, aberto) {
 function _linhaRecebidoHTML(p, aberto, podeVerNota) {
   return `
     <tr class="receb-linha${aberto ? ' aberta' : ''}" data-id="${p.id}">
-      <td>
+      <td class="receb-td-fornecedor">
         <span class="pedido-fornecedor">${escaparHtml(p.fornecedorNome)}</span>
         <span class="pedido-numero">${p.compraFora ? 'Compra por fora' : `Pedido nº ${p.id}`}</span>
       </td>
-      <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
-      <td>
+      <td data-rotulo="Loja"><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
+      <td data-rotulo="Recebido em">
         <span class="receb-data">${_dataBR(p.recebidoEm)}</span>
         ${p.recebidoPor ? `<span class="receb-por">por ${escaparHtml(p.recebidoPor)}</span>` : ''}
       </td>
-      <td>${_itensCelulaRecebimentoHTML(p, aberto)}</td>
-      <td class="col-dinheiro">
+      <td data-rotulo="Itens">${_itensCelulaRecebimentoHTML(p, aberto)}</td>
+      <td class="col-dinheiro" data-rotulo="Valor">
         <strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong>
         ${p.divergenciaNf ? '<span class="receb-nf-diferente" title="O valor da nota não bateu com o dos itens">nota com valor diferente</span>' : ''}
       </td>
-      <td class="col-acao-receb"><div class="acoes-linha">
+      <td class="col-acao-receb" data-rotulo="Nota fiscal"><div class="acoes-linha">
         ${p.numeroNf ? `<span class="text-muted">NF ${escaparHtml(p.numeroNf)}</span>` : ''}
         ${p.temNotaFiscal && podeVerNota ? `
           <a class="btn-acao-icone" href="/api/pedidos/${p.id}/nota-fiscal" target="_blank" rel="noopener" title="Ver nota fiscal" aria-label="Ver a nota fiscal do pedido nº ${p.id}">
@@ -9029,21 +9050,52 @@ document.getElementById('recebimentos-busca')?.addEventListener('input', renderR
 // "9563" ao lado de uma coluna escrita "9,56 kg", e quem digitava 10 punha 10
 // gramas no estoque (QA 22/09). A conversão pra unidade do insumo é feita na
 // hora de enviar; o preço vira R$ por kg/L pelo mesmo motivo.
+// A "Qtd. pedida" da linha é o que ainda falta chegar: numa segunda entrega
+// (o resto que ficou pendente), o que já veio antes sai da conta (QA 22/09).
 function _linhaRecebimentoItemHTML(item) {
   const { rotulo, fator } = _escalaDeCusto(item.unidadeMedida);
-  const quantidade = Math.round((item.quantidade / fator) * 1000) / 1000;
+  const pedida = item.quantidadePedida != null ? item.quantidadePedida : item.quantidade;
+  const jaRecebida = item.quantidadeRecebida || 0;
+  const falta = Math.max(Math.round((pedida - jaRecebida) * 1000) / 1000, 0);
+  const quantidade = Math.round((falta / fator) * 1000) / 1000;
   const preco = Math.round(item.precoUnitario * fator * 100) / 100;
+  const emNumero = (valor) => (valor / fator).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
   return `
-    <tr data-insumo-id="${item.insumoId}" data-fator="${fator}">
-      <td class="font-bold">${escaparHtml(item.nome)}</td>
-      <td class="text-muted">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</td>
-      <td><div class="recebimento-campo-unidade">
+    <tr data-insumo-id="${item.insumoId}" data-fator="${fator}" data-nome="${escaparHtml(item.nome)}" data-falta="${quantidade}">
+      <td class="font-bold" data-rotulo="Insumo">${escaparHtml(item.nome)}</td>
+      <td class="text-muted" data-rotulo="Qtd. pedida">${emNumero(falta)} ${escaparHtml(rotulo)}
+        ${jaRecebida > 0 ? `<span class="recebimento-ja-veio">já chegaram ${emNumero(jaRecebida)} de ${emNumero(pedida)}</span>` : ''}
+      </td>
+      <td data-rotulo="Qtd. recebida"><div class="recebimento-campo-unidade">
         <input type="number" step="any" min="0" class="recebimento-input-quantidade" value="${quantidade}">
         <span>${escaparHtml(rotulo)}</span>
       </div></td>
-      <td><div class="recebimento-campo-unidade">
+      <td data-rotulo="Preço unitário"><div class="recebimento-campo-unidade">
         <input type="number" step="any" min="0" class="recebimento-input-preco" value="${preco}">
         <span>R$/${escaparHtml(rotulo)}</span>
+      </div></td>
+    </tr>
+  `;
+}
+
+// "+ item que veio a mais": o modal não deixava acrescentar linha, e quem
+// recebia não tinha onde lançar o que chegou fora do pedido — só sobrava
+// "Lançar compra por fora", que a operação nem enxerga (QA 22/09).
+function _linhaRecebimentoItemNovoHTML(insumos) {
+  const opcoes = insumos.map((i) => `<option value="${i.id}" data-unidade="${escaparHtml(i.unidadeMedida || 'un')}">${escaparHtml(i.nome)}</option>`).join('');
+  return `
+    <tr class="recebimento-linha-nova" data-insumo-id="" data-fator="1" data-falta="0">
+      <td data-rotulo="Insumo">
+        <select class="recebimento-select-insumo"><option value="">Escolha o insumo que veio a mais...</option>${opcoes}</select>
+      </td>
+      <td class="text-muted" data-rotulo="Qtd. pedida">não estava no pedido</td>
+      <td data-rotulo="Qtd. recebida"><div class="recebimento-campo-unidade">
+        <input type="number" step="any" min="0" class="recebimento-input-quantidade" value="">
+        <span class="recebimento-unidade-nova">un</span>
+      </div></td>
+      <td data-rotulo="Preço unitário"><div class="recebimento-campo-unidade">
+        <input type="number" step="any" min="0" class="recebimento-input-preco" value="">
+        <span class="recebimento-unidade-preco-nova">R$/un</span>
       </div></td>
     </tr>
   `;
@@ -9053,11 +9105,21 @@ function _atualizarValorCalculadoRecebimento() {
   const linhas = document.querySelectorAll('#recebimento-itens-body tr');
   let total = 0;
   linhas.forEach((linha) => {
-    const quantidade = parseFloat(linha.querySelector('.recebimento-input-quantidade').value) || 0;
-    const preco = parseFloat(linha.querySelector('.recebimento-input-preco').value) || 0;
+    const campoQuantidade = linha.querySelector('.recebimento-input-quantidade');
+    const campoPreco = linha.querySelector('.recebimento-input-preco');
+    if (!campoQuantidade || !campoPreco) return;
+    const quantidade = parseFloat(campoQuantidade.value) || 0;
+    const preco = parseFloat(campoPreco.value) || 0;
     total += quantidade * preco;
   });
   document.getElementById('recebimento-valor-calculado').textContent = `R$ ${_formatarMoedaBR(Math.round(total * 100) / 100)}`;
+  // Mexeu na quantidade depois de ver a pergunta da entrega incompleta: a
+  // conta mudou, então a escolha é feita de novo.
+  const bloco = document.getElementById('recebimento-falta');
+  if (bloco && !bloco.hidden) {
+    bloco.hidden = true;
+    recebimentoManterPendente = null;
+  }
 }
 
 document.getElementById('btn-pedido-anexar-nota')?.addEventListener('click', () => {
@@ -9116,10 +9178,10 @@ async function abrirModalRecebimento(pedidoId) {
     document.getElementById('recebimento-nota-arquivo').value = '';
     document.getElementById('recebimento-erro').style.display = 'none';
     document.getElementById('recebimento-itens-body').innerHTML = dados.itens.map(_linhaRecebimentoItemHTML).join('');
+    recebimentoManterPendente = null;
+    document.getElementById('recebimento-falta').hidden = true;
 
-    document.querySelectorAll('#recebimento-itens-body .recebimento-input-quantidade, #recebimento-itens-body .recebimento-input-preco').forEach((input) => {
-      input.addEventListener('input', _atualizarValorCalculadoRecebimento);
-    });
+    _ligarCamposRecebimento();
     _atualizarValorCalculadoRecebimento();
 
     document.getElementById('modal-confirmar-recebimento').style.display = 'flex';
@@ -9129,13 +9191,74 @@ async function abrirModalRecebimento(pedidoId) {
   }
 }
 
+// Os campos são religados a cada linha nova ("+ item que veio a mais").
+function _ligarCamposRecebimento() {
+  document.querySelectorAll('#recebimento-itens-body .recebimento-input-quantidade, #recebimento-itens-body .recebimento-input-preco').forEach((input) => {
+    input.removeEventListener('input', _atualizarValorCalculadoRecebimento);
+    input.addEventListener('input', _atualizarValorCalculadoRecebimento);
+  });
+}
+
+// O que falta pra completar o pedido, conferindo o que está digitado agora.
+function _faltasDoRecebimento() {
+  return Array.from(document.querySelectorAll('#recebimento-itens-body tr')).map((linha) => {
+    const campo = linha.querySelector('.recebimento-input-quantidade');
+    const esperado = parseFloat(linha.dataset.falta) || 0;
+    const recebido = campo ? (parseFloat(campo.value) || 0) : 0;
+    const unidade = linha.querySelector('.recebimento-campo-unidade span')?.textContent || '';
+    return { nome: linha.dataset.nome || '', falta: Math.round((esperado - recebido) * 1000) / 1000, unidade };
+  }).filter((linha) => linha.falta > 0.001);
+}
+
 function fecharModalRecebimento() {
   document.getElementById('modal-confirmar-recebimento').style.display = 'none';
   recebimentoAtual = null;
+  recebimentoManterPendente = null;
+  const bloco = document.getElementById('recebimento-falta');
+  if (bloco) bloco.hidden = true;
 }
 
 document.getElementById('btn-recebimento-fechar')?.addEventListener('click', fecharModalRecebimento);
 document.getElementById('btn-recebimento-cancelar')?.addEventListener('click', fecharModalRecebimento);
+
+// Escolha da entrega incompleta: os dois botões respondem a mesma pergunta e
+// mandam o formulário de novo, agora com a decisão tomada.
+document.getElementById('btn-recebimento-pendente')?.addEventListener('click', () => {
+  recebimentoManterPendente = true;
+  document.getElementById('form-confirmar-recebimento').requestSubmit();
+});
+document.getElementById('btn-recebimento-encerrar')?.addEventListener('click', () => {
+  recebimentoManterPendente = false;
+  document.getElementById('form-confirmar-recebimento').requestSubmit();
+});
+
+document.getElementById('btn-recebimento-item-a-mais')?.addEventListener('click', async () => {
+  const botao = document.getElementById('btn-recebimento-item-a-mais');
+  botao.disabled = true;
+  try {
+    const insumos = (await _carregarInsumosParaPreco())
+      .filter((i) => i.porLoja?.[recebimentoAtual?.loja]?.aplica !== false)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    document.getElementById('recebimento-itens-body').insertAdjacentHTML('beforeend', _linhaRecebimentoItemNovoHTML(insumos));
+    _ligarCamposRecebimento();
+    const linha = document.querySelector('#recebimento-itens-body tr.recebimento-linha-nova:last-child');
+    linha.querySelector('.recebimento-select-insumo').addEventListener('change', (evento) => {
+      const opcao = evento.target.selectedOptions[0];
+      const escala = _escalaDeCusto(opcao?.dataset.unidade || 'un');
+      linha.dataset.insumoId = evento.target.value;
+      linha.dataset.fator = escala.fator;
+      linha.dataset.nome = opcao?.textContent || '';
+      linha.querySelector('.recebimento-unidade-nova').textContent = escala.rotulo;
+      linha.querySelector('.recebimento-unidade-preco-nova').textContent = `R$/${escala.rotulo}`;
+    });
+    linha.querySelector('.recebimento-select-insumo').focus();
+  } catch (erro) {
+    console.error('Falha ao carregar os insumos:', erro);
+    alert('Não foi possível carregar a lista de insumos agora.');
+  } finally {
+    botao.disabled = false;
+  }
+});
 
 document.getElementById('form-confirmar-recebimento')?.addEventListener('submit', async (evento) => {
   evento.preventDefault();
@@ -9143,14 +9266,42 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
   const erro = document.getElementById('recebimento-erro');
   erro.style.display = 'none';
 
-  const itens = Array.from(document.querySelectorAll('#recebimento-itens-body tr')).map((linha) => {
-    const fator = parseFloat(linha.dataset.fator) || 1;
-    return {
-      insumoId: parseInt(linha.dataset.insumoId, 10),
-      quantidade: (parseFloat(linha.querySelector('.recebimento-input-quantidade').value) || 0) * fator,
-      precoUnitario: (parseFloat(linha.querySelector('.recebimento-input-preco').value) || 0) / fator,
-    };
-  });
+  const itens = Array.from(document.querySelectorAll('#recebimento-itens-body tr'))
+    .map((linha) => {
+      const fator = parseFloat(linha.dataset.fator) || 1;
+      const campoQuantidade = linha.querySelector('.recebimento-input-quantidade');
+      const campoPreco = linha.querySelector('.recebimento-input-preco');
+      if (!campoQuantidade || !campoPreco || !linha.dataset.insumoId) return null;
+      return {
+        insumoId: parseInt(linha.dataset.insumoId, 10),
+        quantidade: (parseFloat(campoQuantidade.value) || 0) * fator,
+        precoUnitario: (parseFloat(campoPreco.value) || 0) / fator,
+      };
+    })
+    .filter(Boolean);
+
+  // Linha de "item que veio a mais" deixada em branco não vai pro servidor,
+  // mas linha com quantidade e sem insumo é erro de preenchimento.
+  const semInsumo = Array.from(document.querySelectorAll('#recebimento-itens-body tr.recebimento-linha-nova'))
+    .some((linha) => !linha.dataset.insumoId && (parseFloat(linha.querySelector('.recebimento-input-quantidade')?.value) || 0) > 0);
+  if (semInsumo) {
+    erro.textContent = 'Escolha o insumo da linha que você acrescentou, ou apague a quantidade dela.';
+    erro.style.display = '';
+    return;
+  }
+
+  // Veio menos do que foi pedido: antes zerar a quantidade fechava o pedido e
+  // apagava o que tinha sido pedido, sem pendência pra cobrar (QA 22/09).
+  const faltas = _faltasDoRecebimento();
+  const blocoFalta = document.getElementById('recebimento-falta');
+  if (faltas.length && recebimentoManterPendente === null) {
+    document.getElementById('recebimento-falta-lista').innerHTML = faltas.map((f) => `
+      <li><span>${escaparHtml(f.nome)}</span><strong>faltam ${f.falta.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(f.unidade)}</strong></li>
+    `).join('');
+    blocoFalta.hidden = false;
+    blocoFalta.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return;
+  }
 
   // Confirmar duas vezes somava o estoque duas vezes (QA 22/09): o botão trava
   // e avisa que está confirmando. O servidor também recusa a segunda.
@@ -9170,6 +9321,7 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
         recebidoEm: document.getElementById('recebimento-data').value,
         valorNf: parseFloat(document.getElementById('recebimento-valor-nf').value),
         numeroNf: document.getElementById('recebimento-numero-nf').value.trim(),
+        manterPendente: recebimentoManterPendente === true,
         itens,
       }),
     });
@@ -9183,10 +9335,17 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
 
     fecharModalRecebimento();
     await carregarRecebimentos();
+    // Entrega incompleta: a mensagem diz em que pé o pedido ficou (QA 22/09).
+    const faltou = (dados.faltando || []).length;
     alert([
+      dados.parcial
+        ? `Parte da entrega registrada — estoque atualizado. O pedido continua na fila esperando ${faltou === 1 ? 'o item que faltou' : `os ${faltou} itens que faltaram`}.`
+        : faltou
+          ? `Recebimento confirmado, estoque atualizado. O pedido foi encerrado com ${faltou === 1 ? '1 item faltando' : `${faltou} itens faltando`} — criei uma tarefa pra cobrar o fornecedor.`
+          : 'Recebimento confirmado — estoque atualizado.',
       dados.divergencia
-        ? 'Recebimento confirmado, estoque atualizado. O valor da Nota Fiscal não bateu com o calculado — uma tarefa foi criada no ClickUp pra acompanhar.'
-        : 'Recebimento confirmado — estoque atualizado.',
+        ? 'O valor da Nota Fiscal não bateu com o calculado — uma tarefa foi criada pra acompanhar.'
+        : '',
       anexoFalhou
         ? `A nota fiscal não subiu; ${_possoGerir() ? 'dá pra anexar depois abrindo o pedido' : 'avise o gerente pra anexar pela tela do pedido'}.`
         : '',

@@ -3995,6 +3995,8 @@ def _formatar_recebimento_resumo(pedido):
         "atrasado": dias is not None and dias > DIAS_ENTREGA_ATRASADA,
         "recebidoEm": pedido.get("recebido_em"),
         "recebidoPor": pedido.get("recebido_por"),
+        # Entrega parcial (QA 22/09): já chegou parte e o pedido segue na fila.
+        "parcial": any((item.get("quantidadeRecebida") or 0) > 0 for item in itens) and pedido["status"] != "recebido",
         "compraFora": bool(pedido.get("compra_fora")),
         "numeroNf": pedido.get("numero_nf"),
         "divergenciaNf": bool(pedido.get("divergencia_nf")),
@@ -4094,6 +4096,9 @@ def api_confirmar_recebimento(pedido_id):
     resultado = confirmar_recebimento_pedido(
         pedido_id, recebido_por, valor_nf, itens, data_recebimento.isoformat(),
         numero_nf=(dados.get('numeroNf') or '').strip() or None,
+        # "Deixar o resto pendente": veio menos do que foi pedido e o pedido
+        # continua na fila com o que falta (QA 22/09).
+        manter_pendente=bool(dados.get('manterPendente')),
     )
     # Quem barra de verdade a segunda confirmação é a própria gravação (a
     # checagem acima pode passar duas vezes ao mesmo tempo, com dois

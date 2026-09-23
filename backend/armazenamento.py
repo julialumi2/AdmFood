@@ -1008,6 +1008,19 @@ def inicializar_banco():
             )
             """
         )
+        colunas_pedido_item = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra_item)").fetchall()}
+        if "quantidade_pedida" not in colunas_pedido_item:
+            # Recebimento parcial (QA 22/09): `quantidade` era sobrescrita
+            # pelo que chegou, então o que tinha sido PEDIDO se perdia e não
+            # dava pra saber o que faltou nem receber o resto depois.
+            conn.execute("ALTER TABLE pedido_compra_item ADD COLUMN quantidade_pedida REAL")
+            conn.execute("ALTER TABLE pedido_compra_item ADD COLUMN quantidade_recebida REAL NOT NULL DEFAULT 0")
+            conn.execute("UPDATE pedido_compra_item SET quantidade_pedida = quantidade")
+            # Pedido já recebido antes disso: o que está lá é o que chegou.
+            conn.execute(
+                "UPDATE pedido_compra_item SET quantidade_recebida = quantidade WHERE pedido_id IN "
+                "(SELECT id FROM pedido_compra WHERE status = 'recebido')"
+            )
         colunas_contagem_item = {c["name"] for c in conn.execute("PRAGMA table_info(contagem_item)").fetchall()}
         if "quantidade_compra" not in colunas_contagem_item:
             # Quanto comprar, decidido na Conferência (2026-09-21): NULL = a
@@ -5409,7 +5422,9 @@ def buscar_pedido(pedido_id):
         pedido = dict(linha)
         itens = conn.execute(
             """
-            SELECT pi.insumo_id, pi.quantidade, pi.preco_unitario, i.nome, i.unidade_medida
+            SELECT pi.insumo_id, pi.quantidade, pi.preco_unitario, i.nome, i.unidade_medida,
+                   COALESCE(pi.quantidade_pedida, pi.quantidade) AS quantidade_pedida,
+                   COALESCE(pi.quantidade_recebida, 0) AS quantidade_recebida
             FROM pedido_compra_item pi
             JOIN insumo i ON i.id = pi.insumo_id
             WHERE pi.pedido_id = ?
@@ -5568,7 +5583,10 @@ def listar_pedidos_pendentes_recebimento():
             SELECT pc.id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.whatsapp_enviado_em,
                    f.nome AS fornecedor_nome,
                    COUNT(pi.insumo_id) AS total_itens,
-                   COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS valor_total,
+                   -- O valor da fila é o que ainda tem que chegar: depois de
+                   -- uma entrega parcial, o que já veio sai da conta (QA 22/09).
+                   COALESCE(SUM(MAX(COALESCE(pi.quantidade_pedida, pi.quantidade)
+                                    - COALESCE(pi.quantidade_recebida, 0), 0) * pi.preco_unitario), 0) AS valor_total,
                    GROUP_CONCAT(i.nome, ', ') AS itens_nomes
             FROM pedido_compra pc
             JOIN fornecedor f ON f.id = pc.fornecedor_id
@@ -5623,19 +5641,32 @@ def _anexar_itens_do_pedido(conn, pedidos):
         lote = ids[inicio:inicio + 500]
         for linha in conn.execute(
             f"""
-            SELECT pi.pedido_id, i.nome, pi.quantidade, i.unidade_medida
+            SELECT pi.pedido_id, i.nome, pi.quantidade, i.unidade_medida,
+                   COALESCE(pi.quantidade_pedida, pi.quantidade) AS quantidade_pedida,
+                   COALESCE(pi.quantidade_recebida, 0) AS quantidade_recebida
             FROM pedido_compra_item pi JOIN insumo i ON i.id = pi.insumo_id
             WHERE pi.pedido_id IN ({",".join("?" * len(lote))})
             ORDER BY i.nome COLLATE NOCASE
             """,
             lote,
         ).fetchall():
-            por_id[linha["pedido_id"]]["itens"].append(
-                {"nome": linha["nome"], "quantidade": linha["quantidade"], "unidadeMedida": linha["unidade_medida"]}
-            )
+            por_id[linha["pedido_id"]]["itens"].append({
+                "nome": linha["nome"], "quantidade": linha["quantidade"],
+                "unidadeMedida": linha["unidade_medida"],
+                # Entrega parcial (QA 22/09): a fila mostra o que ainda falta,
+                # não o que já chegou.
+                "quantidadePedida": linha["quantidade_pedida"],
+                "quantidadeRecebida": linha["quantidade_recebida"],
+            })
 
 
-def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento=None, numero_nf=None):
+# Diferença que conta como "veio tudo": abaixo disso é arredondamento de
+# balança, não falta de mercadoria.
+TOLERANCIA_RECEBIMENTO = 0.001
+
+
+def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_recebimento=None,
+                                 numero_nf=None, manter_pendente=False):
     """Confirma que um pedido chegou — pedido real da Julia: é a única ação
     que efetivamente soma no estoque a partir de um pedido de compra (hoje
     "Avançar etapa" só rastreia estágio, e a entrada de verdade é manual,
@@ -5654,7 +5685,15 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
     `data_recebimento` ('AAAA-MM-DD'): o dia em que a mercadoria chegou,
     escolhido na tela (2026-09-16 — a loja confirma dias depois e o
     registro tem de ficar com o dia da entrega). A hora gravada é a da
-    confirmação; sem data, vale agora."""
+    confirmação; sem data, vale agora.
+
+    `manter_pendente` (QA 22/09): veio menos do que foi pedido e a loja quer
+    receber o resto depois. O que chegou entra no estoque, `quantidade_recebida`
+    acumula e o pedido CONTINUA na fila com o que falta, em vez de fechar como
+    recebido e apagar o que tinha sido pedido. Com False, o pedido fecha mesmo
+    faltando item — e nasce uma tarefa com a lista do que não veio, pra cobrar.
+    Item que veio a mais (não estava no pedido) entra como linha nova.
+    Devolve {"faltando": [...], "parcial": bool} além do que já devolvia."""
     pedido = buscar_pedido(pedido_id)
     if not pedido:
         return None
@@ -5663,37 +5702,119 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
     recebido_em = f"{data_recebimento}{agora[10:]}" if data_recebimento else agora
     valor_calculado = round(sum(float(item["quantidade"]) * float(item["precoUnitario"]) for item in itens), 2)
     divergencia = abs(valor_nf - valor_calculado) > 0.05
+    faltando = []
     with conexao() as conn:
-        # Marca como recebido ANTES de somar o estoque, e só se ainda não
-        # estiver recebido: era conferido numa consulta separada da gravação,
-        # então clique duplo (ou as duas pessoas ao mesmo tempo, com dois
-        # processos no ar) somava o estoque duas vezes (QA 22/09).
-        marcou = conn.execute(
-            """
-            UPDATE pedido_compra
-            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, numero_nf = ?,
-                divergencia_nf = ?, atualizado_em = ?
-            WHERE id = ? AND status != ?
-            """,
-            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf,
-             (numero_nf or '').strip() or pedido["numero_nf"], 1 if divergencia else 0, agora,
-             pedido_id, ESTAGIOS_PEDIDO[-1]),
-        ).rowcount
-        if not marcou:
+        # A trava de escrita vem antes de tudo: a conferência do "já foi
+        # recebido?" e a soma no estoque têm de acontecer juntas, senão dois
+        # cliques quase simultâneos somam duas vezes (QA 22/09).
+        travar_para_escrita(conn)
+        if conn.execute(
+            "SELECT 1 FROM pedido_compra WHERE id = ? AND status = ?", (pedido_id, ESTAGIOS_PEDIDO[-1])
+        ).fetchone():
             return {"jaRecebido": True}
 
+        pedidas = {
+            linha["insumo_id"]: linha
+            for linha in conn.execute(
+                "SELECT insumo_id, quantidade_pedida, quantidade_recebida FROM pedido_compra_item WHERE pedido_id = ?",
+                (pedido_id,),
+            )
+        }
+        recebidas = {}
         for item in itens:
             insumo_id = int(item["insumoId"])
             quantidade = float(item["quantidade"])
             preco_unitario = float(item["precoUnitario"])
-            conn.execute(
-                "UPDATE pedido_compra_item SET quantidade = ?, preco_unitario = ? WHERE pedido_id = ? AND insumo_id = ?",
-                (quantidade, preco_unitario, pedido_id, insumo_id),
-            )
+            anterior = pedidas.get(insumo_id)
+            acumulado = round((anterior["quantidade_recebida"] if anterior else 0) + quantidade, 4)
+            recebidas[insumo_id] = acumulado
+            if anterior is None:
+                # Veio item que não estava no pedido: entra como linha nova,
+                # com zero pedido — antes não tinha onde ser lançado e a loja
+                # ficava com mercadoria fora do sistema (QA 22/09).
+                conn.execute(
+                    "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario, "
+                    "quantidade_pedida, quantidade_recebida) VALUES (?, ?, ?, ?, 0, ?)",
+                    (pedido_id, insumo_id, quantidade, preco_unitario, acumulado),
+                )
+                conn.execute("INSERT OR IGNORE INTO insumo_loja (insumo_id, loja) VALUES (?, ?)", (insumo_id, pedido["loja"]))
+                conn.execute(
+                    "INSERT OR IGNORE INTO estoque_insumo (insumo_id, loja, quantidade_atual, estoque_minimo, atualizado_em) "
+                    "VALUES (?, ?, 0, 0, ?)",
+                    (insumo_id, pedido["loja"], agora),
+                )
+            else:
+                # `quantidade` só vira "o que chegou" quando o pedido fecha:
+                # enquanto ele está na fila, continua sendo o que foi pedido
+                # (é o que o detalhe e a mensagem de WhatsApp mostram).
+                conn.execute(
+                    "UPDATE pedido_compra_item SET quantidade_recebida = ?, preco_unitario = ? "
+                    "WHERE pedido_id = ? AND insumo_id = ?",
+                    (acumulado, preco_unitario, pedido_id, insumo_id),
+                )
+            # Só o que chegou AGORA entra no estoque (o acumulado já entrou
+            # nas entregas anteriores).
             conn.execute(
                 "UPDATE estoque_insumo SET quantidade_atual = quantidade_atual + ?, atualizado_em = ? WHERE insumo_id = ? AND loja = ?",
                 (quantidade, agora, insumo_id, pedido["loja"]),
             )
+
+        # O que foi pedido e ainda não chegou (item nem conferido conta inteiro).
+        nomes = {
+            linha["id"]: linha["nome"]
+            for linha in conn.execute("SELECT id, nome FROM insumo")
+        }
+        for insumo_id, linha in pedidas.items():
+            pedida = linha["quantidade_pedida"] if linha["quantidade_pedida"] is not None else 0
+            recebida = recebidas.get(insumo_id, linha["quantidade_recebida"] or 0)
+            if pedida - recebida > TOLERANCIA_RECEBIMENTO:
+                faltando.append({
+                    "insumoId": insumo_id, "nome": nomes.get(insumo_id, str(insumo_id)),
+                    "pedida": round(pedida, 3), "recebida": round(recebida, 3),
+                    "falta": round(pedida - recebida, 3),
+                })
+
+        if faltando and manter_pendente:
+            # Fica na fila: quem entregar o resto abre o mesmo pedido de novo.
+            conn.execute(
+                "UPDATE pedido_compra SET numero_nf = ?, atualizado_em = ? WHERE id = ?",
+                ((numero_nf or '').strip() or pedido["numero_nf"], agora, pedido_id),
+            )
+            return {"parcial": True, "faltando": faltando, "divergenciaNf": False}
+
+        # Fechando: a linha do pedido passa a valer o que realmente chegou
+        # (é daqui que saem custo, histórico e evolução do preço). Item que
+        # não veio fica zerado — a tarefa de cobrança guarda o que faltou.
+        conn.execute(
+            "UPDATE pedido_compra_item SET quantidade = COALESCE(quantidade_recebida, 0) WHERE pedido_id = ?",
+            (pedido_id,),
+        )
+        conn.execute(
+            """
+            UPDATE pedido_compra
+            SET status = ?, recebido_por = ?, recebido_em = ?, valor_nf = ?, numero_nf = ?,
+                divergencia_nf = ?, atualizado_em = ?
+            WHERE id = ?
+            """,
+            (ESTAGIOS_PEDIDO[-1], recebido_por, recebido_em, valor_nf,
+             (numero_nf or '').strip() or pedido["numero_nf"], 1 if divergencia else 0, agora, pedido_id),
+        )
+
+    if faltando:
+        # Encerrado com item faltando: sem essa tarefa, o que não veio sumia
+        # do sistema e ninguém cobrava o fornecedor (QA 22/09).
+        lista = "; ".join(f"{f['nome']}: faltaram {f['falta']:g} de {f['pedida']:g}" for f in faltando)
+        criar_tarefa(
+            titulo=f"Cobrar o que faltou — Pedido #{pedido_id} ({pedido['fornecedor_nome']}, {pedido['loja']})",
+            descricao=(
+                f"O pedido foi encerrado sem vir tudo. Faltou: {lista}. Recebido por {recebido_por} "
+                f"em {recebido_em[:16].replace('T', ' ')}. Falar com o fornecedor: cobrar a entrega "
+                f"do que faltou ou o acerto na próxima nota."
+            ),
+            categoria="Estoque",
+            prioridade="alta",
+            data_limite=(datetime.now() + timedelta(days=1)).date().isoformat(),
+        )
 
     if divergencia:
         # Com prazo pra amanhã e a loja no título: sem data_limite a tarefa
@@ -5712,7 +5833,7 @@ def confirmar_recebimento_pedido(pedido_id, recebido_por, valor_nf, itens, data_
             data_limite=(datetime.now() + timedelta(days=1)).date().isoformat(),
         )
 
-    return {"divergencia": divergencia, "valorCalculado": valor_calculado}
+    return {"divergencia": divergencia, "valorCalculado": valor_calculado, "faltando": faltando}
 
 
 # --- FORNECEDOR HOMOLOGADO E PEDIDO DIRETO (2026-09-16) ----------------------

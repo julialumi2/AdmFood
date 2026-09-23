@@ -4376,3 +4376,34 @@ grama).
   (`pedido_cancelado`, por token): o link antigo devolve 410 com "esse pedido
   foi cancelado em DD/MM — fale com a compradora" em vez de "Link inválido", e
   quando só uma loja caiu o link avisa qual, mantendo o resto do pedido.
+
+### 6.51 Recebimento no celular e entrega parcial (QA "altos", leva E — 2026-09-23)
+
+A tela de Recebimentos é a que a operação usa de pé, na porta da loja, com o
+celular na mão — e era a menos preparada pra isso.
+
+- **Fila em cards no celular.** Abaixo de 720px cada pedido vira um card
+  (fornecedor como título, loja, data, itens e valor com rótulo) e o
+  "Confirmar recebimento" ocupa a largura toda. Era uma tabela de 6 colunas
+  rolando pro lado, com o botão escondido na última.
+- **Modal empilhado.** Os campos deixam de ficar dois a dois e a tabela de
+  itens vira um card por item, com os campos grandes.
+- **Entrega parcial.** `pedido_compra_item` ganhou `quantidade_pedida` (o que
+  foi pedido, não muda mais) e `quantidade_recebida` (acumula o que chegou).
+  Quando vem menos, a tela lista o que faltou e pergunta:
+  - **"Deixar o resto pendente"** — o que chegou entra no estoque, o pedido
+    continua na fila marcado como "entrega parcial", o romaneio mostra
+    "falta 109 un de 209 un", o valor da fila (e o KPI "Valor a receber")
+    passa a contar só o que ainda tem que chegar, e a próxima conferência já
+    abre com o que falta.
+  - **"Encerrar e cobrar o que faltou"** — fecha o pedido e cria tarefa de
+    prioridade alta com a lista item a item ("Picles: faltaram 1.032 de
+    1.377"). Antes, zerar a quantidade fechava o pedido e apagava o que tinha
+    sido pedido: não sobrava pendência pra cobrar nem como receber o resto.
+  Mexer na quantidade depois de ver a pergunta refaz a escolha.
+- **"+ item que veio a mais"** acrescenta uma linha com busca de insumo: o que
+  chegou fora do pedido entra no estoque e na nota, sem depender do "Lançar
+  compra por fora" (que é de gestão e fica em outra tela).
+- **`quantidade` só vira "o que chegou" quando o pedido fecha** — enquanto ele
+  está na fila continua sendo o que foi pedido, que é o que o detalhe e a
+  mensagem de WhatsApp mostram.
