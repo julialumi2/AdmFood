@@ -1008,6 +1008,12 @@ def inicializar_banco():
             )
             """
         )
+        colunas_pedido = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra)").fetchall()}
+        if "confirmado_em" not in colunas_pedido:
+            # Aceite do fornecedor pelo link (QA 22/09): antes, avançar a
+            # etapa por dentro já fazia o link dele dizer "Pedido
+            # confirmado!", e não ficava registrado quem confirmou nem quando.
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN confirmado_em TEXT")
         colunas_convite = {c["name"] for c in conn.execute("PRAGMA table_info(cotacao_convite)").fetchall()}
         if "enviado_em" not in colunas_convite:
             # Quando o convite foi mandado pro fornecedor (QA 22/09): o selo
@@ -4185,6 +4191,11 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         protegidos = {
             l["id"] for l in conn.execute("SELECT id FROM item_cardapio WHERE protegido = 1").fetchall()
         }
+        # Nome de todo item vendido, pra poder dizer QUEM ficou de fora da
+        # conta por não estar na lista de preços desta loja (QA 22/09).
+        nomes_dos_itens = {
+            l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
+        }
         nao_casadas = conn.execute(
             f"""
             SELECT COUNT(*) AS vendas, COUNT(DISTINCT nome_produto) AS produtos
@@ -4231,10 +4242,18 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
             extra["com_custo"] += linha["quantidade"]
 
     itens = {}
+    # Venda de produto que não está na lista de preços dessa loja era
+    # descartada em silêncio (no Açaí, a categoria "Combo" é tirada de
+    # propósito) e o subtítulo seguia dizendo "X itens vendidos" como se
+    # fosse tudo (QA 22/09). Agora conta e diz quem ficou de fora.
+    fora_da_lista = {}
     for venda in vendas:
         item_id = venda["item_cardapio_id"]
         produto = produtos_loja.get(item_id)
         if not produto:
+            nome = (nomes_dos_itens or {}).get(item_id) or f"item {item_id}"
+            fora = fora_da_lista.setdefault(item_id, {"nome": nome, "unidades": 0.0})
+            fora["unidades"] += venda["quantidade"]
             continue
         item = itens.setdefault(item_id, {
             "itemCardapioId": item_id,
@@ -4344,6 +4363,12 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         "totalMargem": round(sum(i["margem"] for i in com_margem), 2) if com_margem else 0,
         "vendasNaoCasadas": nao_casadas["vendas"],
         "produtosNaoCasados": nao_casadas["produtos"],
+        # Vendeu, mas o produto não está na lista de preços desta loja.
+        "foraDaLista": sorted(
+            ({"nome": f["nome"], "unidades": round(f["unidades"], 2)} for f in fora_da_lista.values()),
+            key=lambda f: -f["unidades"],
+        ),
+        "unidadesForaDaLista": round(sum(f["unidades"] for f in fora_da_lista.values()), 2),
         "pendenciasCmv": _ranking_pendencias_cmv(lista),
     }
 
@@ -5490,7 +5515,7 @@ def buscar_pedido(pedido_id):
         linha = conn.execute(
             """
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em, pc.token,
-                   pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
+                   pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em, pc.confirmado_em,
                    pc.valor_nf, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo, pc.somou_estoque,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo
@@ -5646,12 +5671,20 @@ def confirmar_pedidos_por_token(token):
     pedidos = buscar_pedidos_por_token(token)
     if pedidos is None:
         return None
+    agora = datetime.now().isoformat(timespec="minutes")
     confirmados = 0
     for pedido in pedidos:
         if pedido["status"] == "enviado":
             avancar_status_pedido(pedido["id"])
             confirmados += 1
-    return {"confirmados": confirmados, "total": len(pedidos)}
+    # O aceite fica gravado mesmo pro pedido que já tinha sido avançado por
+    # dentro: o que importa é que o fornecedor clicou (QA 22/09).
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE pedido_compra SET confirmado_em = COALESCE(confirmado_em, ?) WHERE token = ?",
+            (agora, token),
+        )
+    return {"confirmados": confirmados, "total": len(pedidos), "confirmadoEm": agora}
 
 
 def listar_pedidos_pendentes_recebimento():

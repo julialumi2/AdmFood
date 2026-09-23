@@ -4606,3 +4606,28 @@ servidor responde 409 — "Esse pedido já foi recebido e somou no estoque. Pra
 desfazer, ajuste a quantidade em Insumos" —, o botão some do detalhe e a nota
 fiscal deixou de ser apagada junto com qualquer cancelamento. Compra por fora
 segue excluível: ela devolve as quantidades ao estoque.
+
+### 6.61 Dinheiro e dado: colar ficha, aceite do fornecedor e venda fora da lista
+
+Primeira leva dos altos que a varredura de 23/09 mostrou em aberto — os que
+mexem em número que decide compra.
+
+- **"Colar lista" da ficha técnica lia número errado.** Fazia
+  `replace(',', '.')` na mão, ignorando o `_lerNumeroBR` que o resto do
+  sistema usa: "1.500" entrava como 1,5. E o número era gravado na unidade do
+  banco enquanto a linha mostra a unidade de conteúdo, então "Leite;200"
+  virava 200 litros. Agora lê número brasileiro, converte da unidade que a
+  linha mostra e a prévia diz o que entrou ("Bacon: 50 g · Leite: 200 ml"),
+  em vez de só contar quantos casaram.
+- **"Pedido confirmado!" sem o fornecedor ter clicado.** O link olhava só o
+  status: alguém de dentro avançar a etapa já fazia a tela dele dizer
+  confirmado. Agora o aceite é gravado (`pedido_compra.confirmado_em`, só pelo
+  link) e a tela interna distingue: "o fornecedor aceitou em 23/09" × "enviado
+  há 2 dias · aceite ainda não veio do fornecedor".
+- **Venda de produto fora da lista de preços da loja era descartada calada.**
+  A Curva ABC pulava a venda (`if not produto: continue`) e o subtítulo seguia
+  dizendo "X itens vendidos" como se fosse tudo — no Açaí a categoria "Combo"
+  é tirada de propósito, então todo combo saía da conta. Agora conta, nomeia e
+  avisa: "20 unidade(s) vendidas não entram nesta conta porque o produto não
+  está na lista de preços desta loja: BATATA MÉDIA (8)…", e o subtítulo mostra
+  "+20 fora da lista de preços".

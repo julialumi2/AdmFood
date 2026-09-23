@@ -5426,7 +5426,16 @@ function _situacaoPedido(p) {
   const enviado = `enviado ${_haQuantoTempo(p.diasEsperando)}`;
   if (p.atrasado) return { classe: 'atrasado', rotulo: 'Atrasado', legenda: enviado };
   if (p.status === 'a_caminho') return { classe: 'caminho', rotulo: 'A caminho', legenda: enviado };
-  return { classe: 'enviado', rotulo: p.status === 'confirmado' ? 'Confirmado' : 'Pedido enviado', legenda: enviado };
+  // "Confirmado" agora distingue o aceite do fornecedor (ele clicou no link)
+  // de alguém de dentro ter avançado a etapa (QA 22/09).
+  if (p.status === 'confirmado') {
+    return {
+      classe: 'enviado',
+      rotulo: 'Confirmado',
+      legenda: p.confirmadoEm ? `o fornecedor aceitou em ${dataCurta(p.confirmadoEm)}` : `${enviado} · aceite ainda não veio do fornecedor`,
+    };
+  }
+  return { classe: 'enviado', rotulo: 'Pedido enviado', legenda: enviado };
 }
 
 function _trilhoPedidoHTML(p, classe) {
@@ -13855,13 +13864,20 @@ function processarColarListaFichaTecnica() {
     const partes = bruta.split(separador);
     if (partes.length < 2) { naoEncontrados.push(bruta); return; }
 
-    const valor = partes[partes.length - 1].trim().replace(',', '.');
+    // "1.500" é mil e quinhentos, não 1,5: o replace de vírgula sozinho lia
+    // ponto de milhar como decimal e a receita entrava 1000× menor (QA 22/09).
+    const valor = _lerNumeroBR(partes[partes.length - 1]);
     const nome = partes.slice(0, -1).join(separador).trim();
-    if (!nome || isNaN(parseFloat(valor))) { naoEncontrados.push(bruta); return; }
+    if (!nome || !Number.isFinite(valor)) { naoEncontrados.push(bruta); return; }
 
     const insumoId = porNomeNormalizado.get(_normalizarNomeInsumo(nome));
     if (insumoId) {
-      casados.push({ insumoId, quantidade: valor });
+      // O número colado está na unidade que a linha mostra (g/ml quando o
+      // insumo tem conteúdo por unidade), e a linha guarda na unidade do
+      // banco — sem isso, "Leite;200" virava 200 litros (QA 22/09).
+      const insumo = fichaTecnicaInsumosDisponiveis.find((i) => i.id === insumoId);
+      const naBase = insumo?.conteudoPorUnidade ? valor / insumo.conteudoPorUnidade : valor;
+      casados.push({ insumoId, quantidade: _arredondarQuantidade(naBase), rotulo: `${insumo?.nome}: ${valor} ${insumo?.conteudoPorUnidade ? insumo.unidadeConteudo : (insumo?.unidadeMedida || '')}` });
     } else {
       naoEncontrados.push(nome);
     }
@@ -13874,9 +13890,12 @@ function processarColarListaFichaTecnica() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // A prévia diz o que entrou e em que unidade: antes o resumo só contava
+  // quantos casaram, e um número lido errado passava batido (QA 22/09).
+  const lidos = casados.slice(0, 6).map((c) => c.rotulo).join(' · ');
   document.getElementById('ficha-tecnica-colar-resultado').textContent = naoEncontrados.length
-    ? `${casados.length} casado(s), substituíram a lista abaixo. Não encontrado (confira o nome e adiciona na mão): ${naoEncontrados.join(', ')}`
-    : `${casados.length} casado(s), substituíram a lista abaixo — confira e clica em "Salvar".`;
+    ? `${casados.length} casado(s): ${lidos}${casados.length > 6 ? '…' : ''}. Não encontrado (confira o nome e adiciona na mão): ${naoEncontrados.join(', ')}`
+    : `${casados.length} casado(s): ${lidos}${casados.length > 6 ? '…' : ''} — confira e clica em "Salvar".`;
 }
 
 document.getElementById('btn-ficha-tecnica-processar-colar')?.addEventListener('click', processarColarListaFichaTecnica);
@@ -14111,6 +14130,14 @@ function renderCurvaAbc() {
   if (d.vendasNaoCasadas) {
     partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em Configurações → Integrações do Estoque.`);
   }
+  // Venda de produto que não está na lista de preços desta loja saía da
+  // conta calada, e o subtítulo seguia dizendo "X itens vendidos" como se
+  // fosse tudo (QA 22/09).
+  if (d.unidadesForaDaLista) {
+    const nomes = (d.foraDaLista || []).slice(0, 3).map((f) => `${f.nome} (${_formatarNumeroBR(f.unidades)})`).join(', ');
+    const resto = (d.foraDaLista || []).length > 3 ? ` e mais ${d.foraDaLista.length - 3}` : '';
+    partes.push(`${_formatarNumeroBR(d.unidadesForaDaLista)} unidade(s) vendidas não entram nesta conta porque o produto não está na lista de preços desta loja: ${nomes}${resto}.`);
+  }
   if (semCmv) {
     partes.push(`${semCmv} produto(s) aparecem sem CMV — o motivo de cada um está logo abaixo.`);
   }
@@ -14119,7 +14146,7 @@ function renderCurvaAbc() {
   _renderPendenciasCmv(d);
 
   document.getElementById('curva-tabela-subtitulo').textContent =
-    `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos · R$ ${_formatarMoedaBR(d.totalReceita)} de receita estimada (preço de tabela × unidades)`;
+    `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos${d.unidadesForaDaLista ? ` (+${_formatarNumeroBR(d.unidadesForaDaLista)} fora da lista de preços)` : ''} · R$ ${_formatarMoedaBR(d.totalReceita)} de receita estimada (preço de tabela × unidades)`;
 
   const curvaA = d.itens.filter(i => i.curva === 'A');
   const curvaC = d.itens.filter(i => i.curva === 'C');

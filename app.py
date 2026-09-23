@@ -3838,6 +3838,8 @@ def _formatar_pedido_resumo(pedido):
         "pedidoMinimo": pedido["pedido_minimo"],
         "abaixoDoMinimo": pedido["pedido_minimo"] > 0 and pedido["valor_total"] < pedido["pedido_minimo"],
         "whatsappEnviadoEm": pedido.get("whatsapp_enviado_em"),
+        # Aceite do fornecedor pelo link (QA 22/09).
+        "confirmadoEm": pedido.get("confirmado_em"),
         "recebidoPor": pedido.get("recebido_por"),
         "recebidoEm": pedido.get("recebido_em"),
         "compraFora": bool(pedido.get("compra_fora")),
@@ -4057,7 +4059,11 @@ def api_buscar_pedidos_por_token(token):
         "fornecedorNome": pedidos[0]["fornecedor_nome"],
         "pedidos": [_formatar_pedido_confirmacao(p) for p in pedidos],
         "valorTotal": round(sum(p["valor_total"] for p in pedidos), 2),
-        "jaConfirmado": all(p["status"] != "enviado" for p in pedidos),
+        # Só conta como confirmado o que veio DO LINK: antes, alguém de dentro
+        # avançar a etapa já fazia a tela do fornecedor dizer "Pedido
+        # confirmado!", e ele nem tinha aberto (QA 22/09).
+        "jaConfirmado": all(p["confirmado_em"] for p in pedidos),
+        "confirmadoEm": next((p["confirmado_em"] for p in pedidos if p["confirmado_em"]), None),
         # Quando só uma loja caiu, o resto do pedido continua valendo.
         "lojasCanceladas": [{"loja": c["loja"], "canceladoEm": c["canceladoEm"]} for c in cancelados],
     })
