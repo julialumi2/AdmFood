@@ -4965,3 +4965,29 @@ o perfil operação não ver a Home — é decisão dela, não bug, e ficou espe
   ganha a própria linha — "Confirmar ou cancelar N pedidos parados há mais de
   30 dias" —, que é o que de fato precisa ser feito: já não é cobrar o
   fornecedor.
+
+### 6.77 A Home aberta pra quem trabalha na loja
+
+O sexto médio da Home: o perfil **operação** era mandado direto pra Insumos,
+então os alertas de entrega, contagem, lote vencendo e estoque crítico só
+chegavam a admin e gerente — que não são quem está na loja. Ela aprovou em
+23/09.
+
+Agora operação abre na Home e vê **o que é dela**:
+
+- **Estoque crítico** (por loja) e **Atividades pendentes do dia**.
+- Os blocos de dinheiro continuam de fora: quadro do faturamento, gráficos e
+  ranking já eram `data-so-admin`; saúde financeira, semanal, Curva A e custos
+  em alta ganharam `data-so-gestao` (admin e gerente).
+- A rota `/api/home/gestao` passou de `_exigir_gestao` pra `_exigir_equipe`,
+  mas **só monta a análise das 4 lojas pra gestão** — pra operação a resposta
+  tem estoque e atividades, nada mais. De quebra, o perfil que mais abre a
+  tela é o que não paga a conta da Curva ABC das 4 lojas.
+- **A lista de atividades respeita o perfil:** tarefa cuja tela a pessoa não
+  pode abrir não entra na lista dela. Operação via "Sincronizar as vendas" e
+  "Lançar venda presencial" — as duas de admin. Conferido: com uma requisição
+  esperando aprovação, operação vê só "Aprovar 1 requisição" e o admin vê as
+  seis. Lista vazia agora diz "Nada pendente pra você agora".
+- Os atalhos do topo "Ver Insights", "Lançar venda presencial" e "Sincronizar"
+  viraram `data-so-admin` — **o gerente também via os três**, e as três telas
+  recusam ele.

@@ -173,16 +173,18 @@
             <h1 id="home-saudacao">Olá, seja bem-vindo(a)!</h1>
           </div>
 
+          <!-- Insights, venda presencial e sincronizar são de admin: pro
+               gerente e pra operação eram botão que leva a erro (QA 22/09). -->
           <div class="quick-actions">
-            <a href="insight.html" class="quick-action-btn">
+            <a href="insight.html" class="quick-action-btn" data-so-admin>
               <i data-lucide="lightbulb"></i>
               <span>Ver Insights</span>
             </a>
-            <a href="insight.html#panel-vendas-presenciais" class="quick-action-btn">
+            <a href="insight.html#panel-vendas-presenciais" class="quick-action-btn" data-so-admin>
               <i data-lucide="banknote"></i>
               <span>Lançar venda presencial</span>
             </a>
-            <button type="button" class="quick-action-btn" id="btn-sincronizar-agora">
+            <button type="button" class="quick-action-btn" id="btn-sincronizar-agora" data-so-admin>
               <span class="home-sync-icone">
                 <i data-lucide="refresh-cw"></i>
                 <span class="home-sync-ponto" id="home-sync-indicador"></span>
@@ -231,13 +233,16 @@
         <!-- MÉTRICAS (saúde financeira, semana passada, estoque crítico) + ATIVIDADES DO DIA -->
         <div class="home-linha-rotina">
           <div class="cards-grid" id="container-periodo">
-            <div class="store-card home-card-saude" id="home-card-saude">
+            <!-- Operação passou a ver a Home (23/09): estoque crítico e
+                 atividades são dela; CMV, semanal, Curva A e custo de insumo
+                 continuam de gestão. -->
+            <div class="store-card home-card-saude" id="home-card-saude" data-so-gestao>
               <span class="home-kpi-rotulo"><i data-lucide="heart-pulse"></i>Saúde financeira</span>
               <div class="home-kpi-valor"><span id="home-saude-cmv">—</span> <span class="home-veredito" id="home-saude-veredito" hidden></span></div>
               <span class="home-kpi-linha" id="home-saude-margem">Carregando...</span>
               <span class="home-kpi-periodo" id="home-saude-periodo"></span>
             </div>
-            <div class="store-card">
+            <div class="store-card" data-so-gestao>
               <span class="home-kpi-rotulo"><i data-lucide="calendar-range"></i>Semanal</span>
               <div class="home-kpi-valor" id="home-semanal-valor">—</div>
               <span class="home-kpi-periodo" id="home-semanal-periodo">Carregando...</span>
@@ -309,7 +314,7 @@
             </div>
           </div>
 
-          <div class="panel home-gestao">
+          <div class="panel home-gestao" data-so-gestao>
             <div class="panel-header">
               <h3 class="panel-title">Gestão operacional</h3>
               <span class="panel-subtitle">Últimos 30 dias</span>

@@ -11270,6 +11270,19 @@ function _formatarMoedaBRL(valor) {
 // Espera saber QUEM está logado antes de decidir: sem isso a checagem rodava
 // com `usuarioLogado` ainda vazio e escondia o faturamento até do admin
 // (achado por ela na Home, 22/09).
+// Blocos que só admin e gerente veem (CMV, semanal, Curva A, custos em
+// alta). Operação passou a ver a Home pelos alertas e pelo estoque crítico.
+async function _esconderBlocosDeGestao() {
+  try {
+    await window.usuarioPronto;
+  } catch (erro) {
+    console.error('Falha ao saber quem está logado:', erro);
+  }
+  if (_possoGerir()) return false;
+  document.querySelectorAll('[data-so-gestao]').forEach((bloco) => { bloco.style.display = 'none'; });
+  return true;
+}
+
 async function _semFaturamentoNaTela() {
   try {
     await window.usuarioPronto;
@@ -11583,6 +11596,10 @@ function _renderAtividadesHome(atividades) {
   document.getElementById('home-rotina-resumo').textContent = pendentes
     ? `${pendentes} ${pendentes === 1 ? 'pendente' : 'pendentes'}`
     : 'Tudo em dia';
+  if (!atividades.length) {
+    lista.innerHTML = '<li class="panel-subtitle">Nada pendente pra você agora.</li>';
+    return;
+  }
   lista.innerHTML = atividades.map((a) => {
     const marca = `<span class="home-rotina-check" aria-hidden="true">${a.pendente ? '' : '<i data-lucide="check"></i>'}</span>`;
     const estado = `<span class="visualmente-oculto">${a.pendente ? 'Pendente: ' : 'Feito: '}</span>`;
@@ -11635,24 +11652,31 @@ function _proximoInsightHome() {
 
 async function carregarGestaoHome() {
   if (!document.getElementById('home-curva-a')) return;
+  const soAlertas = await _esconderBlocosDeGestao();
   try {
     const resposta = await fetch('/api/home/gestao');
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const dados = await resposta.json();
     _renderEstoqueCriticoHome(dados.estoqueCritico || {});
-    _renderSaudeFinanceiraHome(dados.saudeFinanceira || {});
     _renderAtividadesHome(dados.atividades || []);
-    _renderInsightsHome(dados.insights || []);
-    _renderCurvaAHome(dados.curvaA || []);
-    _renderCustosEmAltaHome(dados.custosEmAlta || []);
+    // Operação não recebe esses números, e os blocos deles estão escondidos.
+    if (!soAlertas) {
+      _renderSaudeFinanceiraHome(dados.saudeFinanceira || {});
+      _renderInsightsHome(dados.insights || []);
+      _renderCurvaAHome(dados.curvaA || []);
+      _renderCustosEmAltaHome(dados.custosEmAlta || []);
+    }
     if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch (erro) {
     console.error('Falha ao carregar a gestão da Home:', erro);
     document.getElementById('home-estoque-sub').textContent = 'Não foi possível carregar o estoque.';
-    document.getElementById('home-saude-margem').textContent = 'Não foi possível carregar.';
-    ['home-curva-a', 'home-custos-alta', 'home-rotina-lista'].forEach((id) => {
-      document.getElementById(id).innerHTML = '<li class="panel-subtitle">Não foi possível carregar.</li>';
-    });
+    document.getElementById('home-rotina-lista').innerHTML = '<li class="panel-subtitle">Não foi possível carregar.</li>';
+    if (!soAlertas) {
+      document.getElementById('home-saude-margem').textContent = 'Não foi possível carregar.';
+      ['home-curva-a', 'home-custos-alta'].forEach((id) => {
+        document.getElementById(id).innerHTML = '<li class="panel-subtitle">Não foi possível carregar.</li>';
+      });
+    }
   }
 }
 
@@ -12027,8 +12051,10 @@ const PAGINAS_POR_PAPEL = {
     'pedidos.html', 'recebimentos.html', 'guia-compras.html', 'cardapio.html', 'preparo.html',
     'curva-abc.html', 'insight.html', 'mais-vendidos.html', 'vendas-semanais.html', 'precos.html',
     'configuracoes.html', 'instalar-extensao.html'],
-  operacao: ['estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html', 'cardapio.html',
-    'guia-compras.html', 'configuracoes.html'],
+  // A Home entrou pra operação em 23/09: os alertas de entrega, contagem e
+  // estoque crítico são de quem está na loja (ver PAGINAS_POR_PAPEL no app.py).
+  operacao: ['index.html', 'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
+    'cardapio.html', 'guia-compras.html', 'configuracoes.html'],
 };
 
 function _ajustarMenuAoPerfil() {

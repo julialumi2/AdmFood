@@ -458,13 +458,19 @@ PAGINAS_POR_PAPEL = {
         'instalar-extensao.html',
     },
     'operacao': {
+        # A Home entrou em 23/09 (pedido dela): os alertas de entrega,
+        # contagem e estoque crítico são justamente pra quem está na loja, e
+        # os blocos de dinheiro já ficam escondidos de quem não é admin.
+        'index.html',
         'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
         'cardapio.html', 'guia-compras.html', 'configuracoes.html',
     },
 }
 # Pra onde cai quem tenta abrir uma tela que o perfil não alcança. A operação
 # não vê faturamento, então nem o Resumo (index) serve de casa pra ela.
-PAGINA_INICIAL_POR_PAPEL = {'gerente': '/index.html', 'operacao': '/estoque.html'}
+# Operação abre na Home desde 23/09 (antes caía direto em Insumos e nunca
+# via alerta de entrega, contagem nem estoque crítico).
+PAGINA_INICIAL_POR_PAPEL = {'gerente': '/index.html', 'operacao': '/index.html'}
 
 
 def _papel_do_usuario():
@@ -1598,11 +1604,24 @@ def _atividades_do_dia(lojas, usuario):
     ontem = hoje - timedelta(days=1)
     numeros = numeros_da_rotina(lojas, usuario["id"], ontem.isoformat(), hoje.isoformat())
     pendentes, feitas = [], []
+    papel = usuario.get("papel")
+    paginas = PAGINAS_POR_PAPEL.get(papel)
+
+    # Operação passou a ver a Home (23/09): tarefa que ela não tem como fazer
+    # — porque a tela é de outro perfil — não entra na lista dela.
+    def pode_fazer(link, acao):
+        if acao == "sincronizar":
+            return papel == "admin"
+        if not link or paginas is None:
+            return True
+        return link.split("#")[0].split("?")[0] in paginas
 
     def atividade(pendente, texto, link=None, acao=None):
+        if not pode_fazer(link, acao):
+            return
         (pendentes if pendente else feitas).append({"pendente": pendente, "texto": texto, "link": link, "acao": acao})
 
-    atrasadas = [l for l in lojas if not _sincronizacao_em_dia(buscar_ultima_sincronizacao(l), hoje)]
+    atrasadas = [l for l in lojas if not _sincronizacao_em_dia(ultimo_dia_sincronizado(l), hoje)]
     atividade(
         bool(atrasadas),
         f"Sincronizar as vendas de ontem: {', '.join(_curto(l) for l in atrasadas)}" if atrasadas
@@ -1656,7 +1675,7 @@ def _atividades_do_dia(lojas, usuario):
 
 @app.route('/api/home/gestao', methods=['GET'])
 def api_home_gestao():
-    erro_acesso = _exigir_gestao()
+    erro_acesso = _exigir_equipe()
     if erro_acesso:
         return erro_acesso
     lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
@@ -1673,7 +1692,7 @@ def api_home_gestao():
             if linha["quantidade_atual"] <= 0:
                 contagem["zerados"] += 1
 
-    return jsonify({
+    resposta = {
         "dias": DIAS_DA_HOME,
         "estoqueCritico": {
             "total": sum(c["criticos"] for c in criticos.values()),
@@ -1681,8 +1700,13 @@ def api_home_gestao():
             "porLoja": list(criticos.values()),
         },
         "atividades": _atividades_do_dia(lojas, _usuario_logado()),
-        **_analise_da_home(lojas),
-    })
+    }
+    # Operação vê a Home pelos alertas e pelo estoque; CMV, margem, Curva A e
+    # custo de insumo continuam sendo de gestão — e assim a análise das 4
+    # lojas (que é a parte cara) nem é calculada pra esse perfil.
+    if (_usuario_logado() or {}).get('papel') in ('admin', 'gerente'):
+        resposta.update(_analise_da_home(lojas))
+    return jsonify(resposta)
 
 
 @app.route('/api/precos/variacoes', methods=['GET'])
