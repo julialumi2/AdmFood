@@ -4687,3 +4687,25 @@ lista quem vai sair ("Combo Família NaLata (Açaí, R$ 39,90)…"), avisando qu
 nome digitado diferente também faz o produto sumir da planilha. Só com o
 "Apagar mesmo assim?" confirmado é que grava, e o resumo final passa a dizer
 quantos entraram, quantos foram atualizados e quantos saíram.
+
+### 6.66 A tela parando de mentir: hora da sincronização, dia faltando e canal
+
+- **"Sincronizado até" no lugar de "Atualizado às".** O carimbo era a hora do
+  relógio do navegador, escrita sem esperar as respostas: com a sincronização
+  parada às 11h e o relógio em 19h, a tela dizia "atualizado às 19:07" sobre
+  dado de oito horas atrás. Agora `/api/config/lojas` devolve `sincronizadoEm`
+  (quando a rotina automática rodou de fato, de `execucao_rotina`) e
+  `lojasAtrasadas`; Home, Vendas Diárias e Preparo mostram "Sincronizado até
+  14:00", em laranja quando não é de hoje ou quando alguma loja está atrasada,
+  com o nome delas no hover. Sem registro nenhum, diz "Sem sincronização
+  registrada" — nunca uma hora inventada.
+- **Dia faltando aparece como falta.** O período do relatório é montado dia a
+  dia: quem não tem faturamento de alguma loja entra em `diasFaltando`, e o
+  subtítulo do Histórico Diário passa a dizer "Faltam 26 dias neste período
+  (19/09, 20/09…) — sincronize ou ajuste", mais "o dia de hoje está pela
+  metade" quando o período inclui hoje. Antes o dia simplesmente não tinha
+  linha e o período parecia inteiro.
+- **Canal com nome único.** "portal" e "totem" agora viram "Presencial" em
+  qualquer aba — antes só na Visão Geral e na Tradiça Simus, então a tela
+  mostrava "portal" cru enquanto o relatório de WhatsApp dizia "Presencial"
+  pro mesmo número.

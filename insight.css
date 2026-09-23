@@ -237,3 +237,9 @@
   font-weight: 700;
   cursor: help;
 }
+
+/* Período com dia faltando ou com o dia de hoje pela metade (QA 22/09). */
+.periodo-incompleto {
+  color: var(--warning-texto);
+  font-weight: 600;
+}

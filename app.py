@@ -1041,7 +1041,8 @@ def _cards_periodo(unidade_filtro, linhas_periodo):
     }
 
 
-def _montar_bloco(unidade_filtro, linhas_periodo, titulo, linhas_canais, canal_data_label):
+def _montar_bloco(unidade_filtro, linhas_periodo, titulo, linhas_canais, canal_data_label,
+                  periodo=None):
     base = linhas_periodo if unidade_filtro is None else [l for l in linhas_periodo if l["unidade"] == unidade_filtro]
 
     diario = sorted(base, key=lambda l: (l["dia"], l["unidade"]), reverse=True)
@@ -1052,6 +1053,30 @@ def _montar_bloco(unidade_filtro, linhas_periodo, titulo, linhas_canais, canal_d
         "canalDataLabel": canal_data_label,
         "diario": _formatar_diario(diario),
         "canais": _formatar_canais(canais),
+        # Dia sem linha nenhuma simplesmente não aparecia, e o período parecia
+        # completo: o card ficava menor sem nada dizer (QA 22/09).
+        **_faltas_do_periodo(base, periodo, unidade_filtro),
+    }
+
+
+def _faltas_do_periodo(linhas, periodo, unidade_filtro):
+    """Dias do período que não têm faturamento nenhum (não sincronizaram) e
+    o dia de hoje, que está pela metade por definição."""
+    if not periodo:
+        return {}
+    inicio, fim = periodo
+    hoje = date.today()
+    lojas = [unidade_filtro] if unidade_filtro else list(LOJAS.keys())
+    com_dado = {(l["dia"], l["unidade"]) for l in linhas}
+    faltando = []
+    dia = inicio
+    while dia <= fim:
+        if dia < hoje and any((dia.isoformat(), loja) not in com_dado for loja in lojas):
+            faltando.append(dia.isoformat())
+        dia += timedelta(days=1)
+    return {
+        "diasFaltando": faltando,
+        "temDiaParcial": inicio <= hoje <= fim,
     }
 
 
@@ -5419,8 +5444,21 @@ def api_config_lojas():
             "temPresencial": nome in UNIDADES_COM_PRESENCIAL,
             "ultimaSincronizacao": _formatar_data_br(ultimo_dia_loja) if ultimo_dia_loja else None,
         })
+    # Quando a sincronização automática de fato rodou (o relógio do
+    # navegador não sabe disso): a tela carimba essa hora, não a dela
+    # (QA 22/09).
+    execucoes = listar_execucoes_rotina()
+    rodou_em = max(
+        (execucoes[nome]["ultimaEm"] for nome in ("sincronizacao_hoje", "sincronizacao_diaria") if nome in execucoes),
+        default=None,
+    )
     return jsonify({
         "ultimaSincronizacao": _formatar_data_br(ultimo_dia) if ultimo_dia else None,
+        "sincronizadoEm": rodou_em,
+        "lojasAtrasadas": [
+            l["nome"] for l in lojas
+            if not _sincronizacao_em_dia(buscar_ultima_sincronizacao(l["nome"]), date.today())
+        ],
         "lojas": lojas,
     })
 
@@ -5840,12 +5878,14 @@ def api_insights():
 
     resposta = {
         "geral": _montar_bloco(
-            None, linhas_periodo, "Visão Geral (Todas)", linhas_canais, canal_data_label
+            None, linhas_periodo, "Visão Geral (Todas)", linhas_canais, canal_data_label,
+            periodo=(inicio, fim),
         )
     }
     for nome_unidade in LOJAS.keys():
         resposta[nome_unidade] = _montar_bloco(
-            nome_unidade, linhas_periodo, nome_unidade, linhas_canais, canal_data_label
+            nome_unidade, linhas_periodo, nome_unidade, linhas_canais, canal_data_label,
+            periodo=(inicio, fim),
         )
 
     resposta["geral"].update(_cards_periodo(None, linhas_periodo))

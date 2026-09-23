@@ -145,14 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4.08 ATUALIZAÇÃO AUTOMÁTICA DA HOME (quase em tempo real)
   if (document.getElementById('container-periodo')) {
-    marcarAtualizadoAgora('home-atualizado-em');
+    marcarSincronizadoAte('home-atualizado-em');
     iniciarAtualizacaoAutomatica(() => {
       carregarDadosLojas();
       carregarGraficoRede();
       carregarCanalRedeHome();
       carregarStatusSincronizacaoHome();
       carregarGestaoHome();
-      marcarAtualizadoAgora('home-atualizado-em');
+      marcarSincronizadoAte('home-atualizado-em');
     });
   }
 
@@ -636,6 +636,22 @@ const presencialThTotal = document.getElementById('presencial-th-total');
 // de fundo alternada — todas as linhas do mesmo dia compartilham a mesma
 // cor, e o dia seguinte já vem com um tom diferente, facilitando identificar
 // onde um dia termina e o outro começa sem depender de uma borda chamativa.
+// Dia que não sincronizou não tinha linha e o período parecia inteiro: o
+// card ficava menor sem nada dizer. Hoje é sempre parcial (QA 22/09).
+function _avisarPeriodoIncompleto(data) {
+  const alvo = document.getElementById('daily-subtitle');
+  if (!alvo) return;
+  const faltando = data.diasFaltando || [];
+  const partes = [];
+  if (faltando.length) {
+    const lista = faltando.slice(-4).map((d) => _dataBR(d).slice(0, 5)).join(', ');
+    partes.push(`${faltando.length === 1 ? 'Falta 1 dia' : `Faltam ${faltando.length} dias`} neste período (${lista}${faltando.length > 4 ? '…' : ''}) — sincronize ou ajuste.`);
+  }
+  if (data.temDiaParcial) partes.push('O dia de hoje está pela metade: ele fecha só no fim do expediente.');
+  alvo.textContent = partes.length ? partes.join(' ') : 'Um lançamento por dia sincronizado';
+  alvo.classList.toggle('periodo-incompleto', partes.length > 0);
+}
+
 function renderHistoricoDiario(diario) {
   const dailyTableBody = document.getElementById('daily-table-body');
   if (!dailyTableBody) return;
@@ -705,6 +721,7 @@ function updateDashboard(tabKey) {
 
   // Renderiza Histórico Diário (já respeita o período selecionado no topo)
   renderHistoricoDiario(data.diario || []);
+  _avisarPeriodoIncompleto(data);
 
   // Re-inicializa ícones do Lucide após re-renderizar HTML
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -714,15 +731,11 @@ function updateDashboard(tabKey) {
 // "portal" vira "Presencial" em todo lugar na Visão Geral; nas abas de loja
 // individual, só na Tradiça Simus (nas outras lojas continua "portal").
 function nomeExibicaoCanal(canalBruto, unidade) {
-  const mapa = { ifood: 'IFood', food99: '99Food', catalog: 'Cardápio Web' };
-
-  if (!unidade || unidade === 'geral') {
-    if (canalBruto === 'portal') return 'Presencial';
-    return mapa[canalBruto] || canalBruto;
-  }
-
-  if (unidade === 'Tradiça Simus' && canalBruto === 'portal') return 'Presencial';
-  return mapa[canalBruto] || canalBruto;
+  // "portal" e "totem" são o balcão: apareciam crus nas abas de loja (menos
+  // na Simus), então a tela e o relatório de WhatsApp diziam nomes
+  // diferentes pro mesmo canal (QA 22/09).
+  const mapa = { ifood: 'IFood', food99: '99Food', catalog: 'Cardápio Web', portal: 'Presencial', totem: 'Presencial' };
+  return mapa[String(canalBruto || '').toLowerCase()] || canalBruto;
 }
 
 // Atualiza os 3 cards de topo (Faturamento/Pedidos/Ticket) — usado tanto no
@@ -1362,7 +1375,7 @@ async function carregarInsights(inicio, fim, diaSemana) {
     }
     dashboardData = await resposta.json();
     updateDashboard(dashboardData[currentTab] ? currentTab : 'geral');
-    marcarAtualizadoAgora('insight-atualizado-em');
+    marcarSincronizadoAte('insight-atualizado-em');
   } catch (erro) {
     console.error('Falha ao carregar insights:', erro);
     // Zerar os cards junto com a tabela: deixá-los com o número anterior (ou
@@ -1424,7 +1437,7 @@ async function carregarPreparo() {
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     preparoData = await resposta.json();
     renderPreparoTab(preparoTabAtual);
-    marcarAtualizadoAgora('preparo-atualizado-em');
+    marcarSincronizadoAte('preparo-atualizado-em');
   } catch (erro) {
     console.error('Falha ao carregar Preparo:', erro);
     marcarSemConexao('preparo-atualizado-em');
@@ -10705,6 +10718,38 @@ function marcarAtualizadoAgora(elementId) {
   const hh = String(agora.getHours()).padStart(2, '0');
   const mm = String(agora.getMinutes()).padStart(2, '0');
   el.textContent = `Atualizado às ${hh}:${mm}`;
+}
+
+// "Sincronizado até": a hora em que a sincronização automática rodou de
+// verdade, buscada no servidor — não o relógio do navegador. Se ela parou às
+// 11h e são 19h, a tela dizia "atualizado às 19:07" com dado de 8 horas
+// atrás (QA 22/09). Fica laranja quando a última sincronização não é de hoje,
+// com o nome das lojas atrasadas.
+async function marcarSincronizadoAte(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  try {
+    const resposta = await fetch('/api/config/lojas');
+    if (!resposta.ok) return;
+    const dados = await resposta.json();
+    const quando = dados.sincronizadoEm;
+    if (!quando) {
+      el.textContent = 'Sem sincronização registrada';
+      el.classList.add('atualizado-em-falhou');
+      return;
+    }
+    const data = new Date(quando);
+    const hora = `${String(data.getHours()).padStart(2, '0')}:${String(data.getMinutes()).padStart(2, '0')}`;
+    const deHoje = quando.slice(0, 10) === _hojeLocalISO();
+    const atrasadas = dados.lojasAtrasadas || [];
+    el.textContent = deHoje ? `Sincronizado até ${hora}` : `Sincronizado em ${_dataBR(quando).slice(0, 5)} às ${hora}`;
+    el.classList.toggle('atualizado-em-falhou', !deHoje || atrasadas.length > 0);
+    el.title = atrasadas.length
+      ? `Sem dado novo de: ${atrasadas.join(', ')}`
+      : 'Todas as lojas em dia';
+  } catch (erro) {
+    console.error('Falha ao ler a hora da sincronização:', erro);
+  }
 }
 
 // Considera "em dia" se a última sincronização foi hoje ou ontem — regra
