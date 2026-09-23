@@ -206,3 +206,15 @@
   font-weight: 700;
   color: var(--danger-texto);
 }
+
+/* Unidades que saíram dentro de combo (QA 22/09): entram no volume, mas o
+   combo tem preço próprio e não entra no preço médio nem na margem. */
+.curva-combo {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--warning-texto);
+  white-space: nowrap;
+  cursor: help;
+}

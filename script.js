@@ -14150,6 +14150,12 @@ function renderCurvaAbc() {
   // Venda de produto que não está na lista de preços desta loja saía da
   // conta calada, e o subtítulo seguia dizendo "X itens vendidos" como se
   // fosse tudo (QA 22/09).
+  // Combo tem preço próprio, que não está na lista: as unidades dele entram
+  // no volume à parte, e não no preço médio (QA 22/09).
+  if (d.unidadesDeCombo) {
+    const nomes = (d.combos || []).slice(0, 3).map((c) => `${c.nome} (${_formatarNumeroBR(c.unidades)})`).join(', ');
+    partes.push(`${_formatarNumeroBR(d.unidadesDeCombo)} unidade(s) saíram dentro de combo (${nomes}) — elas aparecem na coluna de volume, mas ficam fora do preço médio e da margem enquanto o combo não tiver preço próprio na lista.`);
+  }
   if (d.unidadesForaDaLista) {
     const nomes = (d.foraDaLista || []).slice(0, 3).map((f) => `${f.nome} (${_formatarNumeroBR(f.unidades)})`).join(', ');
     const resto = (d.foraDaLista || []).length > 3 ? ` e mais ${d.foraDaLista.length - 3}` : '';
@@ -14194,7 +14200,9 @@ function renderCurvaAbc() {
       <tr>
         <td class="font-bold">${escaparHtml(i.nome)}</td>
         <td class="text-muted">${escaparHtml(i.categoria)}</td>
-        <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
+        <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span>${i.volumeCombo
+          ? `<span class="curva-combo" title="Mais ${_formatarNumeroBR(i.volumeCombo)} unidade(s) saíram dentro de combo. Elas não entram no preço médio nem na margem porque o combo tem preço próprio, que não está na lista de preços.">+${_formatarNumeroBR(i.volumeCombo)} em combo</span>`
+          : ''}</td>
         <td><span class="curva-num">R$ ${_formatarMoedaBR(i.receita)}</span></td>
         <td>${_curvaCmvHTML(i)}</td>
         <td>${_curvaMargemHTML(i)}</td>

@@ -4646,3 +4646,21 @@ mexem em número que decide compra.
   ticket com "tem R$ 900,00 de venda presencial lançada sem quantidade: esse
   valor entra no faturamento mas não tem pedido, então o ticket do dia fica
   maior do que foi". Antes o ticket saía inflado sem nenhuma marca.
+
+### 6.63 Combo na Curva ABC: contado, sem inventar receita
+
+A venda de um combo não tem `item_cardapio_id` (o combo não é um item do
+cardápio), então ela sumia inteira da Curva ABC — volume e tudo — mesmo com a
+composição cadastrada em `composicao_produto_venda`. No Açaí isso escondia 92
+unidades de "NaLata 500ml + 3 complementos" saídas por dentro dos combos
+Filhinho e Filminho, contra 50 vendidas direto: dois terços do giro do produto
+não apareciam.
+
+Agora a conta soma essas unidades numa coluna própria (`volumeCombo`,
+mostrada como "+92 em combo" ao lado do volume) e o aviso no topo diz de quais
+combos vieram. Elas **não** entram no preço médio nem na margem: o combo tem
+preço próprio, com desconto, que não está na lista de preços — contar as
+unidades pelo preço cheio de tabela inflaria a receita e a margem, que é
+justamente o erro que o QA apontou. Como nem a receita nem o custo dessas
+unidades entram, os dois lados seguem coerentes; quando o combo ganhar preço
+próprio na lista, dá pra rateá-lo entre os componentes.

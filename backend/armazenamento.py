@@ -4210,6 +4210,23 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         nomes_dos_itens = {
             l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM item_cardapio").fetchall()
         }
+        # Combo com composição cadastrada (Combo Filhinho = 2 × NaLata 500ml):
+        # a venda dele não tem item_cardapio_id, então sumia inteira desta
+        # conta — volume e tudo. Entra como volume de combo, à parte: o preço
+        # do combo não está na lista, e contar as unidades pelo preço cheio de
+        # tabela faria a receita e a margem subirem sem o desconto existir
+        # (QA 22/09).
+        vendas_de_combo = conn.execute(
+            f"""
+            SELECT c.item_cardapio_id AS item_id, v.nome_produto,
+                   SUM(v.quantidade * COALESCE(v.multiplicador, 1) * c.quantidade) AS quantidade
+            FROM venda_item v
+            JOIN composicao_produto_venda c ON c.nome_produto_normalizado = v.nome_normalizado
+            WHERE v.unidade = ? AND v.dia >= ? AND v.item_cardapio_id IS NULL{filtro_fim}
+            GROUP BY c.item_cardapio_id, v.nome_produto
+            """,
+            (loja, corte, *parametros_fim),
+        ).fetchall()
         nao_casadas = conn.execute(
             f"""
             SELECT COUNT(*) AS vendas, COUNT(DISTINCT nome_produto) AS produtos
@@ -4293,7 +4310,30 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         if preco:
             item["receita"] += venda["quantidade"] * preco
 
+    # Unidades que vieram de combo, por produto: entram no volume real (elas
+    # foram vendidas e consumiram insumo) mas ficam fora do preço médio.
+    combo_por_item = {}
+    combos_vistos = {}
+    for linha in vendas_de_combo:
+        if linha["item_id"] not in produtos_loja:
+            continue
+        combo_por_item[linha["item_id"]] = round(combo_por_item.get(linha["item_id"], 0.0) + linha["quantidade"], 2)
+        combos_vistos[linha["nome_produto"]] = round(
+            combos_vistos.get(linha["nome_produto"], 0.0) + linha["quantidade"], 2
+        )
+        if linha["item_id"] not in itens:
+            produto = produtos_loja[linha["item_id"]]
+            itens[linha["item_id"]] = {
+                "itemCardapioId": linha["item_id"],
+                "nome": produto["nome"],
+                "categoria": produto["categoria"],
+                "volume": 0.0,
+                "receita": 0.0,
+                "protegido": linha["item_id"] in protegidos,
+            }
+
     for item in itens.values():
+        item["volumeCombo"] = combo_por_item.get(item["itemCardapioId"], 0)
         item_id = item["itemCardapioId"]
         # Custo digitado à mão ganha do calculado: é a palavra final dela
         # sobre aquele produto naquela loja.
@@ -4378,6 +4418,13 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         "vendasNaoCasadas": nao_casadas["vendas"],
         "produtosNaoCasados": nao_casadas["produtos"],
         # Vendeu, mas o produto não está na lista de preços desta loja.
+        # Combo: unidades que saíram por dentro de um combo, sem preço
+        # próprio na lista (ficam fora do preço médio e da margem).
+        "unidadesDeCombo": round(sum(combo_por_item.values()), 2),
+        "combos": sorted(
+            ({"nome": nome, "unidades": q} for nome, q in combos_vistos.items()),
+            key=lambda c: -c["unidades"],
+        ),
         "foraDaLista": sorted(
             ({"nome": f["nome"], "unidades": round(f["unidades"], 2)} for f in fora_da_lista.values()),
             key=lambda f: -f["unidades"],
