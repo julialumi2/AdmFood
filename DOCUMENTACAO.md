@@ -5198,3 +5198,30 @@ clique, sem pergunta, e nenhum jeito de dizer "esse item eu não tenho" ou
   texto do WhatsApp, e quem abria o link direto não via nada;
 - no celular a tabela de 4 colunas por loja virou card, com a coluna "Total"
   que ficava escondida à direita.
+
+### 6.84 Cotação lançada à mão agora vira pedido
+
+O último médio das telas externas, e o mais caro em trabalho perdido: uma
+cotação criada à mão (sem passar pela Requisição) **nunca virava pedido**. O
+fornecedor recebia o link, preenchia tudo, e aquilo morria ali — porque
+"Gerar pedidos" só enxerga a quebra por loja (`cotacao_item_loja`), que a
+cotação de Requisição traz pronta e a manual não tem.
+
+A causa não era falta de código: é que **ninguém disse pra qual loja é a
+compra**. Agora o sistema pergunta.
+
+- Ao clicar em "Gerar pedidos" numa cotação sem quebra por loja, o servidor
+  responde 409 com a lista de lojas visíveis, e a tela pergunta qual é.
+- Escolhida a loja, as quantidades da coluna "Quantidade" viram a quebra
+  daquela loja (`atribuir_cotacao_a_loja`) — e daí pra frente é uma cotação
+  igual a qualquer outra: mesmo "Gerar pedidos", mesma trava de não duplicar,
+  mesma mensagem de WhatsApp.
+- Item que já tem quebra não é tocado, então dá pra atribuir **loja por
+  loja** se a compra for dividida.
+- O botão "Gerar pedidos", que ficava escondido na cotação manual justamente
+  porque não tinha o que gerar, voltou a aparecer.
+
+Conferido de ponta a ponta numa cotação manual com 2 itens e vencedor
+escolhido: sem loja responde 409 com as 4 lojas; loja inválida, 400; com a
+loja, gera o pedido na Hamburgueria Artesanos com os 2 itens; clicar de novo
+cai no "os pedidos dessa cotação já tinham sido gerados", sem duplicar.

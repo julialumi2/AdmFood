@@ -4325,10 +4325,11 @@ async function recarregarCotacaoDetalhe() {
 
     const btnGerarPedidos = document.getElementById('btn-cotacao-gerar-pedidos');
     if (btnGerarPedidos) {
-      // Cotação manual (catalogoCompleto) não tem quantidade por loja — "Gerar
-      // pedidos" nunca acha o que gerar nesse modo, então nem mostra o botão
-      // (pedido de compra de verdade sai pela Requisição → Cotação por enquanto).
-      btnGerarPedidos.style.display = isAdmin && !dados.catalogoCompleto && (dados.itens || []).length > 0 ? '' : 'none';
+      // A cotação manual não dizia pra qual loja é a compra, e "Gerar
+      // pedidos" só enxerga a quebra por loja: o botão ficava escondido e o
+      // fornecedor preenchia tudo à toa (QA 22/09). Agora ele aparece e o
+      // sistema pergunta a loja na hora de gerar.
+      btnGerarPedidos.style.display = isAdmin && (dados.itens || []).length > 0 ? '' : 'none';
     }
 
     const btnConvidar = document.getElementById('btn-cotacao-convidar-fornecedores');
@@ -5307,8 +5308,34 @@ document.getElementById('btn-cotacao-gerar-pedidos')?.addEventListener('click', 
   botao.disabled = true;
   botao.textContent = 'Gerando…';
   try {
-    const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/gerar-pedidos`, { method: 'POST' });
-    const dados = await resposta.json();
+    const gerar = async (loja) => {
+      const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/gerar-pedidos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loja ? { loja } : {}),
+      });
+      return { resposta, dados: await resposta.json() };
+    };
+    let { resposta, dados } = await gerar(null);
+    // Cotação lançada à mão não diz pra qual loja é a compra: o servidor
+    // devolve a lista e a gente pergunta (QA 22/09).
+    if (resposta.status === 409 && dados.precisaEscolherLoja) {
+      const lojas = dados.lojas || [];
+      const SALTO = String.fromCharCode(10);
+      const escolha = prompt(
+        'Essa cotação foi lançada à mão e não diz pra qual loja é a compra.' + SALTO + SALTO
+        + 'Digite o número da loja:' + SALTO
+        + lojas.map((l, i) => `${i + 1}. ${l}`).join(SALTO),
+        '1');
+      if (escolha === null) {
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+        return;
+      }
+      const loja = lojas[parseInt(escolha, 10) - 1];
+      if (!loja) throw new Error('Escolha inválida — digite o número de uma das lojas da lista.');
+      ({ resposta, dados } = await gerar(loja));
+    }
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao gerar pedidos');
     const ids = (dados.pedidosCriados || []).map((p) => p.id).filter(Boolean);
     let mensagem = `${_qtdTexto(ids.length, 'pedido gerado', 'pedidos gerados')}: ${_listaDeNumerosDePedido(ids)}.`;

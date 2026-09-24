@@ -5750,6 +5750,44 @@ def estender_prazo_convite(convite_id, prazo_validade=None):
 ESTAGIOS_PEDIDO = ['enviado', 'confirmado', 'a_caminho', 'recebido']
 
 
+def cotacao_tem_quebra_por_loja(cotacao_id):
+    """A cotação sabe pra qual loja é cada quantidade? Nasce de Requisição com
+    isso pronto; lançada à mão, não."""
+    with conexao() as conn:
+        return bool(conn.execute(
+            "SELECT 1 FROM cotacao_item_loja WHERE cotacao_id = ? LIMIT 1", (cotacao_id,)
+        ).fetchone())
+
+
+def atribuir_cotacao_a_loja(cotacao_id, loja):
+    """Manda as quantidades de uma cotação lançada à mão pra uma loja, criando
+    a quebra por loja que o "Gerar pedidos" precisa. Sem isso, cotação manual
+    nunca virava pedido e o fornecedor preenchia tudo à toa (QA 22/09).
+
+    Item que já tem quebra (de uma geração anterior, ou de outra loja) não é
+    tocado — dá pra atribuir loja por loja."""
+    with conexao() as conn:
+        travar_para_escrita(conn)
+        ja_tem = {
+            l["insumo_id"] for l in conn.execute(
+                "SELECT insumo_id FROM cotacao_item_loja WHERE cotacao_id = ? AND loja = ?",
+                (cotacao_id, loja),
+            )
+        }
+        criados = 0
+        for linha in conn.execute(
+            "SELECT insumo_id, quantidade_total FROM cotacao_item WHERE cotacao_id = ?", (cotacao_id,)
+        ).fetchall():
+            if linha["insumo_id"] in ja_tem or not (linha["quantidade_total"] or 0) > 0:
+                continue
+            conn.execute(
+                "INSERT INTO cotacao_item_loja (cotacao_id, insumo_id, loja, quantidade) VALUES (?, ?, ?, ?)",
+                (cotacao_id, linha["insumo_id"], loja, linha["quantidade_total"]),
+            )
+            criados += 1
+        return criados
+
+
 def gerar_pedidos_de_cotacao(cotacao_id):
     """Fecha a cotação em pedido(s) de compra de verdade — um por
     (fornecedor, loja), porque o mesmo insumo pode ter vencedores diferentes

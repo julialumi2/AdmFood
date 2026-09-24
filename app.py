@@ -182,6 +182,8 @@ from backend.armazenamento import (
     arredondar_quantidade_compra,
     listar_itens_cotacao,
     gerar_pedidos_de_cotacao,
+    cotacao_tem_quebra_por_loja,
+    atribuir_cotacao_a_loja,
     listar_pedidos,
     buscar_pedido,
     avancar_status_pedido,
@@ -3909,6 +3911,26 @@ def api_gerar_pedidos_cotacao(cotacao_id):
     cotacao = buscar_cotacao(cotacao_id)
     if not cotacao:
         return jsonify({"erro": "Cotação não encontrada."}), 404
+
+    # Cotação lançada à mão não tem quebra por loja, e "Gerar pedidos" só
+    # enxerga ela: o fornecedor preenchia tudo à toa (QA 22/09). A tela
+    # pergunta pra qual loja é, e as quantidades da tabela viram a quebra.
+    dados = request.get_json(silent=True) or {}
+    loja = (dados.get('loja') or '').strip()
+    if not cotacao_tem_quebra_por_loja(cotacao_id):
+        if not loja:
+            return jsonify({
+                "erro": "Essa cotação foi lançada à mão e não diz pra qual loja é a compra. Escolha a loja pra gerar o pedido.",
+                "precisaEscolherLoja": True,
+                "lojas": [nome for nome in LOJAS if _loja_visivel(nome)],
+            }), 409
+        if loja not in LOJAS or not _loja_visivel(loja):
+            return jsonify({"erro": "Loja inválida."}), 400
+        if not atribuir_cotacao_a_loja(cotacao_id, loja):
+            return jsonify({"erro": "Nenhum insumo com quantidade nessa cotação. Preencha a coluna Quantidade antes de gerar."}), 400
+    elif loja:
+        # Quebra já existe e ela escolheu loja: só faz sentido pra manual.
+        return jsonify({"erro": "Essa cotação já tem a loja de cada quantidade — não precisa escolher."}), 400
 
     resultado = gerar_pedidos_de_cotacao(cotacao_id)
     if not resultado["pedidosCriados"]:
