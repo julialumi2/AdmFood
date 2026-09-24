@@ -298,3 +298,40 @@ form { display: flex; flex-direction: column; gap: 20px; }
 
   .login-form-panel { padding: 32px 24px 48px; }
 }
+
+
+/* Força da senha na troca obrigatória do primeiro acesso (QA 22/09) —
+   mesmas classes das Configurações, com as cores desta tela. */
+.forca-senha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.forca-senha-barra {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background-color: #E4E4E7;
+  overflow: hidden;
+}
+
+.forca-senha-barra span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background-color: var(--flame);
+  transition: width 0.18s ease, background-color 0.18s ease;
+}
+
+.forca-senha[data-forca="2"] .forca-senha-barra span { background-color: #F59E0B; }
+.forca-senha[data-forca="3"] .forca-senha-barra span,
+.forca-senha[data-forca="4"] .forca-senha-barra span { background-color: #16A34A; }
+
+.forca-senha-texto {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  min-width: 96px;
+}

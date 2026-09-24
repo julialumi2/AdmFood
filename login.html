@@ -68,6 +68,33 @@
           <button type="submit" class="btn-primary" id="btn-login">Entrar</button>
         </form>
 
+        <!-- Primeiro acesso: a senha que o administrador digitou passou pelo
+             WhatsApp e ficou anotada em algum lugar. Nada obrigava a trocar
+             (QA 22/09) — agora o sistema pede aqui, antes de entrar. -->
+        <form id="form-primeira-senha" onsubmit="salvarPrimeiraSenha(event)" style="display:none;">
+          <p class="form-subtitle" id="primeira-senha-oi">Escolha uma senha sua pra continuar.</p>
+          <p id="primeira-senha-erro" class="form-erro" style="display:none;"></p>
+          <div class="form-group">
+            <label for="primeira-senha" class="form-label">Nova senha</label>
+            <div class="input-icon-wrap">
+              <i data-lucide="lock"></i>
+              <input type="password" id="primeira-senha" placeholder="Mínimo 8 caracteres, com letra e número" required>
+            </div>
+            <div class="forca-senha" id="forcaPrimeiraSenha" hidden>
+              <div class="forca-senha-barra"><span></span></div>
+              <span class="forca-senha-texto"></span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="primeira-senha-confirmar" class="form-label">Repita a nova senha</label>
+            <div class="input-icon-wrap">
+              <i data-lucide="lock"></i>
+              <input type="password" id="primeira-senha-confirmar" placeholder="Repita a nova senha" required>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="btn-primeira-senha">Salvar e entrar</button>
+        </form>
+
         <div class="form-footer-links">
           <p>Seu acesso é criado pelo administrador do sistema.</p>
         </div>

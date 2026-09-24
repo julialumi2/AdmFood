@@ -196,6 +196,18 @@
             </div>
             <button type="button" class="btn-secondary" onclick="fazerLogout()">Sair da conta</button>
           </div>
+          <!-- Ninguém sabia que a sessão dura 7 dias, e celular emprestado no
+               salão continuava logado sem jeito de tirar de longe (QA 22/09) -->
+          <div class="toggle-tile">
+            <div class="toggle-tile-info">
+              <i data-lucide="smartphone"></i>
+              <div>
+                <p class="toggle-tile-title">Aparelhos conectados</p>
+                <p class="toggle-tile-subtitle" id="conta-sessao-label">Quem entra fica conectado por 7 dias em cada aparelho.</p>
+              </div>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-sair-de-todos" onclick="sairDeTodosOsAparelhos()">Sair de todos</button>
+          </div>
           <div class="toggle-tile">
             <div class="toggle-tile-info">
               <i data-lucide="key-round"></i>
@@ -335,16 +347,31 @@
               <h3 class="panel-title">Registro de atividade</h3>
               <span class="panel-subtitle">Quem mexeu em quê, com data e hora</span>
             </div>
-            <div class="select-wrapper">
-              <select id="registro-filtro-dias">
-                <option value="1">Hoje</option>
-                <option value="7" selected>Últimos 7 dias</option>
-                <option value="30">Últimos 30 dias</option>
-                <option value="90">Últimos 90 dias</option>
-              </select>
-              <i data-lucide="chevron-down"></i>
+            <!-- Sem filtro por pessoa e sem busca, e cortando em 300 linhas
+                 sem dizer que cortou (QA 22/09) -->
+            <div class="registro-filtros">
+              <div class="search-box registro-busca">
+                <i data-lucide="search"></i>
+                <input type="search" id="registro-busca" placeholder="Buscar ação, pessoa ou detalhe...">
+              </div>
+              <div class="select-wrapper">
+                <select id="registro-filtro-pessoa">
+                  <option value="">Todo mundo</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
+              </div>
+              <div class="select-wrapper">
+                <select id="registro-filtro-dias">
+                  <option value="1">Hoje</option>
+                  <option value="7" selected>Últimos 7 dias</option>
+                  <option value="30">Últimos 30 dias</option>
+                  <option value="90">Últimos 90 dias</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
+              </div>
             </div>
           </div>
+          <p class="panel-subtitle registro-aviso" id="registro-aviso-corte" hidden></p>
           <div class="table-responsive">
             <table>
               <thead>
@@ -383,10 +410,14 @@
             </div>
           </div>
           <div class="backup-acoes">
-            <a class="btn-primary" id="link-backup-completo" href="/api/admin/backup-completo">
+            <!-- Era um link solto: clicava e ficava sem nenhum sinal enquanto
+                 o servidor montava o .zip, que com banco grande demora
+                 (QA 22/09) -->
+            <button type="button" class="btn-primary" id="btn-backup-completo" onclick="baixarCopiaCompleta()">
               <i data-lucide="download"></i>
-              Baixar cópia completa (.zip)
-            </a>
+              <span id="btn-backup-completo-texto">Baixar cópia completa (.zip)</span>
+            </button>
+            <span class="panel-subtitle" id="backup-completo-aviso" hidden></span>
           </div>
           <div class="table-responsive">
             <table>
@@ -445,7 +476,12 @@
           </div>
           <div class="form-group">
             <label for="usuarioSenha">Senha <span id="usuarioSenhaOpcional" style="display:none; font-weight:400; text-transform:none; letter-spacing:normal;">(deixe em branco pra manter a atual)</span></label>
-            <input type="password" id="usuarioSenha" placeholder="Mínimo 6 caracteres">
+            <input type="password" id="usuarioSenha" placeholder="Mínimo 8 caracteres, com letra e número">
+            <div class="forca-senha" id="forcaSenhaUsuario" hidden>
+              <div class="forca-senha-barra"><span></span></div>
+              <span class="forca-senha-texto"></span>
+            </div>
+            <p class="panel-subtitle" style="margin-top:6px;">Essa senha é provisória: na primeira entrada o sistema pede pra pessoa escolher uma senha dela.</p>
           </div>
           <div class="form-group">
             <label for="usuarioPapel">Perfil</label>
@@ -483,7 +519,12 @@
           </div>
           <div class="form-group">
             <label for="senhaNovaInput">Nova senha</label>
-            <input type="password" id="senhaNovaInput" required placeholder="Mínimo 6 caracteres">
+            <input type="password" id="senhaNovaInput" required placeholder="Mínimo 8 caracteres, com letra e número">
+            <!-- Senha de 6 caracteres passava, e "123456" tem 6 (QA 22/09) -->
+            <div class="forca-senha" id="forcaSenhaTroca" hidden>
+              <div class="forca-senha-barra"><span></span></div>
+              <span class="forca-senha-texto"></span>
+            </div>
           </div>
           <div class="form-group">
             <label for="senhaNovaConfirmarInput">Confirmar nova senha</label>

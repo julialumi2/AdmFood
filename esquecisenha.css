@@ -80,6 +80,21 @@ body {
   color: var(--ink-muted);
 }
 
+/* Os três passos de quem perdeu a senha — a página só dizia "fale com o
+   administrador" e parava aí (QA 22/09) */
+.recovery-passos {
+  margin: 20px 0 0;
+  padding-left: 20px;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--ink-muted);
+}
+
+.recovery-passos li + li { margin-top: 8px; }
+
+.recovery-passos strong { color: #ffffff; font-weight: 700; }
+
 .card-footer { margin-top: 24px; }
 
 .link-back {

@@ -5378,3 +5378,82 @@ sumia das outras. A regra agora está escrita uma vez só, em `DATA_DA_COMPRA`
 consultas. A migração ainda preenche `recebido_em` com `criado_em` nos
 pedidos já marcados como recebidos que estavam sem data, pra diferença não
 voltar pela porta dos fundos.
+
+
+### 6.90 Médios de Segurança e acesso e de Configurações
+
+Dez achados. Dois já estavam fechados por levas anteriores: a "última
+sincronização" que era o último dia com venda (#103, resolvido junto com o
+`ultimo_dia_sincronizado`) e o "Sincronizar agora" sem progresso (#104,
+resolvido com a rota de status e o `_acompanharSincronizacao`). Os outros
+oito:
+
+**Sempre sobra um admin (#102).** A única trava era não mexer em si mesmo,
+então dois admins com a tela aberta podiam se rebaixar ao mesmo tempo — ou um
+rebaixar o outro — e ninguém mais entrava na gestão de equipe. A conta de
+admins ativos agora é feita dentro da transação, com a tabela travada
+(`_confere_que_sobra_admin`): rebaixar, desativar ou excluir o último admin
+ativo é recusado com a frase que explica o que fazer antes.
+
+**O token da Cardápio Web (#119).** A rota das lojas mostrava os 4 primeiros
+E os 4 últimos caracteres de cada token, pra qualquer pessoa logada — a rota
+não olhava perfil. Agora só o admin vê, e só os 4 últimos, o suficiente pra
+conferir *qual* token está configurado; gerente e operação veem
+"conectada".
+
+**Limite de upload (#119).** Só as duas rotas de nota fiscal conferiam
+tamanho; a foto do cardápio não tinha limite nenhum. Agora existe um teto
+global de 25 MB (`MAX_CONTENT_LENGTH`) com uma resposta em português no lugar
+do erro cru do Flask.
+
+**Consulta que tira dado deixa rastro (#119).** Consulta não entra no
+registro — senão cada abertura de tela viraria linha —, mas baixar o banco
+inteiro não deixava rastro nenhum. As duas rotas de download
+(`/api/admin/backup-completo` e `/api/admin/backups/<nome>`) passam a ser
+registradas, com descrição própria.
+
+**Conta inicial aplicada uma vez só (#119).** `ADMIN_INICIAL_*` e
+`EQUIPE_INICIAL` eram reaplicados a cada boot: desativar ou excluir essas
+pessoas não grudava, e a senha da variável de ambiente voltava a valer no
+redeploy seguinte. Cada e-mail agora é aplicado uma vez e fica registrado em
+`bootstrap_usuario` — que mora no mesmo banco, então se o banco se perder (o
+motivo original do reaplicar) o bootstrap volta a funcionar sozinho. Pra
+forçar de propósito: `BOOTSTRAP_FORCAR=true` num boot.
+
+**Recusa em português (#120).** O servidor manda a razão ("Só administradores
+podem fazer isso.") e a tela jogava fora, mostrando só o número. Um helper
+só (`_erroDaResposta`) lê o `erro` da resposta e, quando não vem nenhum,
+traduz o código (401 sessão expirada, 403 sem acesso, 413 arquivo grande,
+404 recarregue a página). Trocado em 40 pontos do `script.js`.
+
+**Senha provisória e "Esqueci minha senha" (#121).** A senha que o admin
+digita ao cadastrar ou redefinir alguém passa pelo WhatsApp e fica anotada em
+algum lugar — não podia virar senha definitiva. Ela agora nasce provisória:
+no primeiro login a própria tela de entrada pede uma senha nova, e enquanto
+isso não acontece a pessoa consulta o sistema mas não muda nada (as rotas de
+escrita respondem 403 com `precisaTrocarSenha`). A tela de "Esqueci minha
+senha" deixou de ser um parágrafo solto e virou os três passos do que
+realmente acontece.
+
+**Sessão e aparelhos (#122).** A tela diz que o login vale 7 dias em cada
+aparelho, e ganhou "Sair de todos" — `usuario.sessao_versao` sobe e todo
+cookie com a versão antiga cai no clique seguinte, inclusive o do celular
+emprestado que ficou no salão.
+
+**Força da senha (#123).** Mínimo de 8 caracteres, letra e número
+misturados, e uma lista curta de senhas óbvias barrada. A regra vive numa
+função só (`_erro_da_senha`), usada no cadastro, no reset do admin e na troca
+pela própria pessoa; quem já tem senha curta continua entrando, a exigência
+vale na próxima senha digitada. A barrinha de força aparece no login, no
+modal de trocar senha e no cadastro de funcionário, com a mesma conta nos
+dois lados (`forca_da_senha` no servidor, `_forcaDaSenha` na tela).
+
+**Registro de atividade (#105).** Ganhou busca (pessoa, ação ou detalhe) e
+filtro por pessoa, e passou a dizer quantas ações existem no período e que a
+lista foi cortada — antes parava em 300 linhas sem avisar. No celular o
+detalhe deixou de depender do mouse.
+
+**Cópia completa em .zip (#106).** Era um link solto: clicava e ficava sem
+sinal nenhum enquanto o servidor montava o arquivo. Virou botão com
+"Preparando o arquivo...", aviso de que não é pra fechar a página, o tamanho
+do arquivo no fim e a mensagem de erro na tela quando falha.

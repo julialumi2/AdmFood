@@ -249,6 +249,10 @@ from backend.armazenamento import (
     item_da_cotacao_virou_pedido,
     insumo_do_preco_cotacao,
     buscar_convite_por_token,
+    contar_admins_ativos,
+    encerrar_sessoes_do_usuario,
+    bootstrap_ja_aplicado,
+    marcar_bootstrap_aplicado,
     responder_convite_cotacao,
     listar_recusas_cotacao,
     reabrir_convite_cotacao,
@@ -329,20 +333,44 @@ app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'f
 # O padrão do Flask é 31 dias, que é muito pra celular perdido ou emprestado
 # no salão. Uma semana evita login todo dia sem deixar sessão viva um mês.
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+# Quanto tempo a sessão dura, pra tela poder dizer isso em português em vez
+# de deixar a pessoa adivinhar (QA 22/09).
+DIAS_DE_SESSAO = 7
+
+# Sem limite global, o upload só era conferido nas duas rotas de nota fiscal
+# — a foto do cardápio não tinha limite nenhum e dava pra encher o disco do
+# servidor com um arquivo só (QA 22/09). 25 MB cobre foto de celular e nota
+# escaneada com folga.
+TAMANHO_MAXIMO_UPLOAD = 25 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = TAMANHO_MAXIMO_UPLOAD
+
+
+@app.errorhandler(413)
+def _arquivo_grande_demais(_erro):
+    limite_mb = TAMANHO_MAXIMO_UPLOAD // (1024 * 1024)
+    return jsonify({"erro": f"O arquivo passou de {limite_mb} MB. Tire uma foto menor ou comprima o arquivo."}), 413
 
 inicializar_banco()
 
 
+# Reaplicar a conta inicial a cada boot resolvia "ficar trancado de fora",
+# mas desativar ou excluir essas pessoas não grudava: o redeploy seguinte
+# devolvia acesso, papel e a senha da variável de ambiente (QA 22/09). Agora
+# cada e-mail é aplicado UMA vez (fica registrado em bootstrap_usuario).
+# BOOTSTRAP_FORCAR=true aplica de novo no próximo boot, pra quando ela
+# precisar mesmo — é o destrave de emergência.
+BOOTSTRAP_FORCAR = os.environ.get("BOOTSTRAP_FORCAR", "").strip().lower() in ("1", "true", "sim")
+
+
 def _sincronizar_usuario_inicial(nome, email, senha, papel, rotulo):
-    # Cria OU atualiza (senha/papel) o usuário desse e-mail específico toda
-    # vez que o app sobe — não só "se a tabela estiver vazia". Isso evita
-    # ficar trancado de fora se uma tentativa anterior (senha digitada
-    # errado, redeploy no meio da configuração) já tiver criado essa conta:
-    # o próximo redeploy corrige sozinho, em vez de pular silenciosamente
-    # porque já existe *algum* usuário.
+    # Cria a conta desse e-mail específico se ela ainda não tiver sido criada
+    # nenhuma vez. Depois disso quem manda é a tela de Equipe: desativar,
+    # trocar papel ou excluir passa a valer de verdade.
     email = (email or '').strip()
     senha = (senha or '').strip()
     if not email or not senha:
+        return
+    if bootstrap_ja_aplicado(email) and not BOOTSTRAP_FORCAR:
         return
     try:
         hash_senha = gerar_hash_senha(senha)
@@ -353,6 +381,7 @@ def _sincronizar_usuario_inicial(nome, email, senha, papel, rotulo):
         else:
             criar_usuario(nome or email, email, hash_senha, papel=papel)
             print(f"✅ {rotulo} criado: {email}")
+        marcar_bootstrap_aplicado(email)
     except Exception:
         import traceback
         print(f"❌ Falha ao sincronizar {rotulo.lower()} ({email}):")
@@ -437,7 +466,13 @@ def _usuario_logado():
         # Desativar alguém tem que valer agora, não daqui a 7 dias: a sessão
         # continuava valendo porque `ativo` só era conferido no login
         # (QA 22/09). Vale também pra conta excluída.
-        g.usuario_cache = usuario if usuario and usuario.get('ativo') else None
+        valido = bool(usuario and usuario.get('ativo'))
+        # "Sair de todos os aparelhos": o cookie guarda a versão da sessão de
+        # quando a pessoa entrou; subir a versão derruba o celular emprestado
+        # que ficou logado no salão (QA 22/09).
+        if valido and session.get('sessao_versao', 0) != (usuario.get('sessao_versao') or 0):
+            valido = False
+        g.usuario_cache = usuario if valido else None
     return g.usuario_cache
 
 
@@ -571,8 +606,20 @@ def _exigir_login():
             or caminho.startswith('/api/pedidos/confirmar/')
         ):
             return
-        if not _usuario_logado():
+        pessoa = _usuario_logado()
+        if not pessoa:
             return jsonify({"erro": "Não autenticado."}), 401
+        # Senha provisória: dá pra olhar o sistema, mas não pra mexer em nada
+        # antes de escolher uma senha própria (QA 22/09).
+        if (
+            pessoa.get('trocar_senha')
+            and request.method not in ('GET', 'HEAD', 'OPTIONS')
+            and caminho not in ('/api/logout', '/api/me/senha')
+        ):
+            return jsonify({
+                "erro": "Escolha uma senha sua antes de mexer no sistema — a que você recebeu é provisória.",
+                "precisaTrocarSenha": True,
+            }), 403
         return
 
     if caminho == '/' or caminho.endswith('.html'):
@@ -596,6 +643,14 @@ CHAVES_SENSIVEIS_NO_REGISTRO = {'senha', 'senhaNova', 'senhaAtual', 'senha_hash'
 # "Sincronizar agora" ficava de fora do registro: ninguém sabia quem
 # disparou, nem quando (QA 22/09).
 ROTAS_SEM_REGISTRO = {'/api/logout'}
+
+# Consulta não entra no registro (senão cada abertura de tela viraria linha),
+# mas a consulta que TIRA DADO do sistema tem que deixar rastro: baixar o
+# banco inteiro não deixava nenhum (QA 22/09).
+GETS_QUE_ENTRAM_NO_REGISTRO = {
+    '/api/admin/backup-completo': 'Baixou a cópia completa do sistema (.zip)',
+    '/api/admin/backups/<nome>': 'Baixou uma cópia de segurança do banco',
+}
 
 DESCRICAO_DA_ACAO = {
     ('POST', '/api/login'): 'Entrou no sistema',
@@ -709,13 +764,15 @@ def _registrar_acao_da_requisicao(resposta):
     """Nunca derruba a resposta: se o registro falhar, o que a pessoa pediu
     seguiu do mesmo jeito e o erro fica só no log do servidor."""
     try:
-        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        regra_bruta = request.url_rule.rule if request.url_rule else request.path
+        if request.method in ('GET', 'HEAD', 'OPTIONS') and regra_bruta not in GETS_QUE_ENTRAM_NO_REGISTRO:
             return resposta
         if not request.path.startswith('/api/') or request.path in ROTAS_SEM_REGISTRO:
             return resposta
-        regra = request.url_rule.rule if request.url_rule else request.path
+        regra = regra_bruta
         descricao = getattr(g, 'descricao_da_acao', None) \
-            or DESCRICAO_DA_ACAO.get((request.method, regra)) or f"{request.method} {regra}"
+            or DESCRICAO_DA_ACAO.get((request.method, regra)) \
+            or GETS_QUE_ENTRAM_NO_REGISTRO.get(regra) or f"{request.method} {regra}"
         if request.path == '/api/login' and resposta.status_code != 200:
             descricao = 'Tentativa de login que não entrou'
         registrar_acao(
@@ -1160,6 +1217,46 @@ def arquivo_imagem(nome_arquivo):
     return send_from_directory(os.path.join(DIRETORIO_BASE, 'imgs'), nome_arquivo)
 
 
+# Senha de 6 caracteres passava, e "123456" é 6 caracteres. A regra agora é
+# uma só, usada no cadastro, no reset do admin e na troca pela própria pessoa
+# (QA 22/09). Quem já tem senha curta continua entrando; a exigência vale na
+# próxima vez que alguém digitar uma senha nova.
+TAMANHO_MINIMO_SENHA = 8
+SENHAS_OBVIAS = {
+    "12345678", "123456789", "1234567890", "senha123", "password", "admfood123",
+    "artesanos", "qwertyui", "11111111", "abcd1234",
+}
+
+
+def forca_da_senha(senha):
+    """0 a 4 — a mesma conta que a tela mostra na barrinha."""
+    senha = senha or ""
+    pontos = 0
+    if len(senha) >= TAMANHO_MINIMO_SENHA:
+        pontos += 1
+    if len(senha) >= 12:
+        pontos += 1
+    if any(c.isalpha() for c in senha) and any(c.isdigit() for c in senha):
+        pontos += 1
+    if any(not c.isalnum() for c in senha) or (
+        any(c.islower() for c in senha) and any(c.isupper() for c in senha)
+    ):
+        pontos += 1
+    return pontos
+
+
+def _erro_da_senha(senha):
+    """Mensagem de recusa, ou None se a senha serve."""
+    senha = senha or ""
+    if len(senha) < TAMANHO_MINIMO_SENHA:
+        return f"A senha precisa ter pelo menos {TAMANHO_MINIMO_SENHA} caracteres."
+    if senha.lower() in SENHAS_OBVIAS:
+        return "Essa senha é das primeiras que qualquer um tenta. Escolha outra."
+    if senha.isdigit() or senha.isalpha():
+        return "Misture letras e números na senha."
+    return None
+
+
 def _formatar_usuario(usuario):
     return {
         "id": usuario["id"],
@@ -1167,6 +1264,10 @@ def _formatar_usuario(usuario):
         "email": usuario["email"],
         "papel": usuario["papel"],
         "loja": usuario["loja"] or None,
+        # Senha que o admin escolheu é provisória: a tela pede uma nova antes
+        # de deixar usar o sistema (QA 22/09).
+        "precisaTrocarSenha": bool(usuario.get("trocar_senha")),
+        "diasDeSessao": DIAS_DE_SESSAO,
     }
 
 
@@ -1235,6 +1336,7 @@ def api_login():
     limpar_falhas_de_login(email)
     session.clear()
     session['usuario_id'] = usuario['id']
+    session['sessao_versao'] = usuario.get('sessao_versao') or 0
     session.permanent = True
     return jsonify({"usuario": _formatar_usuario(usuario)})
 
@@ -1268,10 +1370,26 @@ def api_trocar_minha_senha():
 
     if not senha_confere(senha_atual, usuario['senha_hash']):
         return jsonify({"erro": "Senha atual incorreta."}), 400
-    if len(senha_nova) < 6:
-        return jsonify({"erro": "A nova senha precisa ter pelo menos 6 caracteres."}), 400
+    erro_senha = _erro_da_senha(senha_nova)
+    if erro_senha:
+        return jsonify({"erro": erro_senha}), 400
+    if senha_nova == senha_atual:
+        return jsonify({"erro": "A senha nova precisa ser diferente da atual."}), 400
 
-    atualizar_usuario(usuario['id'], {'senha_hash': gerar_hash_senha(senha_nova)})
+    atualizar_usuario(usuario['id'], {'senha_hash': gerar_hash_senha(senha_nova), 'trocar_senha': 0})
+    return jsonify({"sucesso": True})
+
+
+@app.route('/api/me/sair-de-todos', methods=['POST'])
+def api_sair_de_todos_os_aparelhos():
+    """Derruba a sessão desta pessoa em todo aparelho, inclusive neste.
+    Celular emprestado no salão continuava logado por 7 dias e não havia como
+    tirar de longe (QA 22/09)."""
+    usuario = _usuario_logado()
+    if not usuario:
+        return jsonify({"erro": "Não autenticado."}), 401
+    encerrar_sessoes_do_usuario(usuario['id'])
+    session.clear()
     return jsonify({"sucesso": True})
 
 
@@ -1293,6 +1411,7 @@ def _formatar_membro_equipe(usuario):
         "loja": usuario["loja"] or None,
         "ativo": bool(usuario["ativo"]),
         "criadoEm": usuario["criado_em"],
+        "senhaProvisoria": bool(usuario.get("trocar_senha")),
     }
 
 
@@ -1335,12 +1454,15 @@ def api_criar_usuario():
 
     if not nome or not email:
         return jsonify({"erro": "Informe nome e e-mail."}), 400
-    if len(senha) < 6:
-        return jsonify({"erro": "A senha precisa ter pelo menos 6 caracteres."}), 400
+    erro_senha = _erro_da_senha(senha)
+    if erro_senha:
+        return jsonify({"erro": erro_senha}), 400
     if buscar_usuario_por_email(email):
         return jsonify({"erro": "Já existe um usuário com esse e-mail."}), 400
 
-    usuario_id = criar_usuario(nome, email, gerar_hash_senha(senha), papel, loja)
+    # A senha que o admin digita aqui passa pelo WhatsApp e fica anotada em
+    # algum lugar: ela serve pra primeira entrada, não pra sempre (QA 22/09).
+    usuario_id = criar_usuario(nome, email, gerar_hash_senha(senha), papel, loja, trocar_senha=True)
     return jsonify({"usuario": _formatar_membro_equipe(buscar_usuario_por_id(usuario_id))})
 
 
@@ -1371,9 +1493,12 @@ def api_atualizar_usuario(usuario_id):
     if 'ativo' in dados:
         campos['ativo'] = 1 if dados['ativo'] else 0
     if 'senha' in dados and dados['senha']:
-        if len(dados['senha']) < 6:
-            return jsonify({"erro": "A senha precisa ter pelo menos 6 caracteres."}), 400
+        erro_senha = _erro_da_senha(dados['senha'])
+        if erro_senha:
+            return jsonify({"erro": erro_senha}), 400
         campos['senha_hash'] = gerar_hash_senha(dados['senha'])
+        # Senha redefinida pelo admin é provisória: a pessoa troca na entrada.
+        campos['trocar_senha'] = 1
 
     if not campos:
         return jsonify({"erro": "Nada pra atualizar."}), 400
@@ -1387,7 +1512,12 @@ def api_atualizar_usuario(usuario_id):
         if 'papel' in campos and campos['papel'] != 'admin':
             return jsonify({"erro": "Você não pode remover seu próprio acesso de admin."}), 400
 
-    atualizar_usuario(usuario_id, campos)
+    # Sem isto, dois admins com a tela aberta podiam se rebaixar ao mesmo
+    # tempo e ninguém mais entrava na gestão de equipe (QA 22/09).
+    try:
+        atualizar_usuario(usuario_id, campos)
+    except ValueError as recusa:
+        return jsonify({"erro": str(recusa)}), 400
     return jsonify({"usuario": _formatar_membro_equipe(buscar_usuario_por_id(usuario_id))})
 
 
@@ -1404,7 +1534,10 @@ def api_excluir_usuario(usuario_id):
     if usuario_logado['id'] == usuario_id:
         return jsonify({"erro": "Você não pode excluir a si mesmo."}), 400
 
-    excluir_usuario(usuario_id)
+    try:
+        excluir_usuario(usuario_id)
+    except ValueError as recusa:
+        return jsonify({"erro": str(recusa)}), 400
     return jsonify({"sucesso": True})
 
 
@@ -1751,8 +1884,12 @@ def api_listar_registro():
     dias = request.args.get('dias', 7, type=int)
     usuario_id = request.args.get('usuarioId', type=int)
     limite = min(request.args.get('limite', 300, type=int), 1000)
-    acoes = listar_registro_acoes(dias=max(1, dias), usuario_id=usuario_id, limite=limite)
-    return jsonify({"acoes": [
+    busca = (request.args.get('busca') or '').strip()
+    # A tela cortava em 300 linhas sem dizer que tinha cortado (QA 22/09).
+    acoes, total = listar_registro_acoes(
+        dias=max(1, dias), usuario_id=usuario_id, limite=limite, busca=busca
+    )
+    return jsonify({"total": total, "limite": limite, "cortou": total > len(acoes), "acoes": [
         {
             "id": a["id"],
             "quando": a["criado_em"],
@@ -5765,16 +5902,21 @@ def api_faturamento_rede_diario():
 
 
 def _mascarar_token(token):
+    """Mostrava os 4 primeiros E os 4 últimos caracteres do token da Cardápio
+    Web, pra qualquer pessoa logada — nem perfil a rota conferia (QA 22/09).
+    Agora só o admin vê, e só os 4 últimos, o suficiente pra ele conferir
+    QUAL token está lá sem entregar pedaço utilizável do segredo."""
     if not token:
         return "— não configurado —"
     if len(token) <= 8:
-        return "•" * len(token)
-    return f"{token[:4]}{'•' * 8}{token[-4:]}"
+        return "•" * 12
+    return f"{'•' * 8}{token[-4:]}"
 
 
 @app.route('/api/config/lojas', methods=['GET'])
 def api_config_lojas():
     ultimo_dia = buscar_ultima_sincronizacao()
+    ehAdmin = (_usuario_logado() or {}).get('papel') == 'admin'
     lojas = []
     # Gerente e operação viam "4 lojas conectadas" e o nome das outras nas
     # pílulas do topo de Configurações: a rota não olhava o perfil (QA 22/09).
@@ -5782,12 +5924,16 @@ def api_config_lojas():
         if not _loja_visivel(nome):
             continue
         ultimo_dia_loja = buscar_ultima_sincronizacao(nome)
-        lojas.append({
+        linha = {
             "nome": nome,
-            "tokenMascarado": _mascarar_token(cfg.get("cardapio_web_token")),
             "temPresencial": nome in UNIDADES_COM_PRESENCIAL,
             "ultimaSincronizacao": _formatar_data_br(ultimo_dia_loja) if ultimo_dia_loja else None,
-        })
+        }
+        if ehAdmin:
+            linha["tokenMascarado"] = _mascarar_token(cfg.get("cardapio_web_token"))
+        else:
+            linha["tokenMascarado"] = "conectada" if cfg.get("cardapio_web_token") else "— não configurado —"
+        lojas.append(linha)
     # Quando a sincronização automática de fato rodou (o relógio do
     # navegador não sabe disso): a tela carimba essa hora, não a dela
     # (QA 22/09).

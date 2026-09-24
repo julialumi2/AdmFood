@@ -255,6 +255,67 @@
   font-size: 0.78rem;
 }
 
+/* Filtro por pessoa e busca no registro, e o aviso de que a lista foi
+   cortada (QA 22/09) */
+.registro-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.registro-busca { min-width: 220px; }
+
+.registro-aviso {
+  margin: 0 0 var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .registro-filtros { width: 100%; }
+  .registro-filtros > * { flex: 1 1 100%; }
+  /* No celular o detalhe só aparecia passando o mouse — que não existe lá */
+  .registro-detalhe {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+  }
+}
+
+/* Força da senha: a tela não dizia se a senha era boa ou ruim (QA 22/09) */
+.forca-senha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.forca-senha-barra {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background-color: var(--border-color);
+  overflow: hidden;
+}
+
+.forca-senha-barra span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background-color: var(--danger);
+  transition: width 0.18s ease, background-color 0.18s ease;
+}
+
+.forca-senha[data-forca="2"] .forca-senha-barra span { background-color: var(--warning, #F59E0B); }
+.forca-senha[data-forca="3"] .forca-senha-barra span,
+.forca-senha[data-forca="4"] .forca-senha-barra span { background-color: var(--success); }
+
+.forca-senha-texto {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  min-width: 96px;
+}
+
 /* Quando a rotina automática rodou de verdade (QA 22/09) */
 .backup-ok, .backup-alerta {
   display: block;

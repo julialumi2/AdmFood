@@ -248,7 +248,25 @@ def inicializar_banco():
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_registro_acao_data ON registro_acao(criado_em DESC)")
+        # Senha provisória: quem recebe acesso (ou um reset do admin) troca
+        # a senha no primeiro login. Antes ninguém era obrigado, e a senha
+        # que o admin escolheu ficava valendo pra sempre (QA 22/09).
+        # sessao_versao: subir esse número invalida a sessão em todos os
+        # aparelhos — não existia "sair de todos", e celular emprestado no
+        # salão continuava logado por 7 dias (QA 22/09).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bootstrap_usuario (
+                email TEXT PRIMARY KEY,
+                aplicado_em TEXT NOT NULL
+            )
+            """
+        )
         colunas_usuario = {c["name"] for c in conn.execute("PRAGMA table_info(usuario)").fetchall()}
+        if "trocar_senha" not in colunas_usuario:
+            conn.execute("ALTER TABLE usuario ADD COLUMN trocar_senha INTEGER NOT NULL DEFAULT 0")
+        if "sessao_versao" not in colunas_usuario:
+            conn.execute("ALTER TABLE usuario ADD COLUMN sessao_versao INTEGER NOT NULL DEFAULT 0")
         if "loja" not in colunas_usuario:
             # Loja do funcionário: gerente e operação só enxergam a dela.
             # NULL = a rede inteira, que é o caso do admin (card #35, 17/09).
@@ -1992,12 +2010,17 @@ def adicionar_comentario(tarefa_id, autor, texto):
 
 # --- USUÁRIOS (login da equipe) ---------------------------------------------
 
-def criar_usuario(nome, email, senha_hash, papel="operacao", loja=None):
+def criar_usuario(nome, email, senha_hash, papel="operacao", loja=None, trocar_senha=False):
+    """`trocar_senha` marca a senha como provisória: no primeiro login o
+    sistema exige uma nova. A senha que o admin digitou passa pelo WhatsApp e
+    fica anotada em algum lugar — ela não pode virar a senha definitiva de
+    ninguém (QA 22/09)."""
     agora = datetime.now().isoformat()
     with conexao() as conn:
         cursor = conn.execute(
-            "INSERT INTO usuario (nome, email, senha_hash, papel, loja, ativo, criado_em) VALUES (?, ?, ?, ?, ?, 1, ?)",
-            (nome, email.strip().lower(), senha_hash, papel, loja or None, agora),
+            "INSERT INTO usuario (nome, email, senha_hash, papel, loja, ativo, criado_em, trocar_senha) "
+            "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+            (nome, email.strip().lower(), senha_hash, papel, loja or None, agora, 1 if trocar_senha else 0),
         )
         return cursor.lastrowid
 
@@ -2020,18 +2043,86 @@ def listar_usuarios():
         return [dict(linha) for linha in linhas]
 
 
+def _confere_que_sobra_admin(conn, usuario_id, campos=None, excluindo=False):
+    """Levanta ValueError se a mudança deixaria o sistema sem nenhum admin
+    ativo. A única trava era "não mexer em si mesmo": dois admins podiam se
+    rebaixar ao mesmo tempo, ou um rebaixar o outro, e ninguém mais entrava
+    na gestão de equipe (QA 22/09). A conta é feita dentro da transação, com
+    a tabela travada, porque duas telas abertas fazem isso ao mesmo tempo."""
+    alvo = conn.execute("SELECT papel, ativo FROM usuario WHERE id = ?", (usuario_id,)).fetchone()
+    if not alvo or not (alvo["papel"] == "admin" and alvo["ativo"]):
+        return  # não é admin ativo: não pode ser o último
+    campos = campos or {}
+    continua_admin = (
+        not excluindo
+        and campos.get("papel", "admin") == "admin"
+        and campos.get("ativo", 1) == 1
+    )
+    if continua_admin:
+        return
+    outros = conn.execute(
+        "SELECT COUNT(*) AS n FROM usuario WHERE papel = 'admin' AND ativo = 1 AND id <> ?",
+        (usuario_id,),
+    ).fetchone()["n"]
+    if not outros:
+        raise ValueError(
+            "Esse é o único admin ativo. Promova outra pessoa a admin antes de "
+            "tirar o acesso desta — senão ninguém consegue mais entrar na gestão de equipe."
+        )
+
+
 def atualizar_usuario(usuario_id, campos):
     if not campos:
         return
     colunas = ", ".join(f"{campo} = ?" for campo in campos)
     valores = list(campos.values()) + [usuario_id]
     with conexao() as conn:
+        travar_para_escrita(conn)
+        _confere_que_sobra_admin(conn, usuario_id, campos)
         conn.execute(f"UPDATE usuario SET {colunas} WHERE id = ?", valores)
 
 
 def excluir_usuario(usuario_id):
     with conexao() as conn:
+        travar_para_escrita(conn)
+        _confere_que_sobra_admin(conn, usuario_id, excluindo=True)
         conn.execute("DELETE FROM usuario WHERE id = ?", (usuario_id,))
+
+
+def contar_admins_ativos():
+    with conexao() as conn:
+        return conn.execute("SELECT COUNT(*) AS n FROM usuario WHERE papel = 'admin' AND ativo = 1").fetchone()["n"]
+
+
+def encerrar_sessoes_do_usuario(usuario_id):
+    """Sobe a versão da sessão: todo aparelho que estava logado com a versão
+    antiga cai no próximo clique. Devolve a versão nova."""
+    with conexao() as conn:
+        travar_para_escrita(conn)
+        conn.execute(
+            "UPDATE usuario SET sessao_versao = COALESCE(sessao_versao, 0) + 1 WHERE id = ?", (usuario_id,)
+        )
+        linha = conn.execute("SELECT sessao_versao FROM usuario WHERE id = ?", (usuario_id,)).fetchone()
+        return linha["sessao_versao"] if linha else 0
+
+
+def bootstrap_ja_aplicado(email):
+    """A conta inicial desse e-mail já foi criada alguma vez? Enquanto isso
+    não era guardado, cada boot regravava senha, papel e `ativo` das contas
+    de ADMIN_INICIAL/EQUIPE_INICIAL: desativar ou excluir essas pessoas não
+    grudava, e a senha da variável de ambiente voltava a valer (QA 22/09)."""
+    with conexao() as conn:
+        return bool(conn.execute(
+            "SELECT 1 FROM bootstrap_usuario WHERE email = ?", ((email or "").strip().lower(),)
+        ).fetchone())
+
+
+def marcar_bootstrap_aplicado(email):
+    with conexao() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO bootstrap_usuario (email, aplicado_em) VALUES (?, ?)",
+            ((email or "").strip().lower(), datetime.now().isoformat()),
+        )
 
 
 # --- COMPARATIVO DE PREÇOS DO CARDÁPIO (importado de planilha, editável) --
@@ -8970,25 +9061,33 @@ def registrar_acao(usuario, metodo, rota, caminho, status, descricao, detalhes=N
         )
 
 
-def listar_registro_acoes(dias=7, usuario_id=None, limite=300):
-    """Do mais novo pro mais velho, dos últimos N dias."""
+def listar_registro_acoes(dias=7, usuario_id=None, limite=300, busca=None):
+    """Do mais novo pro mais velho, dos últimos N dias. Devolve
+    (linhas, total): a tela cortava em 300 sem dizer que tinha cortado, então
+    o admin lia "foi só isso que aconteceu" olhando meia lista (QA 22/09)."""
     desde = (datetime.now() - timedelta(days=int(dias))).isoformat()
     filtros = ["criado_em >= ?"]
     valores = [desde]
     if usuario_id:
         filtros.append("usuario_id = ?")
         valores.append(int(usuario_id))
+    termo = (busca or "").strip()
+    if termo:
+        filtros.append("(usuario_nome LIKE ? OR descricao LIKE ? OR detalhes LIKE ? OR caminho LIKE ?)")
+        valores.extend([f"%{termo}%"] * 4)
+    onde = " AND ".join(filtros)
     with conexao() as conn:
+        total = conn.execute(f"SELECT COUNT(*) AS n FROM registro_acao WHERE {onde}", valores).fetchone()["n"]
         linhas = conn.execute(
             f"""
             SELECT * FROM registro_acao
-            WHERE {' AND '.join(filtros)}
+            WHERE {onde}
             ORDER BY criado_em DESC
             LIMIT ?
             """,
             [*valores, int(limite)],
         ).fetchall()
-        return [dict(linha) for linha in linhas]
+        return [dict(linha) for linha in linhas], total
 
 
 def limpar_registro_acoes_antigos(dias=DIAS_DE_REGISTRO_ACAO):

@@ -605,6 +605,23 @@ let canalSelecionado = null;
 // Cores dos gráficos (paleta de 2026-09-15, igual às --grafico-* do theme.css):
 // cinco cores bem diferentes entre si, sem vermelho nem verde (que são de
 // queda e alta). Canal de venda tem cor fixa, a mesma em toda tela.
+// A razão da recusa vinha do servidor ("Só administradores podem fazer
+// isso.") e a tela jogava fora, mostrando só o número: "403" (QA 22/09).
+// Agora a frase do servidor vence; o código sobra pro caso de não vir uma.
+async function _erroDaResposta(resposta) {
+  try {
+    const dados = await resposta.clone().json();
+    if (dados && dados.erro) return dados.erro;
+  } catch (_) {
+    // Resposta sem JSON (HTML de erro, timeout do proxy): cai no texto abaixo.
+  }
+  if (resposta.status === 401) return 'Sua sessão expirou. Entre de novo pra continuar.';
+  if (resposta.status === 403) return 'Seu acesso não permite fazer isso.';
+  if (resposta.status === 413) return 'O arquivo é grande demais pro sistema aceitar.';
+  if (resposta.status === 404) return 'O sistema não achou o que a tela pediu. Recarregue a página.';
+  return `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`;
+}
+
 const CORES_GRAFICO = ['#2563EB', '#F59E0B', '#8B5CF6', '#14B8A6', '#EC4899'];
 const COR_GRAFICO_OUTROS = '#A1A1AA';
 const CORES_CANAL = CORES_GRAFICO;
@@ -799,7 +816,7 @@ async function exibirCanalDoDia(unidade, diaIso) {
     const resposta = await fetch(
       `/api/canal-analise?unidade=${encodeURIComponent(unidade)}&dia=${diaIso}`
     );
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
 
     canalSelecionado = { unidade, diaIso };
@@ -1379,7 +1396,7 @@ async function carregarInsights(inicio, fim, diaSemana) {
     const filtroDiaSemana = diaSemana ? `&diaSemana=${diaSemana}` : '';
     const resposta = await fetch(`/api/insights?inicio=${inicio}&fim=${fim}${filtroDiaSemana}`);
     if (!resposta.ok) {
-      throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+      throw new Error(await _erroDaResposta(resposta));
     }
     dashboardData = await resposta.json();
     updateDashboard(dashboardData[currentTab] ? currentTab : 'geral');
@@ -1442,7 +1459,7 @@ async function carregarPreparo() {
   if (avisoPreparo) avisoPreparo.textContent = 'Carregando...';
   try {
     const resposta = await fetch(`/api/preparo?inicio=${inicio}&fim=${fim}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     preparoData = await resposta.json();
     renderPreparoTab(preparoTabAtual);
     marcarSincronizadoAte('preparo-atualizado-em');
@@ -3274,7 +3291,7 @@ async function carregarLotesVencendo() {
   if (!tbody) return;
   try {
     const resposta = await fetch('/api/insumos/lotes-vencendo?dias=7');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     lotesVencendo = dados.lotes || [];
     renderLotesVencendo();
@@ -3401,7 +3418,7 @@ async function carregarDatasEspeciais() {
   if (window.usuarioLogado?.papel !== 'admin') return;
   try {
     const resposta = await fetch('/api/datas-especiais');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     datasEspeciaisLista = dados.datasEspeciais || [];
     card.style.display = '';
@@ -3520,7 +3537,7 @@ async function carregarFornecedores() {
   if (tbody) tbody.innerHTML = _linhaCarregando(8);
   try {
     const resposta = await fetch('/api/fornecedores');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     fornecedoresLista = dados.fornecedores || [];
     if (tbody) renderFornecedoresTabela();
@@ -3846,7 +3863,7 @@ async function carregarCotacoes() {
   tbody.innerHTML = _linhaCarregando(10);
   try {
     const resposta = await fetch('/api/cotacoes');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     cotacoesLista = dados.cotacoes || [];
     renderCotacoesLista();
@@ -4220,7 +4237,7 @@ async function carregarHistoricoCompras() {
   container.innerHTML = `<p class="panel-subtitle">Carregando...</p>`;
   try {
     const resposta = await fetch('/api/cotacoes/historico');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     historicoComprasLista = dados.historico || [];
     renderHistoricoCompras();
@@ -4319,7 +4336,7 @@ async function recarregarCotacaoDetalhe() {
   const isAdmin = _possoGerir();
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
 
     document.getElementById('cotacao-detalhe-titulo').textContent = dados.cotacao.titulo;
@@ -4373,7 +4390,7 @@ async function carregarConvitesCotacao() {
   if (!card) return;
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     lojasCotacaoAtual = dados.lojas || [];
     renderConvitesCotacao(dados.convites || []);
@@ -4470,7 +4487,7 @@ async function carregarPreviaConvite() {
   alvo.innerHTML = '<p class="panel-subtitle">Carregando...</p>';
   try {
     const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/convites/previa`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     previaConviteDados = await resposta.json();
     renderPreviaConvite();
   } catch (erro) {
@@ -5445,7 +5462,7 @@ function _rotuloEstagioPedido(p, estagio) {
 async function _marcarPedidoEnviadoWhatsApp(pedidoId) {
   try {
     const resposta = await fetch(`/api/pedidos/${pedidoId}/whatsapp-enviado`, { method: 'POST' });
-    if (!resposta.ok) throw new Error(`código ${resposta.status}`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     return true;
   } catch (erro) {
     console.error('Falha ao marcar pedido como enviado:', erro);
@@ -5496,7 +5513,7 @@ async function carregarPedidos() {
   if (!pedidosLista.length) tbody.innerHTML = _linhaCarregando(7);
   try {
     const resposta = await fetch('/api/pedidos');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     pedidosLista = dados.pedidos || [];
     if (dados.estagios) pedidoEstagios = dados.estagios;
@@ -6252,7 +6269,7 @@ async function carregarContagens() {
   tbody.innerHTML = _linhaCarregando(6);
   try {
     const resposta = await fetch('/api/contagens');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     contagensLista = dados.contagens || [];
     renderContagensTabela();
@@ -6531,7 +6548,7 @@ async function carregarRequisicoes() {
   tbody.innerHTML = _linhaCarregando(5);
   try {
     const resposta = await fetch('/api/requisicoes');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     requisicoesLista = dados.requisicoes || [];
     renderRequisicoesTabela();
@@ -9849,7 +9866,7 @@ async function carregarRecebimentos() {
       fetch('/api/recebimentos'),
       fetch('/api/recebimentos/recebidos?dias=30'),
     ]);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     recebimentosLista = dados.pedidos || [];
     if (dados.diasEntregaAtrasada) pedidosDiasAtraso = dados.diasEntregaAtrasada;
@@ -10641,7 +10658,7 @@ function _lojasHomologadasDoFornecedor(insumo, fornecedorId) {
 async function _carregarInsumosParaPreco(forcar = false) {
   if (insumosParaPreco && !forcar) return insumosParaPreco;
   const resposta = await fetch('/api/insumos');
-  if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+  if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
   insumosParaPreco = (await resposta.json()).insumos || [];
   return insumosParaPreco;
 }
@@ -11258,7 +11275,7 @@ async function carregarPresencial(unidade) {
   tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Carregando...</td></tr>`;
   try {
     const resposta = await fetch(`/api/venda-presencial?unidade=${encodeURIComponent(unidade)}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     const lancamentos = dados.lancamentos || [];
     tbody.innerHTML = lancamentos.length
@@ -11329,7 +11346,7 @@ if (presencialTableBody) {
         );
         if (!resposta.ok) {
           const erroDados = await resposta.json().catch(() => ({}));
-          throw new Error(erroDados.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+          throw new Error(erroDados.erro || await _erroDaResposta(resposta));
         }
         if (presencialEditandoDiaOriginal === diaIso) cancelarEdicaoPresencial();
         await carregarPresencial(currentTab);
@@ -11385,7 +11402,7 @@ if (formPresencial) {
       });
       const dadosSalvos = await resposta.json().catch(() => ({}));
       if (!resposta.ok) {
-        throw new Error(dadosSalvos.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+        throw new Error(dadosSalvos.erro || await _erroDaResposta(resposta));
       }
       // O segundo lançamento do mesmo dia apagava o primeiro em silêncio, e
       // com ele mudavam faturamento, ticket e a semana (QA 22/09).
@@ -11504,7 +11521,7 @@ async function carregarGraficoRede() {
 
   try {
     const resposta = await fetch('/api/faturamento-rede-diario?dias=7');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     const dias = dados.dias || [];
     if (dados.periodo) periodoGraficoHome = dados.periodo;
@@ -11589,7 +11606,7 @@ async function carregarCanalRedeHome() {
 
   try {
     const resposta = await fetch(`/api/insights?inicio=${encodeURIComponent(janela.inicio)}&fim=${encodeURIComponent(janela.fim)}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     const canaisBrutos = (dados.geral && dados.geral.canais) || [];
 
@@ -11762,7 +11779,7 @@ async function carregarStatusSincronizacaoHome() {
   };
   try {
     const resposta = await fetch('/api/config/lojas');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const lojas = (await resposta.json()).lojas || [];
     const atrasadas = lojas.filter((l) => !_sincronizacaoEmDia(l.ultimaSincronizacao));
     if (!atrasadas.length) {
@@ -11789,7 +11806,7 @@ async function carregarConfigLojas() {
 
   try {
     const resposta = await fetch('/api/config/lojas');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
 
     if (ultimaSyncElem) {
@@ -11859,7 +11876,7 @@ async function sincronizarAgora() {
       _acompanharSincronizacao();
       return;
     }
-    if (!resposta.ok) throw new Error(dados.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(dados.erro || await _erroDaResposta(resposta));
 
     if (resultadoElem) {
       resultadoElem.innerHTML = `<div class="sync-resultado-item">Sincronização de ${dados.diaLabel} iniciada em segundo plano — pode levar alguns minutos. Os números atualizam sozinhos aqui.</div>`;
@@ -12313,7 +12330,7 @@ async function carregarGestaoHome() {
   const soAlertas = await _esconderBlocosDeGestao();
   try {
     const resposta = await fetch('/api/home/gestao');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     _renderEstoqueCriticoHome(dados.estoqueCritico || {});
     _renderAtividadesHome(dados.atividades || []);
@@ -12367,6 +12384,22 @@ async function fazerLogin(event) {
       return;
     }
 
+    // Senha provisória: em vez de entrar, a pessoa escolhe a senha dela
+    // aqui mesmo — a senha que o admin digitou não pode virar definitiva
+    // (QA 22/09).
+    if (dados.usuario && dados.usuario.precisaTrocarSenha) {
+      _senhaProvisoriaDigitada = senha;
+      document.getElementById('form-login').style.display = 'none';
+      document.querySelector('.form-title').textContent = 'Escolha sua senha';
+      document.querySelector('.form-subtitle').style.display = 'none';
+      const formNovo = document.getElementById('form-primeira-senha');
+      formNovo.style.display = '';
+      document.getElementById('primeira-senha-oi').textContent =
+        `Oi, ${dados.usuario.nome.split(' ')[0]}. A senha que você recebeu é provisória — escolha uma sua pra continuar.`;
+      document.getElementById('primeira-senha').focus();
+      return;
+    }
+
     window.location.href = 'index.html';
   } catch (erro) {
     console.error('Falha ao fazer login:', erro);
@@ -12375,6 +12408,77 @@ async function fazerLogin(event) {
     btn.disabled = false;
     btn.textContent = 'Entrar';
   }
+}
+
+// A senha que a pessoa acabou de digitar pra entrar, pra mandar como
+// "senha atual" na troca obrigatória — nunca sai desta página.
+let _senhaProvisoriaDigitada = '';
+
+// Mesma conta do servidor (forca_da_senha em app.py): 0 a 4.
+const FORCA_SENHA_ROTULOS = ['muito fraca', 'fraca', 'razoável', 'boa', 'forte'];
+
+function _forcaDaSenha(senha) {
+  senha = senha || '';
+  let pontos = 0;
+  if (senha.length >= 8) pontos += 1;
+  if (senha.length >= 12) pontos += 1;
+  if (/[a-zA-Z]/.test(senha) && /[0-9]/.test(senha)) pontos += 1;
+  if (/[^a-zA-Z0-9]/.test(senha) || (/[a-z]/.test(senha) && /[A-Z]/.test(senha))) pontos += 1;
+  return pontos;
+}
+
+// Liga a barrinha de força num campo de senha. A senha só precisava de 6
+// caracteres e nada na tela dizia se aquilo era bom ou ruim (QA 22/09).
+function _ligarForcaDaSenha(idCampo, idBarra) {
+  const campo = document.getElementById(idCampo);
+  const caixa = document.getElementById(idBarra);
+  if (!campo || !caixa) return;
+  const barra = caixa.querySelector('.forca-senha-barra span');
+  const texto = caixa.querySelector('.forca-senha-texto');
+  campo.addEventListener('input', () => {
+    const valor = campo.value;
+    caixa.hidden = !valor;
+    const pontos = _forcaDaSenha(valor);
+    barra.style.width = `${(pontos / 4) * 100}%`;
+    caixa.dataset.forca = String(pontos);
+    texto.textContent = valor.length < 8
+      ? `faltam ${8 - valor.length} caractere${8 - valor.length === 1 ? '' : 's'}`
+      : FORCA_SENHA_ROTULOS[pontos];
+  });
+}
+
+async function salvarPrimeiraSenha(evento) {
+  evento.preventDefault();
+  const nova = document.getElementById('primeira-senha').value;
+  const confirmar = document.getElementById('primeira-senha-confirmar').value;
+  const elErro = document.getElementById('primeira-senha-erro');
+  const botao = document.getElementById('btn-primeira-senha');
+  elErro.style.display = 'none';
+  if (nova !== confirmar) {
+    elErro.textContent = 'As duas senhas precisam ser iguais.';
+    elErro.style.display = 'block';
+    return;
+  }
+  botao.disabled = true;
+  botao.textContent = 'Salvando...';
+  try {
+    const resposta = await fetch('/api/me/senha', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senhaAtual: _senhaProvisoriaDigitada, senhaNova: nova }),
+    });
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+    window.location.href = 'index.html';
+  } catch (erro) {
+    elErro.textContent = erro.message;
+    elErro.style.display = 'block';
+    botao.disabled = false;
+    botao.textContent = 'Salvar e entrar';
+  }
+}
+
+if (document.getElementById('form-primeira-senha')) {
+  _ligarForcaDaSenha('primeira-senha', 'forcaPrimeiraSenha');
 }
 
 function alternarVisibilidadeSenha() {
@@ -12436,6 +12540,13 @@ async function carregarUsuarioLogado() {
       contaNome.textContent = usuario.nome;
       document.getElementById('conta-email-label').textContent = usuario.email;
       document.getElementById('conta-papel-label').textContent = (PAPEL_LABEL_USUARIO[usuario.papel] || usuario.papel) + (usuario.loja ? ` · ${usuario.loja}` : '');
+      // Ninguém sabia por quanto tempo o login vale (QA 22/09).
+      const rotuloSessao = document.getElementById('conta-sessao-label');
+      if (rotuloSessao) {
+        const dias = usuario.diasDeSessao || 7;
+        rotuloSessao.textContent =
+          `Quem entra fica conectado por ${dias} dias em cada aparelho. "Sair de todos" desconecta na hora, aqui e nos outros.`;
+      }
     }
     const painelEquipe = document.getElementById('painel-equipe');
     if (painelEquipe && usuario.papel === 'admin') {
@@ -12553,16 +12664,55 @@ function _quandoLegivel(iso) {
   return mesmoDia ? `hoje ${hora}` : `${_dataBR(iso.slice(0, 10))} ${hora}`;
 }
 
+// Quem aparece no seletor de pessoa — montado do que já veio, pra não
+// precisar de rota nova.
+let _pessoasDoRegistro = new Map();
+
+function _encherPessoasDoRegistro(acoes) {
+  const select = document.getElementById('registro-filtro-pessoa');
+  if (!select) return;
+  let mudou = false;
+  acoes.forEach((a) => {
+    if (a.usuarioId && !_pessoasDoRegistro.has(a.usuarioId)) {
+      _pessoasDoRegistro.set(a.usuarioId, a.quem);
+      mudou = true;
+    }
+  });
+  if (!mudou) return;
+  const escolhido = select.value;
+  const nomes = [..._pessoasDoRegistro.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  select.innerHTML = '<option value="">Todo mundo</option>'
+    + nomes.map(([id, nome]) => `<option value="${id}">${escaparHtml(nome)}</option>`).join('');
+  select.value = escolhido;
+}
+
 async function carregarRegistroAtividade() {
   const tbody = document.getElementById('registro-tbody');
   if (!tbody) return;
   const dias = document.getElementById('registro-filtro-dias')?.value || 7;
+  // Sem filtro por pessoa e sem busca, e cortando em 300 linhas sem dizer
+  // que cortou — o admin lia meia lista achando que era tudo (QA 22/09).
+  const pessoa = document.getElementById('registro-filtro-pessoa')?.value || '';
+  const busca = document.getElementById('registro-busca')?.value.trim() || '';
+  const aviso = document.getElementById('registro-aviso-corte');
   try {
-    const resposta = await fetch(`/api/admin/registro?dias=${encodeURIComponent(dias)}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
-    const acoes = (await resposta.json()).acoes || [];
+    const resposta = await fetch(
+      `/api/admin/registro?dias=${encodeURIComponent(dias)}`
+      + (pessoa ? `&usuarioId=${encodeURIComponent(pessoa)}` : '')
+      + (busca ? `&busca=${encodeURIComponent(busca)}` : '')
+    );
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+    const dados = await resposta.json();
+    const acoes = dados.acoes || [];
+    if (aviso) {
+      aviso.hidden = false;
+      aviso.textContent = dados.cortou
+        ? `Mostrando as ${acoes.length} mais recentes de ${dados.total} — estreite o período ou use a busca pra ver o resto.`
+        : `${dados.total} ${dados.total === 1 ? 'ação registrada' : 'ações registradas'} nesse período.`;
+    }
+    _encherPessoasDoRegistro(acoes);
     if (!acoes.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="panel-subtitle">Nada registrado nesse período.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="4" class="panel-subtitle">${busca || pessoa ? 'Nada com esse filtro.' : 'Nada registrado nesse período.'}</td></tr>`;
       return;
     }
     tbody.innerHTML = acoes.map((a) => {
@@ -12573,7 +12723,8 @@ async function carregarRegistroAtividade() {
           <td class="text-muted">${escaparHtml(_quandoLegivel(a.quando))}</td>
           <td class="font-bold">${escaparHtml(a.quem)}${a.loja ? `<span class="registro-loja">${escaparHtml(a.loja)}</span>` : ''}</td>
           <td>${escaparHtml(a.acao)}${deuErro ? ` <span class="badge-pill neg">barrado (${a.status})</span>` : ''}</td>
-          <td class="text-muted registro-detalhe" title="${escaparHtml(a.detalhes || '')}">${escaparHtml(detalhe)}</td>
+          <td class="text-muted registro-detalhe" title="${escaparHtml(a.detalhes || '')}"
+              data-rotulo="Detalhe">${escaparHtml(detalhe)}${a.detalhes && a.detalhes.length > 120 ? '…' : ''}</td>
         </tr>
       `;
     }).join('');
@@ -12584,6 +12735,13 @@ async function carregarRegistroAtividade() {
 }
 
 document.getElementById('registro-filtro-dias')?.addEventListener('change', carregarRegistroAtividade);
+document.getElementById('registro-filtro-pessoa')?.addEventListener('change', carregarRegistroAtividade);
+// Busca espera a digitação parar, pra não disparar uma consulta por tecla.
+let _timerBuscaRegistro = null;
+document.getElementById('registro-busca')?.addEventListener('input', () => {
+  clearTimeout(_timerBuscaRegistro);
+  _timerBuscaRegistro = setTimeout(carregarRegistroAtividade, 350);
+});
 
 // --- CÓPIA DE SEGURANÇA DO BANCO (Configurações, só admin) ---
 
@@ -12615,7 +12773,7 @@ async function carregarBackups() {
 
   try {
     const resposta = await fetch('/api/admin/backups');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     const copias = dados.backups || [];
     const ultima = copias[0];
@@ -12763,7 +12921,7 @@ async function carregarEquipe() {
 
   try {
     const resposta = await fetch('/api/usuarios');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     equipeData = dados.usuarios;
 
@@ -12781,7 +12939,9 @@ async function carregarEquipe() {
         <td class="text-muted">${escaparHtml(u.email)}</td>
         <td>${PAPEL_LABEL_USUARIO[u.papel] || u.papel}</td>
         <td class="text-muted">${u.loja ? escaparHtml(u.loja) : 'Todas as lojas'}</td>
-        <td><span class="badge-pill ${u.ativo ? 'pos' : 'neg'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td><span class="badge-pill ${u.ativo ? 'pos' : 'neg'}">${u.ativo ? 'Ativo' : 'Inativo'}</span>${
+          u.senhaProvisoria ? '<span class="badge-pill" title="Ainda não entrou e escolheu uma senha própria">senha provisória</span>' : ''
+        }</td>
         <td>
           <div class="acoes-linha" style="justify-content:flex-end;">
             <button type="button" class="btn-acao-icone" title="Editar" data-acao="editar">
@@ -12875,7 +13035,68 @@ function abrirModalTrocarSenha() {
   document.getElementById('formTrocarSenha').reset();
   document.getElementById('trocarSenhaErro').style.display = 'none';
   document.getElementById('trocarSenhaSucesso').style.display = 'none';
+  const forca = document.getElementById('forcaSenhaTroca');
+  if (forca) forca.hidden = true;
   document.getElementById('modalTrocarSenha').style.display = 'flex';
+}
+
+if (document.getElementById('senhaNovaInput')) {
+  _ligarForcaDaSenha('senhaNovaInput', 'forcaSenhaTroca');
+}
+if (document.getElementById('usuarioSenha')) {
+  _ligarForcaDaSenha('usuarioSenha', 'forcaSenhaUsuario');
+}
+
+// ---- #122: derrubar a sessão em todo aparelho -----------------------------
+
+async function sairDeTodosOsAparelhos() {
+  if (!confirm('Isso desconecta a sua conta em todos os aparelhos, inclusive neste. Você vai precisar entrar de novo. Continuar?')) return;
+  const botao = document.getElementById('btn-sair-de-todos');
+  if (botao) { botao.disabled = true; botao.textContent = 'Saindo...'; }
+  try {
+    const resposta = await fetch('/api/me/sair-de-todos', { method: 'POST' });
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+    window.location.href = 'login.html';
+  } catch (erro) {
+    console.error('Falha ao sair de todos os aparelhos:', erro);
+    alert(erro.message);
+    if (botao) { botao.disabled = false; botao.textContent = 'Sair de todos'; }
+  }
+}
+
+// ---- #106: o .zip com "preparando o arquivo" ------------------------------
+
+async function baixarCopiaCompleta() {
+  const botao = document.getElementById('btn-backup-completo');
+  const texto = document.getElementById('btn-backup-completo-texto');
+  const aviso = document.getElementById('backup-completo-aviso');
+  botao.disabled = true;
+  texto.textContent = 'Preparando o arquivo...';
+  aviso.hidden = false;
+  aviso.style.color = '';
+  aviso.textContent = 'O servidor está montando o .zip. Com banco grande isso leva um tempo — não feche a página.';
+  try {
+    const resposta = await fetch('/api/admin/backup-completo');
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+    const arquivo = await resposta.blob();
+    const nome = (resposta.headers.get('Content-Disposition') || '').match(/filename="?([^"]+)"?/);
+    const url = URL.createObjectURL(arquivo);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nome ? nome[1] : 'admfood-copia-completa.zip';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    aviso.textContent = `Arquivo pronto (${_tamanhoLegivel(arquivo.size)}). Guarde fora do servidor.`;
+  } catch (erro) {
+    console.error('Falha ao baixar a cópia completa:', erro);
+    aviso.style.color = 'var(--danger)';
+    aviso.textContent = erro.message;
+  } finally {
+    botao.disabled = false;
+    texto.textContent = 'Baixar cópia completa (.zip)';
+  }
 }
 
 function fecharModalTrocarSenha() {
@@ -13043,7 +13264,7 @@ async function carregarTarefas() {
   if (!board) return;
   try {
     const resposta = await fetch('/api/tarefas');
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     tarefasData = dados.tarefas || [];
     renderKanban();
@@ -13130,7 +13351,7 @@ async function moverTarefa(tarefaId, novoStatus) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: novoStatus }),
     });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     await carregarTarefas();
   } catch (erro) {
     console.error('Falha ao mover tarefa:', erro);
@@ -13256,7 +13477,7 @@ async function salvarNovaTarefa(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corpo),
     });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     fecharModalCriar();
     await carregarTarefas();
   } catch (erro) {
@@ -13355,7 +13576,7 @@ async function adicionarSubtarefa() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ titulo }),
     });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     input.value = '';
     await recarregarTarefaSelecionada();
   } catch (erro) {
@@ -13372,7 +13593,7 @@ async function alternarSubtarefa(subtarefaId, concluida) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ concluida }),
     });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     await recarregarTarefaSelecionada();
   } catch (erro) {
     console.error('Falha ao atualizar subtarefa:', erro);
@@ -13389,7 +13610,7 @@ async function enviarComentario() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ texto }),
     });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     input.value = '';
     await recarregarTarefaSelecionada();
   } catch (erro) {
@@ -13443,7 +13664,7 @@ async function excluirTarefa() {
   if (!confirm(aviso)) return;
   try {
     const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, { method: 'DELETE' });
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     fecharModalDetalhes();
     await carregarTarefas();
   } catch (erro) {
@@ -14924,7 +15145,7 @@ document.getElementById('btn-detalhe-produto-fechar')?.addEventListener('click',
 async function _buscarFichaTecnicaItem(itemId) {
   if (fichaTecnicaInsumosCache.has(itemId)) return fichaTecnicaInsumosCache.get(itemId);
   const resposta = await fetch(`/api/itens-cardapio/${itemId}/ficha-tecnica?loja=${encodeURIComponent(fichaTecnicaLojaAtual)}`);
-  if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+  if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
   const dados = await resposta.json();
   fichaTecnicaInsumosCache.set(itemId, dados);
   return dados;
@@ -16228,7 +16449,7 @@ async function carregarPreparoDoInsight(inicio, fim) {
   if (!painel) return;
   try {
     const resposta = await fetch(`/api/preparo?inicio=${inicio}&fim=${fim}`);
-    if (!resposta.ok) throw new Error(`servidor respondeu ${resposta.status}`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     renderPreparoDoInsight(await resposta.json());
   } catch (erro) {
     console.error('Falha ao carregar tempo de preparo:', erro);
@@ -16353,7 +16574,7 @@ async function carregarVariacoesPreco() {
   });
   try {
     const resposta = await fetch(`/api/precos/variacoes?dias=${precosDias}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const dados = await resposta.json();
     precosVariacoes = dados.variacoes || [];
     precosSemComparacao = dados.semComparacao || { soAgora: [], soAntes: [] };
@@ -16436,7 +16657,7 @@ function _encherRecorte(id, valores, rotuloTodos, escolhido) {
 async function abrirHistoricoPreco(insumoId) {
   try {
     const resposta = await fetch(`/api/precos/insumo/${insumoId}`);
-    if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const d = await resposta.json();
     const unidade = d.insumo.unidade_medida;
     // Os botões de período não mexiam no gráfico: ele continuava mostrando
