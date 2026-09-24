@@ -4057,6 +4057,10 @@ def _formatar_pedido_resumo(pedido):
         "whatsappEnviadoEm": pedido.get("whatsapp_enviado_em"),
         # Aceite do fornecedor pelo link (QA 22/09).
         "confirmadoEm": pedido.get("confirmado_em"),
+        # A ressalva que o fornecedor escreveu ao aceitar ("o bacon está em
+        # falta", "entrego quinta"): o link prometia "já avisamos" e nada
+        # chegava aqui (QA 22/09).
+        "observacaoFornecedor": pedido.get("observacao_fornecedor"),
         "recebidoPor": pedido.get("recebido_por"),
         "recebidoEm": pedido.get("recebido_em"),
         "compraFora": bool(pedido.get("compra_fora")),
@@ -4359,13 +4363,23 @@ def api_buscar_pedidos_por_token(token):
         "confirmadoEm": next((p["confirmado_em"] for p in pedidos if p["confirmado_em"]), None),
         # Quando só uma loja caiu, o resto do pedido continua valendo.
         "lojasCanceladas": [{"loja": c["loja"], "canceladoEm": c["canceladoEm"]} for c in cancelados],
+        # Prazo de pagamento e dia de entrega existiam só no texto do
+        # WhatsApp: quem abria o link direto não via nada disso (QA 22/09).
+        "prazoPagamento": pedidos[0]["prazo_pagamento"] if "prazo_pagamento" in pedidos[0].keys() else None,
+        "diasEntrega": pedidos[0]["dias_entrega"] if "dias_entrega" in pedidos[0].keys() else None,
+        "observacaoFornecedor": next((p["observacao_fornecedor"] for p in pedidos
+                                      if "observacao_fornecedor" in p.keys() and p["observacao_fornecedor"]), None),
     })
 
 
 @app.route('/api/pedidos/confirmar/<token>', methods=['POST'])
 def api_confirmar_pedidos_por_token(token):
     # Pública (sem login) — mesma exceção acima.
-    resultado = confirmar_pedidos_por_token(token)
+    dados = request.get_json(silent=True) or {}
+    # "Esse item eu não tenho", "mando metade", "entrego quinta": era tudo ou
+    # nada, e a ressalva não tinha onde caber (QA 22/09).
+    observacao = (dados.get('observacao') or '').strip()[:500] or None
+    resultado = confirmar_pedidos_por_token(token, observacao)
     if resultado is None:
         return jsonify({"erro": "Link inválido."}), 404
     return jsonify({"ok": True, **resultado})

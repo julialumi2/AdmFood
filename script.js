@@ -5682,7 +5682,8 @@ function renderPedidosTabela() {
         <span class="pedido-numero">Pedido nº ${p.id}${pedidosNovosIds.has(p.id) ? '<span class="pedido-selo-novo">novo</span>' : ''}</span>
       </td>
       <td><span class="tag-loja">${escaparHtml(p.loja)}</span></td>
-      <td class="pedido-origem">${escaparHtml(p.compraFora ? 'Compra por fora' : (p.cotacaoTitulo || '—'))}</td>
+      <td class="pedido-origem">${escaparHtml(p.compraFora ? 'Compra por fora' : (p.cotacaoTitulo || '—'))}
+        ${p.observacaoFornecedor ? `<span class="badge-pill neu-orange" title="${escaparHtml(p.observacaoFornecedor)}">o fornecedor avisou algo</span>` : ''}</td>
       <td class="col-num">${_qtdTexto(p.totalItens, 'item', 'itens')}</td>
       <td class="col-dinheiro">
         <strong>R$ ${_formatarMoedaBR(p.valorTotal)}</strong>
@@ -5824,6 +5825,20 @@ function renderPedidoDetalhe() {
     linkNota.style.display = p.notaFiscalUrl ? '' : 'none';
   }
   _mostrarNotasSubstituidas(p.id);
+
+  // O que o fornecedor escreveu ao aceitar o pedido: o link dele prometia
+  // "já avisamos" e nada chegava do lado de cá (QA 22/09).
+  let ressalva = document.getElementById('pedido-ressalva-fornecedor');
+  if (!ressalva) {
+    ressalva = document.createElement('p');
+    ressalva.id = 'pedido-ressalva-fornecedor';
+    ressalva.className = 'pedido-ressalva-fornecedor';
+    document.getElementById('pedido-detalhe-subtitulo')?.after(ressalva);
+  }
+  ressalva.hidden = !p.observacaoFornecedor;
+  ressalva.innerHTML = p.observacaoFornecedor
+    ? `<strong>O fornecedor avisou ao aceitar:</strong> ${escaparHtml(p.observacaoFornecedor)}`
+    : '';
   // A nota costuma chegar depois da entrega: pedido já recebido aceita anexo
   // (ou troca do que está lá) a qualquer momento.
   const btnAnexarNota = document.getElementById('btn-pedido-anexar-nota');
@@ -8485,6 +8500,13 @@ async function inicializarConfirmarPedido() {
     }
 
     document.getElementById('pedido-publico-fornecedor').textContent = dados.fornecedorNome;
+    const condicoes = [
+      dados.prazoPagamento ? `Pagamento: ${dados.prazoPagamento}` : null,
+      dados.diasEntrega ? `Entrega: ${dados.diasEntrega}` : null,
+    ].filter(Boolean);
+    const elCondicoes = document.getElementById('pedido-publico-condicoes');
+    elCondicoes.textContent = condicoes.join(' · ');
+    elCondicoes.hidden = !condicoes.length;
     // Quando só uma loja caiu, o resto continua valendo — antes a loja
     // cancelada simplesmente sumia do link, sem uma palavra (QA 22/09).
     const canceladas = dados.lojasCanceladas || [];
@@ -8502,10 +8524,10 @@ async function inicializarConfirmarPedido() {
           <tbody>
             ${pedido.itens.map((item) => `
               <tr>
-                <td class="font-bold">${escaparHtml(item.nome)}</td>
-                <td>${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
-                <td>${escaparHtml(_formatarCustoPorUnidade(item.precoUnitario, item.unidadeMedida))}</td>
-                <td>R$ ${item.precoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                <td class="font-bold pedido-publico-td-nome" data-rotulo="Produto">${escaparHtml(item.nome)}</td>
+                <td data-rotulo="Quantidade">${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
+                <td data-rotulo="Preço unit.">${escaparHtml(_formatarCustoPorUnidade(item.precoUnitario, item.unidadeMedida))}</td>
+                <td data-rotulo="Total">R$ ${item.precoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -8521,17 +8543,35 @@ async function inicializarConfirmarPedido() {
 
     document.getElementById('btn-pedido-publico-confirmar').addEventListener('click', async (evento) => {
       const btn = evento.target;
+      const campoObs = document.getElementById('pedido-publico-observacao');
+      const observacao = (campoObs?.value || '').trim();
+      // Um clique confirmava, sem pergunta e sem desfazer (QA 22/09).
+      const SALTO = String.fromCharCode(10);
+      const pergunta = observacao
+        ? `Aceitar o pedido e mandar esta ressalva pra compradora?${SALTO}${SALTO}"${observacao}"`
+        : `Aceitar o pedido de ${document.getElementById('pedido-publico-valor-total').textContent} e se comprometer a entregar?`;
+      if (!confirm(pergunta)) return;
+      const textoOriginal = btn.textContent;
       btn.disabled = true;
+      btn.textContent = 'Enviando…';
       try {
-        const resp = await fetch(`/api/pedidos/confirmar/${encodeURIComponent(token)}`, { method: 'POST' });
+        const resp = await fetch(`/api/pedidos/confirmar/${encodeURIComponent(token)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ observacao: observacao || null }),
+        });
         const respDados = await resp.json();
         if (!resp.ok) throw new Error(respDados.erro || 'falha ao confirmar');
         elConteudo.style.display = 'none';
+        document.getElementById('pedido-publico-confirmado-texto').textContent = observacao
+          ? 'A compradora já está vendo que você recebeu o pedido, e a sua ressalva foi junto.'
+          : 'A compradora já está vendo que você recebeu o pedido e vai entregar.';
         elConfirmado.style.display = '';
       } catch (erro) {
         console.error('Falha ao confirmar pedido:', erro);
-        alert(erro.message || 'Não foi possível confirmar o pedido.');
+        alert(erro.message || 'Não foi possível aceitar o pedido agora. Tente de novo em instantes.');
         btn.disabled = false;
+        btn.textContent = textoOriginal;
       }
     });
   } catch (erro) {

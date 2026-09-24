@@ -1049,6 +1049,11 @@ def inicializar_banco():
             """
         )
         colunas_pedido = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra)").fetchall()}
+        if "observacao_fornecedor" not in colunas_pedido:
+            # O que o fornecedor escreveu ao confirmar ("o bacon está em
+            # falta", "entrego quinta"): era tudo ou nada e sem volta, e
+            # ninguém do lado de cá ficava sabendo (QA 22/09).
+            conn.execute("ALTER TABLE pedido_compra ADD COLUMN observacao_fornecedor TEXT")
         if "confirmado_em" not in colunas_pedido:
             # Aceite do fornecedor pelo link (QA 22/09): antes, avançar a
             # etapa por dentro já fazia o link dele dizer "Pedido
@@ -5839,6 +5844,7 @@ def listar_pedidos():
                    pc.token,
                    pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em,
                    pc.valor_nf, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo, pc.somou_estoque,
+                   pc.observacao_fornecedor,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
                    c.titulo AS cotacao_titulo,
                    COUNT(pi.insumo_id) AS total_itens,
@@ -5861,7 +5867,11 @@ def buscar_pedido(pedido_id):
             SELECT pc.id, pc.cotacao_id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.atualizado_em, pc.token,
                    pc.whatsapp_enviado_em, pc.recebido_por, pc.recebido_em, pc.confirmado_em,
                    pc.valor_nf, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo, pc.somou_estoque,
+                   pc.observacao_fornecedor,
                    f.nome AS fornecedor_nome, f.pedido_minimo,
+                   -- Prazo de pagamento e dia de entrega existiam só no texto
+                   -- do WhatsApp (QA 22/09).
+                   f.prazo_pagamento, f.dias_entrega,
                    c.titulo AS cotacao_titulo
             FROM pedido_compra pc
             JOIN fornecedor f ON f.id = pc.fornecedor_id
@@ -6117,7 +6127,7 @@ def buscar_pedidos_por_token(token):
     return [buscar_pedido(linha["id"]) for linha in linhas]
 
 
-def confirmar_pedidos_por_token(token):
+def confirmar_pedidos_por_token(token, observacao=None):
     """Fornecedor confirma o recebimento do(s) pedido(s) dessa leva de uma
     vez só. Avança cada pedido ainda em 'enviado' pro estágio 'confirmado'
     — reaproveita avancar_status_pedido, não duplica a máquina de
@@ -6139,6 +6149,14 @@ def confirmar_pedidos_por_token(token):
             "UPDATE pedido_compra SET confirmado_em = COALESCE(confirmado_em, ?) WHERE token = ?",
             (agora, token),
         )
+        # A ressalva do fornecedor fica gravada no pedido e aparece na tela de
+        # Pedidos: antes o link prometia "já avisamos" e o efeito era só a
+        # mudança de status (QA 22/09).
+        if observacao:
+            conn.execute(
+                "UPDATE pedido_compra SET observacao_fornecedor = ? WHERE token = ?",
+                (observacao, token),
+            )
     return {"confirmados": confirmados, "total": len(pedidos), "confirmadoEm": agora}
 
 

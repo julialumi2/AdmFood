@@ -1129,3 +1129,16 @@ body.dark-mode {
   font-size: 0.72rem;
   color: var(--text-muted);
 }
+
+/* Ressalva que o fornecedor mandou ao aceitar o pedido (QA 22/09) */
+.pedido-ressalva-fornecedor {
+  margin: calc(var(--space-4) * -1) 0 var(--space-4);
+  padding: 10px var(--space-3);
+  border-left: 3px solid var(--warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background-color: var(--warning-soft);
+  color: var(--warning-texto);
+  font-size: 0.85rem;
+}
+
+.pedido-ressalva-fornecedor[hidden] { display: none; }

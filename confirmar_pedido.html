@@ -37,19 +37,36 @@
 
     <div id="pedido-publico-confirmado" class="contagem-publica-card" style="display:none;">
       <i data-lucide="check-circle-2" class="contagem-publica-icone-ok"></i>
-      <h2>Pedido confirmado!</h2>
-      <p class="panel-subtitle">Já avisamos que você confirmou o recebimento desse pedido.</p>
+      <!-- "Recebimento", no sistema, é o que a LOJA faz quando a mercadoria
+           chega. Aqui o fornecedor está dizendo que recebeu o PEDIDO e vai
+           entregar — as duas pontas liam a mesma palavra de jeito diferente
+           (QA 22/09). -->
+      <h2>Pedido aceito!</h2>
+      <p class="panel-subtitle" id="pedido-publico-confirmado-texto">A compradora já está vendo que você recebeu o pedido e vai entregar.</p>
     </div>
 
     <div id="pedido-publico-conteudo" class="contagem-publica-card" style="display:none;">
-      <h2>Confirmar pedido — <span id="pedido-publico-fornecedor">—</span></h2>
-      <p class="panel-subtitle">Confira os itens de cada loja abaixo e confirme que recebeu esse pedido.</p>
+      <h2>Pedido de compra — <span id="pedido-publico-fornecedor">—</span></h2>
+      <p class="panel-subtitle">Confira os itens de cada loja abaixo e avise se você consegue entregar.</p>
+
+      <!-- Prazo de pagamento e dia de entrega existiam só no texto do
+           WhatsApp: quem abria o link direto não via nada (QA 22/09). -->
+      <p class="pedido-publico-condicoes" id="pedido-publico-condicoes" hidden></p>
 
       <div id="pedido-publico-lojas"><!-- Renderizado dinamicamente via JS --></div>
 
       <p class="contagem-publica-prazo">Valor total: <strong id="pedido-publico-valor-total">—</strong></p>
 
-      <button type="button" class="btn-primary" id="btn-pedido-publico-confirmar">Confirmar pedido</button>
+      <!-- Era tudo ou nada: não dava pra dizer "esse item eu não tenho",
+           "mando metade" ou "entrego quinta" (QA 22/09). -->
+      <div class="form-group pedido-publico-ressalva">
+        <label for="pedido-publico-observacao">Tem alguma ressalva? (opcional)</label>
+        <textarea id="pedido-publico-observacao" rows="3" maxlength="500"
+          placeholder="Ex: o bacon está em falta, mando o resto quinta · consigo metade da batata · entrego só na sexta"></textarea>
+        <p class="panel-subtitle">O que você escrever aqui aparece pra compradora junto com o pedido.</p>
+      </div>
+
+      <button type="button" class="btn-primary" id="btn-pedido-publico-confirmar">Aceitar e entregar</button>
     </div>
   </div>
 

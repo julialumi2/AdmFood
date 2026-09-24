@@ -5155,3 +5155,46 @@ Os 8 médios das duas telas de Cardápio.
   insumos da ficha (e em quantas lojas), embalagem, porções e custo digitado —
   e avisa quando o item **já foi vendido**, porque sem a ficha a baixa de
   estoque dessas vendas para de funcionar.
+
+### 6.83 Médios das três telas externas
+
+As telas que a loja e o fornecedor usam sozinhos, sem ninguém do lado de cá
+pra socorrer.
+
+**Link de contagem (loja).** Item em branco escondido pela busca ou pela seção
+**travava o envio em silêncio**: todo campo era `required`, e o navegador não
+consegue mostrar o balão num campo fora da tela — o botão simplesmente não
+fazia nada. Agora o envio diz quais itens faltam, limpa o filtro e leva até o
+primeiro, lembrando que item zerado também se preenche com 0. Ganhou também um
+**"Faltam N — ir pro próximo"** (em lista de 100 itens, achar o que ficou pra
+trás era rolar tudo) e saída pro erro: "Tentar de novo" ao carregar, e no envio
+a mensagem diz que o rascunho está guardado no aparelho em vez de mostrar
+texto técnico.
+
+**Link de cotação (fornecedor).** Reabrir pra corrigir **começava do zero** —
+o servidor já devolvia o preço que ele tinha mandado e a tela não usava, então
+o que ele não redigitasse continuava valendo com o preço antigo. Agora volta
+preenchido, com o "não vendo" junto. Ele também passou a poder **destravar o
+próprio link** ("Mandei um preço errado — quero corrigir"), enquanto a cotação
+está aberta e o prazo não venceu; antes só o admin destravava. A tela ganhou
+andamento ("7 de 8 respondidos", linha verde, "ir pro próximo"), a conversão
+**"1 caixa = 5 kg"** que o link de contagem já mostrava, e o "não vendo este
+item" virou botão de largura inteira — era um quadradinho no fim da linha, o
+pior alvo possível no celular — que avisa antes de apagar um preço digitado.
+
+**Confirmação do pedido (fornecedor).** Era **tudo ou nada e sem volta**: um
+clique, sem pergunta, e nenhum jeito de dizer "esse item eu não tenho" ou
+"entrego quinta". Agora:
+
+- um campo de **ressalva** (opcional) que vai junto com o aceite e **aparece
+  do lado de cá** — no detalhe do pedido e como selo na lista. Antes a tela
+  prometia "já avisamos" e o efeito era só a mudança de status;
+- **pergunta antes** de aceitar, com o valor ou a ressalva escrita, e o botão
+  vira "Enviando…";
+- a palavra **recebimento saiu**: no sistema, recebimento é o que a loja faz
+  quando a mercadoria chega. O fornecedor agora "aceita o pedido e entrega",
+  e o título virou "Pedido aceito!";
+- **prazo de pagamento e dia de entrega** aparecem na tela — existiam só no
+  texto do WhatsApp, e quem abria o link direto não via nada;
+- no celular a tabela de 4 colunas por loja virou card, com a coluna "Total"
+  que ficava escondida à direita.
