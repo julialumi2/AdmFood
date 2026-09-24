@@ -164,14 +164,63 @@
       <!-- PÁGINA DE CURVA ABC -->
       <div class="page-content">
 
-        <!-- TÍTULO -->
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="chart-no-axes-combined" class="icon-pin"></i>
-            <span>DECISÃO DE CARDÁPIO</span>
-          </div>
-          <div class="title-row">
+        <!-- CABEÇALHO UNIFICADO: título à esquerda, controles à direita -->
+        <div class="curva-cabecalho">
+          <div class="dashboard-title-area">
+            <div class="title-top">
+              <i data-lucide="chart-no-axes-combined" class="icon-pin"></i>
+              <span>DECISÃO DE CARDÁPIO</span>
+            </div>
             <h1>Curva ABC</h1>
+            <p class="curva-cabecalho-apoio">
+              Cruze o volume de vendas com a margem real de lucro para otimizar a engenharia do seu cardápio.
+            </p>
+          </div>
+
+          <div class="curva-cabecalho-controles">
+            <!-- Controles da aba de cardápio -->
+            <div class="curva-controles" id="curva-controles-cardapio">
+              <div class="loja-select" id="curva-loja-select">
+                <button type="button" class="loja-select-trigger" id="curva-loja-trigger">
+                  <i data-lucide="store"></i>
+                  <span class="loja-select-label">Hamburgueria Artesanos</span>
+                  <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+                </button>
+                <div class="loja-select-menu" id="curva-loja-menu">
+                  <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
+                    <i data-lucide="store"></i>
+                    <span>Hamburgueria Artesanos</span>
+                  </button>
+                  <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
+                    <i data-lucide="store"></i>
+                    <span>Tradiça ZN</span>
+                  </button>
+                  <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
+                    <i data-lucide="store"></i>
+                    <span>Tradiça Simus</span>
+                  </button>
+                  <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
+                    <i data-lucide="store"></i>
+                    <span>Açaí Na Lata</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="curva-periodo" id="curva-periodo">
+                <button type="button" class="curva-periodo-btn" data-dias="7">7 dias</button>
+                <button type="button" class="curva-periodo-btn active" data-dias="30">30 dias</button>
+                <button type="button" class="curva-periodo-btn" data-dias="90">90 dias</button>
+              </div>
+            </div>
+
+            <!-- Controles da aba de insumos (só aparecem nela) -->
+            <div class="curva-controles" id="curva-controles-insumos" style="display:none;">
+              <div class="curva-periodo" id="curva-insumos-periodo">
+                <button type="button" class="curva-periodo-btn" data-dias="30">30 dias</button>
+                <button type="button" class="curva-periodo-btn active" data-dias="90">90 dias</button>
+                <button type="button" class="curva-periodo-btn" data-dias="180">180 dias</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -190,70 +239,73 @@
         <!-- ABA: PRODUTOS DO CARDÁPIO (Etapa 10) -->
         <div id="curva-aba-cardapio">
 
-        <p class="panel-subtitle" style="max-width: 680px;">
-          Cruza quanto cada produto vende com a margem que ele gera, usando o custo da Ficha Técnica. A
-          receita é estimada: unidades vendidas × preço de tabela do canal, sem cupom nem promoção — o
-          faturamento de verdade está em Vendas Diárias. Curva A é o que sustenta o faturamento; Curva C
-          fraca vende pouco e ainda tem o pior custo.
-        </p>
+        <!-- BARRA DE ATENÇÃO: uma linha fechada, tudo o que era texto
+             comprido de aviso vive aqui dentro (briefing 24/09). -->
+        <details class="curva-alerta" id="curva-alerta" style="display:none;">
+          <summary class="curva-alerta-resumo">
+            <i data-lucide="triangle-alert"></i>
+            <span id="curva-alerta-linha"></span>
+            <span class="curva-alerta-abrir">ver detalhes e como resolver</span>
+            <i data-lucide="chevron-down" class="curva-alerta-chevron"></i>
+          </summary>
+          <div class="curva-alerta-corpo">
+            <p class="curva-aviso" id="curva-aviso" style="display:none;"></p>
+            <!-- Por que cada produto está sem CMV (card #39) -->
+            <div class="curva-pendencias" id="curva-pendencias" style="display:none;"></div>
+            <p class="curva-metodo">
+              <strong>Como a conta é feita:</strong> a receita é estimada — unidades vendidas × preço de
+              tabela do canal, sem cupom nem promoção. O faturamento de verdade está em
+              <a href="insight.html">Vendas Diárias</a>. O custo vem da Ficha Técnica de cada produto.
+            </p>
+          </div>
+        </details>
 
-        <!-- FILTROS -->
-        <div class="curva-filtros">
-          <div class="loja-select" id="curva-loja-select">
-            <button type="button" class="loja-select-trigger" id="curva-loja-trigger">
-              <i data-lucide="store"></i>
-              <span class="loja-select-label">Hamburgueria Artesanos</span>
-              <i data-lucide="chevron-down" class="loja-select-chevron"></i>
-            </button>
-            <div class="loja-select-menu" id="curva-loja-menu">
-              <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
-                <i data-lucide="store"></i>
-                <span>Hamburgueria Artesanos</span>
-              </button>
-              <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
-                <i data-lucide="store"></i>
-                <span>Tradiça ZN</span>
-              </button>
-              <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
-                <i data-lucide="store"></i>
-                <span>Tradiça Simus</span>
-              </button>
-              <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
-                <i data-lucide="store"></i>
-                <span>Açaí Na Lata</span>
-              </button>
+        <!-- LINHA 1: PARETO 60 / 40 -->
+        <div class="curva-resumo">
+          <section class="curva-painel curva-pareto-painel">
+            <div class="curva-painel-topo">
+              <h3 class="curva-painel-titulo">Onde o faturamento se concentra</h3>
+              <p class="curva-painel-sub" id="curva-pareto-sub">—</p>
             </div>
-          </div>
+            <div class="curva-pareto-area" id="curva-pareto"></div>
+          </section>
 
-          <div class="curva-periodo" id="curva-periodo">
-            <button type="button" class="curva-periodo-btn" data-dias="7">7 dias</button>
-            <button type="button" class="curva-periodo-btn active" data-dias="30">30 dias</button>
-            <button type="button" class="curva-periodo-btn" data-dias="90">90 dias</button>
-          </div>
+          <!-- Três números numa superfície só, divididos por fio: é a grade
+               compacta do briefing sem virar três cartões soltos. -->
+          <section class="curva-painel curva-numeros">
+            <div class="curva-numero" data-faixa="a">
+              <span class="curva-numero-rotulo">Curva A — sustenta</span>
+              <strong class="curva-numero-valor" id="curva-stat-a">—</strong>
+              <span class="curva-numero-apoio" id="curva-stat-a-sub">—</span>
+            </div>
+            <div class="curva-numero" data-faixa="receita">
+              <span class="curva-numero-rotulo">Receita computada</span>
+              <strong class="curva-numero-valor" id="curva-stat-receita">—</strong>
+              <span class="curva-numero-apoio" id="curva-stat-receita-sub">—</span>
+            </div>
+            <div class="curva-numero" data-faixa="c">
+              <span class="curva-numero-rotulo">Curva C fraca — repensar</span>
+              <strong class="curva-numero-valor" id="curva-stat-c">—</strong>
+              <span class="curva-numero-apoio" id="curva-stat-c-sub">—</span>
+            </div>
+          </section>
         </div>
 
-        <!-- AVISO DE COBERTURA -->
-        <p class="curva-aviso" id="curva-aviso" style="display:none;"></p>
-        <!-- Por que cada produto está sem CMV (card #39) -->
-        <div class="curva-pendencias" id="curva-pendencias" style="display:none;"></div>
-
-        <!-- AS DUAS LISTAS -->
+        <!-- LINHA 2: AS TRÊS CURVAS LADO A LADO -->
         <div class="curva-listas">
-          <div class="chart-card curva-lista curva-lista-a">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Curva A — proteger</h3>
-                <p class="table-subtitle">Vendem muito e geram a maior parte da margem. Nunca deixar faltar; são os primeiros candidatos a um ajuste fino de preço.</p>
-              </div>
+          <div class="curva-painel curva-lista curva-lista-a">
+            <div class="curva-painel-topo">
+              <h3 class="curva-painel-titulo">Curva A — proteger</h3>
+              <p class="curva-painel-sub">Vendem muito e geram a maior parte da margem. Nunca deixar faltar.</p>
             </div>
             <div class="table-responsive">
-              <table class="inventory-table">
+              <table class="inventory-table curva-denso">
                 <thead>
                   <tr>
                     <th>Produto</th>
-                    <th>Volume</th>
-                    <th>CMV</th>
-                    <th>Margem</th>
+                    <th class="col-num">Volume</th>
+                    <th class="col-num">CMV</th>
+                    <th class="col-num">Margem</th>
                   </tr>
                 </thead>
                 <tbody id="curva-a-body">
@@ -263,22 +315,42 @@
             </div>
           </div>
 
-          <div class="chart-card curva-lista curva-lista-c">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Curva C fraca — repensar</h3>
-                <p class="table-subtitle">Vendem pouco <em>e</em> têm o pior CMV ao mesmo tempo. Marque como protegido o que tem função estratégica (ex: opção vegetariana).</p>
-              </div>
+          <div class="curva-painel curva-lista curva-lista-b">
+            <div class="curva-painel-topo">
+              <h3 class="curva-painel-titulo">Curva B — otimizar</h3>
+              <p class="curva-painel-sub">O meio da tabela. É onde um ajuste de preço ou de ficha rende mais.</p>
             </div>
             <div class="table-responsive">
-              <table class="inventory-table">
+              <table class="inventory-table curva-denso">
                 <thead>
                   <tr>
                     <th>Produto</th>
-                    <th>Volume</th>
-                    <th>CMV</th>
-                    <th>Margem</th>
-                    <th>Proteger</th>
+                    <th class="col-num">Volume</th>
+                    <th class="col-num">CMV</th>
+                    <th class="col-num">Margem</th>
+                  </tr>
+                </thead>
+                <tbody id="curva-b-body">
+                  <!-- Renderizado dinamicamente via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="curva-painel curva-lista curva-lista-c">
+            <div class="curva-painel-topo">
+              <h3 class="curva-painel-titulo">Curva C fraca — repensar</h3>
+              <p class="curva-painel-sub">Vendem pouco <em>e</em> têm o pior CMV. Marque o que tem função estratégica.</p>
+            </div>
+            <div class="table-responsive">
+              <table class="inventory-table curva-denso">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th class="col-num">Volume</th>
+                    <th class="col-num">CMV</th>
+                    <th class="col-num">Margem</th>
+                    <th class="col-check">Proteger</th>
                   </tr>
                 </thead>
                 <tbody id="curva-c-body">
@@ -289,27 +361,25 @@
           </div>
         </div>
 
-        <!-- TABELA COMPLETA -->
-        <div class="chart-card">
-          <div class="table-header-row">
-            <div>
-              <h3 class="table-title">Todos os produtos vendidos</h3>
-              <p class="table-subtitle" id="curva-tabela-subtitulo">—</p>
-            </div>
+        <!-- LINHA 3: TABELA GERAL -->
+        <div class="curva-painel curva-painel-tabela">
+          <div class="curva-painel-topo">
+            <h3 class="curva-painel-titulo">Todos os produtos vendidos</h3>
+            <p class="curva-painel-sub" id="curva-tabela-subtitulo">—</p>
           </div>
           <!-- Rolava de lado sem nada dizendo que existe rolagem (QA 22/09) -->
           <div class="table-responsive curva-tabela-wrap">
-            <table class="inventory-table">
+            <table class="inventory-table curva-denso">
               <thead>
                 <tr>
                   <th>Produto</th>
                   <th>Categoria</th>
-                  <th>Volume</th>
-                  <th>Receita</th>
-                  <th>CMV</th>
-                  <th>Margem</th>
+                  <th class="col-num">Volume</th>
+                  <th class="col-num">Receita</th>
+                  <th class="col-num">CMV</th>
+                  <th class="col-num">Margem</th>
                   <th>Curva</th>
-                  <th>Proteger</th>
+                  <th class="col-check">Proteger</th>
                 </tr>
               </thead>
               <tbody id="curva-tabela-body">
@@ -330,32 +400,22 @@
             passar direto.
           </p>
 
-          <div class="curva-filtros">
-            <div class="curva-periodo" id="curva-insumos-periodo">
-              <button type="button" class="curva-periodo-btn" data-dias="30">30 dias</button>
-              <button type="button" class="curva-periodo-btn active" data-dias="90">90 dias</button>
-              <button type="button" class="curva-periodo-btn" data-dias="180">180 dias</button>
-            </div>
-          </div>
-
           <p class="curva-aviso" id="curva-insumos-aviso" style="display:none;"></p>
 
-          <div class="chart-card">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Onde o dinheiro da compra vai</h3>
-                <p class="table-subtitle" id="curva-insumos-subtitulo">—</p>
-              </div>
+          <div class="curva-painel curva-painel-tabela">
+            <div class="curva-painel-topo">
+              <h3 class="curva-painel-titulo">Onde o dinheiro da compra vai</h3>
+              <p class="curva-painel-sub" id="curva-insumos-subtitulo">—</p>
             </div>
             <div class="table-responsive">
-              <table class="inventory-table">
+              <table class="inventory-table curva-denso">
                 <thead>
                   <tr>
                     <th>Insumo</th>
                     <th>Categoria</th>
-                    <th>Comprado</th>
-                    <th>Valor</th>
-                    <th>Do gasto</th>
+                    <th class="col-num">Comprado</th>
+                    <th class="col-num">Valor</th>
+                    <th class="col-num">Do gasto</th>
                     <th>Acumulado</th>
                     <th>Curva</th>
                   </tr>

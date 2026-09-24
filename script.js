@@ -16284,7 +16284,7 @@ async function carregarCurvaAbc() {
   // a resposta chegar — e pra sempre, se desse erro (QA 22/09).
   const subtituloAbc = document.getElementById('curva-tabela-subtitulo');
   if (subtituloAbc) subtituloAbc.textContent = 'Carregando...';
-  ['curva-a-body', 'curva-c-body'].forEach((id) => {
+  ['curva-a-body', 'curva-b-body', 'curva-c-body'].forEach((id) => {
     const corpo = document.getElementById(id);
     if (corpo) corpo.innerHTML = '';
   });
@@ -16307,7 +16307,7 @@ async function carregarCurvaAbc() {
     document.getElementById('curva-tabela-body').innerHTML =
       `<tr><td colspan="8" class="panel-subtitle">Não foi possível carregar a análise. Tente de novo em instantes.</td></tr>`;
     if (subtituloAbc) subtituloAbc.textContent = 'Não foi possível carregar a análise.';
-    ['curva-a-body', 'curva-c-body'].forEach((id) => {
+    ['curva-a-body', 'curva-b-body', 'curva-c-body'].forEach((id) => {
       const corpo = document.getElementById(id);
       if (corpo) corpo.innerHTML = `<tr><td colspan="4" class="panel-subtitle">—</td></tr>`;
     });
@@ -16318,8 +16318,13 @@ function _curvaCmvHTML(item) {
   if (item.cmvPercent === null) return '<span class="curva-sem-dado">—</span>';
   // Usava 30% fixo aqui enquanto o resto do sistema usa 31%/34% — duas metas
   // no mesmo sistema (QA 22/09).
-  const limite = (cardapioCmvLimites?.bom ?? 0.34) * 100;
-  const classe = item.cmvPercent >= limite ? 'curva-cmv-alto' : 'curva-cmv-ok';
+  const limiteRuim = (cardapioCmvLimites?.bom ?? 0.34) * 100;
+  const limiteOtimo = (cardapioCmvLimites?.otimo ?? 0.31) * 100;
+  // Vermelho no CMV ruim já existia; o verde no CMV ótimo entrou no
+  // briefing de 24/09 — nas duas pontas a coluna se lê sem comparar.
+  let classe = 'curva-cmv-ok';
+  if (item.cmvPercent >= limiteRuim) classe = 'curva-cmv-alto';
+  else if (item.cmvPercent < limiteOtimo) classe = 'curva-cmv-bom';
   // De onde veio o custo: a coluna não dizia se era da ficha, do custo
   // digitado à mão ou de estimativa (QA 22/09).
   const origem = {
@@ -16335,7 +16340,7 @@ function _curvaCmvHTML(item) {
 
 function _curvaMargemHTML(item) {
   if (item.margem === null) return '<span class="curva-sem-dado">—</span>';
-  return `<span class="curva-num">R$ ${_formatarMoedaBR(item.margem)}</span>`;
+  return `<span class="curva-num curva-margem">R$ ${_formatarMoedaBR(item.margem)}</span>`;
 }
 
 function _curvaCheckProtegidoHTML(item) {
@@ -16346,6 +16351,78 @@ function _curvaCheckProtegidoHTML(item) {
   // Proteger é do produto, não da loja: proteger o vegetariano no Artesanos
   // protege também na Tradiça, e a tela não dizia isso (QA 22/09).
   return `<input type="checkbox" class="curva-check-protegido" data-item-id="${item.itemCardapioId}" ${item.protegido ? 'checked' : ''} title="Nunca sugerir corte desse produto — vale nas quatro lojas, não só nesta">`;
+}
+
+// Chip pastel por categoria (briefing 24/09). A cor é sorteada pelo nome,
+// não pela posição na lista, pra "Lanches" ser sempre da mesma cor.
+function _curvaChipCategoria(categoria) {
+  const nome = categoria || '—';
+  let soma = 0;
+  for (let i = 0; i < nome.length; i += 1) soma = (soma + nome.charCodeAt(i)) % 997;
+  return `<span class="curva-chip-categoria" data-cor="${(soma % 5) + 1}">${escaparHtml(nome)}</span>`;
+}
+
+// --- PARETO (briefing 24/09) ---
+// Barra = receita de cada produto, do maior pro menor. Linha = quanto isso
+// acumula. A tela inteira existe pra responder "quantos produtos seguram o
+// faturamento?", então o desenho marca exatamente onde a linha cruza 80%.
+function _curvaParetoSVG(itens) {
+  const L = 10, R = 10, T = 16, B = 24;
+  const W = 480, H = 170;
+  const util = { w: W - L - R, h: H - T - B };
+  const ranked = itens.filter((i) => i.receita > 0).sort((a, b) => b.receita - a.receita);
+  const total = ranked.reduce((s, i) => s + i.receita, 0);
+  if (!ranked.length || total <= 0) return { svg: '', resumo: 'Sem receita computada no período.' };
+
+  const n = Math.min(ranked.length, 24);
+  const vis = ranked.slice(0, n);
+  const maior = vis[0].receita;
+  const passo = util.w / n;
+  const largura = Math.max(2, passo * 0.6);
+
+  const barras = [];
+  const pontos = [];
+  let acumulado = 0;
+  let cruzou = null;
+  vis.forEach((item, idx) => {
+    const x = L + passo * idx;
+    const alt = Math.max(1, (item.receita / maior) * util.h);
+    const dica = `${item.nome} — R$ ${_formatarMoedaBR(item.receita)}`;
+    barras.push(`<rect class="curva-pareto-barra${item.curva === 'A' ? ' curva-pareto-barra-a' : ''}" x="${(x + (passo - largura) / 2).toFixed(1)}" y="${(T + util.h - alt).toFixed(1)}" width="${largura.toFixed(1)}" height="${alt.toFixed(1)}" rx="1"><title>${escaparHtml(dica)}</title></rect>`);
+    acumulado += item.receita;
+    const fracao = acumulado / total;
+    pontos.push([x + passo / 2, T + util.h - fracao * util.h]);
+    if (cruzou === null && fracao >= 0.8) cruzou = { idx, fracao, x: x + passo / 2, y: T + util.h - fracao * util.h };
+  });
+
+  const linha = pontos.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const yCorte = T + util.h - 0.8 * util.h;
+
+  let marca = '';
+  if (cruzou) {
+    const texto = `${cruzou.idx + 1} ${cruzou.idx === 0 ? 'produto' : 'produtos'} = 80%`;
+    const naEsquerda = cruzou.x < W / 2;
+    marca = `
+      <line class="curva-pareto-marca" x1="${cruzou.x.toFixed(1)}" y1="${cruzou.y.toFixed(1)}" x2="${cruzou.x.toFixed(1)}" y2="${(T + util.h).toFixed(1)}" />
+      <circle class="curva-pareto-ponto" cx="${cruzou.x.toFixed(1)}" cy="${cruzou.y.toFixed(1)}" r="3" />
+      <text class="curva-pareto-destaque" x="${(naEsquerda ? cruzou.x + 7 : cruzou.x - 7).toFixed(1)}" y="${(cruzou.y - 6).toFixed(1)}" text-anchor="${naEsquerda ? 'start' : 'end'}">${escaparHtml(texto)}</text>`;
+  }
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Curva de Pareto da receita por produto" xmlns="http://www.w3.org/2000/svg">
+      <line class="curva-pareto-corte" x1="${L}" y1="${yCorte.toFixed(1)}" x2="${W - R}" y2="${yCorte.toFixed(1)}" />
+      <text class="curva-pareto-rotulo" x="${L}" y="${(yCorte - 4).toFixed(1)}">80% DA RECEITA</text>
+      ${barras.join('')}
+      <path class="curva-pareto-linha" d="${linha}" />
+      ${marca}
+      <line class="curva-pareto-eixo" x1="${L}" y1="${(T + util.h).toFixed(1)}" x2="${W - R}" y2="${(T + util.h).toFixed(1)}" />
+      <text class="curva-pareto-rotulo" x="${L}" y="${H - 8}">MAIOR RECEITA</text>
+      <text class="curva-pareto-rotulo" x="${W - R}" y="${H - 8}" text-anchor="end">${n < ranked.length ? `TOP ${n} DE ${ranked.length}` : 'MENOR'}</text>
+    </svg>`;
+
+  const resumo = cruzou
+    ? `${cruzou.idx + 1} de ${ranked.length} produtos fazem 80% da receita do período.`
+    : `${ranked.length} produtos, sem concentração clara no período.`;
+  return { svg, resumo };
 }
 
 // --- POR QUE O PRODUTO ESTÁ SEM CMV (card #39, 18/09) ---
@@ -16418,11 +16495,23 @@ function _renderPendenciasCmv(d) {
   alvo.style.display = '';
 }
 
+// Uma linha só pra quem já conhece a tela; o texto comprido fica guardado
+// atrás do clique (briefing 24/09).
+function _curvaResumoDoAlerta(d, semCmv) {
+  const pedacos = [];
+  if (semCmv) pedacos.push(`<strong>${semCmv}</strong> ${semCmv === 1 ? 'produto está' : 'produtos estão'} sem CMV`);
+  if (d.vendasNaoCasadas) pedacos.push(`<strong>${_formatarNumeroBR(d.vendasNaoCasadas)}</strong> venda(s) ficaram de fora por não casarem com a Ficha Técnica`);
+  if (d.unidadesForaDaLista) pedacos.push(`<strong>${_formatarNumeroBR(d.unidadesForaDaLista)}</strong> unidade(s) fora da lista de preços`);
+  if (d.unidadesDeCombo) pedacos.push(`<strong>${_formatarNumeroBR(d.unidadesDeCombo)}</strong> unidade(s) saíram em combo`);
+  if (!pedacos.length) return '';
+  if (pedacos.length === 1) return `${pedacos[0]}.`;
+  return `${pedacos.slice(0, -1).join(', ')} e ${pedacos[pedacos.length - 1]}.`;
+}
+
 function renderCurvaAbc() {
   const d = curvaAbcDados;
   if (!d) return;
 
-  const aviso = document.getElementById('curva-aviso');
   const semCmv = d.itens.filter(i => i.margem === null).length;
   const partes = [];
   if (d.vendasNaoCasadas) {
@@ -16447,50 +16536,110 @@ function renderCurvaAbc() {
   if (semCmv) {
     partes.push(`${semCmv} produto(s) aparecem sem CMV — o motivo de cada um está logo abaixo.`);
   }
+  const aviso = document.getElementById('curva-aviso');
   aviso.innerHTML = partes.join(' ');
   aviso.style.display = partes.length ? '' : 'none';
   _renderPendenciasCmv(d);
+
+  // A barra de atenção some inteira quando não há nada a avisar.
+  const alerta = document.getElementById('curva-alerta');
+  const linhaAlerta = _curvaResumoDoAlerta(d, semCmv);
+  if (alerta) {
+    document.getElementById('curva-alerta-linha').innerHTML = linhaAlerta;
+    alerta.style.display = linhaAlerta ? '' : 'none';
+    if (!linhaAlerta) alerta.open = false;
+  }
 
   document.getElementById('curva-tabela-subtitulo').textContent =
     `${d.loja} — últimos ${d.dias} dias · ${_formatarNumeroBR(d.totalVolume)} itens vendidos${d.unidadesForaDaLista ? ` (+${_formatarNumeroBR(d.unidadesForaDaLista)} fora da lista de preços)` : ''} · R$ ${_formatarMoedaBR(d.totalReceita)} de receita estimada (preço de tabela × unidades)`;
 
   const curvaA = d.itens.filter(i => i.curva === 'A');
   const curvaC = d.itens.filter(i => i.curva === 'C');
+  // "normal" é o meio da tabela: tem margem calculada, não é pilar nem
+  // candidato a corte. É a Curva B do briefing — não precisou de nada novo
+  // no servidor, a classificação já existia.
+  const curvaB = d.itens.filter(i => i.curva === 'normal');
 
-  document.getElementById('curva-a-body').innerHTML = curvaA.length ? curvaA.map(i => `
+  // --- Pareto e os três números do topo ---
+  const pareto = _curvaParetoSVG(d.itens);
+  const areaPareto = document.getElementById('curva-pareto');
+  if (areaPareto) areaPareto.innerHTML = pareto.svg || '<p class="curva-vazio">Sem receita computada no período.</p>';
+  const subPareto = document.getElementById('curva-pareto-sub');
+  if (subPareto) subPareto.textContent = pareto.resumo;
+
+  const receitaA = curvaA.reduce((s, i) => s + i.receita, 0);
+  const margemA = curvaA.reduce((s, i) => s + (i.margem || 0), 0);
+  const comMargem = d.itens.filter(i => i.margem !== null);
+  const margemTotal = comMargem.reduce((s, i) => s + i.margem, 0);
+  const receitaComMargem = comMargem.reduce((s, i) => s + i.receita, 0);
+  const cmvMedio = receitaComMargem > 0 ? ((receitaComMargem - margemTotal) / receitaComMargem) * 100 : null;
+  const piorC = curvaC.slice().sort((a, b) => (b.cmvPercent || 0) - (a.cmvPercent || 0))[0];
+
+  const escrever = (id, texto) => { const el = document.getElementById(id); if (el) el.textContent = texto; };
+  escrever('curva-stat-a', `${curvaA.length} ${curvaA.length === 1 ? 'produto' : 'produtos'}`);
+  escrever('curva-stat-a-sub', d.totalReceita > 0
+    ? `${Math.round((receitaA / d.totalReceita) * 100)}% da receita · R$ ${_formatarMoedaBR(margemA)} de margem`
+    : 'sem receita no período');
+  escrever('curva-stat-receita', `R$ ${_formatarMoedaBR(d.totalReceita)}`);
+  escrever('curva-stat-receita-sub', comMargem.length
+    ? `R$ ${_formatarMoedaBR(margemTotal)} de margem · CMV médio ${cmvMedio.toFixed(1).replace('.', ',')}%`
+    : 'nenhum produto com CMV calculado');
+  escrever('curva-stat-c', `${curvaC.length} ${curvaC.length === 1 ? 'item' : 'itens'}`);
+  escrever('curva-stat-c-sub', piorC
+    ? `pior CMV: ${piorC.nome} a ${(piorC.cmvPercent || 0).toString().replace('.', ',')}%`
+    : 'nada juntando baixo volume com CMV ruim');
+
+  const linhaCurta = (i, comCheck) => `
     <tr>
-      <td class="font-bold">${escaparHtml(i.nome)}</td>
-      <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
-      <td>${_curvaCmvHTML(i)}</td>
-      <td>${_curvaMargemHTML(i)}</td>
+      <td class="col-produto">${escaparHtml(i.nome)}</td>
+      <td class="col-num"><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
+      <td class="col-num">${_curvaCmvHTML(i)}</td>
+      <td class="col-num">${_curvaMargemHTML(i)}</td>
+      ${comCheck ? `<td class="col-check">${_curvaCheckProtegidoHTML(i)}</td>` : ''}
     </tr>
-  `).join('') : `<tr><td colspan="4" class="curva-vazio">Nenhum produto com margem calculável ainda no período.</td></tr>`;
+  `;
 
-  document.getElementById('curva-c-body').innerHTML = curvaC.length ? curvaC.map(i => `
-    <tr>
-      <td class="font-bold">${escaparHtml(i.nome)}</td>
-      <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span></td>
-      <td>${_curvaCmvHTML(i)}</td>
-      <td>${_curvaMargemHTML(i)}</td>
-      <td>${_curvaCheckProtegidoHTML(i)}</td>
-    </tr>
-  `).join('') : `<tr><td colspan="5" class="curva-vazio">Nada pra repensar no período — nenhum produto junta baixo volume com CMV ruim.</td></tr>`;
+  document.getElementById('curva-a-body').innerHTML = curvaA.length
+    ? curvaA.map((i) => linhaCurta(i, false)).join('')
+    : `<tr><td colspan="4" class="curva-vazio">Nenhum produto com margem calculável ainda no período.</td></tr>`;
 
-  const rotuloCurva = { 'A': ['curva-tag-a', 'Curva A'], 'C': ['curva-tag-c', 'C fraca'], 'sem-cmv': ['curva-tag-sem-cmv', 'sem CMV'], 'normal': ['curva-tag-normal', '—'] };
+  const corpoB = document.getElementById('curva-b-body');
+  if (corpoB) {
+    // O meio da tabela é comprido: mostra os que mais rendem e diz quantos
+    // sobraram, em vez de estender a coluna sem fim.
+    const topoB = curvaB.slice().sort((a, b) => (b.margem || 0) - (a.margem || 0));
+    const mostra = topoB.slice(0, 12);
+    const sobra = topoB.length - mostra.length;
+    corpoB.innerHTML = mostra.length
+      ? mostra.map((i) => linhaCurta(i, false)).join('')
+        + (sobra > 0 ? `<tr><td colspan="4" class="curva-vazio">+ ${sobra} ${sobra === 1 ? 'produto' : 'produtos'} na tabela completa abaixo</td></tr>` : '')
+      : `<tr><td colspan="4" class="curva-vazio">Nenhum produto no meio da tabela neste período.</td></tr>`;
+  }
+
+  document.getElementById('curva-c-body').innerHTML = curvaC.length
+    ? curvaC.map((i) => linhaCurta(i, true)).join('')
+    : `<tr><td colspan="5" class="curva-vazio">Nada pra repensar no período — nenhum produto junta baixo volume com CMV ruim.</td></tr>`;
+
+  const rotuloCurva = {
+    'A': ['curva-tag-a', 'Curva A'],
+    'C': ['curva-tag-c', 'C fraca'],
+    'sem-cmv': ['curva-tag-sem-cmv', 'sem CMV'],
+    'normal': ['curva-tag-b', 'Curva B'],
+  };
   document.getElementById('curva-tabela-body').innerHTML = d.itens.length ? d.itens.map(i => {
     const [classe, texto] = rotuloCurva[i.curva] || rotuloCurva['normal'];
     return `
       <tr>
-        <td class="font-bold">${escaparHtml(i.nome)}</td>
-        <td class="text-muted">${escaparHtml(i.categoria)}</td>
-        <td><span class="curva-num">${_formatarNumeroBR(i.volume)}</span>${i.volumeCombo
+        <td class="col-produto">${escaparHtml(i.nome)}</td>
+        <td>${_curvaChipCategoria(i.categoria)}</td>
+        <td class="col-num"><span class="curva-num">${_formatarNumeroBR(i.volume)}</span>${i.volumeCombo
           ? `<span class="curva-combo" title="Mais ${_formatarNumeroBR(i.volumeCombo)} unidade(s) saíram dentro de combo. Elas não entram no preço médio nem na margem porque o combo tem preço próprio, que não está na lista de preços.">+${_formatarNumeroBR(i.volumeCombo)} em combo</span>`
           : ''}</td>
-        <td><span class="curva-num">R$ ${_formatarMoedaBR(i.receita)}</span></td>
-        <td>${_curvaCmvHTML(i)}</td>
-        <td>${_curvaMargemHTML(i)}</td>
+        <td class="col-num"><span class="curva-num">R$ ${_formatarMoedaBR(i.receita)}</span></td>
+        <td class="col-num">${_curvaCmvHTML(i)}</td>
+        <td class="col-num">${_curvaMargemHTML(i)}</td>
         <td><span class="curva-tag ${classe}" ${i.motivosSemCmv && i.motivosSemCmv.length ? `title="${escaparHtml(_textoMotivosSemCmv(i.motivosSemCmv))}"` : ''}>${texto}</span></td>
-        <td>${_curvaCheckProtegidoHTML(i)}</td>
+        <td class="col-check">${_curvaCheckProtegidoHTML(i)}</td>
       </tr>
     `;
   }).join('') : `<tr><td colspan="8" class="curva-vazio">Nenhuma venda casada com a Ficha Técnica nesse período.</td></tr>`;
@@ -17000,6 +17149,12 @@ document.querySelectorAll('#curva-tabs-bar .tab-btn').forEach((btn) => {
     const insumos = btn.dataset.tab === 'insumos';
     document.getElementById('curva-aba-cardapio').style.display = insumos ? 'none' : '';
     document.getElementById('curva-aba-insumos').style.display = insumos ? '' : 'none';
+    // O seletor de loja e o periodo subiram pro cabecalho (briefing
+    // 24/09): cada aba tem o seu, so um aparece por vez.
+    const ctrlCardapio = document.getElementById('curva-controles-cardapio');
+    const ctrlInsumos = document.getElementById('curva-controles-insumos');
+    if (ctrlCardapio) ctrlCardapio.style.display = insumos ? 'none' : '';
+    if (ctrlInsumos) ctrlInsumos.style.display = insumos ? '' : 'none';
     if (insumos) carregarCurvaAbcInsumos();
     if (typeof lucide !== 'undefined') lucide.createIcons();
   });
