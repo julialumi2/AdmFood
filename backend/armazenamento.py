@@ -5634,6 +5634,9 @@ def buscar_convite_por_token(token):
         itens = conn.execute(
             """
             SELECT cci.insumo_id, i.nome, i.categoria, i.unidade_medida, i.marca_homologada,
+                   -- "1 caixa = 5 kg": o link de contagem mostra e o do
+                   -- fornecedor não mostrava (QA 22/09).
+                   i.fator_conversao_compra, i.unidade_compra,
                    ci.quantidade_total, cp.preco AS preco_preenchido
             FROM cotacao_convite_item cci
             JOIN insumo i ON i.id = cci.insumo_id

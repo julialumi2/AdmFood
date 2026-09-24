@@ -598,3 +598,41 @@ body {
 }
 
 #contagem-publica-erro #btn-contagem-tentar-de-novo { margin-top: var(--space-3); }
+
+/* "Não vendo este item" era um quadradinho no fim da linha — o pior alvo
+   possível no celular (QA 22/09). */
+.cotacao-nao-vende {
+  min-height: 40px;
+  padding: 8px var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cotacao-nao-vende.marcado {
+  border-color: var(--warning);
+  background-color: var(--warning-soft);
+  color: var(--warning-texto);
+  font-weight: 700;
+}
+
+.cotacao-conversao {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.cotacao-tabela tbody tr.cotacao-linha-pronta { background-color: var(--success-soft); }
+
+#cotacao-publica-obrigado #btn-cotacao-corrigir { margin-top: var(--space-4); }
+
+/* O "não vendo" virou botão: no celular ocupa a linha inteira. */
+@media (max-width: 720px) {
+  .cotacao-tabela td.cotacao-td-recusa .cotacao-nao-vende { width: 100%; }
+}

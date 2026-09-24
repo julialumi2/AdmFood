@@ -8246,6 +8246,24 @@ async function inicializarPreencherCotacao() {
   const elObrigado = document.getElementById('cotacao-publica-obrigado');
   const form = document.getElementById('form-cotacao-publica');
 
+  // "Mandei um preço errado": depois de enviar, o link travava e só o admin
+  // destravava — na tela do fornecedor não existia nem como avisar (QA 22/09).
+  document.getElementById('btn-cotacao-corrigir')?.addEventListener('click', async (evento) => {
+    const botao = evento.currentTarget;
+    const aviso = document.getElementById('cotacao-corrigir-aviso');
+    botao.disabled = true;
+    try {
+      const resposta = await fetch(`/api/cotacoes/convite/${encodeURIComponent(token)}/reabrir`, { method: 'POST' });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível reabrir agora.');
+      location.reload();
+    } catch (erro) {
+      aviso.textContent = erro.message;
+      aviso.hidden = false;
+      botao.disabled = false;
+    }
+  });
+
   function mostrarErro(mensagem) {
     elCarregando.style.display = 'none';
     elErroTexto.textContent = mensagem;
@@ -8287,33 +8305,91 @@ async function inicializarPreencherCotacao() {
     container.innerHTML = dados.itens.map((item) => {
       const { rotulo, fator } = _escalaDeCusto(item.unidadeMedida);
       const quantidade = Math.round((item.quantidade / fator) * 1000) / 1000;
+      // Reabrir pra corrigir começava do zero: o preço já mandado voltava
+      // na resposta e a tela não usava (QA 22/09).
+      const jaMandou = item.precoPreenchido != null;
+      const valorAnterior = jaMandou ? _numeroCampoQtd(item.precoPreenchido * fator) : '';
       return `
-      <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}" data-fator="${fator}">
-        <td class="font-bold cotacao-td-nome" data-rotulo="Produto">${escaparHtml(item.nome)}</td>
+      <tr data-nome-busca="${escaparHtml(item.nome.toLowerCase())}" data-fator="${fator}" class="${jaMandou || item.naoVende ? 'cotacao-linha-pronta' : ''}">
+        <td class="font-bold cotacao-td-nome" data-rotulo="Produto">${escaparHtml(item.nome)}
+          ${item.fatorConversaoCompra > 0
+            ? `<span class="cotacao-conversao">1 ${escaparHtml(item.unidadeCompra || 'caixa')} = ${escaparHtml(_formatarQuantidade(item.fatorConversaoCompra, item.unidadeMedida))}</span>`
+            : ''}
+        </td>
         <td data-rotulo="Marca" class="${item.marcaHomologada ? '' : 'cotacao-td-vazio'}"><div class="contagem-item-somente-leitura">${escaparHtml(item.marcaHomologada || '—')}</div></td>
         <td data-rotulo="Quantidade"><div class="contagem-item-somente-leitura">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</div></td>
         <td data-rotulo="Preço unitário"><div class="cotacao-campo-preco">
           <span>R$</span>
-          <input type="number" step="any" min="0" placeholder="0,00" data-insumo-id="${item.insumoId}">
+          <input type="text" inputmode="decimal" placeholder="0,00" data-insumo-id="${item.insumoId}" value="${valorAnterior}" ${item.naoVende ? 'disabled' : ''}>
           <span>/ ${escaparHtml(rotulo)}</span>
         </div></td>
-        <td class="cotacao-td-recusa" style="text-align:center;">
-          <label class="cotacao-recusa">
-            <input type="checkbox" data-nao-vende-id="${item.insumoId}">
-            <span>Não vendo esse item</span>
-          </label>
+        <td class="cotacao-td-recusa">
+          <button type="button" class="cotacao-nao-vende${item.naoVende ? ' marcado' : ''}" data-nao-vende-id="${item.insumoId}" aria-pressed="${item.naoVende ? 'true' : 'false'}">
+            ${item.naoVende ? 'Não vendo este' : 'Não vendo este item'}
+          </button>
         </td>
       </tr>
     `;
     }).join('');
 
-    container.querySelectorAll('[data-nao-vende-id]').forEach((checkbox) => {
-      checkbox.addEventListener('change', () => {
-        const input = container.querySelector(`[data-insumo-id="${checkbox.dataset.naoVendeId}"]`);
-        input.disabled = checkbox.checked;
-        if (checkbox.checked) input.value = '';
+    // Era um quadradinho no fim da linha — o pior alvo possível no celular —
+    // e o efeito dele (apagar o preço digitado) só aparecia depois (QA 22/09).
+    container.querySelectorAll('[data-nao-vende-id]').forEach((botao) => {
+      botao.addEventListener('click', () => {
+        const input = container.querySelector(`[data-insumo-id="${botao.dataset.naoVendeId}"]`);
+        const marcando = botao.getAttribute('aria-pressed') !== 'true';
+        if (marcando && input.value.trim() !== ''
+          && !confirm(`Marcar "${botao.closest('tr').querySelector('.cotacao-td-nome').textContent.trim()}" como "não vendo" apaga o preço que você digitou. Confirma?`)) return;
+        botao.setAttribute('aria-pressed', marcando ? 'true' : 'false');
+        botao.classList.toggle('marcado', marcando);
+        botao.textContent = marcando ? 'Não vendo este' : 'Não vendo este item';
+        input.disabled = marcando;
+        if (marcando) input.value = '';
+        atualizarProgressoCotacao();
       });
     });
+
+    // #87 — andamento: quantos já foram respondidos e onde está o próximo.
+    function _linhasPendentesCotacao() {
+      return [...container.querySelectorAll('tr')].filter((linha) => {
+        const input = linha.querySelector('[data-insumo-id]');
+        return input && !input.disabled && input.value.trim() === '';
+      });
+    }
+
+    function atualizarProgressoCotacao() {
+      const total = container.querySelectorAll('tr').length;
+      const pendentes = _linhasPendentesCotacao();
+      const prontos = total - pendentes.length;
+      document.getElementById('cotacao-publica-progresso').textContent =
+        `${prontos} de ${total} respondidos`;
+      container.querySelectorAll('tr').forEach((linha) => {
+        const input = linha.querySelector('[data-insumo-id]');
+        linha.classList.toggle('cotacao-linha-pronta', !!input && (input.disabled || input.value.trim() !== ''));
+      });
+      const botao = document.getElementById('btn-cotacao-ir-vazio');
+      if (botao) {
+        botao.hidden = !pendentes.length || !prontos;
+        botao.textContent = `Faltam ${pendentes.length} — ir pro próximo`;
+      }
+    }
+
+    document.getElementById('btn-cotacao-ir-vazio')?.addEventListener('click', () => {
+      const busca = document.getElementById('cotacao-publica-busca');
+      if (busca.value) {
+        busca.value = '';
+        busca.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const pendente = _linhasPendentesCotacao()[0];
+      if (!pendente) return;
+      pendente.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      pendente.querySelector('[data-insumo-id]').focus({ preventScroll: true });
+    });
+
+    container.addEventListener('input', (evento) => {
+      if (evento.target.matches('[data-insumo-id]')) atualizarProgressoCotacao();
+    });
+    atualizarProgressoCotacao();
 
     document.getElementById('cotacao-publica-busca').addEventListener('input', (evento) => {
       const termo = evento.target.value.trim().toLowerCase();
@@ -8332,15 +8408,15 @@ async function inicializarPreencherCotacao() {
         if (input.disabled || input.value === '') return;
         // De R$/kg (o que ele digitou) pra R$/g (o que o sistema guarda).
         const fator = parseFloat(input.closest('tr')?.dataset.fator) || 1;
-        const valor = parseFloat(input.value);
+        const valor = _lerNumeroBR(input.value);
         if (!(valor > 0)) return;
         precos[input.dataset.insumoId] = String(Math.round((valor / fator) * 1e6) / 1e6);
       });
       // "Não vendo esse item" agora vai junto: antes o envio levava só os
       // preços, e item recusado chegava igual a item esquecido (QA 22/09).
       const naoVende = [...container.querySelectorAll('[data-nao-vende-id]')]
-        .filter((caixa) => caixa.checked)
-        .map((caixa) => caixa.dataset.naoVendeId);
+        .filter((botao) => botao.getAttribute('aria-pressed') === 'true')
+        .map((botao) => botao.dataset.naoVendeId);
       const semResposta = [...container.querySelectorAll('[data-insumo-id]')]
         .filter((input) => !input.disabled && input.value === '').length;
       if (!Object.keys(precos).length && !naoVende.length) {

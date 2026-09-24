@@ -3797,6 +3797,12 @@ def api_buscar_convite_por_token(token):
     resposta = _formatar_convite(convite)
     resposta.pop('token', None)
     resposta['cotacaoTitulo'] = convite['cotacao_titulo']
+    # Reabrir pra corrigir começava do zero: o preço já mandado voltava na
+    # resposta mas a tela não usava, e o "não vendo" nem vinha (QA 22/09).
+    recusados = {
+        r["insumoId"] for r in listar_recusas_cotacao(convite["cotacao_id"])
+        if r["fornecedorId"] == convite["fornecedor_id"]
+    }
     resposta['itens'] = [
         {
             "insumoId": item["insumo_id"],
@@ -3806,11 +3812,43 @@ def api_buscar_convite_por_token(token):
             "marcaHomologada": item["marca_homologada"],
             "quantidade": item["quantidade_total"],
             "precoPreenchido": item["preco_preenchido"],
+            "naoVende": item["insumo_id"] in recusados,
+            # A embalagem que o link de contagem mostra ("1 caixa = 5 kg")
+            # faltava aqui, e é o que evita preço de caixa no campo do kg.
+            "fatorConversaoCompra": item["fator_conversao_compra"] if "fator_conversao_compra" in item.keys() else None,
+            "unidadeCompra": item["unidade_compra"] if "unidade_compra" in item.keys() else None,
         }
         for item in convite["itens"]
     ]
     resposta['expirado'] = convite['status'] == 'aberta' and _prazo_vencido(convite['prazo_validade'])
     return jsonify(resposta)
+
+
+@app.route('/api/cotacoes/convite/<token>/reabrir', methods=['POST'])
+def api_fornecedor_reabre_convite(token):
+    """O próprio fornecedor destrava o convite dele pra corrigir um preço que
+    saiu errado. Antes, depois de enviar, só o admin destravava — e na tela
+    dele não existia nem um "mandei errado" (QA 22/09). Vale enquanto a
+    cotação está aberta e o prazo não venceu; o link é a credencial, e ele já
+    podia mandar preço por ele."""
+    convite = buscar_convite_por_token(token)
+    if not convite:
+        return jsonify({"erro": "Link inválido."}), 404
+    if not convite["fornecedor_ativo"]:
+        return jsonify({"erro": "Esse fornecedor não está mais ativo na rede. Fale com a compradora."}), 410
+    if convite["status"] == "aberta":
+        return jsonify({"ok": True, "jaEstavaAberto": True})
+    cotacao = buscar_cotacao(convite["cotacao_id"])
+    if cotacao and cotacao["status"] != "aberta":
+        return jsonify({
+            "erro": "A compradora já encerrou essa cotação. Fale com ela pra corrigir o preço."
+        }), 409
+    if _prazo_vencido(convite["prazo_validade"]):
+        return jsonify({
+            "erro": "O prazo dessa cotação já venceu. Fale com a compradora pra ela reabrir."
+        }), 409
+    reabrir_convite_cotacao(convite["id"])
+    return jsonify({"ok": True})
 
 
 @app.route('/api/cotacoes/convite/<token>/responder', methods=['POST'])
