@@ -5304,3 +5304,33 @@ recusados — antes dava pra lançar em 2027 e o valor sumia do período.
   escolhida mostra valor e CMV embaixo.
 - **A tabela de 9 colunas** rolava de lado no celular sem dizer; ganhou a
   dica.
+
+### 6.88 Médios da Evolução do Preço
+
+- **Os botões de período não mexiam no gráfico.** Eles trocavam as listas de
+  "mais subiram / mais caíram", mas o gráfico do insumo continuava mostrando
+  tudo desde a primeira compra — e nada na tela dizia isso. Agora o período
+  vale nos dois, o gráfico é redesenhado ao trocar, e o subtítulo diz qual
+  janela está na tela ("últimos 30 dias"). Com menos de duas compras no
+  período, mostra o histórico inteiro **e avisa que é isso que está fazendo**
+  (uma linha com um ponto só não diz nada).
+- **"Desde a primeira compra" comparava com dezembro de 2024 sem ressalva** —
+  é justamente onde um lançamento antigo em unidade errada vira "+1.900%".
+  Agora, quando a primeira compra é de seis meses ou mais atrás, o subtítulo
+  diz quantos meses a comparação está olhando; e variação de 300% pra cima
+  ganha a observação de que aquilo quase sempre é unidade trocada, não preço.
+- **A busca só reagia a nome exato:** digitar "tomate" e apertar Enter não
+  fazia nada e não dizia nada. Agora acha por pedaço do nome (sem acento, sem
+  maiúscula): um resultado abre direto, vários listam os nomes, nenhum diz
+  "Nenhum insumo com 'zzzzz'. Confira o nome no cadastro." E o Enter passou a
+  funcionar.
+- **Sem "carregando", e no erro só "mais subiram" avisava** — "mais caíram"
+  ficava vazia, parecendo que nada tinha caído. As duas listas agora dizem
+  "Carregando…" e as duas mostram o erro.
+
+Ficaram de fora três, que não são de tela e precisam de decisão: a série
+mistura lojas, fornecedores e tamanhos de embalagem na mesma linha (#72 —
+pede filtro por loja/fornecedor), compra recebida sem data que cai fora de
+parte do sistema (#74 — pede regra única de qual data vale) e a segunda-feira
+fechada contando como semana incompleta (#68 — pede a sincronização gravar o
+dia zerado).

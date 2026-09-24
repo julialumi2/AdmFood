@@ -226,6 +226,8 @@
               <input type="text" id="precos-busca-insumo" list="precos-lista-insumos" placeholder="Buscar insumo...">
               <datalist id="precos-lista-insumos"></datalist>
             </div>
+            <!-- A busca só reagia a nome exato e não dizia "não encontrei" (QA 22/09) -->
+            <p class="panel-subtitle precos-busca-aviso" id="precos-busca-aviso" hidden></p>
           </div>
           <div class="precos-resumo" id="precos-resumo" style="display:none;"></div>
           <div class="precos-grafico-area" id="precos-grafico-area" style="display:none;">

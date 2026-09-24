@@ -16338,6 +16338,12 @@ function _mostrarInsumosSemComparacao(periodo) {
 }
 
 async function carregarVariacoesPreco() {
+  // Sem "carregando", e no erro só a lista "mais subiram" avisava: "mais
+  // caíram" ficava vazia, parecendo que nada caiu (QA 22/09).
+  ['precos-altas', 'precos-quedas'].forEach((id) => {
+    const alvo = document.getElementById(id);
+    if (alvo) alvo.innerHTML = '<li class="precos-vazio">Carregando…</li>';
+  });
   try {
     const resposta = await fetch(`/api/precos/variacoes?dias=${precosDias}`);
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
@@ -16347,7 +16353,10 @@ async function carregarVariacoesPreco() {
     renderVariacoesPreco();
   } catch (erro) {
     console.error('Falha ao carregar variações de preço:', erro);
-    document.getElementById('precos-altas').innerHTML = '<li class="precos-vazio">Não foi possível carregar.</li>';
+    ['precos-altas', 'precos-quedas'].forEach((id) => {
+      const alvo = document.getElementById(id);
+      if (alvo) alvo.innerHTML = '<li class="precos-vazio">Não foi possível carregar.</li>';
+    });
   }
 }
 
@@ -16375,13 +16384,27 @@ function _dataCurtaDoInstante(ms) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}`;
 }
 
+// Qual insumo está aberto, pra o botão de período redesenhar o gráfico dele.
+let precosInsumoAberto = null;
+
 async function abrirHistoricoPreco(insumoId) {
   try {
     const resposta = await fetch(`/api/precos/insumo/${insumoId}`);
     if (!resposta.ok) throw new Error(`O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
     const d = await resposta.json();
-    const compras = d.compras || [];
     const unidade = d.insumo.unidade_medida;
+    // Os botões de período não mexiam no gráfico: ele continuava mostrando
+    // tudo desde a primeira compra, e nada na tela dizia isso (QA 22/09).
+    const corte = new Date();
+    corte.setDate(corte.getDate() - precosDias);
+    const corteIso = new Date(corte.getTime() - corte.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const todas = d.compras || [];
+    const noPeriodo = todas.filter((c) => c.data >= corteIso);
+    // Menos de dois pontos no período não desenha linha nenhuma: aí vale
+    // mais mostrar tudo e dizer que está mostrando tudo.
+    const compras = noPeriodo.length >= 2 ? noPeriodo : todas;
+    const mostrandoTudo = compras.length !== noPeriodo.length || !noPeriodo.length;
+    precosInsumoAberto = insumoId;
 
     document.getElementById('precos-insumo-titulo').textContent = d.insumo.nome;
     document.getElementById('precos-busca-insumo').value = d.insumo.nome;
@@ -16396,8 +16419,20 @@ async function abrirHistoricoPreco(insumoId) {
     const ultima = compras[compras.length - 1];
     const primeira = compras[0];
     const variacaoTotal = ((ultima.preco - primeira.preco) / primeira.preco) * 100;
+    // "Desde a primeira compra" comparava com dez/2024 sem ressalva, e é
+    // onde um lançamento antigo em unidade errada vira "+1.900%" (QA 22/09).
+    const mesesDeDistancia = Math.round(
+      (new Date(`${ultima.data}T12:00:00`) - new Date(`${primeira.data}T12:00:00`)) / (30 * 86400000));
+    const suspeita = Math.abs(variacaoTotal) >= 300
+      ? ' — variação desse tamanho quase sempre é unidade trocada num lançamento antigo, não preço'
+      : '';
     document.getElementById('precos-insumo-sub').textContent =
-      `${compras.length} ${compras.length === 1 ? 'compra recebida' : 'compras recebidas'} desde ${_dataBR(primeira.data)} · preço por ${unidade}`;
+      `${compras.length} ${compras.length === 1 ? 'compra recebida' : 'compras recebidas'} desde ${_dataBR(primeira.data)}`
+      + ` · preço por ${unidade}`
+      + (mostrandoTudo && todas.length
+        ? ` · mostrando o histórico inteiro (menos de 2 compras nos últimos ${precosDias} dias)`
+        : ` · últimos ${precosDias} dias`)
+      + (mesesDeDistancia >= 6 ? ` · a comparação "desde a primeira" olha ${mesesDeDistancia} meses atrás${suspeita}` : suspeita);
 
     document.getElementById('precos-resumo').innerHTML = `
       <div><span class="precos-rotulo">Último preço</span><strong>R$ ${_formatarPrecoUnitario(ultima.preco)}</strong><small>${_dataBR(ultima.data)} · ${escaparHtml(ultima.fornecedor || '—')}</small></div>
@@ -16467,11 +16502,38 @@ if (document.getElementById('precos-altas')) {
       botao.classList.add('active');
       precosDias = parseInt(botao.dataset.dias, 10);
       carregarVariacoesPreco();
+      // O período agora vale também pro gráfico do insumo aberto.
+      if (precosInsumoAberto) abrirHistoricoPreco(precosInsumoAberto);
     });
   });
+  // Só reagia a nome exato: digitar "tomate" e apertar Enter não fazia nada
+  // e não dizia "não encontrei" (QA 22/09).
+  const _buscarInsumoDePreco = (texto) => {
+    const termo = (texto || '').trim();
+    if (!termo) return;
+    const exato = precosInsumosPorNome.get(termo);
+    if (exato) return abrirHistoricoPreco(exato);
+    const alvo = _textoBuscaCardapio(termo);
+    const achados = [...precosInsumosPorNome.entries()]
+      .filter(([nome]) => _textoBuscaCardapio(nome).includes(alvo));
+    if (achados.length === 1) return abrirHistoricoPreco(achados[0][1]);
+    const aviso = document.getElementById('precos-busca-aviso');
+    if (aviso) {
+      aviso.textContent = achados.length
+        ? `${achados.length} insumos com "${termo}": ${achados.slice(0, 6).map(([nome]) => nome).join(', ')}${achados.length > 6 ? '…' : ''}. Escolha um na lista.`
+        : `Nenhum insumo com "${termo}". Confira o nome no cadastro.`;
+      aviso.hidden = false;
+      setTimeout(() => { aviso.hidden = true; }, 6000);
+    }
+  };
   document.getElementById('precos-busca-insumo')?.addEventListener('change', (evento) => {
-    const id = precosInsumosPorNome.get(evento.target.value);
-    if (id) abrirHistoricoPreco(id);
+    _buscarInsumoDePreco(evento.target.value);
+  });
+  document.getElementById('precos-busca-insumo')?.addEventListener('keydown', (evento) => {
+    if (evento.key === 'Enter') {
+      evento.preventDefault();
+      _buscarInsumoDePreco(evento.target.value);
+    }
   });
   carregarVariacoesPreco();
   carregarInsumosParaBuscaDePreco();
