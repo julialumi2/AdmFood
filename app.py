@@ -186,6 +186,7 @@ from backend.armazenamento import (
     avancar_status_pedido,
     voltar_status_pedido,
     excluir_pedido,
+    substituir_itens_do_pedido,
     listar_pedidos_pendentes_recebimento,
     confirmar_recebimento_pedido,
     vincular_insumo_fornecedor,
@@ -645,6 +646,7 @@ DESCRICAO_DA_ACAO = {
     ('POST', '/api/pedidos/<int:pedido_id>/avancar'): 'Avançou a etapa do pedido',
     ('POST', '/api/pedidos/<int:pedido_id>/voltar'): 'Voltou a etapa do pedido',
     ('DELETE', '/api/pedidos/<int:pedido_id>'): 'Excluiu pedido',
+    ('PUT', '/api/pedidos/<int:pedido_id>/itens'): 'Corrigiu os itens de um pedido',
     ('POST', '/api/pedidos/<int:pedido_id>/whatsapp-enviado'): 'Marcou o pedido como enviado no WhatsApp',
     ('POST', '/api/recebimentos/<int:pedido_id>/confirmar'): 'Confirmou recebimento (soma no estoque)',
     ('POST', '/api/pedidos/<int:pedido_id>/nota-fiscal'): 'Anexou a nota fiscal do pedido',
@@ -4180,6 +4182,59 @@ def api_voltar_pedido(pedido_id):
     return jsonify({"ok": True, "status": novo_status})
 
 
+@app.route('/api/pedidos/<int:pedido_id>/itens', methods=['PUT'])
+def api_editar_itens_do_pedido(pedido_id):
+    """Corrige um pedido que ainda não chegou: quantidade, preço, tirar item
+    e acrescentar item. Recebido não entra — depois da entrega quem manda é a
+    conferência do recebimento (QA 22/09)."""
+    erro_admin = _exigir_gestao()
+    if erro_admin:
+        return erro_admin
+
+    pedido = buscar_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"erro": "Pedido não encontrado."}), 404
+    if not _loja_visivel(pedido['loja']):
+        return jsonify({"erro": "Esse pedido é de outra loja."}), 403
+
+    dados = request.get_json(silent=True) or {}
+    brutos = dados.get('itens')
+    if not isinstance(brutos, list) or not brutos:
+        return jsonify({"erro": "O pedido precisa ter pelo menos um item."}), 400
+    vistos = set()
+    itens = []
+    try:
+        for bruto in brutos:
+            insumo_id = int(bruto['insumoId'])
+            if insumo_id in vistos:
+                return jsonify({"erro": "O mesmo insumo está duas vezes na lista."}), 400
+            vistos.add(insumo_id)
+            quantidade = float(bruto['quantidade'])
+            preco = float(bruto['precoUnitario'])
+            if not quantidade > 0:
+                return jsonify({"erro": "Quantidade precisa ser maior que 0 (pra tirar o item, use a lixeira)."}), 400
+            if preco < 0:
+                return jsonify({"erro": "Preço não pode ser negativo."}), 400
+            itens.append({"insumoId": insumo_id, "quantidade": quantidade, "precoUnitario": preco})
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"erro": "Item inválido na lista."}), 400
+
+    try:
+        resultado = substituir_itens_do_pedido(pedido_id, itens)
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 409
+
+    _anotar_no_registro(
+        f'Editou o pedido nº {pedido_id} ({pedido["fornecedor_nome"]} · {pedido["loja"]}): '
+        f'{resultado["itensAntes"]} → {resultado["itensDepois"]} itens, '
+        f'R$ {resultado["totalAntes"]:.2f} → R$ {resultado["totalDepois"]:.2f}'
+    )
+    resposta = dict(resultado)
+    # O fornecedor já recebeu a mensagem antiga: quem edita precisa reenviar.
+    resposta["precisaReenviar"] = bool(pedido["whatsapp_enviado_em"])
+    return jsonify(resposta)
+
+
 @app.route('/api/pedidos/<int:pedido_id>', methods=['DELETE'])
 def api_excluir_pedido(pedido_id):
     """Cancela um pedido gerado por engano — libera o insumo pra entrar
@@ -4331,6 +4386,12 @@ def api_buscar_recebimento(pedido_id):
             "unidadeMedida": item["unidade_medida"],
             "quantidade": item["quantidade"],
             "precoUnitario": item["preco_unitario"],
+            # Faltavam na conferência: sem elas a tela não sabia o que já
+            # tinha chegado nem em quantas caixas vem (QA 22/09).
+            "quantidadePedida": item["quantidade_pedida"],
+            "quantidadeRecebida": item["quantidade_recebida"],
+            "fatorConversaoCompra": item["fator_conversao_compra"],
+            "unidadeCompra": item["unidade_compra"],
         }
         for item in pedido["itens"]
     ]

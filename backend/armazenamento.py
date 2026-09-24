@@ -5839,6 +5839,9 @@ def buscar_pedido(pedido_id):
         itens = conn.execute(
             """
             SELECT pi.insumo_id, pi.quantidade, pi.preco_unitario, i.nome, i.unidade_medida,
+                   -- Caixa/pacote e quanto rende: quem recebe na porta conta
+                   -- caixa, não grama (QA 22/09).
+                   i.fator_conversao_compra, i.unidade_compra,
                    COALESCE(pi.quantidade_pedida, pi.quantidade) AS quantidade_pedida,
                    COALESCE(pi.quantidade_recebida, 0) AS quantidade_recebida
             FROM pedido_compra_item pi
@@ -5890,6 +5893,114 @@ def voltar_status_pedido(pedido_id):
             (novo_status, datetime.now().isoformat(), pedido_id),
         )
     return novo_status
+
+
+def substituir_itens_do_pedido(pedido_id, itens):
+    """Troca os itens de um pedido que ainda não foi recebido: dá pra mudar
+    quantidade e preço, tirar item e acrescentar item. Antes não existia como
+    corrigir nada — o único caminho era cancelar e refazer (QA 22/09).
+
+    Devolve {antes, depois} com o total de cada lado, pro registro de ações
+    dizer o que mudou. Recebido não passa por aqui: depois da entrega, quem
+    manda é a conferência do recebimento.
+    """
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        travar_para_escrita(conn)
+        pedido = conn.execute(
+            "SELECT status, compra_fora FROM pedido_compra WHERE id = ?", (pedido_id,)
+        ).fetchone()
+        if not pedido:
+            raise ValueError("Pedido não encontrado.")
+        if pedido["status"] == "recebido":
+            raise ValueError(
+                "Esse pedido já foi recebido: o que chegou é o que vale. "
+                "Pra corrigir, ajuste a quantidade em Insumos."
+            )
+
+        nomes = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM insumo")}
+        antigos = [dict(l) for l in conn.execute(
+            "SELECT insumo_id, quantidade, preco_unitario FROM pedido_compra_item WHERE pedido_id = ?",
+            (pedido_id,),
+        )]
+        total_antes = round(sum(l["quantidade"] * l["preco_unitario"] for l in antigos), 2)
+
+        conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
+        for item in itens:
+            insumo_id = int(item["insumoId"])
+            if insumo_id not in nomes:
+                raise ValueError("Insumo inválido na lista.")
+            quantidade = float(item["quantidade"])
+            preco = float(item["precoUnitario"])
+            conn.execute(
+                "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario, "
+                "quantidade_pedida, quantidade_recebida) VALUES (?, ?, ?, ?, ?, 0)",
+                (pedido_id, insumo_id, quantidade, preco, quantidade),
+            )
+        conn.execute("UPDATE pedido_compra SET atualizado_em = ? WHERE id = ?", (agora, pedido_id))
+
+        total_depois = round(sum(float(i["quantidade"]) * float(i["precoUnitario"]) for i in itens), 2)
+        return {
+            "totalAntes": total_antes,
+            "totalDepois": total_depois,
+            "itensAntes": len(antigos),
+            "itensDepois": len(itens),
+            "jaEnviado": pedido["status"] != "enviado" or bool(pedido["compra_fora"]),
+        }
+
+
+def substituir_itens_do_pedido(pedido_id, itens):
+    """Troca os itens de um pedido que ainda não foi recebido: dá pra mudar
+    quantidade e preço, tirar item e acrescentar item. Antes não existia como
+    corrigir nada — o único caminho era cancelar e refazer (QA 22/09).
+
+    Devolve {antes, depois} com o total de cada lado, pro registro de ações
+    dizer o que mudou. Recebido não passa por aqui: depois da entrega, quem
+    manda é a conferência do recebimento.
+    """
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        travar_para_escrita(conn)
+        pedido = conn.execute(
+            "SELECT status, compra_fora FROM pedido_compra WHERE id = ?", (pedido_id,)
+        ).fetchone()
+        if not pedido:
+            raise ValueError("Pedido não encontrado.")
+        if pedido["status"] == "recebido":
+            raise ValueError(
+                "Esse pedido já foi recebido: o que chegou é o que vale. "
+                "Pra corrigir, ajuste a quantidade em Insumos."
+            )
+
+        nomes = {l["id"]: l["nome"] for l in conn.execute("SELECT id, nome FROM insumo")}
+        antigos = [dict(l) for l in conn.execute(
+            "SELECT insumo_id, quantidade, preco_unitario FROM pedido_compra_item WHERE pedido_id = ?",
+            (pedido_id,),
+        )]
+        total_antes = round(sum(l["quantidade"] * l["preco_unitario"] for l in antigos), 2)
+
+        conn.execute("DELETE FROM pedido_compra_item WHERE pedido_id = ?", (pedido_id,))
+        for item in itens:
+            insumo_id = int(item["insumoId"])
+            if insumo_id not in nomes:
+                raise ValueError("Insumo inválido na lista.")
+            quantidade = float(item["quantidade"])
+            preco = float(item["precoUnitario"])
+            conn.execute(
+                "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, preco_unitario, "
+                "quantidade_pedida, quantidade_recebida) VALUES (?, ?, ?, ?, ?, 0)",
+                (pedido_id, insumo_id, quantidade, preco, quantidade),
+            )
+        conn.execute("UPDATE pedido_compra SET atualizado_em = ? WHERE id = ?", (agora, pedido_id))
+
+        total_depois = round(sum(float(i["quantidade"]) * float(i["precoUnitario"]) for i in itens), 2)
+        return {
+            "totalAntes": total_antes,
+            "totalDepois": total_depois,
+            "itensAntes": len(antigos),
+            "itensDepois": len(itens),
+            "jaEnviado": pedido["status"] != "enviado" or bool(pedido["compra_fora"]),
+        }
 
 
 def excluir_pedido(pedido_id):

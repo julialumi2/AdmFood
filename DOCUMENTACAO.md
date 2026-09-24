@@ -5078,3 +5078,39 @@ programador). Estes são os quatro que faltavam.
   enviar" sem ninguém saber. Agora a falha aparece, dizendo que o pedido
   segue pendente. (Que "enviado" seja só o clique continua sendo o que dá
   pra saber: o WhatsApp Web não conta pro sistema se a mensagem saiu.)
+
+### 6.81 Corrigir um pedido, e conferir o recebimento de pé
+
+**Editar pedido** (o médio que estava esperando decisão dela — aprovado em
+24/09). Não existia como corrigir nada num pedido: nem item, nem quantidade,
+nem preço. O único caminho era cancelar e refazer — e cancelar depois de
+recebido é justamente o que a gente barrou.
+
+- No detalhe do pedido, **"Corrigir itens deste pedido"** transforma as linhas
+  em campos: quantidade e preço nas mesmas unidades que a tela já usa
+  (kg/L/un e R$ por kg/L/un), lixeira pra tirar item e "+ acrescentar item".
+  O total recalcula enquanto se digita, e o Salvar mostra o resumo antes.
+- **Recebido não entra.** O servidor recusa (409) dizendo que o que chegou é
+  o que vale, e que pra corrigir é pela quantidade em Insumos. Compra por
+  fora também fica de fora — ela nasce recebida.
+- **Se o pedido já foi pro fornecedor**, a tela avisa antes e, depois de
+  gravar, lembra de mandar a mensagem de novo: o fornecedor está com a versão
+  antiga.
+- Vai pro registro de ações com o que mudou: *"Editou o pedido nº 10027
+  (Fornecedor · Loja): 1 → 2 itens, R$ 60,00 → R$ 170,00"*.
+- Barrados no servidor: lista vazia, insumo repetido, quantidade ≤ 0 e preço
+  negativo.
+
+**Conferir o recebimento** era digitação pura, e quem recebe está de pé, na
+porta, com pressa:
+
+- cada item ganhou **− e +** e um **"não veio"** que zera num toque;
+- **"Chegou tudo certo"** devolve todas as quantidades pro que foi pedido —
+  serve depois de zerar um item por engano;
+- **a caixa virou unidade**: quando o insumo tem conversão cadastrada, dá pra
+  digitar em caixa em vez de kg, com "1 caixa = 5 kg" escrito embaixo. Trocar
+  a unidade converte o que já estava digitado, e a conta do valor, a do que
+  faltou e a que vai pro servidor seguem a unidade escolhida.
+- A conferência também passou a receber **o que já tinha chegado** em entregas
+  anteriores (`quantidadePedida`/`quantidadeRecebida`), que a tela usava mas a
+  rota não mandava.

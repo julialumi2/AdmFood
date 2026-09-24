@@ -334,6 +334,7 @@
                   <th>Quantidade</th>
                   <th>Preço unitário</th>
                   <th>Subtotal</th>
+                  <th id="pedido-itens-th-acoes" hidden></th>
                 </tr>
               </thead>
               <tbody id="pedido-itens-body">
@@ -343,9 +344,24 @@
                 <tr>
                   <td colspan="3" class="font-bold">Total</td>
                   <td class="font-bold" id="pedido-detalhe-total">—</td>
+                  <td id="pedido-itens-td-acoes" hidden></td>
                 </tr>
               </tfoot>
             </table>
+            </div>
+            <!-- Corrigir um pedido que ainda não chegou: antes o único
+                 caminho era cancelar e refazer (QA 22/09). -->
+            <div class="pedido-itens-edicao" id="pedido-itens-edicao" hidden>
+              <button type="button" class="btn-limpar-filtro" id="btn-pedido-editar-itens">
+                <i data-lucide="pencil"></i> Corrigir itens deste pedido
+              </button>
+              <div class="pedido-itens-edicao-acoes" id="pedido-itens-edicao-acoes" hidden>
+                <button type="button" class="btn-limpar-filtro" id="btn-pedido-item-novo">+ acrescentar item</button>
+                <span class="pedido-itens-edicao-espaco"></span>
+                <button type="button" class="btn-secondary-sm" id="btn-pedido-editar-cancelar">Cancelar</button>
+                <button type="button" class="btn-primary-sm" id="btn-pedido-editar-salvar">Salvar correção</button>
+              </div>
+              <p class="panel-subtitle" id="pedido-itens-edicao-aviso" hidden></p>
             </div>
           </div>
         </div>

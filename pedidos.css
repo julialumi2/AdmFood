@@ -1020,3 +1020,112 @@ body.dark-mode {
 .pedido-notas-substituidas { margin: calc(var(--space-4) * -1) 0 var(--space-4); font-size: 0.85rem; }
 .pedido-notas-substituidas a { color: var(--info); text-decoration: underline; }
 .pedido-notas-substituidas[hidden] { display: none; }
+
+/* Corrigir os itens de um pedido que ainda não chegou (QA 22/09) */
+.pedido-itens-edicao { margin-top: var(--space-3); }
+.pedido-itens-edicao[hidden] { display: none; }
+
+.pedido-itens-edicao-acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pedido-itens-edicao-acoes[hidden] { display: none; }
+.pedido-itens-edicao-espaco { flex: 1; }
+
+.pedido-campo-unidade {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  overflow: hidden;
+  max-width: 160px;
+}
+
+.pedido-campo-unidade:focus-within {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+.pedido-campo-unidade input {
+  width: 80px;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dark);
+  font: inherit;
+  text-align: right;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.pedido-edicao-unidade {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-left: 1px solid var(--input-border);
+  background-color: var(--surface-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pedido-edicao-insumo {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font: inherit;
+}
+
+.pedido-linha-nova { background-color: var(--info-soft); }
+
+/* Conferir o recebimento de pé, na porta (QA 22/09): − / +, "não veio" num
+   toque e a caixa como unidade. */
+.recebimento-conferir {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.recebimento-passo {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.recebimento-passo:active { background-color: var(--info-soft); }
+.recebimento-nao-veio { white-space: nowrap; }
+
+.recebimento-unidade-escolha {
+  border: none;
+  border-left: 1px solid var(--input-border);
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.recebimento-conversao {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

@@ -5899,7 +5899,7 @@ function renderPedidoDetalhe() {
     return `R$ ${_formatarPrecoUnitario(item.precoUnitario * fator)}/${escaparHtml(rotulo)}`;
   };
   itensBody.innerHTML = p.itens.map((item) => `
-    <tr>
+    <tr data-insumo-id="${item.insumoId}">
       <td class="font-bold">${escaparHtml(item.nome)}</td>
       <td>${_formatarQuantidade(item.quantidade, item.unidadeMedida)}</td>
       <td>${precoPorUnidade(item)}</td>
@@ -5907,9 +5907,195 @@ function renderPedidoDetalhe() {
     </tr>
   `).join('');
   document.getElementById('pedido-detalhe-total').textContent = `R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  _prepararEdicaoDoPedido(p);
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+
+// --- CORRIGIR OS ITENS DE UM PEDIDO (QA 22/09) -----------------------------
+// Não existia como corrigir um pedido: nem item, nem quantidade, nem preço.
+// O único caminho era cancelar e refazer — e cancelar depois de recebido é
+// justamente o que a gente barrou. Editar só vale enquanto não chegou;
+// depois da entrega quem manda é a conferência do recebimento.
+let pedidoEmEdicao = null;
+
+function _prepararEdicaoDoPedido(p) {
+  const bloco = document.getElementById('pedido-itens-edicao');
+  if (!bloco) return;
+  pedidoEmEdicao = null;
+  const podeEditar = _possoGerir() && p.status !== 'recebido' && !p.compraFora;
+  bloco.hidden = !podeEditar;
+  document.getElementById('pedido-itens-edicao-acoes').hidden = true;
+  document.getElementById('btn-pedido-editar-itens').hidden = false;
+  document.getElementById('pedido-itens-edicao-aviso').hidden = true;
+  document.getElementById('pedido-itens-th-acoes').hidden = true;
+  document.getElementById('pedido-itens-td-acoes').hidden = true;
+}
+
+// Cada linha vira campo de quantidade e de preço, nas unidades que a tela
+// já usa (kg/L/un e R$ por kg/L/un), mais a lixeira pra tirar o item.
+function _linhaPedidoEdicaoHTML(item, insumosDisponiveis) {
+  const { rotulo, fator } = _escalaDeCusto(item.unidadeMedida);
+  const quantidade = _numeroCampoQtd(item.quantidade / fator);
+  const preco = _formatarPrecoUnitario(item.precoUnitario * fator);
+  const nome = item.novo
+    ? `<select class="pedido-edicao-insumo">
+         <option value="">Escolha o insumo...</option>
+         ${insumosDisponiveis.map((i) => `<option value="${i.id}" data-unidade="${escaparHtml(i.unidadeMedida || 'un')}">${escaparHtml(i.nome)}</option>`).join('')}
+       </select>`
+    : `<span class="font-bold">${escaparHtml(item.nome)}</span>`;
+  return `
+    <tr data-insumo-id="${item.insumoId || ''}" data-fator="${fator}" class="pedido-linha-edicao${item.novo ? ' pedido-linha-nova' : ''}">
+      <td data-rotulo="Insumo">${nome}</td>
+      <td data-rotulo="Quantidade"><div class="pedido-campo-unidade">
+        <input type="text" inputmode="decimal" class="pedido-input-quantidade" value="${item.novo ? '' : quantidade}" placeholder="0">
+        <span class="pedido-edicao-unidade">${escaparHtml(rotulo)}</span>
+      </div></td>
+      <td data-rotulo="Preço unitário"><div class="pedido-campo-unidade">
+        <input type="text" inputmode="decimal" class="pedido-input-preco" value="${item.novo ? '' : preco}" placeholder="0,00">
+        <span class="pedido-edicao-unidade">R$/<span class="pedido-edicao-unidade-preco">${escaparHtml(rotulo)}</span></span>
+      </div></td>
+      <td data-rotulo="Subtotal" class="pedido-edicao-subtotal">—</td>
+      <td class="col-acoes"><div class="acoes-linha">
+        <button type="button" class="btn-acao-icone btn-excluir" data-acao="tirar-item-pedido" title="Tirar este item do pedido">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div></td>
+    </tr>`;
+}
+
+function _lerLinhasDaEdicao() {
+  return [...document.querySelectorAll('#pedido-itens-body tr.pedido-linha-edicao')].map((linha) => {
+    const fator = parseFloat(linha.dataset.fator) || 1;
+    const insumoId = linha.dataset.insumoId
+      ? parseInt(linha.dataset.insumoId, 10)
+      : parseInt(linha.querySelector('.pedido-edicao-insumo')?.value || '', 10);
+    const quantidade = _lerNumeroBR(linha.querySelector('.pedido-input-quantidade').value);
+    const preco = _lerNumeroBR(linha.querySelector('.pedido-input-preco').value);
+    return { linha, insumoId, fator, quantidade, preco, vazia: !linha.querySelector('.pedido-input-quantidade').value.trim() };
+  });
+}
+
+function _atualizarTotalDaEdicao() {
+  let total = 0;
+  _lerLinhasDaEdicao().forEach((l) => {
+    const subtotal = Number.isFinite(l.quantidade) && Number.isFinite(l.preco) ? l.quantidade * l.preco : 0;
+    total += subtotal;
+    l.linha.querySelector('.pedido-edicao-subtotal').textContent = subtotal ? `R$ ${_formatarMoedaBR(Math.round(subtotal * 100) / 100)}` : '—';
+  });
+  document.getElementById('pedido-detalhe-total').textContent = `R$ ${_formatarMoedaBR(Math.round(total * 100) / 100)}`;
+}
+
+async function _entrarNaEdicaoDoPedido() {
+  const p = pedidoDetalheAtual;
+  if (!p) return;
+  const insumos = await _carregarInsumosParaPreco();
+  pedidoEmEdicao = { id: p.id, insumos };
+  document.getElementById('pedido-itens-body').innerHTML =
+    p.itens.map((item) => _linhaPedidoEdicaoHTML(item, insumos)).join('');
+  document.getElementById('pedido-itens-th-acoes').hidden = false;
+  document.getElementById('pedido-itens-td-acoes').hidden = false;
+  document.getElementById('btn-pedido-editar-itens').hidden = true;
+  document.getElementById('pedido-itens-edicao-acoes').hidden = false;
+  const aviso = document.getElementById('pedido-itens-edicao-aviso');
+  aviso.hidden = !p.whatsappEnviadoEm;
+  aviso.textContent = p.whatsappEnviadoEm
+    ? 'Este pedido já foi pro fornecedor: depois de corrigir, mande a mensagem de novo pra ele saber o que mudou.'
+    : '';
+  _atualizarTotalDaEdicao();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.getElementById('btn-pedido-editar-itens')?.addEventListener('click', _entrarNaEdicaoDoPedido);
+document.getElementById('btn-pedido-editar-cancelar')?.addEventListener('click', () => {
+  if (pedidoDetalheAtual) renderPedidoDetalhe(pedidoDetalheAtual);
+});
+
+document.getElementById('btn-pedido-item-novo')?.addEventListener('click', () => {
+  if (!pedidoEmEdicao) return;
+  document.getElementById('pedido-itens-body').insertAdjacentHTML('beforeend',
+    _linhaPedidoEdicaoHTML({ novo: true, unidadeMedida: 'un', quantidade: 0, precoUnitario: 0 }, pedidoEmEdicao.insumos));
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
+
+document.getElementById('pedido-itens-body')?.addEventListener('input', (evento) => {
+  if (evento.target.matches('.pedido-input-quantidade, .pedido-input-preco')) _atualizarTotalDaEdicao();
+});
+
+// Linha nova: a unidade e o fator vêm do insumo escolhido.
+document.getElementById('pedido-itens-body')?.addEventListener('change', (evento) => {
+  const seletor = evento.target.closest('.pedido-edicao-insumo');
+  if (!seletor) return;
+  const linha = seletor.closest('tr');
+  const unidade = seletor.options[seletor.selectedIndex]?.dataset.unidade || 'un';
+  const { rotulo, fator } = _escalaDeCusto(unidade);
+  linha.dataset.fator = fator;
+  linha.dataset.insumoId = seletor.value;
+  linha.querySelectorAll('.pedido-edicao-unidade').forEach((el, i) => {
+    el.innerHTML = i === 0 ? escaparHtml(rotulo) : `R$/<span class="pedido-edicao-unidade-preco">${escaparHtml(rotulo)}</span>`;
+  });
+  _atualizarTotalDaEdicao();
+});
+
+document.getElementById('pedido-itens-body')?.addEventListener('click', (evento) => {
+  const botao = evento.target.closest('[data-acao="tirar-item-pedido"]');
+  if (!botao) return;
+  const linhas = document.querySelectorAll('#pedido-itens-body tr.pedido-linha-edicao');
+  if (linhas.length <= 1) {
+    alert('O pedido precisa ter pelo menos um item. Pra desfazer o pedido inteiro, use "Cancelar pedido".');
+    return;
+  }
+  botao.closest('tr').remove();
+  _atualizarTotalDaEdicao();
+});
+
+document.getElementById('btn-pedido-editar-salvar')?.addEventListener('click', async (evento) => {
+  if (!pedidoEmEdicao) return;
+  const linhas = _lerLinhasDaEdicao();
+  const semInsumo = linhas.filter((l) => !l.insumoId);
+  if (semInsumo.length) {
+    alert('Escolha o insumo da linha que você acrescentou, ou tire a linha.');
+    return;
+  }
+  const ilegiveis = linhas.filter((l) => !Number.isFinite(l.quantidade) || !Number.isFinite(l.preco) || l.quantidade <= 0);
+  if (ilegiveis.length) {
+    alert('Confira a quantidade e o preço: quantidade tem que ser maior que 0 e os dois têm que ser número.');
+    return;
+  }
+  const itens = linhas.map((l) => ({
+    insumoId: l.insumoId,
+    quantidade: Math.round(l.quantidade * l.fator * 1000) / 1000,
+    precoUnitario: l.preco / l.fator,
+  }));
+  const total = itens.reduce((s, i) => s + i.quantidade * i.precoUnitario, 0);
+  if (!confirm(`Gravar a correção do pedido nº ${pedidoEmEdicao.id}?`
+    + '\n' + '\n' + `${itens.length} ${itens.length === 1 ? 'item' : 'itens'} · total R$ ${_formatarMoedaBR(Math.round(total * 100) / 100)}`)) return;
+
+  const botao = evento.currentTarget;
+  botao.disabled = true;
+  botao.textContent = 'Salvando…';
+  try {
+    const resposta = await fetch(`/api/pedidos/${pedidoEmEdicao.id}/itens`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itens }),
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível gravar a correção.');
+    pedidoEmEdicao = null;
+    await carregarPedidos();
+    await abrirPedidoDetalhe(dados.pedidoId || pedidoDetalheAtual.id);
+    if (dados.precisaReenviar) {
+      alert('Correção gravada. O fornecedor já tinha recebido a mensagem antiga — mande "Enviar por WhatsApp" de novo pra ele saber o que mudou.');
+    }
+  } catch (erro) {
+    alert(erro.message);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = 'Salvar correção';
+  }
+});
 
 ['pedidos-filtro-periodo', 'pedidos-filtro-loja', 'pedidos-filtro-fornecedor'].forEach((id) => {
   document.getElementById(id)?.addEventListener('change', renderPedidosTabela);
@@ -9785,10 +9971,27 @@ function _linhaRecebimentoItemHTML(item) {
       <td class="text-muted" data-rotulo="Qtd. pedida">${emNumero(falta)} ${escaparHtml(rotulo)}
         ${jaRecebida > 0 ? `<span class="recebimento-ja-veio">já chegaram ${emNumero(jaRecebida)} de ${emNumero(pedida)}</span>` : ''}
       </td>
-      <td data-rotulo="Qtd. recebida"><div class="recebimento-campo-unidade">
-        <input type="number" step="any" min="0" class="recebimento-input-quantidade" value="${quantidade}">
-        <span>${escaparHtml(rotulo)}</span>
-      </div></td>
+      <td data-rotulo="Qtd. recebida">
+        <!-- Quem recebe está de pé, na porta, com pressa: − e +, "não veio"
+             num toque e a caixa como unidade (QA 22/09). -->
+        <div class="recebimento-conferir">
+          <button type="button" class="recebimento-passo" data-passo="-1" aria-label="Diminuir ${escaparHtml(item.nome)}">−</button>
+          <div class="recebimento-campo-unidade">
+            <input type="text" inputmode="decimal" class="recebimento-input-quantidade" value="${emNumero(falta)}">
+            ${item.fatorConversaoCompra > 0
+              ? `<select class="recebimento-unidade-escolha" data-fator-base="${fator}" aria-label="Unidade de ${escaparHtml(item.nome)}">
+                   <option value="${fator}">${escaparHtml(rotulo)}</option>
+                   <option value="${item.fatorConversaoCompra}">${escaparHtml(item.unidadeCompra || 'caixa')}</option>
+                 </select>`
+              : `<span>${escaparHtml(rotulo)}</span>`}
+          </div>
+          <button type="button" class="recebimento-passo" data-passo="1" aria-label="Aumentar ${escaparHtml(item.nome)}">+</button>
+          <button type="button" class="btn-limpar-filtro recebimento-nao-veio" data-acao="item-nao-veio">não veio</button>
+        </div>
+        ${item.fatorConversaoCompra > 0
+          ? `<span class="recebimento-conversao">1 ${escaparHtml(item.unidadeCompra || 'caixa')} = ${escaparHtml(_formatarQuantidade(item.fatorConversaoCompra, item.unidadeMedida))}</span>`
+          : ''}
+      </td>
       <td data-rotulo="Preço unitário"><div class="recebimento-campo-unidade">
         <input type="number" step="any" min="0" class="recebimento-input-preco" value="${preco}">
         <span>R$/${escaparHtml(rotulo)}</span>
@@ -9829,7 +10032,10 @@ function _atualizarValorCalculadoRecebimento() {
     const campoQuantidade = linha.querySelector('.recebimento-input-quantidade');
     const campoPreco = linha.querySelector('.recebimento-input-preco');
     if (!campoQuantidade || !campoPreco) return;
-    const quantidade = parseFloat(campoQuantidade.value) || 0;
+    // O campo pode estar em caixa, e o preço é sempre por kg/L/un.
+    const base = parseFloat(linha.dataset.fator) || 1;
+    const escolhido = parseFloat(linha.querySelector('.recebimento-unidade-escolha')?.value) || base;
+    const quantidade = (_lerNumeroBR(campoQuantidade.value) || 0) * escolhido / base;
     const preco = parseFloat(campoPreco.value) || 0;
     total += quantidade * preco;
   });
@@ -9924,15 +10130,69 @@ function _ligarCamposRecebimento() {
     input.removeEventListener('input', _atualizarValorCalculadoRecebimento);
     input.addEventListener('input', _atualizarValorCalculadoRecebimento);
   });
+  document.querySelectorAll('#recebimento-itens-body .recebimento-unidade-escolha').forEach((select) => {
+    select.removeEventListener('change', _trocarUnidadeRecebimento);
+    select.addEventListener('change', _trocarUnidadeRecebimento);
+  });
 }
+
+// Trocar kg ↔ caixa mantém a mesma quantidade física.
+function _trocarUnidadeRecebimento(evento) {
+  const select = evento.currentTarget;
+  const campo = select.closest('.recebimento-campo-unidade').querySelector('.recebimento-input-quantidade');
+  const anterior = Number(select.dataset.fatorAnterior) || Number(select.dataset.fatorBase) || 1;
+  const novo = Number(select.value) || 1;
+  const digitado = _lerNumeroBR(campo.value);
+  if (campo.value.trim() !== '' && Number.isFinite(digitado)) {
+    campo.value = _numeroCampoQtd(digitado * anterior / novo);
+  }
+  select.dataset.fatorAnterior = String(novo);
+  _atualizarValorCalculadoRecebimento();
+}
+
+// − / + e "não veio": conferir era digitação pura, e quem recebe está de pé
+// na porta com pressa (QA 22/09).
+document.getElementById('recebimento-itens-body')?.addEventListener('click', (evento) => {
+  const linha = evento.target.closest('tr');
+  if (!linha) return;
+  const campo = linha.querySelector('.recebimento-input-quantidade');
+  if (!campo) return;
+  if (evento.target.closest('[data-acao="item-nao-veio"]')) {
+    campo.value = '0';
+  } else {
+    const passo = evento.target.closest('.recebimento-passo');
+    if (!passo) return;
+    const atual = _lerNumeroBR(campo.value) || 0;
+    campo.value = _numeroCampoQtd(Math.max(0, atual + (passo.dataset.passo === '-1' ? -1 : 1)));
+  }
+  campo.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+// "Chegou tudo certo": devolve todas as quantidades pro que foi pedido —
+// útil depois de zerar um item por engano.
+document.getElementById('btn-recebimento-tudo-certo')?.addEventListener('click', () => {
+  document.querySelectorAll('#recebimento-itens-body tr[data-falta]').forEach((linha) => {
+    const campo = linha.querySelector('.recebimento-input-quantidade');
+    const select = linha.querySelector('.recebimento-unidade-escolha');
+    if (!campo) return;
+    const falta = parseFloat(linha.dataset.falta) || 0;
+    const base = parseFloat(linha.dataset.fator) || 1;
+    const escolhido = parseFloat(select?.value) || base;
+    campo.value = _numeroCampoQtd(falta * base / escolhido);
+  });
+  _atualizarValorCalculadoRecebimento();
+});
 
 // O que falta pra completar o pedido, conferindo o que está digitado agora.
 function _faltasDoRecebimento() {
   return Array.from(document.querySelectorAll('#recebimento-itens-body tr')).map((linha) => {
     const campo = linha.querySelector('.recebimento-input-quantidade');
     const esperado = parseFloat(linha.dataset.falta) || 0;
-    const recebido = campo ? (parseFloat(campo.value) || 0) : 0;
-    const unidade = linha.querySelector('.recebimento-campo-unidade span')?.textContent || '';
+    // Contando em caixa, o que está no campo não está na unidade do "falta".
+    const base = parseFloat(linha.dataset.fator) || 1;
+    const escolhido = parseFloat(linha.querySelector('.recebimento-unidade-escolha')?.value) || base;
+    const recebido = campo ? ((_lerNumeroBR(campo.value) || 0) * escolhido / base) : 0;
+    const unidade = linha.dataset.unidade || '';
     return { nome: linha.dataset.nome || '', falta: Math.round((esperado - recebido) * 1000) / 1000, unidade };
   }).filter((linha) => linha.falta > 0.001);
 }
@@ -9999,9 +10259,11 @@ document.getElementById('form-confirmar-recebimento')?.addEventListener('submit'
       const campoQuantidade = linha.querySelector('.recebimento-input-quantidade');
       const campoPreco = linha.querySelector('.recebimento-input-preco');
       if (!campoQuantidade || !campoPreco || !linha.dataset.insumoId) return null;
+      // Contando em caixa, o fator é o da caixa; o preço continua por kg/L/un.
+      const fatorDigitado = parseFloat(linha.querySelector('.recebimento-unidade-escolha')?.value) || fator;
       return {
         insumoId: parseInt(linha.dataset.insumoId, 10),
-        quantidade: (parseFloat(campoQuantidade.value) || 0) * fator,
+        quantidade: (_lerNumeroBR(campoQuantidade.value) || 0) * fatorDigitado,
         precoUnitario: (parseFloat(campoPreco.value) || 0) / fator,
         // Vira lote em "Lotes vencendo"; em branco, nada muda (QA 22/09).
         validade: linha.querySelector('.recebimento-input-validade')?.value || null,
