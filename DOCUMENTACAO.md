@@ -5457,3 +5457,74 @@ detalhe deixou de depender do mouse.
 sinal nenhum enquanto o servidor montava o arquivo. Virou botão com
 "Preparando o arquivo...", aviso de que não é pra fechar a página, o tamanho
 do arquivo no fim e a mensagem de erro na tela quando falha.
+
+
+### 6.91 Médios do caminho da compra (Requisições, Fornecedores, Guia)
+
+Doze achados das três telas do fluxo de compra. Sete já estavam fechados por
+levas anteriores: o "carregando" da conferência (#14), a tabela que não
+atualizava depois de criar (#15), o resumo do "Gerar pedidos homologados"
+(#16), o convite de estoque mínimo com unidade e sem ponto de milhar (#17), o
+"carregando" e a mensagem de erro dos Fornecedores (#29), o "Desativar" com
+pergunta (#30) e o texto do vencedor depois de gerar (#40). O #13 e o #25
+estavam pela metade. Os cinco abertos e as duas metades:
+
+**Tirar uma loja da requisição (#13).** O clique duplo já não duplicava a
+contagem, mas continuava sem saída: a loja que não respondia segurava a
+requisição inteira em "Aguardando lojas" e só dava pra apagar a requisição
+toda. Agora cada loja tem a lixeira na lista da conferência
+(`DELETE /api/contagens/<id>`), com o que ela preencheu. Contagem já aprovada
+não sai — ela virou estoque; pra refazer, reabra antes.
+
+**Fornecedor desativado no meio da cotação (#25).** O link dele já parava de
+aceitar preço. Faltava a tela: no comparativo ele aparecia igual a todo mundo
+e podia virar vencedor sem uma palavra. Agora a coluna dele leva a etiqueta
+"desativado", com a explicação de que o preço continua valendo ali mas é pra
+conferir antes de escolher.
+
+**O convite que marcava a rede inteira (#26).** Quando nenhum fornecedor tem
+a loja da cotação marcada em Fornecedores, o sistema marca todos — é o
+comportamento que ela pediu em 11/09. O problema era o aviso: uma linha
+cinza. Virou um bloco amarelo que diz quantos links isso significa, com
+"Desmarcar todos" do lado, e o "Gerar convites" pergunta antes de disparar,
+deixando claro que eles vieram marcados por falta de cadastro, não por
+escolha. Fornecedor sem loja nenhuma também deixou de ficar lá embaixo sem
+explicação: agora a linha dele diz "sem loja marcada no cadastro — por isso
+não entrou na sugestão". E quem ainda não cota nenhum insumo (que recebe a
+cotação inteira) passou a vir com os itens **desmarcados**, pra ela escolher
+o que mandar.
+
+**O pedido mínimo entra na cotação (#27).** Ele só aparecia depois, na tela de
+Pedidos, quando já não dava pra remanejar. Agora, embaixo do nome de cada
+fornecedor no comparativo, aparece quanto ele leva com os vencedores marcados
+naquele momento — em amarelo, com quanto falta, quando isso ainda não fecha o
+mínimo dele. A conta usa a cotação inteira, não o filtro de seção.
+
+**A corrida do perfil (#28).** Se a lista de fornecedores respondia antes do
+`/api/me`, o admin via a tela como se fosse só leitura até digitar algo na
+busca. A tabela agora é redesenhada quando o perfil chega.
+
+**O que o fornecedor cota (#31).** Morava só em Insumos. O "Ver detalhes"
+ganhou a seção "O que ele cota", agrupada por categoria, com as lojas no
+title de cada item e uma estrela em quem é homologado. Quem não cota nada
+recebe a explicação de onde se marca isso.
+
+**Atualizar preços na cotação (#41).** Não havia nem botão: era sair da
+cotação e entrar de novo. O detalhe ganhou "Atualizar preços", e enquanto a
+cotação estiver aberta na frente da pessoa ela se relê sozinha de minuto em
+minuto (nunca com a aba escondida ou a tela fechada).
+
+**O que faltava no Guia (#42).** Ele não falava em **fechar a cotação** — e é
+o fechar que enche a aba Compras, então seguindo o Guia ao pé da letra a aba
+ficava vazia pra sempre. Também não mencionava "Selecionar os melhores
+preços", "Reabrir", nem o prazo do convite. Tudo isso entrou, com o aviso do
+fechar em destaque.
+
+**"Nenhuma mensagem sem você clicar" (#43).** Deixou de ser verdade com a
+extensão: um clique dispara a fila inteira. A abertura do Guia agora diz
+exatamente isso.
+
+**O fluxograma no celular (#44).** A moldura rolava de lado e os textos
+ficavam minúsculos. Abaixo de 720px o desenho dá lugar à mesma sequência em
+lista, com os dois blocos (pedido direto e cotação) marcados pela cor da
+borda.

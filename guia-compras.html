@@ -177,8 +177,9 @@
         <p class="guia-intro">
           A loja conta o estoque, você decide quanto comprar, o que tem fornecedor homologado sai
           direto em pedido e <strong>só o resto passa por cotação</strong>. O estoque só sobe quando
-          alguém confirma a entrega em Recebimentos. E nenhuma mensagem vai pro fornecedor sem
-          você clicar em "Enviar por WhatsApp".
+          alguém confirma a entrega em Recebimentos. Nenhuma mensagem sai sem você clicar — mas
+          atenção: com a extensão do WhatsApp instalada, <strong>um clique em "Enviar todos" dispara
+          a fila inteira</strong>, um fornecedor atrás do outro, sem parar pra confirmar cada um.
         </p>
 
         <div class="chart-card">
@@ -249,6 +250,18 @@
               </g>
             </svg>
           </div>
+          <!-- No celular o desenho não cabe: a moldura rolava de lado e o
+               texto ficava minúsculo. Lá o mesmo caminho vira lista
+               (QA 22/09). -->
+          <ol class="guia-fluxo-lista">
+            <li class="guia-fluxo-passo"><span class="guia-fluxo-passo-num">1</span><span><b>Insumo cadastrado</b><span class="detalhe">com estoque mínimo e quem cota, por loja</span></span></li>
+            <li class="guia-fluxo-passo"><span class="guia-fluxo-passo-num">2</span><span><b>Requisição</b><span class="detalhe">cada loja conta pelo link e você aprova</span></span></li>
+            <li class="guia-fluxo-passo"><span class="guia-fluxo-passo-num">3</span><span><b>O que comprar</b><span class="detalhe">você confere a quantidade de cada item; ele cai em um dos dois blocos</span></span></li>
+            <li class="guia-fluxo-passo direto"><span class="guia-fluxo-passo-num">4</span><span><b>Pedido direto (homologado)</b><span class="detalhe">preço já combinado, sai sem cotar</span></span></li>
+            <li class="guia-fluxo-passo cotacao"><span class="guia-fluxo-passo-num">4</span><span><b>Cotação</b><span class="detalhe">o resto: convite por WhatsApp, preços chegam pelo link, você escolhe o vencedor e fecha a cotação</span></span></li>
+            <li class="guia-fluxo-passo"><span class="guia-fluxo-passo-num">5</span><span><b>Pedido</b><span class="detalhe">um por fornecedor e por loja, enviado pelo WhatsApp</span></span></li>
+            <li class="guia-fluxo-passo"><span class="guia-fluxo-passo-num">6</span><span><b>Recebimento</b><span class="detalhe">confere quantidade e nota, e o estoque sobe</span></span></li>
+          </ol>
           <p class="guia-mapa-atalho">As duas setas do meio trocam um item de bloco na hora, sem refazer a contagem.</p>
         </div>
 
@@ -354,9 +367,17 @@
               </p>
               <p>
                 Depois, na tabela de convites, clique em <span class="guia-btnref">Enviar por WhatsApp</span>
-                em cada fornecedor. Quando ele responde o link, recarregue a cotação pra ver os preços que
-                chegaram — a tela não se atualiza sozinha. Preço que chegou por telefone ou mensagem entra
-                em <span class="guia-btnref">Lançar preço</span>.
+                em cada fornecedor — ou, com a extensão instalada, em
+                <span class="guia-btnref">Enviar todos pelo WhatsApp</span>, que manda pra fila inteira de
+                uma vez. Quando ele responde o link, clique em <span class="guia-btnref">Atualizar preços</span>
+                pra ver o que chegou (a cotação aberta também se atualiza sozinha de minuto em minuto).
+                Preço que chegou por telefone ou mensagem entra em <span class="guia-btnref">Lançar preço</span>.
+              </p>
+              <p>
+                Cada convite tem <b>prazo</b>: passou do prazo, o link para de aceitar preço. Dá pra
+                <span class="guia-btnref">Estender o prazo</span> ou <span class="guia-btnref">Reabrir</span>
+                o convite de quem mandou errado — nos dois casos ele recebe o link de novo e digita tudo
+                outra vez.
               </p>
               <div class="guia-seguranca">
                 <span class="guia-seguranca-marca">!</span>
@@ -377,9 +398,23 @@
               </p>
               <p>
                 Pra escolher o vencedor, clique no preço. Pode ser um fornecedor diferente em cada item.
+                <span class="guia-btnref">Selecionar os melhores preços</span> marca de uma vez o mais
+                barato de cada item, e daí você ajusta o que quiser. Embaixo do nome de cada fornecedor
+                aparece <b>quanto ele leva</b> com as suas escolhas e, em amarelo, quando isso ainda não
+                fecha o <b>pedido mínimo</b> dele.
+              </p>
+              <p>
                 Depois, <span class="guia-btnref">Gerar pedidos</span>: item sem vencedor fica de fora e
                 dá pra gerar depois.
               </p>
+              <div class="guia-seguranca">
+                <span class="guia-seguranca-marca">!</span>
+                <p>
+                  <b>Falta fechar a cotação.</b> Gerar os pedidos não fecha a cotação — quem enche a aba
+                  <b>Compras</b> é o <span class="guia-btnref">Fechar cotação</span>. Enquanto ela ficar
+                  aberta, aquela compra não entra no histórico e a aba continua vazia.
+                </p>
+              </div>
               <div class="guia-seguranca">
                 <span class="guia-seguranca-marca">↺</span>
                 <p>

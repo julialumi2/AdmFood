@@ -353,7 +353,52 @@ body.dark-mode {
   --fluxo-cotacao-texto: #CECBF6;
 }
 
+/* No celular a moldura rolava de lado e o texto do fluxograma ficava
+   minúsculo (QA 22/09): abaixo de 720px o desenho vira uma lista de passos,
+   que cabe na tela e dá pra ler. */
 .guia-fluxo-moldura { overflow-x: auto; }
+
+.guia-fluxo-lista { display: none; }
+
+@media (max-width: 720px) {
+  .guia-fluxo-moldura { display: none; }
+
+  .guia-fluxo-lista {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 var(--space-2);
+  }
+
+  .guia-fluxo-passo {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-left-width: 3px;
+    border-radius: 10px;
+    background-color: var(--surface-muted);
+  }
+
+  .guia-fluxo-passo.direto { border-left-color: var(--fluxo-direto); }
+  .guia-fluxo-passo.cotacao { border-left-color: var(--fluxo-cotacao); }
+
+  .guia-fluxo-passo-num {
+    flex: 0 0 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-strong);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .guia-fluxo-passo b { display: block; font-size: 0.875rem; }
+  .guia-fluxo-passo span.detalhe { font-size: 0.8125rem; color: var(--text-muted); }
+}
 
 .guia-fluxo {
   display: block;

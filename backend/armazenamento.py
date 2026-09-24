@@ -5048,6 +5048,77 @@ def criar_fornecedor(campos):
         return cursor.lastrowid
 
 
+def excluir_contagem(contagem_id):
+    """Apaga UMA contagem (a da loja) com o que ela tiver preenchido. Só
+    existia apagar a requisição inteira, então a cópia presa de uma loja
+    segurava a requisição toda em "Aguardando lojas" e não havia saída
+    (QA 22/09). Contagem já aprovada não sai: ela virou estoque."""
+    with conexao() as conn:
+        travar_para_escrita(conn)
+        linha = conn.execute("SELECT status, loja FROM contagem WHERE id = ?", (contagem_id,)).fetchone()
+        if not linha:
+            return None
+        if linha["status"] == "aprovada":
+            raise ValueError(
+                "Essa contagem já foi aprovada e virou estoque. Reabra antes, se for pra refazer."
+            )
+        conn.execute("DELETE FROM contagem_item WHERE contagem_id = ?", (contagem_id,))
+        conn.execute("DELETE FROM contagem WHERE id = ?", (contagem_id,))
+        return linha["loja"]
+
+
+def fornecedores_por_insumo_da_cotacao(cotacao_id):
+    """{fornecedor_id: [nome do insumo, ...]} — o que cada fornecedor cota
+    dentro dessa cotação."""
+    por_insumo = _insumos_da_cotacao_por_fornecedor(cotacao_id)
+    if not por_insumo:
+        return {}
+    with conexao() as conn:
+        nomes = {
+            l["id"]: l["nome"] for l in conn.execute(
+                f"SELECT id, nome FROM insumo WHERE id IN ({', '.join('?' for _ in por_insumo)})",
+                list(por_insumo),
+            )
+        }
+    saida = {}
+    for insumo_id, fornecedores in por_insumo.items():
+        for fornecedor_id in fornecedores:
+            saida.setdefault(fornecedor_id, []).append(nomes.get(insumo_id, f"#{insumo_id}"))
+    return {f: sorted(set(itens)) for f, itens in saida.items()}
+
+
+def insumos_que_o_fornecedor_cota(fornecedor_id):
+    """O que esse fornecedor cota, insumo por insumo, com as lojas em que ele
+    cota e onde ele é o homologado. O cadastro não mostrava o que o fornecedor
+    vende: isso morava só em Insumos, e nem a tabela nem o "Ver detalhes"
+    diziam (QA 22/09)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT i.id, i.nome, i.categoria, i.unidade_medida, ilf.loja,
+                   CASE WHEN ilh.fornecedor_id IS NOT NULL THEN 1 ELSE 0 END AS homologado
+            FROM insumo_loja_fornecedor ilf
+            JOIN insumo i ON i.id = ilf.insumo_id
+            LEFT JOIN insumo_loja_homologado ilh
+                   ON ilh.insumo_id = ilf.insumo_id AND ilh.loja = ilf.loja
+                  AND ilh.fornecedor_id = ilf.fornecedor_id
+            WHERE ilf.fornecedor_id = ?
+            ORDER BY i.categoria, i.nome, ilf.loja
+            """,
+            (fornecedor_id,),
+        ).fetchall()
+    por_insumo = {}
+    for linha in linhas:
+        item = por_insumo.setdefault(linha["id"], {
+            "insumoId": linha["id"], "nome": linha["nome"], "categoria": linha["categoria"],
+            "unidade": linha["unidade_medida"], "lojas": [], "homologadoEm": [],
+        })
+        item["lojas"].append(linha["loja"])
+        if linha["homologado"]:
+            item["homologadoEm"].append(linha["loja"])
+    return sorted(por_insumo.values(), key=lambda i: (i["categoria"] or "", i["nome"]))
+
+
 def listar_fornecedores():
     with conexao() as conn:
         linhas = conn.execute(

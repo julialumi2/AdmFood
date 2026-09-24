@@ -344,6 +344,13 @@
             <div class="title-row">
               <h1 id="cotacao-detalhe-titulo">—</h1>
               <div class="page-acoes-topo" id="cotacao-detalhe-acoes-admin" style="display:none;">
+                <!-- O preço que o fornecedor manda pelo link não aparecia
+                     sozinho e não havia botão nenhum: era sair da cotação e
+                     entrar de novo (QA 22/09) -->
+                <button type="button" class="btn-secondary" id="btn-cotacao-atualizar" title="Buscar os preços que chegaram pelo link">
+                  <i data-lucide="refresh-cw"></i>
+                  <span id="btn-cotacao-atualizar-texto">Atualizar preços</span>
+                </button>
                 <button type="button" class="btn-secondary" id="btn-cotacao-alternar-status">Fechar cotação</button>
                 <button type="button" class="btn-secondary" id="btn-cotacao-convidar-fornecedores" style="display:none;">
                   <i data-lucide="send"></i>

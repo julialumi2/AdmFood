@@ -250,6 +250,8 @@ from backend.armazenamento import (
     insumo_do_preco_cotacao,
     buscar_convite_por_token,
     contar_admins_ativos,
+    excluir_contagem,
+    insumos_que_o_fornecedor_cota,
     encerrar_sessoes_do_usuario,
     bootstrap_ja_aplicado,
     marcar_bootstrap_aplicado,
@@ -3488,6 +3490,21 @@ def api_criar_fornecedor():
     return jsonify({"id": fornecedor_id})
 
 
+@app.route('/api/fornecedores/<int:fornecedor_id>/insumos', methods=['GET'])
+def api_insumos_do_fornecedor(fornecedor_id):
+    """O que esse fornecedor cota. Morava só em Insumos: nem a tabela de
+    Fornecedores nem o "Ver detalhes" diziam o que ele vende (QA 22/09)."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+    itens = [
+        {**i, "lojas": [l for l in i["lojas"] if _loja_visivel(l)],
+         "homologadoEm": [l for l in i["homologadoEm"] if _loja_visivel(l)]}
+        for i in insumos_que_o_fornecedor_cota(fornecedor_id)
+    ]
+    return jsonify({"insumos": [i for i in itens if i["lojas"]]})
+
+
 @app.route('/api/fornecedores/<int:fornecedor_id>', methods=['PUT'])
 def api_atualizar_fornecedor(fornecedor_id):
     erro_admin = _exigir_gestao()
@@ -5497,6 +5514,29 @@ def api_buscar_contagem(contagem_id):
     resposta = _formatar_contagem(contagem)
     resposta['itens'] = listar_itens_contagem(contagem_id, contagem['loja'])
     return jsonify(resposta)
+
+
+@app.route('/api/contagens/<int:contagem_id>', methods=['DELETE'])
+def api_excluir_contagem(contagem_id):
+    """Tira UMA loja da requisição. Só dava pra apagar a requisição inteira,
+    então a contagem presa de uma loja (link que ninguém respondeu, loja que
+    entrou por engano) segurava tudo em "Aguardando lojas" (QA 22/09)."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+
+    contagem = buscar_contagem(contagem_id)
+    if not contagem:
+        return jsonify({"erro": "Contagem não encontrada."}), 404
+    if not _loja_visivel(contagem['loja']):
+        return jsonify({"erro": "Essa contagem é de outra loja."}), 403
+
+    try:
+        excluir_contagem(contagem_id)
+    except ValueError as recusa:
+        return jsonify({"erro": str(recusa)}), 400
+    _anotar_no_registro(f"Tirou {contagem['loja']} da requisição \"{contagem['descricao']}\"")
+    return jsonify({"sucesso": True})
 
 
 @app.route('/api/contagens/<int:contagem_id>/aprovar', methods=['POST'])

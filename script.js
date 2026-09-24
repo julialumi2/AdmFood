@@ -3705,6 +3705,43 @@ function abrirDetalhesFornecedor(fornecedor) {
   ].join('');
   document.getElementById('btn-fornecedor-detalhes-editar').hidden = !_possoGerir();
   document.getElementById('modal-fornecedor-detalhes').style.display = 'flex';
+  _carregarInsumosDoFornecedor(fornecedor.id);
+}
+
+// O que o fornecedor cota morava só em Insumos: nem a tabela nem o "Ver
+// detalhes" diziam o que ele vende (QA 22/09).
+async function _carregarInsumosDoFornecedor(fornecedorId) {
+  const alvo = document.getElementById('fornecedor-detalhes-insumos');
+  if (!alvo) return;
+  alvo.innerHTML = '<p class="panel-subtitle">Carregando o que ele cota...</p>';
+  try {
+    const resposta = await fetch(`/api/fornecedores/${fornecedorId}/insumos`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+    const itens = (await resposta.json()).insumos || [];
+    if (fornecedorDetalhesId !== fornecedorId) return;  // trocou de fornecedor no meio
+    if (!itens.length) {
+      alvo.innerHTML = '<p class="panel-subtitle">Ele ainda não está marcado como quem cota nenhum insumo. Isso se marca em <strong>Insumos</strong>, na aba da loja — sem isso ele não entra na sugestão de convite.</p>';
+      return;
+    }
+    const porCategoria = new Map();
+    itens.forEach((i) => {
+      if (!porCategoria.has(i.categoria)) porCategoria.set(i.categoria, []);
+      porCategoria.get(i.categoria).push(i);
+    });
+    const homologados = itens.filter((i) => i.homologadoEm.length).length;
+    alvo.innerHTML = `
+      <p class="panel-subtitle">${_qtdTexto(itens.length, 'insumo', 'insumos')}${homologados ? ` · homologado em ${homologados}` : ''}</p>
+      <div class="fornecedor-insumos">
+        ${[...porCategoria.entries()].map(([categoria, lista]) => `
+          <div class="fornecedor-insumos-grupo">
+            <span class="fornecedor-insumos-categoria">${escaparHtml(categoria || 'Sem categoria')}</span>
+            ${lista.map((i) => `<span class="fornecedor-insumo" title="${escaparHtml(`Cota em: ${i.lojas.join(', ')}`)}">${escaparHtml(i.nome)}${i.homologadoEm.length ? '<span class="fornecedor-insumo-homologado" title="Homologado — vai direto em pedido">★</span>' : ''}</span>`).join('')}
+          </div>`).join('')}
+      </div>`;
+  } catch (erro) {
+    console.error('Falha ao carregar o que o fornecedor cota:', erro);
+    alvo.innerHTML = `<p class="panel-subtitle" style="color:var(--danger);">${escaparHtml(erro.message)}</p>`;
+  }
 }
 
 function fecharDetalhesFornecedor() {
@@ -4222,6 +4259,7 @@ document.getElementById('form-nova-cotacao')?.addEventListener('submit', async (
 });
 
 document.getElementById('btn-cotacao-voltar')?.addEventListener('click', async () => {
+  _pararDeAcompanharCotacao();
   document.getElementById('cotacoes-detalhe-view').style.display = 'none';
   document.getElementById('cotacoes-lista-view').style.display = '';
   document.getElementById('cotacoes-topo').style.display = '';
@@ -4298,6 +4336,46 @@ function renderHistoricoCompras() {
   `).join('');
 }
 
+// O preço que chega pelo link não aparece sozinho: a tela não tem nada que
+// avise o navegador. Enquanto a cotação estiver aberta na frente da pessoa,
+// ela é relida de tempos em tempos, e o botão faz na hora (QA 22/09).
+const SEGUNDOS_ENTRE_ATUALIZACOES_DA_COTACAO = 60;
+// Cadastro dos fornecedores enquanto a cotação está aberta: pedido mínimo e
+// se ainda estão ativos.
+let cadastroFornecedoresCotacao = new Map();
+let _relogioDaCotacao = null;
+
+function _pararDeAcompanharCotacao() {
+  if (_relogioDaCotacao) {
+    clearInterval(_relogioDaCotacao);
+    _relogioDaCotacao = null;
+  }
+}
+
+function _acompanharCotacaoAberta() {
+  _pararDeAcompanharCotacao();
+  _relogioDaCotacao = setInterval(() => {
+    // Só quando a tela está na frente da pessoa e a cotação segue aberta:
+    // recarregar em segundo plano é consulta à toa.
+    const naTela = document.getElementById('cotacoes-detalhe-view');
+    if (document.hidden || !naTela || naTela.style.display === 'none' || !cotacaoAtualId) return;
+    recarregarCotacaoDetalhe();
+  }, SEGUNDOS_ENTRE_ATUALIZACOES_DA_COTACAO * 1000);
+}
+
+document.getElementById('btn-cotacao-atualizar')?.addEventListener('click', async () => {
+  const botao = document.getElementById('btn-cotacao-atualizar');
+  const texto = document.getElementById('btn-cotacao-atualizar-texto');
+  botao.disabled = true;
+  texto.textContent = 'Buscando...';
+  try {
+    await recarregarCotacaoDetalhe();
+  } finally {
+    botao.disabled = false;
+    texto.textContent = 'Atualizar preços';
+  }
+});
+
 async function abrirCotacaoDetalhe(cotacaoId) {
   cotacaoAtualId = cotacaoId;
   // Pode vir da aba Compras ("Nova cotação"); o detalhe tem título e ações
@@ -4324,12 +4402,19 @@ async function abrirCotacaoDetalhe(cotacaoId) {
   selectInsumo.addEventListener('change', _atualizarUnidadeLancarPreco);
   _atualizarUnidadeLancarPreco();
 
+  // O comparativo precisa do pedido mínimo e do "ativo" de cada fornecedor:
+  // o mínimo não entrava em decisão nenhuma da cotação e o fornecedor
+  // desativado no meio dela não aparecia marcado (QA 22/09).
+  cadastroFornecedoresCotacao = new Map(
+    (fornecedoresDados.fornecedores || []).map((f) => [f.id, f]));
+
   const selectFornecedor = document.getElementById('cotacao-preco-fornecedor');
   selectFornecedor.innerHTML = (fornecedoresDados.fornecedores || [])
     .filter(f => f.ativo)
     .map(f => `<option value="${f.id}">${escaparHtml(f.nome)}</option>`).join('');
 
   await recarregarCotacaoDetalhe();
+  _acompanharCotacaoAberta();
 }
 
 async function recarregarCotacaoDetalhe() {
@@ -4461,12 +4546,34 @@ async function renderListaConvidarFornecedores() {
         <span>${escaparHtml(f.nome)}</span>
         ${dica ? `<span class="text-muted">${dica}</span>` : ''}
       </label>`;
+    // Sem ninguém marcado pra essas lojas, TODO fornecedor ativo vinha
+    // marcado e o aviso era uma linha cinza: um "Gerar convites" distraído
+    // mandava link pra rede inteira (QA 22/09). O aviso agora é amarelo, diz
+    // quantos links são e traz o "Desmarcar todos".
+    const avisoMarcouTodos = `
+      <div class="convidar-aviso-todos">
+        <strong>Marquei os ${ativos.length} fornecedores ativos.</strong>
+        Nenhum deles tem ${lojasCotacaoAtual.length ? escaparHtml(lojasCotacaoAtual.join(', ')) : 'a loja desta cotação'} marcada em Fornecedores,
+        então não dá pra saber quem atende essas lojas. Assim como está, o "Gerar convites" manda
+        ${ativos.length} links. Desmarque quem não deve receber, ou marque as lojas no cadastro de cada fornecedor.
+        <button type="button" class="btn-secondary-sm" id="btn-convidar-desmarcar-todos">Desmarcar todos</button>
+      </div>`;
+    // Fornecedor sem loja nenhuma marcada não sumia: ficava lá embaixo,
+    // desmarcado e sem explicação de por que não foi sugerido (QA 22/09).
+    const dicaDeOutro = (f) => (f.lojas.length
+      ? `compramos pra ${escaparHtml(f.lojas.join(', '))}`
+      : 'sem loja marcada no cadastro — por isso não entrou na sugestão');
     lista.innerHTML = semSugestao
-      ? `<p class="panel-subtitle">Nenhum fornecedor marcado pra ${lojasCotacaoAtual.length ? escaparHtml(lojasCotacaoAtual.join(', ')) : 'essa cotação'} em Fornecedores — marquei todos.</p>` + ativos.map((f) => linha(f, true, '')).join('')
-      : sugeridos.map((f) => linha(f, true, `compramos pra ${escaparHtml(f.lojas.filter((l) => !lojasCotacaoAtual.length || lojasCotacaoAtual.includes(l)).join(', '))}`)).join('') + outros.map((f) => linha(f, false, '')).join('');
+      ? avisoMarcouTodos + ativos.map((f) => linha(f, true, dicaDeOutro(f))).join('')
+      : sugeridos.map((f) => linha(f, true, `compramos pra ${escaparHtml(f.lojas.filter((l) => !lojasCotacaoAtual.length || lojasCotacaoAtual.includes(l)).join(', '))}`)).join('') + outros.map((f) => linha(f, false, dicaDeOutro(f))).join('');
     lista.querySelectorAll('input[type="checkbox"]').forEach((caixa) => {
       caixa.addEventListener('change', renderPreviaConvite);
     });
+    document.getElementById('btn-convidar-desmarcar-todos')?.addEventListener('click', () => {
+      lista.querySelectorAll('input[type="checkbox"]').forEach((caixa) => { caixa.checked = false; });
+      renderPreviaConvite();
+    });
+    lista.dataset.marcouTodos = semSugestao ? '1' : '';
     await carregarPreviaConvite();
   } catch (erro) {
     console.error('Falha ao carregar fornecedores:', erro);
@@ -4506,7 +4613,12 @@ function renderPreviaConvite() {
   const jaTem = escolhidos.filter((f) => f.jaTemConvite);
   const editaveis = escolhidos.filter((f) => !f.jaTemConvite);
   editaveis.forEach((f) => {
-    if (!selecaoItensConvite.has(f.fornecedorId)) selecaoItensConvite.set(f.fornecedorId, new Set(f.itens || []));
+    // Quem ainda não cota nenhum insumo recebia a cotação inteira JÁ MARCADA:
+    // um "Gerar convites" distraído mandava tudo pra rede inteira (QA 22/09).
+    // Agora ele começa sem nada marcado — ela abre e escolhe o que mandar.
+    if (!selecaoItensConvite.has(f.fornecedorId)) {
+      selecaoItensConvite.set(f.fornecedorId, new Set(f.recebeTudo ? [] : (f.itens || [])));
+    }
   });
   const receberao = editaveis.filter((f) => selecaoItensConvite.get(f.fornecedorId).size);
   const todosItens = previaConviteDados.itensDaCotacao || [];
@@ -4537,7 +4649,7 @@ function renderPreviaConvite() {
         return `
         <li>
           <details data-convite-detalhe="${f.fornecedorId}" ${conviteFornecedoresAbertos.has(f.fornecedorId) ? 'open' : ''}>
-            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — <span data-convite-contagem="${f.fornecedorId}">${_textoContagemConvite(marcadosDele.size)}</span>${f.recebeTudo ? ' (ainda não cota nada: vai a cotação inteira)' : ''}</summary>
+            <summary><strong>${escaparHtml(f.fornecedorNome)}</strong> — <span data-convite-contagem="${f.fornecedorId}">${_textoContagemConvite(marcadosDele.size)}</span>${f.recebeTudo ? ' <span class="convite-alerta">recebe a cotação inteira — ele ainda não cota nenhum insumo</span>' : ''}</summary>
             <div class="convite-itens">
               ${dele.length ? dele.map(caixa).join('') : '<span class="text-muted">Não cota nenhum item dessa cotação.</span>'}
               ${outros.length ? `<span class="convite-itens-outros">Outros itens da cotação</span>${outros.map(caixa).join('')}` : ''}
@@ -4915,6 +5027,14 @@ document.getElementById('form-convidar-fornecedores')?.addEventListener('submit'
     alert('Esse prazo já passou. O fornecedor abriria o link e o envio já seria recusado.');
     return;
   }
+  // Quando a lista veio toda marcada por falta de loja no cadastro, o clique
+  // distraído mandava pra rede inteira (QA 22/09).
+  if (document.getElementById('convidar-fornecedores-lista')?.dataset.marcouTodos
+      && !confirm(`Gerar convite pra ${fornecedorIds.length} fornecedores?
+
+Eles vieram todos marcados porque nenhum tem a loja desta cotação no cadastro — não porque foram escolhidos.`)) {
+    return;
+  }
   // O que ficou marcado no link de cada um (2026-09-21).
   const itensPorFornecedor = {};
   fornecedorIds.forEach((id) => {
@@ -5176,8 +5296,27 @@ function _renderTabelaComparacaoCotacao() {
   const itensPorInsumo = {};
   itens.forEach(item => { itensPorInsumo[item.insumoId] = item; });
 
+  // Quanto cada fornecedor leva com os vencedores marcados agora — é o que
+  // diz se o pedido dele vai fechar o mínimo. O mínimo só aparecia depois,
+  // na tela de Pedidos, quando já não dava pra remanejar (QA 22/09).
+  // linhasBase, não as filtradas: filtrar por seção não pode mudar o total
+  // que o fornecedor leva.
+  const levaPorFornecedor = new Map();
+  linhasBase.forEach((linha) => {
+    const item = itensPorInsumo[linha.insumoId];
+    const vencedor = (linha.precos || []).find((p) => p.selecionado);
+    if (!vencedor || !item || !(item.quantidadeTotal > 0)) return;
+    levaPorFornecedor.set(
+      vencedor.fornecedorId,
+      (levaPorFornecedor.get(vencedor.fornecedorId) || 0) + item.quantidadeTotal * vencedor.preco);
+  });
+
   const theadFornecedores = fornecedores.map(f => {
     const linkWhats = _linkWhatsAppContato(f.telefone);
+    const cadastro = cadastroFornecedoresCotacao.get(f.id);
+    const leva = levaPorFornecedor.get(f.id) || 0;
+    const minimo = cadastro?.pedidoMinimo || 0;
+    const faltaPraMinimo = minimo && leva > 0 && leva < minimo;
     return `
     <th class="th-comparacao-fornecedor">
       <div class="comparacao-fornecedor-cabecalho">
@@ -5185,6 +5324,11 @@ function _renderTabelaComparacaoCotacao() {
         <span>${escaparHtml(f.nome)}</span>
         ${linkWhats ? `<a href="${escaparHtml(linkWhats)}" target="_blank" rel="noopener" class="icone-whatsapp-fornecedor" title="Chamar ${escaparHtml(f.nome)} no WhatsApp"><i data-lucide="message-circle"></i></a>` : ''}
       </div>
+      ${cadastro && !cadastro.ativo ? '<span class="comparacao-fornecedor-inativo" title="Ele foi desativado depois que esta cotação começou. O preço dele continua valendo aqui, mas confira antes de escolher.">desativado</span>' : ''}
+      ${leva > 0 ? `<span class="comparacao-fornecedor-leva${faltaPraMinimo ? ' abaixo-do-minimo' : ''}"
+            title="${faltaPraMinimo
+              ? `Faltam ${_reais(minimo - leva)} pro pedido mínimo dele (${_reais(minimo)}) — some mais itens ou leve pra outro fornecedor.`
+              : (minimo ? `Pedido mínimo dele: ${_reais(minimo)}` : 'Sem pedido mínimo cadastrado')}">leva ${_reais(leva)}${faltaPraMinimo ? ` · mín. ${_reais(minimo)}` : ''}</span>` : ''}
     </th>
   `;
   }).join('');
@@ -6851,12 +6995,35 @@ function renderConferenciaRequisicao() {
           <button type="button" class="btn-acao-icone" data-acao="abrir-contagem-da-requisicao" data-id="${c.id}" title="Ver/conferir essa loja">
             <i data-lucide="arrow-right"></i>
           </button>
+          ${c.status === 'aprovada' ? '' : `
+          <!-- A loja que não responde segurava a requisição inteira em
+               "Aguardando lojas", sem saída nenhuma (QA 22/09) -->
+          <button type="button" class="btn-acao-icone btn-excluir" data-acao="tirar-loja-da-requisicao"
+                  data-id="${c.id}" data-loja="${escaparHtml(c.loja)}" title="Tirar essa loja da requisição">
+            <i data-lucide="trash-2"></i>
+          </button>`}
         </div></td>
       </tr>
     `;
   }).join('');
   lojasBody.querySelectorAll('[data-acao="abrir-contagem-da-requisicao"]').forEach((btn) => {
     btn.addEventListener('click', () => abrirContagemDetalhe(parseInt(btn.dataset.id, 10)));
+  });
+  lojasBody.querySelectorAll('[data-acao="tirar-loja-da-requisicao"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const loja = btn.dataset.loja;
+      if (!confirm(`Tirar ${loja} desta requisição? O que essa loja já tiver preenchido é apagado, e o link dela para de valer. As outras lojas continuam.`)) return;
+      btn.disabled = true;
+      try {
+        const resposta = await fetch(`/api/contagens/${btn.dataset.id}`, { method: 'DELETE' });
+        if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+        await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
+      } catch (erro) {
+        console.error('Falha ao tirar a loja da requisição:', erro);
+        alert(erro.message);
+        btn.disabled = false;
+      }
+    });
   });
 
   _renderCompraConferencia(r);
@@ -12533,6 +12700,12 @@ async function carregarUsuarioLogado() {
     _ajustarMenuAoPerfil();
     _travarNaLojaDoFuncionario();
     carregarContadoresMenuCompras();
+    // Se a lista de fornecedores respondeu antes do perfil, a tela ficava
+    // como se fosse só leitura — sem "Cadastrar fornecedor" e sem a coluna
+    // Ações — até digitar algo na busca (QA 22/09).
+    if (document.getElementById('fornecedores-tabela-body') && fornecedoresLista.length) {
+      renderFornecedoresTabela();
+    }
 
     // Tela de Configurações: painel "Sua Conta" + seção "Equipe" (só admin)
     const contaNome = document.getElementById('conta-nome-label');

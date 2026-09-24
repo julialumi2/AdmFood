@@ -63,6 +63,62 @@
   margin-top: 2px;
 }
 
+/* Aviso de "marquei todos por falta de loja no cadastro" — era uma linha
+   cinza e o clique distraído mandava pra rede inteira (QA 22/09) */
+.convidar-aviso-todos {
+  margin-bottom: var(--space-2);
+  padding: 10px 12px;
+  border: 1px solid var(--warning, #F59E0B);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background-color: var(--warning-soft, rgba(245, 158, 11, 0.12));
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.convidar-aviso-todos strong { display: block; margin-bottom: 2px; }
+
+.convidar-aviso-todos button { margin-top: 8px; }
+
+/* O que o fornecedor leva com os vencedores marcados, e o aviso de pedido
+   mínimo — o mínimo só aparecia depois, na tela de Pedidos (QA 22/09) */
+.comparacao-fornecedor-leva {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.comparacao-fornecedor-leva.abaixo-do-minimo { color: var(--warning, #F59E0B); }
+
+/* Desativado no meio da cotação: o preço dele continua aqui (QA 22/09) */
+.comparacao-fornecedor-inativo {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background-color: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Fornecedor que ainda não cota nada recebe a cotação inteira (QA 22/09) */
+.convite-alerta {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background-color: var(--warning-soft, rgba(245, 158, 11, 0.16));
+  color: var(--warning, #F59E0B);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .th-comparacao-fornecedor {
   min-width: 150px;
 }
