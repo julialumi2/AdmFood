@@ -5528,3 +5528,54 @@ exatamente isso.
 ficavam minúsculos. Abaixo de 720px o desenho dá lugar à mesma sequência em
 lista, com os dois blocos (pedido direto e cotação) marcados pela cor da
 borda.
+
+
+### 6.92 Médios do Preparo e da extensão do WhatsApp
+
+**Preparo.** Dois já estavam fechados: o erro invisível na busca (#107) e a
+falta de "carregando" (#109), resolvidos junto com o `marcarSemConexao`. Os
+outros quatro:
+
+- **Zero não é resultado (#108).** Loja sem pedido no período mostrava 0 min
+  e 0 pedidos como se a cozinha tivesse sido rápida. Cada bloco agora vem com
+  `semDado`, e a tela escreve que aquilo é falta de dado, não resultado.
+- **O período tem teto (#108).** Dava pra pedir dez anos de uma vez e o
+  servidor varria a tabela inteira. O teto é de 366 dias; quando o pedido
+  passa disso, o período é encurtado e a tela diz que encurtou.
+- **Os subtítulos vazios (#110).** `preparo-periodo-label-2` existia no HTML e
+  nunca era preenchido — ficava um espaço em branco embaixo do "Total de
+  Pedidos". Agora mostra o período que está sendo somado.
+- **Atalhos de período (#111).** 7 dias, 30 dias, este mês e mês passado, em
+  vez de dois teclados de calendário no celular. Mexer nas datas à mão
+  desmarca o atalho, pra tela não dizer "30 dias" com outro período na frente.
+- **"Dias mais lentos" abre (#112).** A linha do dia agora abre os pedidos
+  daquele dia naquela loja, do mais demorado pro mais rápido, com hora de
+  entrada e de fechamento (`/api/preparo/dia`).
+
+**Extensão do WhatsApp** (versão 1.3.0):
+
+- **"Enviado" podia ser mentira (#113).** Sem conexão, o script esperava 30
+  segundos pela confirmação e marcava como enviado do mesmo jeito. Agora esse
+  caso vira um estado próprio, `na-fila`: a mensagem está na fila do próprio
+  WhatsApp, pode não ter chegado, e o painel diz isso em amarelo com o nome
+  do fornecedor. A mensagem final do envio conta os dois separados.
+- **O resultado deixou de se perder (#114).** Fechar a tela do AdmFood no meio
+  fazia o resumo do que falhou sumir: o painel só voltava enquanto a fila
+  estivesse ativa. A fila terminada fica guardada e o painel reaparece quando
+  ela abrir o AdmFood de novo, até clicar em Fechar (que marca como vista).
+- **Não manda tudo de novo (#115).** A fila era montada com todo convite
+  aberto, inclusive quem já tinha recebido: clicar de novo depois de terminar
+  mandava outra vez pra todo mundo. Quem já recebeu fica de fora, o botão diz
+  "os N que faltam", e a tela explica quantos ficaram de fora — pra reenviar
+  pra alguém específico existe o botão da linha dele.
+- **A aba do WhatsApp (#118).** A fila reaproveita a aba do WhatsApp Web que
+  estiver aberta e troca a conversa — é assim porque o WhatsApp Web só aceita
+  uma aba. A confirmação antes de disparar passou a avisar isso.
+- **Histórico (#117).** O histórico por fornecedor já existia na tabela de
+  convites ("enviado em ..."); o que faltava era o resumo da rodada, que
+  agora sobrevive a fechar a tela (#114).
+- **A instalação em seis passos (#116)** não tem conserto no código: o que
+  tira o "modo do desenvolvedor" e faz a extensão se atualizar sozinha é
+  publicar na Chrome Web Store, e o pacote e os textos da loja já estão
+  prontos em `extensao-whatsapp/publicacao/`. A página de instalação agora
+  explica isso em vez de deixar a impressão de que é assim mesmo.

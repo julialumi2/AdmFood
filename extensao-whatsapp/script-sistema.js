@@ -115,6 +115,9 @@ document.addEventListener('click', async (evento) => {
         : `Enviar a cotação pra ${itens.length} fornecedores pelo WhatsApp?`,
       '',
       `O WhatsApp Web vai abrir e mandar um por vez (uns ${minutos} min no total).`,
+      // A fila reaproveita a aba do WhatsApp que estiver aberta e troca a
+      // conversa sem avisar — o WhatsApp Web só aceita uma aba (QA 22/09).
+      'Se você já estiver com o WhatsApp Web aberto, a fila vai usar ESSA aba e trocar de conversa sozinha.',
       'Deixe a aba do WhatsApp aberta e não use o WhatsApp Web enquanto isso.',
     ];
   if (ignorados.length) aviso.push('', `Sem telefone (ficam de fora): ${ignorados.join(', ')}.`);
@@ -156,6 +159,7 @@ function criarPainel() {
       .barra span { display: block; height: 100%; background: #d93829; border-radius: 999px; transition: width .3s ease; }
       .falhas { max-height: 140px; overflow: auto; margin: 10px 16px 0; padding: 0; list-style: none; font-size: 12px; }
       .falhas li { padding: 4px 0; border-top: 1px dashed #ece3d6; color: #c62b2b; }
+      .falhas li.na-fila { color: #b07407; }
       .falhas li span { color: #7a6f66; }
       .acoes { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 14px; }
       button { font: 600 13px system-ui, sans-serif; border-radius: 8px; padding: 7px 12px; cursor: pointer; border: 1px solid #d8cfc0; background: #fff; color: #241a16; }
@@ -180,6 +184,9 @@ function criarPainel() {
     renderizarPainel(resposta?.resumo);
   });
   raizPainel.querySelector('.fechar').addEventListener('click', () => {
+    // Marca o resultado como visto: sem isso ele voltaria a cada recarga do
+    // AdmFood (o painel agora sobrevive a fechar a tela — QA 22/09).
+    chrome.runtime.sendMessage({ tipo: 'marcar-vista' }).catch(() => {});
     host.remove();
     raizPainel = null;
   });
@@ -199,9 +206,12 @@ function renderizarPainel(resumo) {
     ? `Agora: ${resumo.atual || '—'}`
     : `${feitos} ${resumo.ensaio ? 'conferido(s)' : (feitos === 1 ? 'enviado' : 'enviados')} de ${resumo.total}`;
   raiz.querySelector('.barra span').style.width = `${resumo.total ? (resumo.feitos / resumo.total) * 100 : 0}%`;
-  raiz.querySelector('.falhas').innerHTML = resumo.falhas
-    .map((f) => `<li>${escapar(f.fornecedor)} <span>· ${escapar(f.motivo || 'falhou')}</span></li>`)
-    .join('');
+  raiz.querySelector('.falhas').innerHTML = [
+    ...resumo.falhas.map((f) => `<li>${escapar(f.fornecedor)} <span>· ${escapar(f.motivo || 'falhou')}</span></li>`),
+    // "Enviado" podia ser mentira: sem confirmação do WhatsApp em 30 s a
+    // mensagem fica na fila dele e pode não chegar (QA 22/09).
+    ...(resumo.naFila || []).map((f) => `<li class="na-fila">${escapar(f.fornecedor)} <span>· na fila do WhatsApp, sem confirmação — confira a conversa</span></li>`),
+  ].join('');
   raiz.querySelector('.parar').hidden = !resumo.ativa;
   raiz.querySelector('.fechar').hidden = resumo.ativa;
 
@@ -226,8 +236,11 @@ document.documentElement.dataset.admfoodExtensao = chrome.runtime.getManifest().
 document.dispatchEvent(new CustomEvent('admfood:extensao-pronta'));
 
 // Abriu (ou recarregou) o AdmFood no meio de um envio: mostra o painel.
+// #114: se a tela do AdmFood for fechada no meio, a fila continua — e o
+// resumo do que falhou sumia junto. Agora o painel volta quando ela abre o
+// AdmFood de novo, e só some quando ela clica em Fechar.
 chrome.runtime.sendMessage({ tipo: 'estado-fila' })
   .then((resumo) => {
-    if (resumo?.ativa) renderizarPainel(resumo);
+    if (resumo?.ativa || (resumo?.terminadaEm && !resumo.vista)) renderizarPainel(resumo);
   })
   .catch(() => {});

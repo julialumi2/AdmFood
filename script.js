@@ -1503,6 +1503,25 @@ function renderPreparoTab(tab) {
     mediaEl.title = 'A média sobe com pedido esquecido aberto; a mediana é o tempo do pedido do meio.';
   }
   document.getElementById('preparo-val-pedidos').textContent = (dados.totalPedidos || 0).toLocaleString('pt-BR');
+  // O segundo subtítulo existia no HTML e nunca era preenchido: ficava um
+  // espaço em branco embaixo do número (QA 22/09).
+  const periodo = preparoData?.periodo;
+  const rotuloPeriodo = document.getElementById('preparo-periodo-label-2');
+  if (rotuloPeriodo && periodo) {
+    rotuloPeriodo.textContent = `${_dataBR(periodo.inicio)} a ${_dataBR(periodo.fim)}`;
+  }
+  // Loja sem pedido nenhum mostrava 0 min e 0 pedidos como se fosse resultado.
+  const semDado = document.getElementById('preparo-sem-dado');
+  if (semDado) {
+    semDado.hidden = !dados.semDado;
+    semDado.textContent = dados.semDado
+      ? `Nenhum pedido com tempo medido ${tab === 'geral' ? 'nesse período' : `em ${tab} nesse período`}. Os números abaixo não são resultado: é falta de dado.`
+      : '';
+  }
+  if (periodo?.encurtado) {
+    const aviso = document.getElementById('preparo-periodo-label');
+    if (aviso) aviso.textContent = `· período encurtado pro máximo de ${periodo.maximoDeDias} dias`;
+  }
   _avisarCoberturaPreparo();
 
   const picoEl = document.getElementById('preparo-val-pico');
@@ -1578,7 +1597,7 @@ function renderPreparoTab(tab) {
   const corpoGargalos = document.getElementById('preparo-gargalos-body');
   corpoGargalos.innerHTML = (dados.gargalos && dados.gargalos.length)
     ? dados.gargalos.map(g => `
-        <tr>
+        <tr class="linha-clicavel" data-dia="${g.dia}" data-loja="${escaparHtml(g.loja)}" title="Ver os pedidos que puxaram a média desse dia">
           <td>${g.dia.split('-').reverse().join('/')}</td>
           <td>${escaparHtml(g.loja)}</td>
           <td>${g.totalPedidos}</td>
@@ -1586,9 +1605,85 @@ function renderPreparoTab(tab) {
         </tr>
       `).join('')
     : `<tr><td colspan="4" class="panel-subtitle">Sem dados suficientes nesse período.</td></tr>`;
+  // "Dias mais lentos" mostrava que o dia foi ruim e não deixava ver quais
+  // pedidos puxaram a média (QA 22/09).
+  corpoGargalos.querySelectorAll('tr[data-dia]').forEach((linha) => {
+    linha.addEventListener('click', () => abrirPedidosDoDiaPreparo(linha.dataset.loja, linha.dataset.dia));
+  });
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+async function abrirPedidosDoDiaPreparo(loja, dia) {
+  const modal = document.getElementById('modal-preparo-dia');
+  if (!modal) return;
+  document.getElementById('preparo-dia-titulo').textContent = `${loja} · ${_dataBR(dia)}`;
+  document.getElementById('preparo-dia-sub').textContent = 'Carregando...';
+  document.getElementById('preparo-dia-body').innerHTML = '';
+  modal.style.display = 'flex';
+  try {
+    const resposta = await fetch(`/api/preparo/dia?loja=${encodeURIComponent(loja)}&dia=${encodeURIComponent(dia)}`);
+    if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+    const dados = await resposta.json();
+    const pedidos = dados.pedidos || [];
+    document.getElementById('preparo-dia-sub').textContent = pedidos.length < dados.total
+      ? `Os ${pedidos.length} mais demorados dos ${dados.total} pedidos do dia.`
+      : `${_qtdTexto(dados.total, 'pedido', 'pedidos')} nesse dia, do mais demorado pro mais rápido.`;
+    document.getElementById('preparo-dia-body').innerHTML = pedidos.length
+      ? pedidos.map((p) => `
+        <tr>
+          <td class="font-bold num-mono">#${p.pedido_id}</td>
+          <td>${escaparHtml(nomeExibicaoCanal(p.canal))}</td>
+          <td class="num-mono">${escaparHtml((p.criado_em || '').slice(11, 16))}</td>
+          <td class="num-mono">${escaparHtml((p.atualizado_em || '').slice(11, 16))}</td>
+          <td class="font-bold">${_formatarMinutos(p.duracao_minutos)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" class="panel-subtitle">Nenhum pedido medido nesse dia.</td></tr>';
+  } catch (erro) {
+    console.error('Falha ao abrir os pedidos do dia:', erro);
+    document.getElementById('preparo-dia-sub').textContent = erro.message;
+  }
+}
+
+document.getElementById('btn-preparo-dia-fechar')?.addEventListener('click', () => {
+  document.getElementById('modal-preparo-dia').style.display = 'none';
+});
+document.getElementById('btn-preparo-dia-ok')?.addEventListener('click', () => {
+  document.getElementById('modal-preparo-dia').style.display = 'none';
+});
+
+// ---- #111: atalhos de período do Preparo ----------------------------------
+document.querySelectorAll('#preparo-atalhos .curva-periodo-btn').forEach((botao) => {
+  botao.addEventListener('click', () => {
+    document.querySelectorAll('#preparo-atalhos .curva-periodo-btn').forEach((b) => b.classList.remove('active'));
+    botao.classList.add('active');
+    const hoje = new Date();
+    const paraCampo = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    let inicio;
+    let fim = hoje;
+    if (botao.dataset.atalho === 'mes') {
+      inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    } else if (botao.dataset.atalho === 'mes-passado') {
+      inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+      fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    } else {
+      const dias = parseInt(botao.dataset.atalho, 10);
+      inicio = new Date(hoje.getTime());
+      inicio.setDate(hoje.getDate() - (dias - 1));
+    }
+    document.getElementById('preparo-data-inicio').value = paraCampo(inicio);
+    document.getElementById('preparo-data-fim').value = paraCampo(fim);
+    carregarPreparo();
+  });
+});
+
+// Mexer nas datas à mão desmarca o atalho: senão a tela diz "30 dias" com
+// outro período na frente.
+['preparo-data-inicio', 'preparo-data-fim'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', () => {
+    document.querySelectorAll('#preparo-atalhos .curva-periodo-btn').forEach((b) => b.classList.remove('active'));
+  });
+});
 
 // --- ESTOQUE (insumos nativos, catálogo único + quantidade por loja) ---
 const LOJAS_ESTOQUE = ['Hamburgueria Artesanos', 'Açaí Na Lata', 'Tradiça ZN', 'Tradiça Simus'];
@@ -4796,8 +4891,15 @@ function _atualizarEnvioWhatsappConvites() {
   const fila = document.getElementById('fila-whatsapp');
   if (!botao || !fila) return;
   const agora = new Date();
-  const itens = convitesCotacaoAtuais
-    .filter((c) => c.status === 'aberta' && new Date(c.prazoValidade) >= agora && c.fornecedorTelefone)
+  // A fila era montada com TODO convite aberto, inclusive os que já tinham
+  // recebido o link: clicar de novo depois de terminar mandava tudo outra
+  // vez (QA 22/09). Quem já recebeu fica de fora; pra reenviar de propósito
+  // existe o botão da linha dele.
+  const abertos = convitesCotacaoAtuais
+    .filter((c) => c.status === 'aberta' && new Date(c.prazoValidade) >= agora && c.fornecedorTelefone);
+  const jaReceberam = abertos.filter((c) => c.enviadoEm || enviadosPeloWhatsapp.has(c.id)).length;
+  const itens = abertos
+    .filter((c) => !(c.enviadoEm || enviadosPeloWhatsapp.has(c.id)))
     .map((c) => {
       const link = `${location.origin}/preencher_cotacao.html?token=${c.token}`;
       return {
@@ -4813,8 +4915,16 @@ function _atualizarEnvioWhatsappConvites() {
   // Ensaio anda junto com o botão: só faz sentido com a extensão instalada.
   const opcaoEnsaio = document.getElementById('ensaio-whatsapp-opcao');
   if (opcaoEnsaio) opcaoEnsaio.hidden = botao.hidden;
-  document.getElementById('btn-enviar-cotacoes-texto').textContent =
-    `Enviar ${itens.length === 1 ? 'o convite' : `os ${itens.length} convites`} pelo WhatsApp`;
+  document.getElementById('btn-enviar-cotacoes-texto').textContent = itens.length === 1
+    ? 'Enviar o convite que falta pelo WhatsApp'
+    : `Enviar os ${itens.length} convites que faltam pelo WhatsApp`;
+  const jaForam = document.getElementById('convites-ja-enviados');
+  if (jaForam) {
+    jaForam.hidden = !jaReceberam;
+    jaForam.textContent = jaReceberam
+      ? `${jaReceberam} ${jaReceberam === 1 ? 'fornecedor já recebeu o link e fica de fora' : 'fornecedores já receberam o link e ficam de fora'} — pra mandar de novo pra alguém, use o botão da linha dele.`
+      : '';
+  }
   document.getElementById('convites-extensao-aviso').hidden = temExtensao || !itens.length || !_possoGerir();
   const avisoAtualizar = document.getElementById('convites-extensao-atualizar');
   if (avisoAtualizar) {

@@ -233,15 +233,22 @@
     }
     if (!saiu) return avisarResultado(indice, 'falhou', 'Cliquei em enviar, mas a mensagem ficou na caixa.');
 
-    // 7) Espera o WhatsApp confirmar (o reloginho some da mensagem). Mesmo
-    //    se passar do tempo, ela já está na fila do próprio WhatsApp e sai
-    //    quando a conexão deixar.
-    await esperarPor(() => !ultimaMensagemPendente(), { tempoMaximo: 30000 });
+    // 7) Espera o WhatsApp confirmar (o reloginho some da mensagem). Se não
+    //    confirmar, a mensagem ficou na fila do PRÓPRIO WhatsApp e sai
+    //    quando a conexão voltar — só que antes isso virava "enviado" na
+    //    tela do AdmFood do mesmo jeito, e ela não tinha como saber que
+    //    aquele fornecedor talvez nunca tivesse recebido (QA 22/09).
+    const confirmou = await esperarPor(() => !ultimaMensagemPendente(), { tempoMaximo: 30000 });
 
     // 8) Intervalo antes do próximo fornecedor (6 a 14 s, fora o tempo de
     //    o WhatsApp carregar de novo): uns 20 a 35 s por fornecedor.
     await esperarComSinal(sortear(6000, 14000));
-    avisarResultado(indice, 'enviado');
+    if (confirmou) {
+      avisarResultado(indice, 'enviado');
+    } else {
+      avisarResultado(indice, 'na-fila',
+        'O WhatsApp não confirmou a entrega em 30 s — a mensagem está na fila dele e sai quando a conexão voltar. Confira a conversa.');
+    }
   }
 
   enviar().catch((erro) => {

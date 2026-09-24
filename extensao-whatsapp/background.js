@@ -57,8 +57,16 @@ function resumo(fila) {
     total: fila.itens.length,
     feitos: fila.itens.filter((i) => i.status !== 'pendente').length,
     enviados: fila.itens.filter((i) => i.status === 'enviado').length,
+    // O WhatsApp não confirmou dentro do tempo: está na fila dele, pode não
+    // ter chegado. Contado à parte de "enviado" (QA 22/09).
+    naFila: fila.itens
+      .filter((i) => i.status === 'na-fila')
+      .map((i) => ({ fornecedor: i.fornecedor, motivo: i.motivo })),
     ensaio: !!fila.ensaio,
     ensaiados: fila.itens.filter((i) => i.status === 'ensaio').length,
+    iniciadaEm: fila.iniciadaEm,
+    terminadaEm: fila.terminadaEm || null,
+    vista: !!fila.vista,
     falhas: fila.itens
       .filter((i) => i.status === 'falhou')
       .map((i) => ({ fornecedor: i.fornecedor, motivo: i.motivo })),
@@ -162,12 +170,17 @@ async function avancar(fila, status, motivo) {
 
   if (fila.indice >= fila.itens.length) {
     fila.ativa = false;
+    fila.terminadaEm = new Date().toISOString();
     const falhas = fila.itens.filter((i) => i.status === 'falhou').length;
+    const naFila = fila.itens.filter((i) => i.status === 'na-fila').length;
     const oQueAconteceu = fila.ensaio
       ? 'Ensaio terminado: as conversas abriram com a mensagem, e nada foi enviado.'
       : 'Terminou: todos os fornecedores receberam.';
-    fila.mensagemFinal = falhas
-      ? `${fila.ensaio ? 'Ensaio terminado' : 'Terminou'}, com ${falhas} ${falhas === 1 ? 'falha' : 'falhas'}.`
+    const partes = [];
+    if (falhas) partes.push(`${falhas} ${falhas === 1 ? 'falha' : 'falhas'}`);
+    if (naFila) partes.push(`${naFila} sem confirmação do WhatsApp`);
+    fila.mensagemFinal = partes.length
+      ? `${fila.ensaio ? 'Ensaio terminado' : 'Terminou'}, com ${partes.join(' e ')}.`
       : oQueAconteceu;
     await salvarFila(fila);
     chrome.alarms.clear(ALARME_VIGIA);
@@ -208,6 +221,17 @@ chrome.runtime.onMessage.addListener((mensagem, remetente, responder) => {
     'iniciar-fila': () => iniciarFila(mensagem.itens, remetente, mensagem.ensaio),
     'parar-fila': () => pararFila('Parado pelo botão Parar.'),
     'estado-fila': async () => resumo(await lerFila()),
+    // #114: fechar a tela do AdmFood no meio fazia o resultado se perder. A
+    // fila continua guardada e o painel volta a aparecer quando ela abrir o
+    // AdmFood de novo; "marcar-vista" é o botão Fechar do painel.
+    'marcar-vista': async () => {
+      const fila = await lerFila();
+      if (fila) {
+        fila.vista = true;
+        await salvarFila(fila);
+      }
+      return { ok: true };
+    },
     'qual-envio': () => envioDaAba(remetente),
     'sinal-de-vida': () => sinalDeVida(remetente),
     'resultado-envio': () => registrarResultado(mensagem, remetente),

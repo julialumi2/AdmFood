@@ -186,6 +186,14 @@
             <span class="atualizado-em" id="preparo-atualizado-em"></span>
           </div>
           <div class="action-controls">
+            <!-- Só dois campos de data: no celular eram dois teclados de
+                 calendário pra ver "os últimos 7 dias" (QA 22/09) -->
+            <div class="curva-periodo" id="preparo-atalhos">
+              <button type="button" class="curva-periodo-btn" data-atalho="7">7 dias</button>
+              <button type="button" class="curva-periodo-btn active" data-atalho="30">30 dias</button>
+              <button type="button" class="curva-periodo-btn" data-atalho="mes">Este mês</button>
+              <button type="button" class="curva-periodo-btn" data-atalho="mes-passado">Mês passado</button>
+            </div>
             <div class="date-range-picker">
               <div class="date-range-field">
                 <label for="preparo-data-inicio">De</label>
@@ -224,6 +232,10 @@
             <span>Tradiça Simus</span>
           </button>
         </div>
+
+        <!-- Loja sem pedido no período mostrava 0 min e 0 pedidos como se
+             fosse resultado (QA 22/09) -->
+        <p class="panel-subtitle preparo-sem-dado" id="preparo-sem-dado" hidden></p>
 
         <!-- CARDS DE MÉTRICAS -->
         <div class="metrics-grid">
@@ -342,6 +354,35 @@
 
       </div> <!-- /page-content -->
     </main> <!-- /main-wrapper -->
+
+    <!-- "Dias mais lentos" não abria nada: dava pra ver que o dia foi ruim e
+         não quais pedidos puxaram a média (QA 22/09) -->
+    <div class="modal-overlay" id="modal-preparo-dia" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="preparo-dia-titulo">Pedidos do dia</h2>
+          <button type="button" class="btn-close" id="btn-preparo-dia-fechar">&times;</button>
+        </div>
+        <p class="panel-subtitle" id="preparo-dia-sub"></p>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Pedido</th>
+                <th>Canal</th>
+                <th>Entrou</th>
+                <th>Fechou</th>
+                <th>Tempo</th>
+              </tr>
+            </thead>
+            <tbody id="preparo-dia-body"></tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary-sm" id="btn-preparo-dia-ok">Fechar</button>
+        </div>
+      </div>
+    </div>
 
   </div> <!-- /dashboard-wrapper -->
 

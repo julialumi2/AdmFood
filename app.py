@@ -251,6 +251,7 @@ from backend.armazenamento import (
     buscar_convite_por_token,
     contar_admins_ativos,
     excluir_contagem,
+    pedidos_preparo_do_dia,
     insumos_que_o_fornecedor_cota,
     encerrar_sessoes_do_usuario,
     bootstrap_ja_aplicado,
@@ -6750,6 +6751,10 @@ def api_preparo():
     inicio_str = request.args.get('inicio')
     fim_str = request.args.get('fim')
 
+    # Sem teto, dava pra pedir 10 anos de uma vez e o servidor varria a
+    # tabela inteira (QA 22/09). Um ano cobre qualquer comparação que ela faz.
+    DIAS_MAXIMOS = 366
+    periodo_encurtado = False
     if inicio_str and fim_str:
         try:
             inicio = date.fromisoformat(inicio_str)
@@ -6758,6 +6763,9 @@ def api_preparo():
             return jsonify({"erro": "Datas inválidas."}), 400
         if inicio > fim:
             inicio, fim = fim, inicio
+        if (fim - inicio).days + 1 > DIAS_MAXIMOS:
+            inicio = fim - timedelta(days=DIAS_MAXIMOS - 1)
+            periodo_encurtado = True
     else:
         fim = date.today()
         inicio = fim - timedelta(days=29)
@@ -6780,7 +6788,13 @@ def api_preparo():
     )
 
     for nome_unidade in lojas_visiveis:
-        resposta[nome_unidade] = _montar_bloco_preparo([p for p in pedidos if p["unidade"] == nome_unidade])
+        da_loja = [p for p in pedidos if p["unidade"] == nome_unidade]
+        resposta[nome_unidade] = _montar_bloco_preparo(da_loja)
+        # Loja sem pedido no período mostrava 0 min e 0 pedidos como se fosse
+        # resultado — "a cozinha foi rápida" em vez de "não tem dado"
+        # (QA 22/09).
+        resposta[nome_unidade]["semDado"] = not da_loja
+    resposta["geral"]["semDado"] = not pedidos
 
     # Cobertura: com a sincronização parada, a média dos dias que existem
     # aparecia como se fosse o período inteiro (QA 22/09).
@@ -6791,7 +6805,31 @@ def api_preparo():
         "diasComDado": dias_com_dado,
         "lojas": lojas_visiveis,
     }
+    resposta["periodo"] = {
+        "inicio": inicio.isoformat(),
+        "fim": fim.isoformat(),
+        "encurtado": periodo_encurtado,
+        "maximoDeDias": DIAS_MAXIMOS,
+    }
     return jsonify(resposta)
+
+
+@app.route('/api/preparo/dia', methods=['GET'])
+def api_preparo_do_dia():
+    """Os pedidos mais demorados de um dia numa loja — o que "Dias mais
+    lentos" não abria (QA 22/09)."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+    loja = request.args.get('loja') or ''
+    dia = request.args.get('dia') or ''
+    if loja not in LOJAS or not _loja_visivel(loja):
+        return jsonify({"erro": "Loja inválida."}), 400
+    try:
+        date.fromisoformat(dia)
+    except ValueError:
+        return jsonify({"erro": "Data inválida."}), 400
+    return jsonify({"loja": loja, "dia": dia, **pedidos_preparo_do_dia(loja, dia)})
 
 
 # --- TAREFAS (quadro do ClickUp) --------------------------------------------

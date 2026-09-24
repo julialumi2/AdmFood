@@ -3218,6 +3218,27 @@ def listar_vinculos_manuais():
         return [dict(linha) for linha in linhas]
 
 
+def pedidos_preparo_do_dia(unidade, dia_iso, limite=25):
+    """Os pedidos mais demorados de um dia numa loja. "Dias mais lentos" não
+    abria nada: ela via que o dia foi ruim e não tinha como olhar quais
+    pedidos puxaram a média (QA 22/09)."""
+    with conexao() as conn:
+        linhas = conn.execute(
+            """
+            SELECT pedido_id, canal, criado_em, atualizado_em, duracao_minutos
+            FROM pedido_preparo
+            WHERE unidade = ? AND dia = ?
+            ORDER BY duracao_minutos DESC
+            LIMIT ?
+            """,
+            (unidade, dia_iso, int(limite)),
+        ).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM pedido_preparo WHERE unidade = ? AND dia = ?", (unidade, dia_iso)
+        ).fetchone()["n"]
+    return {"pedidos": [dict(l) for l in linhas], "total": total}
+
+
 def buscar_pedidos_preparo_periodo(inicio_iso, fim_iso, unidade=None):
     with conexao() as conn:
         if unidade:
