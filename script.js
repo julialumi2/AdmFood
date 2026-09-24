@@ -7833,10 +7833,28 @@ async function inicializarContagemPublica() {
   const elObrigado = document.getElementById('contagem-publica-obrigado');
   const form = document.getElementById('form-contagem-publica');
 
-  function mostrarErro(mensagem) {
+  // Erro sem saída: a falha ao carregar não tinha como tentar de novo, e
+  // quem está na loja não vai saber o que fazer com "Failed to fetch"
+  // (QA 22/09).
+  function mostrarErro(mensagem, podeTentarDeNovo = false) {
     elCarregando.style.display = 'none';
     elErroTexto.textContent = mensagem;
     elErro.style.display = '';
+    let botao = document.getElementById('btn-contagem-tentar-de-novo');
+    if (podeTentarDeNovo) {
+      if (!botao) {
+        botao = document.createElement('button');
+        botao.type = 'button';
+        botao.id = 'btn-contagem-tentar-de-novo';
+        botao.className = 'btn-primary';
+        botao.textContent = 'Tentar de novo';
+        botao.addEventListener('click', () => location.reload());
+        elErro.appendChild(botao);
+      }
+      botao.hidden = false;
+    } else if (botao) {
+      botao.hidden = true;
+    }
   }
 
   if (!token) {
@@ -7871,10 +7889,42 @@ async function inicializarContagemPublica() {
     });
 
     const totalItens = dados.itens.length;
-    function atualizarProgresso() {
-      const preenchidos = Array.from(form.querySelectorAll('input[data-insumo-id]')).filter((input) => input.value !== '').length;
-      document.getElementById('contagem-publica-progresso').textContent = `Você preencheu ${preenchidos} de ${totalItens} itens`;
+
+    function _camposVazios() {
+      return Array.from(form.querySelectorAll('input[data-insumo-id]')).filter((input) => input.value.trim() === '');
     }
+
+    function atualizarProgresso() {
+      const vazios = _camposVazios();
+      const preenchidos = totalItens - vazios.length;
+      document.getElementById('contagem-publica-progresso').textContent = `Você preencheu ${preenchidos} de ${totalItens} itens`;
+      const botao = document.getElementById('btn-contagem-ir-vazio');
+      if (botao) {
+        botao.hidden = !vazios.length || !preenchidos;
+        botao.textContent = `Faltam ${vazios.length} — ir pro próximo`;
+      }
+    }
+
+    // Leva até o campo vazio, desfazendo busca e filtro de seção: o item
+    // podia estar escondido, e aí nem o balão do navegador aparecia.
+    function _irParaCampo(input) {
+      const busca = document.getElementById('contagem-publica-busca');
+      const filtro = document.getElementById('contagem-publica-filtro-secao');
+      if (busca.value || filtro.value) {
+        busca.value = '';
+        filtro.value = '';
+        aplicarFiltros();
+      }
+      input.closest('.contagem-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus({ preventScroll: true });
+      input.closest('.contagem-card')?.classList.add('contagem-card-alvo');
+      setTimeout(() => input.closest('.contagem-card')?.classList.remove('contagem-card-alvo'), 1600);
+    }
+
+    document.getElementById('btn-contagem-ir-vazio')?.addEventListener('click', () => {
+      const vazios = _camposVazios();
+      if (vazios.length) _irParaCampo(vazios[0]);
+    });
 
     // Um card por item, no formato do link da VMarket que a Julia usa de
     // modelo (11/09/2026): campos empilhados, quantidade com − e +,
@@ -7905,7 +7955,7 @@ async function inicializarContagemPublica() {
             <div class="contagem-stepper">
               <button type="button" data-passo="-1" aria-label="Diminuir">−</button>
               <div class="contagem-campo-unidade">
-                <input type="text" inputmode="decimal" placeholder="0" id="contagem-qtd-${item.insumoId}" data-insumo-id="${item.insumoId}" data-fator="${unidades[0].fator}" required>
+                <input type="text" inputmode="decimal" placeholder="0" id="contagem-qtd-${item.insumoId}" data-insumo-id="${item.insumoId}" data-fator="${unidades[0].fator}">
                 ${unidades.length > 1
                   ? `<select class="contagem-unidade-escolha" data-fator-anterior="${unidades[0].fator}" aria-label="Unidade em que você está contando ${escaparHtml(item.nome)}">${unidades.map((u) => `<option value="${u.fator}">${escaparHtml(u.rotulo)}</option>`).join('')}</select>`
                   : `<span class="contagem-unidade-fixa">${escaparHtml(unidades[0].rotulo)}</span>`}
@@ -8141,6 +8191,19 @@ async function inicializarContagemPublica() {
         alert('Confira a quantidade destes itens — não deu pra ler o número: ' + ilegiveis.slice(0, 8).join(', '));
         return;
       }
+      // Campo vazio escondido pela busca ou pela seção travava o envio em
+      // silêncio: o navegador não consegue mostrar o balão num campo que não
+      // está na tela, e o botão simplesmente não fazia nada (QA 22/09).
+      const vazios = _camposVazios();
+      if (vazios.length) {
+        const nomes = vazios.slice(0, 6).map((input) => itensPorId.get(input.dataset.insumoId)?.nome || '?');
+        const resto = vazios.length > 6 ? ` e mais ${vazios.length - 6}` : '';
+        alert(`Faltam ${vazios.length} ${vazios.length === 1 ? 'item' : 'itens'} sem quantidade: ${nomes.join(', ')}${resto}.`
+          + String.fromCharCode(10) + String.fromCharCode(10)
+          + 'Item que está zerado na loja também precisa ser preenchido — digite 0. Vou te levar até o primeiro.');
+        _irParaCampo(vazios[0]);
+        return;
+      }
       if (conferir.length) {
         const lista = conferir.slice(0, 8).join('\n');
         const resto = conferir.length > 8 ? `\n… e mais ${conferir.length - 8}` : '';
@@ -8163,13 +8226,15 @@ async function inicializarContagemPublica() {
         elObrigado.style.display = '';
       } catch (erro) {
         console.error('Falha ao enviar contagem:', erro);
-        alert(erro.message || 'Não foi possível enviar a requisição.');
+        alert(`${erro.message && !/fetch|network|Failed/i.test(erro.message) ? erro.message : 'A internet caiu no meio do envio.'}`
+          + String.fromCharCode(10) + String.fromCharCode(10)
+          + 'O que você digitou está guardado neste aparelho: é só apertar em "Enviar requisição" de novo quando voltar.');
         btn.disabled = false;
       }
     });
   } catch (erro) {
     console.error('Falha ao carregar contagem pública:', erro);
-    mostrarErro('Não foi possível carregar essa requisição agora.');
+    mostrarErro('Não foi possível carregar essa requisição agora — pode ser a internet.', true);
   }
 }
 

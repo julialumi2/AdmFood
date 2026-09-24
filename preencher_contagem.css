@@ -573,3 +573,28 @@ body {
 
   #btn-contagem-publica-enviar { margin: var(--space-4) 0 0; }
 }
+
+/* "Ir pro próximo vazio" e realce do campo alvo (QA 22/09): em lista de 100
+   itens, achar o que ficou pra trás era rolar tudo de novo. */
+.contagem-ir-vazio {
+  display: block;
+  margin: var(--space-2) auto 0;
+  padding: 8px var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: 999px;
+  background-color: var(--warning-soft);
+  color: var(--warning-texto);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.contagem-ir-vazio[hidden] { display: none; }
+
+.contagem-card-alvo {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--info-soft);
+}
+
+#contagem-publica-erro #btn-contagem-tentar-de-novo { margin-top: var(--space-3); }
