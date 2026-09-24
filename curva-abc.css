@@ -218,3 +218,28 @@
   white-space: nowrap;
   cursor: help;
 }
+
+/* De onde veio o custo do CMV (QA 22/09): a coluna não dizia se era da ficha,
+   do custo digitado à mão ou de estimativa. */
+.curva-origem-custo {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Tabela de 8 colunas rolando de lado no celular, sem nada indicando que
+   existe rolagem (QA 22/09). */
+@media (max-width: 768px) {
+  .curva-tabela-wrap { position: relative; }
+  .curva-tabela-wrap::after {
+    content: "arraste pro lado pra ver o resto ›";
+    display: block;
+    padding: 6px 0 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: right;
+  }
+}

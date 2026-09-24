@@ -5225,3 +5225,27 @@ Conferido de ponta a ponta numa cotação manual com 2 itens e vencedor
 escolhido: sem loja responde 409 com as 4 lojas; loja inválida, 400; com a
 loja, gera o pedido na Hamburgueria Artesanos com os 2 itens; clicar de novo
 cai no "os pedidos dessa cotação já tinham sido gerados", sem duplicar.
+
+### 6.85 Médios da Curva ABC
+
+- **"30 dias" eram 31, e hoje entrava pela metade.** A janela não tinha limite
+  superior: o dia de hoje, ainda em andamento, contava junto. Agora fecha
+  ontem — dias completos, e o mesmo número toda vez que se abre a tela.
+- **CMV em parte estimado aparecia como número normal.** Quando menos de 20%
+  dos complementos de um produto estão sem custo, o sistema completa pela
+  média dos que têm — o que é razoável, mas a tela não dizia. Agora a coluna
+  CMV marca **"estimado"** e o tooltip diz quantos complementos entraram pela
+  média. Nas contas do Açaí: "NaLata 500ml + 3 complementos" (CMV 44,2%, 7
+  complementos sem custo) e "NaLata 330ml" (40,1%, 3).
+- **De onde veio o custo.** A coluna não dizia se era da ficha técnica, do
+  custo digitado à mão ou de estimativa — três coisas diferentes com a mesma
+  cara. Agora o custo à mão fica marcado como "à mão" e o tooltip explica
+  cada caso.
+- **Duas metas de CMV no mesmo sistema:** esta tela pintava de vermelho a
+  partir de 30%, enquanto Vendas Semanais e a Home usam 31% (ótimo) e 34%
+  (bom), que é a régua da planilha do chefe. Agora é a mesma.
+- **O aviso mandava pra uma tela que não existe** ("Configurações →
+  Integrações do Estoque"): aquilo virou "Vendas não reconhecidas", dentro de
+  Mais Vendidos — e agora é um link que leva direto lá.
+- **A tabela de 8 colunas** rolava de lado no celular sem nada indicando que
+  havia rolagem. Ganhou a dica "arraste pro lado pra ver o resto ›".

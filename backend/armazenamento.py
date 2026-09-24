@@ -4473,8 +4473,11 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         corte = (date.fromisoformat(ate) - timedelta(days=dias)).isoformat()
         filtro_fim, parametros_fim = " AND dia < ?", (ate,)
     else:
-        corte = (datetime.now() - timedelta(days=dias)).date().isoformat()
-        filtro_fim, parametros_fim = "", ()
+        # Sem limite superior, o dia de hoje entrava pela metade e "30 dias"
+        # viravam 31 (QA 22/09). A janela fecha ontem: dias completos.
+        hoje = date.today()
+        corte = (hoje - timedelta(days=dias)).isoformat()
+        filtro_fim, parametros_fim = " AND dia < ?", (hoje.isoformat(),)
 
     with conexao() as conn:
         vendas = conn.execute(
@@ -4625,6 +4628,9 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
         custo_manual = custo is not None
         if custo is None:
             custo = custos_ficha.get(item_id)
+        # De onde veio o custo: a coluna CMV não dizia se era da ficha, do
+        # custo digitado à mão ou de estimativa (QA 22/09).
+        item["origemCusto"] = "manual" if custo_manual else ("ficha" if custo is not None else None)
         extra = extras_por_produto.get(item_id)
         if extra and item["volume"]:
             item["receita"] += extra["receita"]  # topping pago
@@ -4633,8 +4639,15 @@ def curva_abc_cardapio(loja, dias=30, ate=None):
                 if extra["com_custo"] >= 0.8 * extra["unidades"]:
                     estimado = extra["custo"] * extra["unidades"] / extra["com_custo"] if extra["com_custo"] else 0.0
                     custo += estimado / item["volume"]
+                    # Complemento sem custo entrava pela média e o produto
+                    # aparecia com CMV "normal", sem dizer que parte é
+                    # estimativa (QA 22/09).
+                    if extra["com_custo"] < extra["unidades"]:
+                        item["origemCusto"] = "estimado"
+                        item["complementosSemCusto"] = round(extra["unidades"] - extra["com_custo"], 2)
                 else:
                     custo = None
+                    item["origemCusto"] = None
         item["custoUnitario"] = round(custo, 2) if custo is not None else None
         item["volume"] = round(item["volume"], 2)
         item["receita"] = round(item["receita"], 2)

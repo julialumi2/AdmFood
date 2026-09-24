@@ -15505,8 +15505,21 @@ async function carregarCurvaAbc() {
 
 function _curvaCmvHTML(item) {
   if (item.cmvPercent === null) return '<span class="curva-sem-dado">—</span>';
-  const classe = item.cmvPercent >= 30 ? 'curva-cmv-alto' : 'curva-cmv-ok';
-  return `<span class="curva-num ${classe}">${item.cmvPercent.toString().replace('.', ',')}%</span>`;
+  // Usava 30% fixo aqui enquanto o resto do sistema usa 31%/34% — duas metas
+  // no mesmo sistema (QA 22/09).
+  const limite = (cardapioCmvLimites?.bom ?? 0.34) * 100;
+  const classe = item.cmvPercent >= limite ? 'curva-cmv-alto' : 'curva-cmv-ok';
+  // De onde veio o custo: a coluna não dizia se era da ficha, do custo
+  // digitado à mão ou de estimativa (QA 22/09).
+  const origem = {
+    manual: { marca: 'à mão', titulo: 'Custo digitado à mão pra esse produto nessa loja' },
+    ficha: { marca: '', titulo: 'Custo calculado pela ficha técnica' },
+    estimado: {
+      marca: 'estimado',
+      titulo: `Parte do custo é estimativa: ${item.complementosSemCusto || 'alguns'} complemento(s) vendidos sem preço cadastrado entraram pela média dos que têm`,
+    },
+  }[item.origemCusto] || { marca: '', titulo: '' };
+  return `<span class="curva-num ${classe}"${origem.titulo ? ` title="${escaparHtml(origem.titulo)}"` : ''}>${item.cmvPercent.toString().replace('.', ',')}%${origem.marca ? `<small class="curva-origem-custo">${origem.marca}</small>` : ''}</span>`;
 }
 
 function _curvaMargemHTML(item) {
@@ -15600,7 +15613,9 @@ function renderCurvaAbc() {
   const semCmv = d.itens.filter(i => i.margem === null).length;
   const partes = [];
   if (d.vendasNaoCasadas) {
-    partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em Configurações → Integrações do Estoque.`);
+    // Mandava pra "Configurações → Integrações do Estoque", que virou
+    // "Vendas não reconhecidas", dentro de Mais Vendidos (QA 22/09).
+    partes.push(`${d.vendasNaoCasadas} venda(s) de ${d.produtosNaoCasados} produto(s) ainda não casaram com a Ficha Técnica e ficaram de fora — resolva em <a href="mais-vendidos.html#painel-integracoes-estoque">Mais Vendidos → Vendas não reconhecidas</a>.`);
   }
   // Venda de produto que não está na lista de preços desta loja saía da
   // conta calada, e o subtítulo seguia dizendo "X itens vendidos" como se
