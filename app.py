@@ -6029,9 +6029,24 @@ def api_salvar_venda_presencial():
         return jsonify({"erro": "Quantidade inválida."}), 400
     if quantidade < 0:
         return jsonify({"erro": "Quantidade não pode ser negativa."}), 400
+    # A data não era validada: dava pra lançar em 2027 e o valor sumia do
+    # período que ela olha (QA 22/09).
+    try:
+        dia_alvo = date.fromisoformat(dia)
+    except ValueError:
+        return jsonify({"erro": "Data inválida."}), 400
+    if dia_alvo > date.today():
+        return jsonify({"erro": "Não dá pra lançar venda de um dia que ainda não aconteceu."}), 400
 
-    salvar_venda_presencial(unidade, dia, valor, quantidade)
-    return jsonify({"sucesso": True})
+    # Segundo lançamento do mesmo dia apagava o primeiro em silêncio, e com
+    # ele mudavam faturamento, ticket e o resultado da semana (QA 22/09).
+    anterior = salvar_venda_presencial(unidade, dia, valor, quantidade)
+    if anterior:
+        _anotar_no_registro(
+            f'Trocou a venda presencial de {unidade} em {_formatar_data_br(dia)}: '
+            f'R$ {anterior["valor"]:.2f} → R$ {valor:.2f}'
+        )
+    return jsonify({"sucesso": True, "substituiu": anterior})
 
 
 @app.route('/api/venda-presencial', methods=['DELETE'])

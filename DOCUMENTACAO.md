@@ -5249,3 +5249,28 @@ cai no "os pedidos dessa cotação já tinham sido gerados", sem duplicar.
   Mais Vendidos — e agora é um link que leva direto lá.
 - **A tabela de 8 colunas** rolava de lado no celular sem nada indicando que
   havia rolagem. Ganhou a dica "arraste pro lado pra ver o resto ›".
+
+### 6.86 Médios de Vendas Diárias e Mais Vendidos
+
+**Vendas Diárias.** Lançar o presencial duas vezes no mesmo dia era uma
+**sobrescrita silenciosa** — a chave é loja + dia, então o segundo apagava o
+primeiro sem aviso, e junto mudavam faturamento, ticket e o resultado da
+semana. Agora a tela avisa o que foi substituído ("esse dia já tinha
+R$ 500,00 em 20 pedidos") e o registro de ações guarda a troca. A data também
+passou a ser validada: dia que ainda não aconteceu e data impossível são
+recusados — antes dava pra lançar em 2027 e o valor sumia do período.
+
+**Mais Vendidos.**
+
+- **O combo contava diferente do estoque.** O ranking somava a quantidade
+  crua, sem o multiplicador do vínculo, enquanto a baixa de estoque usa ele:
+  "2 smash's tradicionais" contava 1 aqui e 2 lá. Agora as duas contas usam o
+  mesmo número.
+- **Trocar de dia não mostrava nada** e, se falhasse, a tela ficava
+  exatamente como estava — como se o clique não tivesse funcionado. Agora a
+  página esmaece enquanto carrega, o erro diz que a troca não foi e que a
+  tela continua no dia anterior, e resposta fora de ordem é descartada.
+- **O valor curto escondia a precisão** que o dono quer ("R$ 6,9 mil"): o
+  valor cheio agora está no tooltip do total e de cada coluna.
+- **"Não reconhecido" só era ação pra admin** — o gerente via a etiqueta e não
+  tinha o que fazer. Agora a etiqueta dele diz que vincular é coisa de admin.

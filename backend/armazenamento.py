@@ -1716,7 +1716,16 @@ def listar_faturamento_canal_semanal(unidade):
 
 
 def salvar_venda_presencial(unidade, dia_iso, valor, quantidade=0):
+    """Grava o presencial do dia e devolve o que estava lá antes, ou None. A
+    chave é loja + dia, então o segundo lançamento do mesmo dia apagava o
+    primeiro sem aviso nenhum — e faturamento, ticket e semana mudavam junto
+    (QA 22/09)."""
     with conexao() as conn:
+        travar_para_escrita(conn)
+        anterior = conn.execute(
+            "SELECT valor, quantidade FROM venda_presencial WHERE unidade = ? AND dia = ?",
+            (unidade, dia_iso),
+        ).fetchone()
         conn.execute(
             """
             INSERT INTO venda_presencial (unidade, dia, valor, quantidade)
@@ -1725,6 +1734,7 @@ def salvar_venda_presencial(unidade, dia_iso, valor, quantidade=0):
             """,
             (unidade, dia_iso, valor, quantidade),
         )
+        return dict(anterior) if anterior else None
 
 
 def excluir_venda_presencial(unidade, dia_iso):
@@ -2794,7 +2804,11 @@ def produtos_mais_vendidos_do_dia(lojas, dia_iso=None):
             SELECT v.dia, v.unidade, v.canal, v.item_cardapio_id,
                    i.nome AS nome_item, i.categoria AS categoria_item,
                    COALESCE(v.nome_normalizado, v.nome_produto) AS nome_chave,
-                   MIN(v.nome_produto) AS nome_vendido, SUM(v.quantidade) AS quantidade,
+                   MIN(v.nome_produto) AS nome_vendido,
+                   -- O multiplicador do vínculo ("2 smash's tradicionais" = 2)
+                   -- entrava na baixa de estoque e não entrava aqui: o mesmo
+                   -- dia contava 1 nesta tela e 2 no estoque (QA 22/09).
+                   SUM(v.quantidade * COALESCE(v.multiplicador, 1)) AS quantidade,
                    MAX(CASE WHEN v.item_cardapio_id IS NULL AND NOT EXISTS (
                            SELECT 1 FROM composicao_produto_venda c
                            WHERE c.nome_produto_normalizado = v.nome_normalizado

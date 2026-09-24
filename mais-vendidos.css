@@ -734,3 +734,11 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
   .dia-navegador { width: 100%; }
   .dia-rotulo { flex: 1; }
 }
+
+/* Trocar de dia não mostrava nada: os gráficos ficavam com o dia anterior
+   até a resposta chegar (QA 22/09). */
+.page-content.mv-carregando { opacity: 0.55; pointer-events: none; transition: opacity 120ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-content.mv-carregando { transition: none; }
+}

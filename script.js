@@ -2879,21 +2879,39 @@ function _mvFiltrarLoja(loja) {
   renderMaisVendidos(true);
 }
 
+// Trocar de dia não mostrava nada: os gráficos ficavam com o dia anterior
+// até a resposta chegar, e o erro deixava a tela exatamente como estava —
+// como se o clique não tivesse funcionado (QA 22/09).
+let _buscaMaisVendidos = 0;
+
 async function carregarMaisVendidos(dia) {
   const mesmoDia = Boolean(dia && maisVendidosDados && dia === maisVendidosDados.dia);
+  const minhaBusca = ++_buscaMaisVendidos;
+  const pagina = document.querySelector('.page-content');
+  if (!mesmoDia) pagina?.classList.add('mv-carregando');
   try {
     const resposta = await fetch(`/api/vendas/mais-vendidos${dia ? `?dia=${encodeURIComponent(dia)}` : ''}`);
     const dados = await resposta.json();
+    if (minhaBusca !== _buscaMaisVendidos) return;
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
     if (!mesmoDia) mvRankingLimite = MV_RANKING_PASSO;
     maisVendidosDados = dados;
     renderMaisVendidos(!mesmoDia);
   } catch (erro) {
+    if (minhaBusca !== _buscaMaisVendidos) return;
     console.error('Falha ao carregar os mais vendidos:', erro);
     if (!maisVendidosDados) {
       document.getElementById('mv-ranking-lista').innerHTML =
         '<li class="mv-ranking-vazio">Não deu pra carregar as vendas agora. Recarregue a página em instantes.</li>';
+    } else {
+      // Já tem um dia na tela: avisa que a troca não foi, em vez de deixar
+      // o dia velho como se fosse o novo.
+      alert(`Não deu pra carregar ${dia ? _dataBR(dia) : 'esse dia'} agora — a tela continua mostrando ${_dataBR(maisVendidosDados.dia)}.`);
+      const input = document.getElementById('mv-dia-input');
+      if (input) input.value = maisVendidosDados.dia;
     }
+  } finally {
+    if (minhaBusca === _buscaMaisVendidos) pagina?.classList.remove('mv-carregando');
   }
 }
 
@@ -3012,7 +3030,7 @@ function _renderMvCategorias(lojas) {
     <div class="mv-rosca">
       <svg viewBox="0 0 42 42" role="img" aria-label="Receita estimada por categoria">${arcos}</svg>
       <div class="mv-rosca-centro">
-        <span class="mv-rosca-total">${_mvMoedaCurta(total)}</span>
+        <span class="mv-rosca-total" title="${escaparHtml(_mvMoeda(total))}">${_mvMoedaCurta(total)}</span>
         <span class="mv-rosca-rotulo">estimado</span>
       </div>
     </div>
@@ -3070,7 +3088,7 @@ function _renderMvComparativo(lojas, rotuloComparado, diaParcial) {
       <div class="mv-colunas-grade" aria-hidden="true">${marcas.slice(1).map((v) => `<span style="bottom: ${pct(v)}%"></span>`).join('')}</div>
       ${lojas.map((l, indice) => `
         <div class="mv-coluna ${MV_LOJAS[l.loja]?.classe || ''}${l.loja === mvLojaFiltro ? ' foco' : ''}" title="${escaparHtml(l.loja)}: ${_mvMoeda(l.faturamento || 0)}">
-          <span class="mv-coluna-valor">${_mvMoedaCurta(l.faturamento || 0)}</span>
+          <span class="mv-coluna-valor" title="${escaparHtml(_mvMoeda(l.faturamento || 0))}">${_mvMoedaCurta(l.faturamento || 0)}</span>
           <span class="mv-coluna-barra" style="height: ${pct(l.faturamento || 0).toFixed(2)}%; animation-delay: ${indice * 60}ms;"></span>
         </div>`).join('')}
     </div>
@@ -3144,7 +3162,8 @@ function _mvLinhaRanking(p, maximo, admin, rotuloComparado, indice) {
   const aviso = 'O estoque não sabe de qual item do cardápio é esse produto, então ele não desconta nada.';
   const tag = !p.pendente ? '' : admin
     ? `<button type="button" class="tag-pendente" data-mv-vincular="${escaparHtml(p.nomeVendido)}" title="${aviso} Clique pra vincular.">não reconhecido</button>`
-    : `<span class="tag-pendente" title="${aviso}">não reconhecido</span>`;
+    // O gerente via a etiqueta e não tinha o que fazer com ela (QA 22/09).
+    : `<span class="tag-pendente" title="${aviso} Vincular é coisa de admin — avise quem cuida do cadastro.">não reconhecido</span>`;
   const iniciais = p.nome.split(/\s+/).filter(Boolean).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase();
   const foto = p.fotoUrl
     ? `<img class="mv-foto" src="${escaparHtml(p.fotoUrl)}" alt="" loading="lazy">`
@@ -11364,9 +11383,15 @@ if (formPresencial) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ unidade: currentTab, dia, valor, quantidade }),
       });
+      const dadosSalvos = await resposta.json().catch(() => ({}));
       if (!resposta.ok) {
-        const erroDados = await resposta.json().catch(() => ({}));
-        throw new Error(erroDados.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+        throw new Error(dadosSalvos.erro || `O sistema não respondeu agora (código ${resposta.status}). Tente de novo em instantes.`);
+      }
+      // O segundo lançamento do mesmo dia apagava o primeiro em silêncio, e
+      // com ele mudavam faturamento, ticket e a semana (QA 22/09).
+      if (dadosSalvos.substituiu) {
+        alert(`Esse dia já tinha lançamento: ${_formatarMoedaBRL(dadosSalvos.substituiu.valor)}`
+          + ` em ${dadosSalvos.substituiu.quantidade} pedido(s). Foi substituído pelo que você acabou de gravar.`);
       }
       cancelarEdicaoPresencial();
       await carregarPresencial(currentTab);
@@ -11376,7 +11401,7 @@ if (formPresencial) {
       }
     } catch (erro) {
       console.error('Falha ao salvar venda presencial:', erro);
-      alert('Não foi possível salvar o lançamento presencial. Tente de novo em instantes.');
+      alert(erro.message || 'Não foi possível salvar o lançamento presencial. Tente de novo em instantes.');
     }
   });
 }
