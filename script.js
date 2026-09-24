@@ -461,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('config-lojas-body')) {
     carregarConfigLojas();
   }
+  iniciarAbasDeConfiguracoes();
   const btnSincronizarAgora = document.getElementById('btn-sincronizar-agora');
   if (btnSincronizarAgora) {
     btnSincronizarAgora.addEventListener('click', () => sincronizarAgora());
@@ -2585,52 +2586,57 @@ async function carregarBaixaAutomatica() {
   }
 }
 
+// Desde o briefing de 24/09 a baixa não tem painel próprio: ela é a
+// última coluna da tabela de Lojas cadastradas, que se redesenha quando
+// qualquer uma das duas chamadas responde.
 function renderBaixaAutomatica(inicios) {
-  const lista = document.getElementById('baixa-automatica-lojas');
-  if (!lista) return;
+  configBaixaAutomatica = inicios || {};
+  renderConfigLojasTabela();
+}
+
+function _dataCurtaBaixa(iso) {
+  return iso.split('-').reverse().slice(0, 2).join('/');
+}
+
+// Conteúdo da célula "Baixa do estoque" de uma loja.
+function _celulaBaixaAutomatica(loja) {
+  if (!configBaixaAutomatica) return '<span class="text-muted">—</span>';
   const hoje = new Date();
   const hojeIso = _dataIsoLocal(hoje);
   const amanhaIso = _dataIsoLocal(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1));
-  const dataCurta = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
+  const inicio = configBaixaAutomatica[loja] || null;
+  const lojaAttr = escaparHtml(loja);
+  let estado;
+  let controles;
+  if (inicio && inicio > hojeIso) {
+    estado = `<span class="badge-pill neu-orange">Liga em ${_dataCurtaBaixa(inicio)}</span>`;
+    controles = `<button type="button" class="btn-secondary-sm" data-baixa-desligar="${lojaAttr}">Cancelar</button>`;
+  } else if (inicio) {
+    estado = `<span class="badge-pill pos">Ligada desde ${_dataCurtaBaixa(inicio)}</span>`;
+    controles = `<button type="button" class="btn-secondary-sm" data-baixa-desligar="${lojaAttr}">Desligar</button>`;
+  } else {
+    estado = '<span class="badge-pill badge-neutral">Desligada</span>';
+    controles = `
+      <label class="baixa-automatica-ligar">
+        a partir de
+        <input type="date" min="${hojeIso}" value="${amanhaIso}" data-baixa-inicio="${lojaAttr}">
+      </label>
+      <button type="button" class="btn-primary-sm" data-baixa-ligar="${lojaAttr}">Ligar</button>`;
+  }
+  return `<div class="baixa-celula">${estado}<div class="baixa-loja-controles">${controles}</div></div>`;
+}
 
-  lista.innerHTML = LOJAS_ESTOQUE.map((loja) => {
-    const inicio = inicios[loja] || null;
-    const lojaAttr = escaparHtml(loja);
-    let estado;
-    let controles;
-    if (inicio && inicio > hojeIso) {
-      estado = `<span class="badge-pill neu-orange">Liga em ${dataCurta(inicio)}</span>`;
-      controles = `<button type="button" class="btn-secondary-sm" data-baixa-desligar="${lojaAttr}">Cancelar</button>`;
-    } else if (inicio) {
-      estado = `<span class="badge-pill pos">Ligada desde ${dataCurta(inicio)}</span>`;
-      controles = `<button type="button" class="btn-secondary-sm" data-baixa-desligar="${lojaAttr}">Desligar</button>`;
-    } else {
-      estado = `<span class="badge-pill badge-neutral">Desligada</span>`;
-      controles = `
-        <label class="baixa-automatica-ligar">
-          Ligar a partir de
-          <input type="date" min="${hojeIso}" value="${amanhaIso}" data-baixa-inicio="${lojaAttr}">
-        </label>
-        <button type="button" class="btn-primary-sm" data-baixa-ligar="${lojaAttr}">Ligar</button>`;
-    }
-    return `
-      <div class="baixa-loja">
-        <span class="baixa-loja-nome">${lojaAttr}</span>
-        ${estado}
-        <div class="baixa-loja-controles">${controles}</div>
-      </div>`;
-  }).join('');
-
-  lista.querySelectorAll('[data-baixa-ligar]').forEach((btn) => {
+function _ligarBotoesDaBaixa(raiz) {
+  raiz.querySelectorAll('[data-baixa-ligar]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const loja = btn.dataset.baixaLigar;
-      const data = [...lista.querySelectorAll('[data-baixa-inicio]')].find((i) => i.dataset.baixaInicio === loja)?.value;
+      const data = [...raiz.querySelectorAll('[data-baixa-inicio]')].find((i) => i.dataset.baixaInicio === loja)?.value;
       if (!data) return;
-      if (!confirm(`Ligar a baixa automática de ${loja} a partir de ${dataCurta(data)}? As vendas desse dia em diante vão descontar a ficha técnica do estoque. Conte o estoque antes do primeiro pedido desse dia.`)) return;
+      if (!confirm(`Ligar a baixa automática de ${loja} a partir de ${_dataCurtaBaixa(data)}? As vendas desse dia em diante vão descontar a ficha técnica do estoque. Conte o estoque antes do primeiro pedido desse dia.`)) return;
       _salvarBaixaAutomatica(loja, data);
     });
   });
-  lista.querySelectorAll('[data-baixa-desligar]').forEach((btn) => {
+  raiz.querySelectorAll('[data-baixa-desligar]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const loja = btn.dataset.baixaDesligar;
       if (!confirm(`Desligar a baixa automática de ${loja}? O que já foi descontado continua descontado; as próximas vendas não descontam mais.`)) return;
@@ -12292,6 +12298,13 @@ async function carregarStatusSincronizacaoHome() {
  * Tela de Configurações: carrega a lista de lojas cadastradas (com o token
  * mascarado, nunca o valor real) e a data da última sincronização.
  */
+// A tabela de lojas junta duas chamadas: o cadastro/integração
+// (/api/config/lojas) e o liga-desliga da baixa de estoque
+// (/api/estoque/baixa-automatica). Cada uma guarda o que trouxe e manda
+// redesenhar — quem chegar primeiro desenha, quem chegar depois completa.
+let configLojasCadastradas = null;
+let configBaixaAutomatica = null;
+
 async function carregarConfigLojas() {
   const tbody = document.getElementById('config-lojas-body');
   const ultimaSyncElem = document.getElementById('config-ultima-sync');
@@ -12309,6 +12322,7 @@ async function carregarConfigLojas() {
     }
 
     const lojas = dados.lojas || [];
+    configLojasCadastradas = lojas;
 
     if (pillLojas) pillLojas.textContent = `${lojas.length} ${lojas.length === 1 ? 'loja conectada' : 'lojas conectadas'}`;
     if (pillSync) {
@@ -12322,23 +12336,85 @@ async function carregarConfigLojas() {
       }
     }
 
-    tbody.innerHTML = lojas.length
-      ? lojas.map(loja => `
-          <tr>
-            <td class="font-bold">${loja.nome}</td>
-            <td class="token-mascarado">${loja.tokenMascarado}</td>
-            <td>
-              <span class="badge ${loja.temPresencial ? 'badge-green' : 'badge-neutral'}">
-                ${loja.temPresencial ? 'Sim' : 'Não'}
-              </span>
-            </td>
-            <td>${_badgeSincronizacao(loja.ultimaSincronizacao)}</td>
-          </tr>
-        `).join('')
-      : `<tr><td colspan="4" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
+    renderConfigLojasTabela();
   } catch (erro) {
     console.error('Falha ao carregar lojas cadastradas:', erro);
-    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Tente de novo em instantes.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Tente de novo em instantes.</td></tr>`;
+  }
+}
+
+function renderConfigLojasTabela() {
+  const tbody = document.getElementById('config-lojas-body');
+  if (!tbody) return;
+  const lojas = configLojasCadastradas;
+  // A outra chamada pode ter respondido primeiro: sem o cadastro ainda não
+  // dá pra desenhar linha nenhuma.
+  if (!lojas) return;
+
+  tbody.innerHTML = lojas.length
+    ? lojas.map(loja => `
+        <tr>
+          <td class="font-bold">${escaparHtml(loja.nome)}</td>
+          <td class="token-mascarado">${escaparHtml(loja.tokenMascarado)}</td>
+          <td>
+            <span class="badge ${loja.temPresencial ? 'badge-green' : 'badge-neutral'}">
+              ${loja.temPresencial ? 'Sim' : 'Não'}
+            </span>
+          </td>
+          <td>${_badgeSincronizacao(loja.ultimaSincronizacao)}</td>
+          <td>${_celulaBaixaAutomatica(loja.nome)}</td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="5" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
+
+  _ligarBotoesDaBaixa(tbody);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// --- Navegação por seções (briefing 24/09) ---
+// Cada item do menu aponta pra uma .config-secao. Um item cujo conteúdo
+// inteiro está escondido pelo perfil de quem entrou (só admin vê
+// integração, equipe, registro e backup) some junto com a seção.
+function _configAbrirSecao(nome) {
+  document.querySelectorAll('#config-menu .config-menu-item').forEach((item) => {
+    item.classList.toggle('ativa', item.dataset.secao === nome);
+  });
+  document.querySelectorAll('.config-secao').forEach((secao) => {
+    secao.classList.toggle('ativa', secao.dataset.secao === nome);
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _configAtualizarAbas() {
+  const menu = document.getElementById('config-menu');
+  if (!menu) return;
+  const itens = [...menu.querySelectorAll('.config-menu-item')];
+  itens.forEach((item) => {
+    const secao = document.querySelector(`.config-secao[data-secao="${item.dataset.secao}"]`);
+    const temConteudo = Boolean(secao)
+      && [...secao.querySelectorAll('.panel')].some((painel) => painel.style.display !== 'none');
+    item.hidden = !temConteudo;
+  });
+  const visiveis = itens.filter((item) => !item.hidden);
+  if (!visiveis.length) return;
+  // Se a seção aberta sumiu pro perfil de quem entrou, abre a primeira que sobrou.
+  const atual = visiveis.find((item) => item.classList.contains('ativa'));
+  if (!atual) _configAbrirSecao(visiveis[0].dataset.secao);
+}
+
+function iniciarAbasDeConfiguracoes() {
+  const menu = document.getElementById('config-menu');
+  if (!menu) return;
+  menu.querySelectorAll('.config-menu-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      _configAbrirSecao(item.dataset.secao);
+      history.replaceState(null, '', `#${item.dataset.secao}`);
+    });
+  });
+  // configuracoes.html#equipe abre direto na seção certa.
+  const alvo = location.hash.replace('#', '');
+  if (alvo && menu.querySelector(`.config-menu-item[data-secao="${CSS.escape(alvo)}"]`)) {
+    _configAbrirSecao(alvo);
   }
 }
 
@@ -13083,11 +13159,13 @@ async function carregarUsuarioLogado() {
       painelRegistro.style.display = '';
       carregarRegistroAtividade();
     }
-    const painelBaixa = document.getElementById('painel-baixa-automatica');
-    if (painelBaixa && usuario.papel === 'admin') {
-      painelBaixa.style.display = '';
+    // A baixa de estoque virou coluna da tabela de lojas (briefing 24/09):
+    // não tem mais painel próprio pra mostrar, só a chamada.
+    if (document.getElementById('config-lojas-body') && usuario.papel === 'admin') {
       carregarBaixaAutomatica();
     }
+    // Só agora dá pra saber quais seções esse perfil enxerga.
+    _configAtualizarAbas();
     // Mais Vendidos: pra admin, a marca "não reconhecido" vira botão de vincular
     if (maisVendidosDados && usuario.papel === 'admin') renderMaisVendidos(false);
     const painelIntegracoes = document.getElementById('painel-integracoes-estoque');

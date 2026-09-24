@@ -164,293 +164,341 @@
       <!-- CONTEÚDO DA PÁGINA -->
       <div class="page-content">
 
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="settings"></i>
-            <span>PREFERÊNCIAS DO SISTEMA</span>
-          </div>
-          <div class="title-row">
-            <h1>Configurações</h1>
+        <!-- CABEÇALHO: título e situação da rede à esquerda, modo escuro à
+             direita (briefing 24/09). -->
+        <div class="config-cabecalho">
+          <div class="config-cabecalho-titulo">
+            <div class="config-titulo-linha">
+              <h1>Configurações</h1>
+              <span class="config-tag">Preferências do sistema</span>
+            </div>
             <div class="config-status-pills">
               <span class="badge-pill" id="config-status-lojas">-- lojas conectadas</span>
               <span class="badge-pill" id="config-status-sync">Verificando sincronização...</span>
             </div>
           </div>
+
+          <!-- Era um painel inteiro ("Aparência") pra um interruptor só. -->
+          <div class="config-modo-escuro">
+            <i data-lucide="moon"></i>
+            <span>Modo escuro</span>
+            <label class="theme-switch" title="Alternar Modo Escuro/Claro">
+              <input type="checkbox" id="theme-toggle-checkbox-config">
+              <span class="slider">
+                <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+                </svg>
+                <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+              </span>
+            </label>
+          </div>
         </div>
 
-        <!-- SUA CONTA -->
-        <div class="panel">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Sua Conta</h3>
-              <span class="panel-subtitle" id="conta-email-label">—</span>
-            </div>
-          </div>
-          <div class="toggle-tile">
-            <div class="toggle-tile-info">
+        <!-- DUAS COLUNAS: menu interno à esquerda, conteúdo da aba à direita.
+             Cada item do menu some sozinho quando o perfil de quem entrou não
+             tem aquela seção (só admin vê integração, equipe, registro e
+             backup) — ver _configAtualizarAbas no script.js. -->
+        <div class="config-layout">
+
+          <nav class="config-menu" id="config-menu" aria-label="Seções das configurações">
+            <button type="button" class="config-menu-item ativa" data-secao="conta">
               <i data-lucide="user-circle"></i>
-              <div>
-                <p class="toggle-tile-title" id="conta-nome-label">—</p>
-                <p class="toggle-tile-subtitle" id="conta-papel-label">—</p>
-              </div>
-            </div>
-            <button type="button" class="btn-secondary" onclick="fazerLogout()">Sair da conta</button>
-          </div>
-          <!-- Ninguém sabia que a sessão dura 7 dias, e celular emprestado no
-               salão continuava logado sem jeito de tirar de longe (QA 22/09) -->
-          <div class="toggle-tile">
-            <div class="toggle-tile-info">
-              <i data-lucide="smartphone"></i>
-              <div>
-                <p class="toggle-tile-title">Aparelhos conectados</p>
-                <p class="toggle-tile-subtitle" id="conta-sessao-label">Quem entra fica conectado por 7 dias em cada aparelho.</p>
-              </div>
-            </div>
-            <button type="button" class="btn-secondary" id="btn-sair-de-todos" onclick="sairDeTodosOsAparelhos()">Sair de todos</button>
-          </div>
-          <div class="toggle-tile">
-            <div class="toggle-tile-info">
-              <i data-lucide="key-round"></i>
-              <div>
-                <p class="toggle-tile-title">Senha</p>
-                <p class="toggle-tile-subtitle">Troque a senha da sua própria conta</p>
-              </div>
-            </div>
-            <button type="button" class="btn-secondary" onclick="abrirModalTrocarSenha()">Trocar senha</button>
-          </div>
-        </div>
+              <span>
+                <strong>Minha conta</strong>
+                <small>Perfil, aparelhos e senha</small>
+              </span>
+            </button>
+            <button type="button" class="config-menu-item" data-secao="integracao">
+              <i data-lucide="store"></i>
+              <span>
+                <strong>Integração &amp; lojas</strong>
+                <small>Cardápio Web, tokens e baixa do estoque</small>
+              </span>
+            </button>
+            <button type="button" class="config-menu-item" data-secao="equipe">
+              <i data-lucide="users"></i>
+              <span>
+                <strong>Equipe &amp; permissões</strong>
+                <small>Quem entra e com qual perfil</small>
+              </span>
+            </button>
+            <button type="button" class="config-menu-item" data-secao="registro">
+              <i data-lucide="scroll-text"></i>
+              <span>
+                <strong>Registro de atividade</strong>
+                <small>Quem mexeu em quê</small>
+              </span>
+            </button>
+            <button type="button" class="config-menu-item" data-secao="backup">
+              <i data-lucide="hard-drive-download"></i>
+              <span>
+                <strong>Backup &amp; segurança</strong>
+                <small>Cópia de segurança e zona de perigo</small>
+              </span>
+            </button>
+          </nav>
 
-        <!-- APARÊNCIA + SINCRONIZAÇÃO -->
-        <div class="config-row">
-          <div class="panel">
-            <div class="panel-header">
-              <h3 class="panel-title">Aparência</h3>
-              <span class="panel-subtitle">Vale pra todas as telas do sistema</span>
-            </div>
-            <div class="toggle-tile">
-              <div class="toggle-tile-info">
-                <i data-lucide="moon"></i>
-                <div>
-                  <p class="toggle-tile-title">Modo escuro</p>
-                  <p class="toggle-tile-subtitle">Aplica em Resumo, Insights, Estoque e ClickUp</p>
+          <div class="config-conteudo">
+
+            <!-- ================= MINHA CONTA ================= -->
+            <section class="config-secao ativa" data-secao="conta">
+              <div class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Sua Conta</h3>
+                    <span class="panel-subtitle" id="conta-email-label">—</span>
+                  </div>
+                </div>
+                <!-- Perfil e senha lado a lado; aparelhos ocupa a linha
+                     inteira embaixo (briefing 24/09). -->
+                <div class="config-conta-grade">
+                  <div class="toggle-tile">
+                    <div class="toggle-tile-info">
+                      <i data-lucide="user-circle"></i>
+                      <div>
+                        <p class="toggle-tile-title" id="conta-nome-label">—</p>
+                        <p class="toggle-tile-subtitle" id="conta-papel-label">—</p>
+                      </div>
+                    </div>
+                    <button type="button" class="btn-secondary" onclick="fazerLogout()">Sair da conta</button>
+                  </div>
+                  <div class="toggle-tile">
+                    <div class="toggle-tile-info">
+                      <i data-lucide="key-round"></i>
+                      <div>
+                        <p class="toggle-tile-title">Senha</p>
+                        <p class="toggle-tile-subtitle">Troque a senha da sua própria conta</p>
+                      </div>
+                    </div>
+                    <button type="button" class="btn-secondary" onclick="abrirModalTrocarSenha()">Trocar senha</button>
+                  </div>
+                  <!-- Ninguém sabia que a sessão dura 7 dias, e celular emprestado no
+                       salão continuava logado sem jeito de tirar de longe (QA 22/09) -->
+                  <div class="toggle-tile config-conta-largo">
+                    <div class="toggle-tile-info">
+                      <i data-lucide="smartphone"></i>
+                      <div>
+                        <p class="toggle-tile-title">Aparelhos conectados</p>
+                        <p class="toggle-tile-subtitle" id="conta-sessao-label">Quem entra fica conectado por 7 dias em cada aparelho.</p>
+                      </div>
+                    </div>
+                    <button type="button" class="btn-secondary" id="btn-sair-de-todos" onclick="sairDeTodosOsAparelhos()">Sair de todos</button>
+                  </div>
                 </div>
               </div>
-              <label class="theme-switch" title="Alternar Modo Escuro/Claro">
-                <input type="checkbox" id="theme-toggle-checkbox-config">
-                <span class="slider">
-                  <svg class="sun-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
-                  </svg>
-                  <svg class="moon-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                  </svg>
-                </span>
-              </label>
-            </div>
-          </div>
+            </section>
 
-          <div class="panel" id="painel-sincronizacao" style="display:none;">
-            <div class="panel-header">
-              <h3 class="panel-title">Sincronização com a Cardápio Web</h3>
-              <span class="panel-subtitle">Última sincronização: <span id="config-ultima-sync">—</span></span>
-            </div>
+            <!-- ============ INTEGRAÇÃO & LOJAS ============ -->
+            <section class="config-secao" data-secao="integracao">
+              <div class="panel" id="painel-sincronizacao" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Sincronização com a Cardápio Web</h3>
+                    <span class="panel-subtitle">Última sincronização: <span id="config-ultima-sync">—</span></span>
+                  </div>
+                  <button type="button" class="btn-whatsapp" id="btn-sincronizar-agora">
+                    <i data-lucide="refresh-cw"></i>
+                    <span>Sincronizar agora</span>
+                  </button>
+                </div>
 
-            <div class="sync-info">
-              <i data-lucide="clock"></i>
-              <p>Automática: de <strong>15 em 15 minutos</strong> pro dia de hoje e às <strong>03:00</strong> reconferindo os últimos 7 dias (horário de Brasília).</p>
-            </div>
+                <div class="sync-info">
+                  <i data-lucide="clock"></i>
+                  <p>Automática: de <strong>15 em 15 minutos</strong> pro dia de hoje e às <strong>03:00</strong> reconferindo os últimos 7 dias (horário de Brasília).</p>
+                </div>
 
-            <button type="button" class="btn-whatsapp" id="btn-sincronizar-agora">
-              <i data-lucide="refresh-cw"></i>
-              <span>Sincronizar agora</span>
-            </button>
-
-            <div id="sync-resultado" class="sync-resultado"></div>
-          </div>
-        </div>
-
-        <!-- LOJAS CADASTRADAS -->
-        <div class="panel panel-table" id="painel-lojas" style="display:none;">
-          <div class="panel-header">
-            <h3 class="panel-title">Lojas Cadastradas</h3>
-            <span class="panel-subtitle">Integração com a Cardápio Web</span>
-          </div>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Unidade</th>
-                  <th>Token da Cardápio Web</th>
-                  <th>Vendas Presenciais</th>
-                  <th>Última Sincronização</th>
-                </tr>
-              </thead>
-              <tbody id="config-lojas-body">
-                <tr><td colspan="4" class="panel-subtitle">Carregando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- BAIXA AUTOMÁTICA DO ESTOQUE (só admin). A fila de vendas não
-             reconhecidas, que ficava junto, foi pra Insights → Mais Vendidos em 2026-09-14 -->
-        <div class="panel" id="painel-baixa-automatica" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Baixa automática do estoque</h3>
-              <span class="panel-subtitle">Ligada, cada venda desconta a ficha técnica do estoque da loja. Conte o estoque antes do primeiro pedido do dia em que ela liga.</span>
-            </div>
-          </div>
-          <div class="baixa-lojas" id="baixa-automatica-lojas">
-            <!-- Uma linha por loja — renderizado via JS (renderBaixaAutomatica) -->
-          </div>
-        </div>
-
-        <!-- FUNCIONÁRIOS (só visível/habilitado pra quem é admin) -->
-        <div class="panel panel-table" id="painel-equipe" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Funcionários</h3>
-              <span class="panel-subtitle">Quem entra no sistema, com qual perfil e em qual loja</span>
-            </div>
-            <button type="button" class="btn-primary" onclick="abrirModalNovoUsuario()">+ Adicionar funcionário</button>
-          </div>
-          <div class="perfis-legenda">
-            <div><strong>Admin</strong><span>A rede inteira: tudo o que existe no sistema, inclusive esta tela.</span></div>
-            <div><strong>Gerente</strong><span>Uma loja: compras, estoque, ficha técnica e as vendas dela.</span></div>
-            <div><strong>Operação</strong><span>Uma loja, o dia a dia: contagem, recebimento e consulta de ficha.</span></div>
-          </div>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>E-mail</th>
-                  <th>Perfil</th>
-                  <th>Loja</th>
-                  <th>Status</th>
-                  <th style="text-align:right;">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="equipe-tbody">
-                <tr><td colspan="6" class="panel-subtitle">Carregando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- REGISTRO DE ATIVIDADE (só admin) -->
-        <div class="panel panel-table" id="painel-registro" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Registro de atividade</h3>
-              <span class="panel-subtitle">Quem mexeu em quê, com data e hora</span>
-            </div>
-            <!-- Sem filtro por pessoa e sem busca, e cortando em 300 linhas
-                 sem dizer que cortou (QA 22/09) -->
-            <div class="registro-filtros">
-              <div class="search-box registro-busca">
-                <i data-lucide="search"></i>
-                <input type="search" id="registro-busca" placeholder="Buscar ação, pessoa ou detalhe...">
+                <div id="sync-resultado" class="sync-resultado"></div>
               </div>
-              <div class="select-wrapper">
-                <select id="registro-filtro-pessoa">
-                  <option value="">Todo mundo</option>
-                </select>
-                <i data-lucide="chevron-down"></i>
-              </div>
-              <div class="select-wrapper">
-                <select id="registro-filtro-dias">
-                  <option value="1">Hoje</option>
-                  <option value="7" selected>Últimos 7 dias</option>
-                  <option value="30">Últimos 30 dias</option>
-                  <option value="90">Últimos 90 dias</option>
-                </select>
-                <i data-lucide="chevron-down"></i>
-              </div>
-            </div>
-          </div>
-          <p class="panel-subtitle registro-aviso" id="registro-aviso-corte" hidden></p>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Quando</th>
-                  <th>Quem</th>
-                  <th>Ação</th>
-                  <th>Detalhe</th>
-                </tr>
-              </thead>
-              <tbody id="registro-tbody">
-                <tr><td colspan="4" class="panel-subtitle">Carregando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        <!-- CÓPIA DE SEGURANÇA (só admin) -->
-        <div class="panel" id="painel-backup" style="display:none;">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Cópia de segurança</h3>
-              <span class="panel-subtitle">Todo o sistema num arquivo só — histórico, estoque, fichas e notas</span>
-            </div>
-            <button type="button" class="btn-secondary" id="btn-gerar-backup">Gerar cópia agora</button>
-          </div>
-          <div class="backup-resumo" id="backup-resumo">
-            <span class="panel-subtitle">Carregando...</span>
-          </div>
-          <div class="backup-aviso">
-            <i data-lucide="shield-alert"></i>
-            <div>
-              <strong>A cópia automática fica no mesmo servidor.</strong>
-              Ela salva de erro de operação e de banco corrompido, mas não de perder o servidor.
-              Baixe a cópia completa de vez em quando e guarde fora daqui (computador, Drive, HD).
-            </div>
-          </div>
-          <div class="backup-acoes">
-            <!-- Era um link solto: clicava e ficava sem nenhum sinal enquanto
-                 o servidor montava o .zip, que com banco grande demora
-                 (QA 22/09) -->
-            <button type="button" class="btn-primary" id="btn-backup-completo" onclick="baixarCopiaCompleta()">
-              <i data-lucide="download"></i>
-              <span id="btn-backup-completo-texto">Baixar cópia completa (.zip)</span>
-            </button>
-            <span class="panel-subtitle" id="backup-completo-aviso" hidden></span>
-          </div>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Cópia</th>
-                  <th>Tamanho</th>
-                  <th style="text-align:right;">Baixar</th>
-                </tr>
-              </thead>
-              <tbody id="backup-tbody">
-                <tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+              <!-- A baixa automática virou coluna desta tabela: era um painel
+                   inteiro repetindo os mesmos quatro nomes de loja logo
+                   abaixo (briefing 24/09). -->
+              <div class="panel panel-table" id="painel-lojas" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Lojas cadastradas</h3>
+                    <span class="panel-subtitle">Integração com a Cardápio Web e baixa de estoque por ficha técnica</span>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="config-denso">
+                    <thead>
+                      <tr>
+                        <th>Unidade</th>
+                        <th>Token da Cardápio Web</th>
+                        <th>Presencial</th>
+                        <th>Última sincronização</th>
+                        <th>Baixa do estoque</th>
+                      </tr>
+                    </thead>
+                    <tbody id="config-lojas-body">
+                      <tr><td colspan="5" class="panel-subtitle">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="panel-subtitle config-nota-baixa">
+                  Com a baixa ligada, cada venda desconta a ficha técnica do estoque daquela loja.
+                  Conte o estoque antes do primeiro pedido do dia em que ela liga.
+                </p>
+              </div>
+            </section>
 
-        <!-- ZONA DE PERIGO (só admin) -->
-        <div class="panel" id="painel-zona-perigo" style="display:none; border-color: var(--danger);">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title" style="color: var(--danger);">Zona de perigo</h3>
-              <span class="panel-subtitle">Ações que não podem ser desfeitas</span>
-            </div>
-          </div>
-          <div style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-4); flex-wrap: wrap;">
-            <div>
-              <strong>Limpar requisições e cotações</strong>
-              <p class="panel-subtitle" style="margin-top: 4px;">
-                Apaga TODO o histórico de requisições, contagens, cotações e pedidos de compra. Não mexe no estoque atual nem no cadastro de insumos/fornecedores.
-              </p>
-            </div>
-            <button type="button" class="btn-secondary" id="btn-limpar-requisicoes-cotacoes" style="border-color: var(--danger); color: var(--danger);">Limpar requisições e cotações</button>
+            <!-- ============ EQUIPE & PERMISSÕES ============ -->
+            <section class="config-secao" data-secao="equipe">
+              <div class="panel panel-table" id="painel-equipe" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Funcionários</h3>
+                    <span class="panel-subtitle">Quem entra no sistema, com qual perfil e em qual loja</span>
+                  </div>
+                  <button type="button" class="btn-primary" onclick="abrirModalNovoUsuario()">+ Adicionar funcionário</button>
+                </div>
+                <div class="perfis-legenda">
+                  <div><strong>Admin</strong><span>A rede inteira: tudo o que existe no sistema, inclusive esta tela.</span></div>
+                  <div><strong>Gerente</strong><span>Uma loja: compras, estoque, ficha técnica e as vendas dela.</span></div>
+                  <div><strong>Operação</strong><span>Uma loja, o dia a dia: contagem, recebimento e consulta de ficha.</span></div>
+                </div>
+                <div class="table-responsive">
+                  <table class="config-denso">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>E-mail</th>
+                        <th>Perfil</th>
+                        <th>Loja</th>
+                        <th>Status</th>
+                        <th style="text-align:right;">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="equipe-tbody">
+                      <tr><td colspan="6" class="panel-subtitle">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- ============ REGISTRO DE ATIVIDADE ============ -->
+            <section class="config-secao" data-secao="registro">
+              <div class="panel panel-table" id="painel-registro" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Registro de atividade</h3>
+                    <span class="panel-subtitle">Quem mexeu em quê, com data e hora</span>
+                  </div>
+                  <!-- Sem filtro por pessoa e sem busca, e cortando em 300 linhas
+                       sem dizer que cortou (QA 22/09) -->
+                  <div class="registro-filtros">
+                    <div class="search-box registro-busca">
+                      <i data-lucide="search"></i>
+                      <input type="search" id="registro-busca" placeholder="Buscar ação, pessoa ou detalhe...">
+                    </div>
+                    <div class="select-wrapper">
+                      <select id="registro-filtro-pessoa">
+                        <option value="">Todo mundo</option>
+                      </select>
+                      <i data-lucide="chevron-down"></i>
+                    </div>
+                    <div class="select-wrapper">
+                      <select id="registro-filtro-dias">
+                        <option value="1">Hoje</option>
+                        <option value="7" selected>Últimos 7 dias</option>
+                        <option value="30">Últimos 30 dias</option>
+                        <option value="90">Últimos 90 dias</option>
+                      </select>
+                      <i data-lucide="chevron-down"></i>
+                    </div>
+                  </div>
+                </div>
+                <p class="panel-subtitle registro-aviso" id="registro-aviso-corte" hidden></p>
+                <div class="table-responsive">
+                  <table class="config-denso">
+                    <thead>
+                      <tr>
+                        <th>Quando</th>
+                        <th>Quem</th>
+                        <th>Ação</th>
+                        <th>Detalhe</th>
+                      </tr>
+                    </thead>
+                    <tbody id="registro-tbody">
+                      <tr><td colspan="4" class="panel-subtitle">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- ============ BACKUP & SEGURANÇA ============ -->
+            <section class="config-secao" data-secao="backup">
+              <div class="panel" id="painel-backup" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Cópia de segurança</h3>
+                    <span class="panel-subtitle">Todo o sistema num arquivo só — histórico, estoque, fichas e notas</span>
+                  </div>
+                  <button type="button" class="btn-secondary" id="btn-gerar-backup">Gerar cópia agora</button>
+                </div>
+                <div class="backup-resumo" id="backup-resumo">
+                  <span class="panel-subtitle">Carregando...</span>
+                </div>
+                <div class="backup-aviso">
+                  <i data-lucide="shield-alert"></i>
+                  <div>
+                    <strong>A cópia automática fica no mesmo servidor.</strong>
+                    Ela salva de erro de operação e de banco corrompido, mas não de perder o servidor.
+                    Baixe a cópia completa de vez em quando e guarde fora daqui (computador, Drive, HD).
+                  </div>
+                </div>
+                <div class="backup-acoes">
+                  <!-- Era um link solto: clicava e ficava sem nenhum sinal enquanto
+                       o servidor montava o .zip, que com banco grande demora
+                       (QA 22/09) -->
+                  <button type="button" class="btn-primary" id="btn-backup-completo" onclick="baixarCopiaCompleta()">
+                    <i data-lucide="download"></i>
+                    <span id="btn-backup-completo-texto">Baixar cópia completa (.zip)</span>
+                  </button>
+                  <span class="panel-subtitle" id="backup-completo-aviso" hidden></span>
+                </div>
+                <div class="table-responsive">
+                  <table class="config-denso">
+                    <thead>
+                      <tr>
+                        <th>Cópia</th>
+                        <th>Tamanho</th>
+                        <th style="text-align:right;">Baixar</th>
+                      </tr>
+                    </thead>
+                    <tbody id="backup-tbody">
+                      <tr><td colspan="3" class="panel-subtitle">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- ZONA DE PERIGO (só admin) -->
+              <div class="panel config-zona-perigo" id="painel-zona-perigo" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Zona de perigo</h3>
+                    <span class="panel-subtitle">Ações que não podem ser desfeitas</span>
+                  </div>
+                </div>
+                <div class="config-zona-perigo-linha">
+                  <div>
+                    <strong>Limpar requisições e cotações</strong>
+                    <p class="panel-subtitle">
+                      Apaga TODO o histórico de requisições, contagens, cotações e pedidos de compra. Não mexe no estoque atual nem no cadastro de insumos/fornecedores.
+                    </p>
+                  </div>
+                  <button type="button" class="btn-perigo-contorno" id="btn-limpar-requisicoes-cotacoes">Limpar requisições e cotações</button>
+                </div>
+              </div>
+            </section>
+
           </div>
         </div>
 

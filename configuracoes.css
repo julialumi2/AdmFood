@@ -1,7 +1,40 @@
 /* Estilos específicos da tela de Configurações — a base compartilhada
    (sidebar, cabeçalho, painéis, tabelas, botões) está em theme.css */
 
-.page-content { max-width: 860px; }
+/* Era 860px pra uma página só de rolagem. Com o menu interno de um lado
+   e o conteúdo do outro, a tela precisa da largura. */
+.page-content { max-width: 1280px; gap: var(--space-5); }
+
+/* --- Cabeçalho ----------------------------------------------------------- */
+.config-cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.config-cabecalho-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.config-titulo-linha {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.config-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
 
 .config-status-pills {
   display: flex;
@@ -9,18 +42,120 @@
   gap: var(--space-2);
 }
 
-.config-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-6);
+/* O modo escuro ocupava um painel inteiro; aqui ele é só o interruptor. */
+.config-modo-escuro {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px var(--space-3) 8px var(--space-4);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* min-width: 0 — sem isso, um item de grid não encolhe abaixo do tamanho
-   mínimo do conteúdo, o que pode empurrar a página pra fora da tela no
-   celular (mesmo problema já visto no painel de canais do Insights). */
-.config-row > .panel {
+.config-modo-escuro i,
+.config-modo-escuro svg { width: 15px; height: 15px; color: var(--text-faint); }
+
+/* --- Duas colunas: menu interno e conteúdo da seção ---------------------- */
+.config-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(0, 4fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.config-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: var(--space-4);
+}
+
+.config-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* `display: flex` acima ganha do `hidden`, e o item de uma seção que o
+   perfil não enxerga continuaria na tela levando a um painel vazio. */
+.config-menu-item[hidden] { display: none; }
+
+.config-menu-item i,
+.config-menu-item svg { width: 17px; height: 17px; flex-shrink: 0; margin-top: 1px; }
+
+.config-menu-item span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
 }
+
+.config-menu-item strong { font-size: 0.85rem; font-weight: 600; }
+
+.config-menu-item small {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  line-height: 1.35;
+}
+
+.config-menu-item:hover { background-color: var(--surface-muted); color: var(--text-dark); }
+
+.config-menu-item.ativa {
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+}
+
+.config-menu-item.ativa strong { font-weight: 700; }
+
+.config-conteudo { min-width: 0; }
+
+/* Só a seção aberta ocupa lugar. */
+.config-secao { display: none; }
+
+.config-secao.ativa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .config-layout { grid-template-columns: minmax(0, 1fr); }
+  .config-menu { position: static; flex-direction: row; overflow-x: auto; }
+  .config-menu-item { flex-shrink: 0; }
+  .config-menu-item small { display: none; }
+}
+
+/* Perfil e senha lado a lado; aparelhos conectados na linha inteira. */
+.config-conta-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-3);
+}
+
+.config-conta-grade > .toggle-tile { min-width: 0; }
+.config-conta-largo { grid-column: 1 / -1; }
 
 .toggle-tile {
   display: flex;
@@ -88,8 +223,6 @@
    manual) estão em theme.css — reaproveitados também na Home. */
 
 @media (max-width: 768px) {
-  .config-row { grid-template-columns: 1fr; }
-
   .toggle-tile { flex-wrap: wrap; }
 
   .btn-whatsapp {
@@ -101,47 +234,35 @@
 
 /* Baixa automática do estoque: uma linha por loja (a fila de vendas não
    reconhecidas foi pra Insights → Mais Vendidos em 2026-09-14). */
-.baixa-lojas {
+/* A baixa automática deixou de ser um painel com os mesmos quatro nomes
+   de loja repetidos e virou a última coluna da tabela de lojas: estado em
+   cima, o que fazer embaixo (briefing 24/09). */
+.baixa-celula {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-}
-
-.baixa-loja {
-  display: grid;
-  grid-template-columns: minmax(170px, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-3);
-  background: var(--surface-muted);
-  border: 1px solid var(--surface-muted-border);
-  border-radius: var(--radius-sm);
-}
-
-.baixa-loja-nome {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--text-dark);
+  align-items: flex-start;
+  gap: 5px;
 }
 
 .baixa-loja-controles {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
-@media (max-width: 640px) {
-  .baixa-loja { grid-template-columns: 1fr auto; }
-  .baixa-loja-controles { grid-column: 1 / -1; justify-content: flex-start; }
+.config-nota-baixa {
+  padding: 0 var(--space-5) var(--space-4);
+  line-height: 1.45;
 }
 
 .baixa-automatica-ligar {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: 0.85rem;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .baixa-automatica-ligar input[type="date"] {
@@ -247,12 +368,20 @@
   color: var(--text-muted);
 }
 
+/* JSON não se lê em fonte proporcional, e cortar numa linha só escondia
+   metade do detalhe. Monoespaçada, duas linhas no máximo, o resto no
+   title (briefing 24/09). */
 .registro-detalhe {
-  max-width: 320px;
+  max-width: 380px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.78rem;
 }
 
 /* Filtro por pessoa e busca no registro, e o aviso de que a lista foi
@@ -325,3 +454,69 @@
 
 .backup-ok { color: var(--text-faint); }
 .backup-alerta { color: var(--danger-texto); font-weight: 600; }
+
+
+/* --- Densidade das tabelas (briefing 24/09) ------------------------------ */
+/* Funcionários, registro e lojas cabem muito mais linha por tela com o
+   respiro vertical menor — a leitura não sofre porque a coluna continua
+   com o mesmo respiro lateral. */
+.config-denso th {
+  padding: 9px var(--space-5);
+  font-size: 0.65rem;
+}
+
+.config-denso td {
+  padding: 9px var(--space-5);
+  font-size: 0.82rem;
+  vertical-align: middle;
+}
+
+.config-denso .token-mascarado { font-size: 0.76rem; }
+
+/* --- Zona de perigo ------------------------------------------------------ */
+/* Isolada: borda vermelha, fundo levemente tingido e o botão só de
+   contorno, pra não parecer um botão comum. */
+.config-zona-perigo {
+  border-color: var(--danger);
+  background-color: var(--danger-soft);
+}
+
+.config-zona-perigo .panel-title { color: var(--danger-texto); }
+
+.config-zona-perigo-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.config-zona-perigo-linha strong { font-size: 0.9rem; color: var(--text-dark); }
+.config-zona-perigo-linha .panel-subtitle { margin-top: 4px; max-width: 62ch; }
+
+.btn-perigo-contorno {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--danger-texto);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-perigo-contorno:hover {
+  background-color: var(--danger);
+  color: #ffffff;
+}
+
+.btn-perigo-contorno:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
