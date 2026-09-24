@@ -1463,6 +1463,22 @@ def salvar_faturamento_canal_semanal_se_ausente(unidade, periodo_inicio_iso, per
         return True
 
 
+def substituir_semana_importada(unidade, periodo_inicio_iso):
+    """Apaga o que foi gravado de uma semana (canais e resultado), pra
+    reimportação poder corrigir. A importação nunca sobrescreve — o que é
+    certo pro uso normal, mas deixava valor errado gravado pra sempre quando
+    o erro estava na planilha antiga (QA 22/09)."""
+    with conexao() as conn:
+        conn.execute(
+            "DELETE FROM faturamento_canal_semanal WHERE unidade = ? AND periodo_inicio = ?",
+            (unidade, periodo_inicio_iso),
+        )
+        conn.execute(
+            "DELETE FROM resultado_semanal WHERE unidade = ? AND periodo_inicio = ?",
+            (unidade, periodo_inicio_iso),
+        )
+
+
 def salvar_resultado_semanal(unidade, periodo_inicio_iso, periodo_fim_iso, cmv, promo_loja):
     """Grava CMV/promoção de uma semana **sobrescrevendo** o que estiver lá.
     Diferente de `salvar_resultado_semanal_se_ausente` (usada na importação,

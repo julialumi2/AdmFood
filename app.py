@@ -36,6 +36,7 @@ from backend.armazenamento import (
     listar_faturamento_canal_semanal,
     listar_resultado_semanal,
     salvar_resultado_semanal_se_ausente,
+    substituir_semana_importada,
     salvar_resultado_semanal,
     salvar_faturamento_canal_semanal_se_ausente,
     listar_tarefas,
@@ -6340,13 +6341,25 @@ def api_importar_faturamento_semanal():
     except Exception as erro_leitura:
         return jsonify({"erro": f"Não foi possível ler a planilha: {erro_leitura}"}), 400
 
-    gravadas = existentes = 0
+    # Corrigir a planilha e subir de novo não consertava nada: a importação
+    # nunca sobrescreve. Com "substituir", a semana que vier na planilha é
+    # regravada do zero (QA 22/09).
+    substituir = str(request.form.get('substituir', '')).lower() in ('1', 'true', 'on')
+    hoje = date.today()
+    gravadas = existentes = substituidas = 0
+    no_futuro = []
     semanas_por_loja = {}
     for loja, semanas in por_loja.items():
         if loja not in LOJAS:
             continue
         semanas_por_loja[loja] = len(semanas)
         for inicio, fim, canais, extras in semanas:
+            # Semana virando o ano ia toda pro futuro e ninguém via (QA 22/09).
+            if inicio > hoje:
+                no_futuro.append(f"{loja}: {inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}")
+            if substituir:
+                substituir_semana_importada(loja, inicio.isoformat())
+                substituidas += 1
             for canal, valor in canais.items():
                 if salvar_faturamento_canal_semanal_se_ausente(
                     loja, inicio.isoformat(), fim.isoformat(), canal, valor
@@ -6358,7 +6371,13 @@ def api_importar_faturamento_semanal():
                 loja, inicio.isoformat(), fim.isoformat(), extras['cmv'], extras['promoLoja']
             )
 
+    if no_futuro:
+        avisos.append(
+            "Semana(s) com data no futuro — quase sempre é o ano inferido errado numa semana que vira o ano: "
+            + ", ".join(no_futuro[:6])
+        )
     return jsonify({
+        "substituidas": substituidas,
         "gravadas": gravadas,
         "jaExistiam": existentes,
         "semanasPorLoja": semanas_por_loja,

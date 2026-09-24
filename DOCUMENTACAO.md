@@ -5274,3 +5274,33 @@ recusados — antes dava pra lançar em 2027 e o valor sumia do período.
   valor cheio agora está no tooltip do total e de cada coluna.
 - **"Não reconhecido" só era ação pra admin** — o gerente via a etiqueta e não
   tinha o que fazer. Agora a etiqueta dele diz que vincular é coisa de admin.
+
+### 6.87 Médios de Vendas Semanais
+
+- **Uma coluna a mais na planilha corrompia o CMV em silêncio.** As colunas
+  eram lidas por posição fixa: quem inserisse uma coluna fazia o "TOTAL" cair
+  no lugar do CMV, e a semana virava ~100% ("ruim") sem uma palavra. Agora o
+  cabeçalho é lido primeiro e cada coluna é achada pelo nome (iFood, Catalog,
+  99, Portal, CMV, Promo); sem cabeçalho reconhecível, cai nas posições de
+  sempre **e avisa**. Conferido com uma planilha de coluna a mais: o CMV sai
+  1100, como deve — antes sairia 3800.
+- **Valor escrito como texto sumia do canal.** "R$ 1.234,56" digitado como
+  texto virava nada; agora é lido.
+- **Importar a planilha corrigida não consertava nada.** A importação nunca
+  sobrescreve o que já está gravado — certo pro uso normal, mas quando o erro
+  está no que já foi gravado (semana que virou o ano e caiu no futuro, CMV
+  corrompido) o valor errado ficava lá pra sempre. Agora, quando algo já
+  existe, a tela oferece **regravar aquelas semanas com o que está na
+  planilha**. Conferido: com o valor corrigido de 12.542,79 pra 9.999, sem
+  regravar nada muda; regravando, o banco passa a valer o novo.
+- **Semana com data no futuro** — quase sempre o ano inferido errado numa
+  semana que vira o ano — agora sai como aviso na importação.
+- **O CMV era salvo ao sair do campo**, sem confirmação, sem aviso de sucesso
+  e sem validar nada. Agora CMV maior que o faturamento da semana pergunta
+  antes (é o que deixa a semana "ruim"), cancelar devolve o valor de antes, e
+  o campo pisca em verde quando grava.
+- **A fita não tinha eixo de valor:** o número só aparecia passando o mouse, o
+  que no celular não existe. Agora a escala fica escrita à esquerda e a semana
+  escolhida mostra valor e CMV embaixo.
+- **A tabela de 9 colunas** rolava de lado no celular sem dizer; ganhou a
+  dica.

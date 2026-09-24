@@ -235,7 +235,13 @@
               <span><i style="background:#cbbfae"></i>sem CMV</span>
             </div>
           </div>
-          <div class="fita" id="fita"><!-- Renderizado dinamicamente via JS --></div>
+          <!-- A fita não tinha eixo de valor: o número só aparecia passando
+               o mouse, o que no celular não existe (QA 22/09). -->
+          <div class="fita-area">
+            <div class="fita-eixo-valor" id="fita-eixo-valor" aria-hidden="true"></div>
+            <div class="fita" id="fita"><!-- Renderizado dinamicamente via JS --></div>
+          </div>
+          <p class="fita-selecionada" id="fita-selecionada"></p>
           <div class="fita-eixo">
             <span id="fita-eixo-inicio"></span>
             <span id="fita-eixo-fim"></span>
@@ -250,7 +256,7 @@
               <p class="table-subtitle" id="vendas-semanais-subtitulo">—</p>
             </div>
           </div>
-          <div class="table-responsive">
+          <div class="table-responsive vendas-semanais-tabela-wrap">
             <table class="inventory-table">
               <thead>
                 <tr>

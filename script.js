@@ -15908,6 +15908,21 @@ function renderVendasSemanais() {
       </button>
     `;
   }).join('');
+  // A fita não tinha eixo de valor: o número só aparecia passando o mouse, o
+  // que no celular não existe (QA 22/09). Agora o topo e o meio da escala
+  // ficam escritos, e a semana escolhida diz o valor embaixo.
+  const eixoValor = document.getElementById('fita-eixo-valor');
+  if (eixoValor) {
+    eixoValor.innerHTML = [maiorTotal, maiorTotal / 2].map((valor, i) => `
+      <span style="bottom: ${i === 0 ? 100 : 50}%">R$ ${escaparHtml(_formatarMoedaCompacta(valor))}</span>
+    `).join('');
+  }
+  const eixoSelecionada = document.getElementById('fita-selecionada');
+  if (eixoSelecionada) {
+    eixoSelecionada.textContent =
+      `${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)}: R$ ${_formatarMoedaBR(semana.total)}`
+      + (semana.pctCmv !== null ? ` · CMV ${_pctBR(semana.pctCmv)}` : ' · sem CMV');
+  }
   fitaCard.style.display = '';
 
   const primeira = cronologica[0];
@@ -15931,10 +15946,19 @@ function renderVendasSemanais() {
 
   document.querySelectorAll('[data-campo-semana]').forEach((input) => {
     input.addEventListener('change', async () => {
+      const anterior = input.dataset.valorAnterior ?? '';
       try {
         await _salvarResultadoSemana(semana, input.dataset.campoSemana, input.value);
+        input.dataset.valorAnterior = input.value;
+        // Salvava em silêncio: nada dizia que tinha dado certo (QA 22/09).
+        input.classList.add('campo-salvo');
+        setTimeout(() => input.classList.remove('campo-salvo'), 1500);
         await carregarVendasSemanais(vendasSemanaisLojaAtual);
       } catch (erro) {
+        if (erro.message === 'cancelado') {
+          input.value = anterior;
+          return;
+        }
         console.error('Falha ao salvar CMV/promoção da semana:', erro);
         alert(erro.message || 'Não foi possível salvar.');
       }
@@ -15955,7 +15979,8 @@ function _valorEditavelHTML(campo, valor, isAdmin) {
   return `<span class="semana-valor-editavel">
     <span class="prefixo-moeda">R$</span>
     <input type="number" step="0.01" min="0" data-campo-semana="${campo}"
-      value="${valor !== null && valor !== undefined ? valor : ''}" placeholder="—"
+      value="${valor !== null && valor !== undefined ? valor : ''}"
+      data-valor-anterior="${valor !== null && valor !== undefined ? valor : ''}" placeholder="—"
       aria-label="${campo === 'cmv' ? 'CMV da semana' : 'Promoção da loja na semana'}">
   </span>`;
 }
@@ -15969,6 +15994,17 @@ async function _salvarResultadoSemana(semana, campo, valor) {
     promoLoja: semana.promoLoja,
   };
   corpo[campo] = valor === '' ? null : valor;
+  // Era salvo ao sair do campo, sem aviso nenhum e sem conferir se o CMV
+  // fazia sentido: CMV maior que o faturamento da semana passava direto e a
+  // semana virava "ruim" sem explicação (QA 22/09).
+  if (campo === 'cmv' && valor !== '' && valor !== null) {
+    const faturamento = semana.total || 0;
+    if (faturamento > 0 && Number(valor) > faturamento
+      && !confirm(`O CMV de ${_formatarMoedaBRL(Number(valor))} é maior que o faturamento da semana (${_formatarMoedaBRL(faturamento)}).`
+        + String.fromCharCode(10) + String.fromCharCode(10) + 'Isso deixa a semana como "ruim". Gravar assim mesmo?')) {
+      throw new Error('cancelado');
+    }
+  }
   const resposta = await fetch('/api/faturamento-semanal/resultado', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -16062,9 +16098,29 @@ async function importarPlanilhaVendasSemanais(event) {
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao importar');
 
     const partes = [];
+    if (dados.substituidas) partes.push(`${dados.substituidas} semana(s) regravada(s) pela planilha`);
     if (dados.gravadas) partes.push(`${dados.gravadas} valor(es) novo(s) gravado(s)`);
     if (dados.jaExistiam) partes.push(`${dados.jaExistiam} já estavam no sistema e ficaram como estavam`);
     if (!partes.length) partes.push('nada novo pra gravar');
+    // Corrigir a planilha e subir de novo não consertava nada: a importação
+    // nunca sobrescreve o que já está gravado (QA 22/09).
+    if (dados.jaExistiam && !dados.substituidas) {
+      const SALTO = String.fromCharCode(10);
+      if (confirm(`${dados.jaExistiam} valor(es) dessa planilha já estavam no sistema e ficaram como estavam.`
+        + SALTO + SALTO
+        + 'Se você corrigiu a planilha e quer que o sistema passe a valer o que está nela, dá pra regravar essas semanas.'
+        + SALTO + SALTO + 'Regravar agora?')) {
+        const formSubstituir = new FormData();
+        formSubstituir.append('planilha', arquivo);
+        formSubstituir.append('substituir', '1');
+        const respostaSub = await fetch('/api/faturamento-semanal/importar', { method: 'POST', body: formSubstituir });
+        const dadosSub = await respostaSub.json();
+        if (!respostaSub.ok) throw new Error(dadosSub.erro || 'falha ao regravar');
+        statusEl.textContent = `${dadosSub.substituidas} semana(s) regravada(s) com o que está na planilha.`;
+        await carregarVendasSemanais(vendasSemanaisLojaAtual);
+        return;
+      }
+    }
     // Linha que a planilha traz com data quebrada não entra — avisa qual,
     // senão a semana some sem ninguém perceber.
     if (dados.avisos?.length) {

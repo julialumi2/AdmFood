@@ -44,6 +44,43 @@ COLUNA_PROMO_LOJA = 7
 
 PRIMEIRA_LINHA_DADOS = 4
 
+# O cabeçalho é conferido antes de ler: as colunas eram lidas por posição
+# fixa, então uma coluna a mais na planilha fazia o "TOTAL" cair no lugar do
+# CMV e a semana inteira virar ~100% ("ruim"), em silêncio (QA 22/09).
+NOMES_DE_COLUNA = {
+    "ifood": ("ifood",),
+    "catalog": ("catalog", "cardapio web", "cardápio web", "catálogo", "catalogo"),
+    "food99": ("99", "99food", "99 food"),
+    "portal": ("portal", "presencial", "balcao", "balcão"),
+    "cmv": ("cmv",),
+    "promoLoja": ("promo", "promocao", "promoção"),
+}
+
+
+def _normalizar_cabecalho(texto):
+    return re.sub(r"\s+", " ", str(texto or "").strip().lower())
+
+
+def _mapear_colunas(ws):
+    """Onde está cada coluna, pelo nome no cabeçalho. Devolve (mapa, aviso).
+    Sem cabeçalho reconhecível, volta nas posições fixas de sempre."""
+    for linha in ws.iter_rows(min_row=1, max_row=PRIMEIRA_LINHA_DADOS - 1, values_only=True):
+        achadas = {}
+        for indice, celula in enumerate(linha or ()):
+            nome = _normalizar_cabecalho(celula)
+            if not nome:
+                continue
+            for chave, apelidos in NOMES_DE_COLUNA.items():
+                if chave in achadas:
+                    continue
+                if any(apelido in nome for apelido in apelidos):
+                    achadas[chave] = indice
+        # Precisa achar pelo menos os canais pra valer como cabeçalho.
+        if len([c for c in achadas if c in ("ifood", "catalog", "food99", "portal")]) >= 3:
+            return achadas, None
+    return None, ("não achei o cabeçalho com os nomes das colunas (iFood, Catalog, 99, Portal): "
+                  "li pelas posições de sempre. Se alguém acrescentou coluna, confira os valores.")
+
 PERIODO = re.compile(r"^\s*(\d{1,2})/(\d{1,2})\s*\D*\s*(\d{1,2})/(\d{1,2})\s*$")
 
 # Semana de verdade tem de 1 a 8 dias. Mais que isso é dígito trocado na
@@ -53,20 +90,40 @@ MAX_DIAS_SEMANA = 8
 
 
 def _numero(valor):
+    """Número da célula. Quem digita na planilha às vezes escreve
+    "R$ 1.234,56" como texto, e aí o valor sumia do canal sem uma palavra
+    (QA 22/09)."""
     if valor is None or valor == "":
         return None
     try:
         return round(float(valor), 2)
     except (TypeError, ValueError):
+        pass
+    limpo = re.sub(r"[^\d,.\-]", "", str(valor)).strip()
+    if not limpo:
+        return None
+    # "1.234,56" é milhar + decimal; "1234.56" é decimal do inglês.
+    if "," in limpo:
+        limpo = limpo.replace(".", "").replace(",", ".")
+    try:
+        return round(float(limpo), 2)
+    except ValueError:
         return None
 
 
 def _ler_aba(ws):
     """Linhas cruas da aba, ainda sem ano: (dia_i, mes_i, dia_f, mes_f, canais)."""
     linhas, avisos = [], []
+    mapa, aviso_cabecalho = _mapear_colunas(ws)
+    if aviso_cabecalho:
+        avisos.append(aviso_cabecalho)
+    colunas_canal = ({canal: mapa[canal] for canal in ("ifood", "catalog", "food99", "portal") if canal in mapa}
+                     if mapa else {canal: coluna for coluna, canal in CANAL_POR_COLUNA.items()})
+    coluna_cmv = mapa.get("cmv", COLUNA_CMV) if mapa else COLUNA_CMV
+    coluna_promo = mapa.get("promoLoja", COLUNA_PROMO_LOJA) if mapa else COLUNA_PROMO_LOJA
     for numero_linha, r in enumerate(ws.iter_rows(min_row=PRIMEIRA_LINHA_DADOS, values_only=True), PRIMEIRA_LINHA_DADOS):
         periodo = str(r[0]).strip() if r[0] is not None else ""
-        canais = {canal: _numero(r[coluna]) for coluna, canal in CANAL_POR_COLUNA.items()
+        canais = {canal: _numero(r[coluna]) for canal, coluna in colunas_canal.items()
                   if coluna < len(r)}
         if not periodo and all(v is None for v in canais.values()):
             continue
@@ -82,8 +139,8 @@ def _ler_aba(ws):
             avisos.append(f"linha {numero_linha}: data inválida em {periodo!r} — corrija a planilha")
             continue
         extras = {
-            "cmv": _numero(r[COLUNA_CMV]) if len(r) > COLUNA_CMV else None,
-            "promoLoja": _numero(r[COLUNA_PROMO_LOJA]) if len(r) > COLUNA_PROMO_LOJA else None,
+            "cmv": _numero(r[coluna_cmv]) if len(r) > coluna_cmv else None,
+            "promoLoja": _numero(r[coluna_promo]) if len(r) > coluna_promo else None,
         }
         linhas.append((dia_i, mes_i, dia_f, mes_f, canais, extras))
     return linhas, avisos

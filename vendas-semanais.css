@@ -417,3 +417,56 @@
   padding: 2px 8px;
   white-space: nowrap;
 }
+
+/* CMV era salvo ao sair do campo, sem nada dizendo que deu certo (QA 22/09) */
+.semana-valor-editavel input.campo-salvo {
+  border-color: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
+  transition: box-shadow 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .semana-valor-editavel input.campo-salvo { transition: none; }
+}
+
+/* Eixo de valor da fita (QA 22/09): o número só aparecia no hover, que no
+   celular não existe. */
+.fita-area { position: relative; padding-left: 52px; }
+
+.fita-eixo-valor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 48px;
+}
+
+.fita-eixo-valor span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fita-selecionada {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  text-align: center;
+}
+
+/* Tabela de 9 colunas rolando de lado no celular (QA 22/09) */
+@media (max-width: 768px) {
+  .vendas-semanais-tabela-wrap { position: relative; }
+  .vendas-semanais-tabela-wrap::after {
+    content: "arraste pro lado pra ver todos os canais ›";
+    display: block;
+    padding: 6px 0 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: right;
+  }
+}
