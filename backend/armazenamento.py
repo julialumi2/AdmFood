@@ -63,6 +63,15 @@ def travar_para_escrita(conn):
         pass
 
 
+# Qual data vale pra uma compra recebida — UMA regra pro sistema inteiro.
+# Cada tela tinha a sua: a Evolução do Preço aceitava a data de criação
+# quando faltava a de recebimento, e a Curva ABC de insumos, o "último preço
+# de compra" e o histórico de Recebimentos exigiam a de recebimento. O mesmo
+# pedido aparecia numa tela e sumia das outras (QA 22/09). Recebimento sem
+# data é pedido antigo importado: vale o dia em que ele foi criado.
+DATA_DA_COMPRA = "COALESCE(NULLIF(pc.recebido_em, ''), pc.criado_em)"
+
+
 def inicializar_banco():
     with conexao() as conn:
         conn.execute(
@@ -103,6 +112,14 @@ def inicializar_banco():
         colunas = {c["name"] for c in conn.execute("PRAGMA table_info(venda_presencial)").fetchall()}
         if "quantidade" not in colunas:
             conn.execute("ALTER TABLE venda_presencial ADD COLUMN quantidade INTEGER NOT NULL DEFAULT 0")
+
+        # fechado = 1: a sincronização rodou nesse dia e a loja não teve
+        # venda nenhuma (segunda, feriado). Antes a segunda sem pedido não
+        # era gravada, e "loja fechada" ficava igual a "sincronização falhou":
+        # a semana contava 6 de 7 dias pra sempre (QA 22/09).
+        colunas_diario = {c["name"] for c in conn.execute("PRAGMA table_info(faturamento_diario)").fetchall()}
+        if "fechado" not in colunas_diario:
+            conn.execute("ALTER TABLE faturamento_diario ADD COLUMN fechado INTEGER NOT NULL DEFAULT 0")
 
         conn.execute(
             """
@@ -919,6 +936,15 @@ def inicializar_banco():
             conn.execute("ALTER TABLE pedido_compra ADD COLUMN recebido_por TEXT")
         if "recebido_em" not in colunas_pedido:
             conn.execute("ALTER TABLE pedido_compra ADD COLUMN recebido_em TEXT")
+        # Pedido marcado como recebido sem data de recebimento entrava numa
+        # tela e sumia da outra (ver DATA_DA_COMPRA). Aqui a data é gravada
+        # de vez, pra consulta nenhuma precisar adivinhar (QA 22/09).
+        conn.execute(
+            """
+            UPDATE pedido_compra SET recebido_em = criado_em
+            WHERE status = 'recebido' AND (recebido_em IS NULL OR recebido_em = '')
+            """
+        )
         if "valor_nf" not in colunas_pedido:
             conn.execute("ALTER TABLE pedido_compra ADD COLUMN valor_nf REAL")
         if "divergencia_nf" not in colunas_pedido:
@@ -1273,18 +1299,23 @@ def salvar_resumo_do_dia(unidade, dia_iso, resumo):
         if resumo["quantidade_pedidos"] > 0
         else 0.0
     )
+    # Dia que a sincronização visitou e não tinha venda nenhuma fica marcado:
+    # é a diferença entre "a loja fechou" e "a sincronização não rodou", que
+    # antes ninguém conseguia fazer (QA 22/09).
+    fechado = 1 if not resumo["quantidade_pedidos"] and not resumo["faturamento_dia"] else 0
     with conexao() as conn:
         conn.execute(
             """
             INSERT INTO faturamento_diario
-                (unidade, dia, faturamento_dia, ticket_medio, quantidade_pedidos)
-            VALUES (?, ?, ?, ?, ?)
+                (unidade, dia, faturamento_dia, ticket_medio, quantidade_pedidos, fechado)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (unidade, dia) DO UPDATE SET
                 faturamento_dia = excluded.faturamento_dia,
                 ticket_medio = excluded.ticket_medio,
-                quantidade_pedidos = excluded.quantidade_pedidos
+                quantidade_pedidos = excluded.quantidade_pedidos,
+                fechado = excluded.fechado
             """,
-            (unidade, dia_iso, resumo["faturamento_dia"], ticket_medio, resumo["quantidade_pedidos"]),
+            (unidade, dia_iso, resumo["faturamento_dia"], ticket_medio, resumo["quantidade_pedidos"], fechado),
         )
         conn.execute(
             "DELETE FROM faturamento_canal WHERE unidade = ? AND dia = ?",
@@ -1372,7 +1403,7 @@ def buscar_faturamento_periodo(inicio_iso, fim_iso):
     with conexao() as conn:
         linhas = conn.execute(
             """
-            SELECT unidade, dia, faturamento_dia, ticket_medio, quantidade_pedidos
+            SELECT unidade, dia, faturamento_dia, ticket_medio, quantidade_pedidos, fechado
             FROM faturamento_diario
             WHERE dia >= ? AND dia <= ?
             ORDER BY dia DESC
@@ -1556,7 +1587,15 @@ def _semanas_do_faturamento_diario(unidade):
             "SELECT dia, valor FROM venda_presencial WHERE unidade = ?",
             (unidade,),
         ).fetchall()
-    por_dia = {}
+        # Dia fechado não tem linha de canal nenhuma, então a semana com uma
+        # segunda dentro contava 6 de 7 dias e ficava "em andamento" pra
+        # sempre (QA 22/09). Ele entra zerado: dia visitado é dia coberto.
+        fechados = {
+            l["dia"] for l in conn.execute(
+                "SELECT dia FROM faturamento_diario WHERE unidade = ? AND fechado = 1", (unidade,)
+            )
+        }
+    por_dia = {dia: {} for dia in fechados}
     for linha in linhas:
         por_dia.setdefault(linha["dia"], {})[linha["canal"]] = linha["faturamento"]
     for ajuste in ajustes:
@@ -1681,6 +1720,7 @@ def listar_resultado_semanal(unidade):
             "origem": origem,
             "diasComDadoDiario": len(cobertos),
             "diasNoPeriodo": len(dias),
+            "diasFechados": len([d for d in cobertos if not faturamento_diario[d]]),
             # Semana que ainda não fechou: a tela esconde variação e veredito
             # e avisa "em andamento", em vez de mostrar meia semana como se
             # fosse semana cheia (QA 22/09).
@@ -3975,7 +4015,7 @@ def curva_abc_insumos(dias=90):
     corte = (datetime.now() - timedelta(days=dias)).date().isoformat()
     with conexao() as conn:
         linhas = conn.execute(
-            """
+            f"""
             SELECT pci.insumo_id,
                    i.nome, i.categoria, i.unidade_medida,
                    SUM(pci.quantidade * pci.preco_unitario) AS valor,
@@ -3984,7 +4024,7 @@ def curva_abc_insumos(dias=90):
             FROM pedido_compra_item pci
             JOIN pedido_compra pc ON pc.id = pci.pedido_id
             JOIN insumo i ON i.id = pci.insumo_id
-            WHERE pc.status = 'recebido' AND pc.recebido_em >= ?
+            WHERE pc.status = 'recebido' AND {DATA_DA_COMPRA} >= ?
             GROUP BY pci.insumo_id
             ORDER BY valor DESC
             """,
@@ -5335,15 +5375,18 @@ def buscar_ultima_compra_por_insumo():
     da VMarket (~26 mil itens) a subconsulta levava 40 s (2026-09-17)."""
     with conexao() as conn:
         linhas = conn.execute(
-            """
+            f"""
             SELECT insumo_id, preco_unitario, recebido_em, fornecedor_id, fornecedor_nome
             FROM (
-                SELECT pci.insumo_id, pci.preco_unitario, pc.recebido_em, pc.fornecedor_id, f.nome AS fornecedor_nome,
-                       ROW_NUMBER() OVER (PARTITION BY pci.insumo_id ORDER BY pc.recebido_em DESC, pc.id DESC) AS ordem
+                SELECT pci.insumo_id, pci.preco_unitario, {DATA_DA_COMPRA} AS recebido_em,
+                       pc.fornecedor_id, f.nome AS fornecedor_nome,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY pci.insumo_id ORDER BY {DATA_DA_COMPRA} DESC, pc.id DESC
+                       ) AS ordem
                 FROM pedido_compra_item pci
                 JOIN pedido_compra pc ON pc.id = pci.pedido_id
                 JOIN fornecedor f ON f.id = pc.fornecedor_id
-                WHERE pc.status = 'recebido' AND pci.preco_unitario > 0 AND pc.recebido_em IS NOT NULL
+                WHERE pc.status = 'recebido' AND pci.preco_unitario > 0
             )
             WHERE ordem = 1
             """
@@ -6279,19 +6322,19 @@ def listar_pedidos_recebidos(desde):
     entra (já nasce recebida)."""
     with conexao() as conn:
         linhas = conn.execute(
-            """
+            f"""
             SELECT pc.id, pc.fornecedor_id, pc.loja, pc.status, pc.criado_em, pc.whatsapp_enviado_em,
-                   pc.recebido_em, pc.recebido_por, pc.compra_fora, pc.numero_nf, pc.nota_fiscal_arquivo,
-                   pc.divergencia_nf,
+                   {DATA_DA_COMPRA} AS recebido_em, pc.recebido_por, pc.compra_fora, pc.numero_nf,
+                   pc.nota_fiscal_arquivo, pc.divergencia_nf,
                    f.nome AS fornecedor_nome,
                    COUNT(pi.insumo_id) AS total_itens,
                    COALESCE(SUM(pi.quantidade * pi.preco_unitario), 0) AS valor_total
             FROM pedido_compra pc
             JOIN fornecedor f ON f.id = pc.fornecedor_id
             LEFT JOIN pedido_compra_item pi ON pi.pedido_id = pc.id
-            WHERE pc.status = 'recebido' AND pc.recebido_em >= ?
+            WHERE pc.status = 'recebido' AND {DATA_DA_COMPRA} >= ?
             GROUP BY pc.id
-            ORDER BY pc.recebido_em DESC, pc.id DESC
+            ORDER BY {DATA_DA_COMPRA} DESC, pc.id DESC
             """,
             (desde,),
         ).fetchall()
@@ -8635,8 +8678,8 @@ def historico_precos_insumo(insumo_id):
         if not insumo:
             return None
         compras = conn.execute(
-            """
-            SELECT COALESCE(pc.recebido_em, pc.criado_em) AS data, pci.preco_unitario AS preco,
+            f"""
+            SELECT {DATA_DA_COMPRA} AS data, pci.preco_unitario AS preco,
                    pci.quantidade, f.nome AS fornecedor, pc.loja, pc.id AS pedido_id
             FROM pedido_compra_item pci
             JOIN pedido_compra pc ON pc.id = pci.pedido_id
@@ -8672,9 +8715,9 @@ def variacoes_de_preco(dias=90):
     corte = (datetime.now() - timedelta(days=int(dias))).isoformat()
     with conexao() as conn:
         linhas = conn.execute(
-            """
+            f"""
             SELECT pci.insumo_id, i.nome, i.unidade_medida, i.categoria,
-                   COALESCE(pc.recebido_em, pc.criado_em) AS data, pci.preco_unitario AS preco,
+                   {DATA_DA_COMPRA} AS data, pci.preco_unitario AS preco,
                    f.nome AS fornecedor
             FROM pedido_compra_item pci
             JOIN pedido_compra pc ON pc.id = pci.pedido_id
@@ -8812,14 +8855,18 @@ def alertas_de_custo_na_margem(lojas, dias=30, limite=3):
 
 def faturamento_por_loja_nos_dias(dias):
     """{(loja, dia): faturamento} com a venda presencial somada, como toda
-    tela de faturamento faz. Dia sem venda nenhuma fica de fora."""
+    tela de faturamento faz. Dia sem venda nenhuma fica de fora — inclusive
+    o dia fechado, que agora é gravado zerado: entrando na média das últimas
+    4 terças, uma terça de feriado derrubaria a média e o insight anunciaria
+    uma queda que não existiu (QA 22/09)."""
     if not dias:
         return {}
     marcadores = ",".join("?" * len(dias))
     with conexao() as conn:
         linhas = conn.execute(
             f"""
-            SELECT unidade, dia, faturamento_dia AS valor FROM faturamento_diario WHERE dia IN ({marcadores})
+            SELECT unidade, dia, faturamento_dia AS valor FROM faturamento_diario
+            WHERE dia IN ({marcadores}) AND fechado = 0
             UNION ALL
             SELECT unidade, dia, valor FROM venda_presencial WHERE dia IN ({marcadores})
             """,

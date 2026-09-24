@@ -5334,3 +5334,47 @@ pede filtro por loja/fornecedor), compra recebida sem data que cai fora de
 parte do sistema (#74 — pede regra única de qual data vale) e a segunda-feira
 fechada contando como semana incompleta (#68 — pede a sincronização gravar o
 dia zerado).
+
+
+### 6.89 Os três que ficaram pendentes da Evolução do Preço e de Vendas Semanais
+
+Os três achados que a leva anterior deixou de fora por mexerem em dado
+gravado, não só em tela.
+
+**Segunda fechada não é semana incompleta (#68).** A sincronização pulava a
+segunda sem pedido pra "loja fechada não virar um zero no gráfico". Só que o
+gráfico já preenche dia faltando com zero por conta própria, e o preço do
+atalho era alto: sem a linha do dia, a semana contava *6 de 7 dias* e ficava
+"em andamento" pra sempre, o Insights listava a segunda em "dias faltando", e
+não havia como distinguir *loja fechada* de *sincronização falhou*.
+
+Agora a segunda é sincronizada como qualquer dia. `faturamento_diario` ganhou
+a coluna `fechado`: vale 1 quando a sincronização visitou o dia e não havia
+venda nenhuma (segunda, feriado). O dia fechado conta como dia coberto da
+semana, entra no gráfico como zero (que é o valor certo), fica de fora da
+média das últimas 4 terças — uma terça de feriado zerada derrubaria a média e
+o insight anunciaria uma queda que nunca existiu — e a semana passa a dizer
+"semana cheia · 1 dia fechado" em vez de "6 de 7". O dia que de fato não
+sincronizou continua aparecendo como falta. `sincronizar_periodo.py`, a carga
+de histórico, também parou de pular segunda.
+
+**Recorte por loja e por fornecedor na Evolução do Preço (#72).** A série de
+um insumo era uma linha só, com a compra de qualquer loja e de qualquer
+fornecedor no meio: trocar de fornecedor virava um degrau com cara de
+aumento, e uma compra lançada em caixa (preço da caixa, quantidade em
+unidade) virava um pico. A tela ganhou dois seletores — Loja e Fornecedor —
+que valem pro resumo, pro gráfico e pra tabela. Sem recorte de fornecedor,
+cada fornecedor vira a própria linha, em vez de um zigue-zague só. E o preço
+que está 4 vezes acima ou abaixo da mediana do próprio insumo (com pelo menos
+três compras pra mediana significar alguma coisa) aparece como triângulo, com
+o aviso de conferir a embalagem daquele lançamento.
+
+**Uma regra só de qual data vale pra compra recebida (#74).** A Evolução do
+Preço aceitava a data de criação quando faltava a de recebimento; a Curva ABC
+de insumos, a "Última Compra" do Comparativo de Preços e o histórico de
+Recebimentos exigiam a de recebimento. O mesmo pedido aparecia numa tela e
+sumia das outras. A regra agora está escrita uma vez só, em `DATA_DA_COMPRA`
+(`COALESCE(NULLIF(pc.recebido_em, ''), pc.criado_em)`), e vale nas cinco
+consultas. A migração ainda preenche `recebido_em` com `criado_em` nos
+pedidos já marcados como recebidos que estavam sem data, pra diferença não
+voltar pela porta dos fundos.

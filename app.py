@@ -265,7 +265,7 @@ from backend.cardapio_web import (
     STATUS_CONCLUIDOS,
     _total_com_desconto_ifood,
 )
-from sincronizar import sincronizar_dia, DIA_FECHADO
+from sincronizar import sincronizar_dia
 
 # Sem CORS: frontend e backend são servidos pelo mesmo Flask (mesma origem),
 # então cross-origin nunca foi necessário de verdade em produção — e com
@@ -865,6 +865,8 @@ def _aplicar_presencial(linhas, linhas_presencial):
         qtd_presencial = p.get("quantidade") or 0
         if chave in por_chave:
             linha = por_chave[chave]
+            if p["valor"]:
+                linha["fechado"] = 0  # teve venda, então não estava fechada
             linha["faturamento_dia"] += p["valor"]
             linha["quantidade_pedidos"] += qtd_presencial
             linha["ticket_medio"] = (
@@ -1045,6 +1047,9 @@ def _formatar_diario(linhas):
             # faturamento e nenhum pedido entra, então o ticket do dia fica
             # inflado — a tela marca em vez de mentir (QA 22/09).
             "presencialSemQuantidade": l.get("presencial_sem_quantidade"),
+            # R$ 0,00 de loja fechada é diferente de R$ 0,00 de dia que não
+            # sincronizou — a tela escreve "fechada" em vez do zero seco.
+            "fechada": bool(l.get("fechado")),
         }
         for l in linhas
     ]
@@ -5817,7 +5822,7 @@ _TRAVA_SINCRONIZACAO_MANUAL = threading.Lock()
 def _sincronizar_lojas_em_segundo_plano(dia_alvo):
     erro = None
     try:
-        # Mesmo caminho da sincronização automática (segunda sem pedido não grava).
+        # Mesmo caminho da sincronização automática.
         sincronizar_dia(dia_alvo)
     except Exception as falha:  # noqa: BLE001 — o resultado precisa chegar na tela
         erro = str(falha)

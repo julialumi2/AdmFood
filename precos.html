@@ -229,6 +229,17 @@
             <!-- A busca só reagia a nome exato e não dizia "não encontrei" (QA 22/09) -->
             <p class="panel-subtitle precos-busca-aviso" id="precos-busca-aviso" hidden></p>
           </div>
+          <!-- A linha misturava loja, fornecedor e tamanho de embalagem:
+               compra de outra loja em caixa virava pico de preço (QA 22/09) -->
+          <div class="precos-recortes" id="precos-recortes" hidden>
+            <label>Loja
+              <select id="precos-recorte-loja"><option value="">Todas</option></select>
+            </label>
+            <label>Fornecedor
+              <select id="precos-recorte-fornecedor"><option value="">Todos</option></select>
+            </label>
+            <span class="precos-recorte-aviso" id="precos-recorte-aviso"></span>
+          </div>
           <div class="precos-resumo" id="precos-resumo" style="display:none;"></div>
           <div class="precos-grafico-area" id="precos-grafico-area" style="display:none;">
             <canvas id="precos-grafico"></canvas>

@@ -19,7 +19,6 @@ from config import LOJAS
 from backend.cardapio_web import buscar_resumo_do_dia
 from backend.armazenamento import (
     inicializar_banco,
-    tem_faturamento_no_dia,
     salvar_resumo_do_dia,
     salvar_pedidos_do_dia,
     salvar_itens_vendidos_do_dia,
@@ -27,15 +26,18 @@ from backend.armazenamento import (
 
 # Segunda as lojas fecham — mas nem sempre: feriado aberto (07/09) e pedido
 # que cai na segunda (14/09 teve 6 no Artesanos e 11 na ZN) ficavam de fora,
-# e a semana não batia com a planilha (2026-09-18). Agora a segunda é
-# consultada como qualquer dia; só não grava a segunda sem pedido, pra loja
-# fechada não virar um zero no gráfico.
-DIA_FECHADO = 0  # date.weekday(): 0 = segunda-feira
+# e a semana não batia com a planilha (2026-09-18).
+#
+# A segunda sem pedido também não era gravada, pra loja fechada não virar um
+# zero no gráfico — mas o gráfico já preenche dia faltando com zero sozinho,
+# e o preço era alto: sem a linha do dia, a semana contava "6 de 7 dias" e
+# ficava em andamento pra sempre, e "loja fechada" ficava idêntico a
+# "sincronização falhou" (QA 22/09). Agora todo dia é gravado, e o dia sem
+# venda nenhuma fica marcado como fechado.
 
 
 def sincronizar_dia(dia: date):
     dia_iso = dia.isoformat()
-    segunda = dia.weekday() == DIA_FECHADO
     for nome_unidade, config_loja in LOJAS.items():
         token = config_loja.get("cardapio_web_token")
         if not token:
@@ -44,18 +46,16 @@ def sincronizar_dia(dia: date):
 
         try:
             resumo = buscar_resumo_do_dia(token, dia)
-            # Segunda sem pedido não grava — a não ser que já tenha dado desse
-            # dia (pedido cancelado depois), que precisa ser zerado.
-            if segunda and not resumo["quantidade_pedidos"] and not tem_faturamento_no_dia(nome_unidade, dia_iso):
-                print(f"{nome_unidade} ({dia_iso}): segunda sem pedido, nada a gravar.")
-                continue
             salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
             salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
-            print(
-                f"✅ {nome_unidade} ({dia_iso}): "
-                f"R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos"
-            )
+            if not resumo["quantidade_pedidos"] and not resumo["faturamento_dia"]:
+                print(f"🔒 {nome_unidade} ({dia_iso}): sem venda nenhuma, gravado como dia fechado.")
+            else:
+                print(
+                    f"✅ {nome_unidade} ({dia_iso}): "
+                    f"R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos"
+                )
         except Exception as erro:
             print(f"❌ {nome_unidade} ({dia_iso}): {erro}")
 

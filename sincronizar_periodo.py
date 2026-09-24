@@ -30,7 +30,6 @@ try:
 except (AttributeError, OSError):
     pass
 
-DIA_FECHADO = 0  # segunda-feira
 
 
 def sincronizar_periodo(unidade, dias, ate=0):
@@ -52,28 +51,33 @@ def sincronizar_periodo(unidade, dias, ate=0):
 
     inicializar_banco()
     hoje = date.today()
-    ok = falhas = pulados = 0
+    ok = falhas = fechados = 0
     faturamento = 0.0
 
     for passo in range(dias, ate, -1):
         dia = hoje - timedelta(days=passo)
-        if dia.weekday() == DIA_FECHADO:
-            pulados += 1
-            continue
+        # A segunda era pulada aqui. Sem a linha do dia, a semana inteira
+        # conta "6 de 7 dias" e fica em andamento pra sempre, e "loja
+        # fechada" vira igual a "não sincronizou" (QA 22/09). Agora ela é
+        # consultada como qualquer dia e grava zerada, marcada como fechada.
         try:
             resumo = buscar_resumo_do_dia(token, dia)
             dia_iso = dia.isoformat()
             salvar_resumo_do_dia(unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(unidade, dia_iso, resumo["pedidos_detalhados"])
             salvar_itens_vendidos_do_dia(unidade, dia_iso, resumo["pedidos_detalhados"])
-            ok += 1
-            faturamento += resumo["faturamento_dia"]
-            print(f"  {dia_iso}: R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos")
+            if not resumo["quantidade_pedidos"] and not resumo["faturamento_dia"]:
+                fechados += 1
+                print(f"  {dia_iso}: sem venda nenhuma, gravado como dia fechado.")
+            else:
+                ok += 1
+                faturamento += resumo["faturamento_dia"]
+                print(f"  {dia_iso}: R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos")
         except Exception as erro:
             falhas += 1
             print(f"  {dia.isoformat()}: FALHOU — {erro}")
 
-    print(f"\n{unidade}: {ok} dias sincronizados, {falhas} falhas, {pulados} segundas puladas.")
+    print(f"\n{unidade}: {ok} dias sincronizados, {falhas} falhas, {fechados} dias fechados.")
     print(f"Faturamento somado no período: R$ {faturamento:,.2f}".replace(",", "."))
 
 

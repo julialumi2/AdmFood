@@ -15846,6 +15846,13 @@ function renderVendasSemanais() {
   const etiquetaAndamento = emAndamento
     ? `<span class="tag-origem tag-em-andamento" title="A semana ainda não fechou: o faturamento é só dos dias que já entraram">em andamento · ${semana.diasComDadoDiario} de ${semana.diasNoPeriodo} dias</span>`
     : '';
+  // Loja fechada na segunda contava como dia faltando e a semana inteira
+  // aparecia incompleta pra sempre. Agora o dia é gravado zerado e a semana
+  // só diz quantos dias a loja não abriu (QA 22/09).
+  const fechados = semana.diasFechados || 0;
+  const etiquetaFechados = fechados && !emAndamento
+    ? `<span class="tag-origem" title="A loja não abriu nesse(s) dia(s) — a semana está completa">semana cheia · ${fechados} ${fechados === 1 ? 'dia fechado' : 'dias fechados'}</span>`
+    : '';
 
   heroEl.innerHTML = `
     <div class="semana-hero ${veredito ? 'veredito-' + semana.classificacao : ''}">
@@ -15854,7 +15861,7 @@ function renderVendasSemanais() {
           <span class="semana-hero-rotulo">${ehMaisRecente ? 'Semana mais recente' : 'Semana selecionada'}</span>
           <span class="semana-hero-periodo">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)} · ${semana.periodoInicio.slice(0, 4)}</span>
         </div>
-        <span class="semana-hero-etiquetas">${etiquetaAndamento}<span class="tag-origem" title="${origemTitulo}">${semana.origem === 'sistema' ? 'do sistema' : 'da planilha'}</span></span>
+        <span class="semana-hero-etiquetas">${etiquetaAndamento}${etiquetaFechados}<span class="tag-origem" title="${origemTitulo}">${semana.origem === 'sistema' ? 'do sistema' : 'da planilha'}</span></span>
       </div>
 
       <div class="semana-hero-corpo">
@@ -16386,6 +16393,45 @@ function _dataCurtaDoInstante(ms) {
 
 // Qual insumo está aberto, pra o botão de período redesenhar o gráfico dele.
 let precosInsumoAberto = null;
+// Recorte da série de um insumo. A linha misturava loja, fornecedor e
+// tamanho de embalagem: trocar de fornecedor virava um degrau com cara de
+// aumento, e a compra de outra loja lançada em caixa virava pico (QA 22/09).
+let precosRecorteLoja = '';
+let precosRecorteFornecedor = '';
+
+// Preço muito longe da mediana do próprio insumo quase sempre é o preço da
+// caixa com a quantidade em unidade, não aumento — mesma régua do backend.
+const FATOR_PRECO_FORA_DA_CURVA = 4;
+
+// Com duas compras só a mediana fica no meio das duas e a MAIS BARATA sai
+// como fora da curva — precisa de pelo menos três pra ter maioria.
+const MINIMO_PRA_ACHAR_FORA_DA_CURVA = 3;
+
+function _medianaDePrecos(valores) {
+  if (valores.length < MINIMO_PRA_ACHAR_FORA_DA_CURVA) return 0;
+  const ordenados = [...valores].sort((a, b) => a - b);
+  const meio = Math.floor(ordenados.length / 2);
+  return ordenados.length % 2 ? ordenados[meio] : (ordenados[meio - 1] + ordenados[meio]) / 2;
+}
+
+function _foraDaCurva(preco, mediana) {
+  if (!mediana || !preco) return false;
+  return preco >= mediana * FATOR_PRECO_FORA_DA_CURVA || preco * FATOR_PRECO_FORA_DA_CURVA <= mediana;
+}
+
+// Preenche um <select> de recorte mantendo a escolha atual quando ela ainda
+// existe no insumo aberto (trocar de insumo não pode herdar um fornecedor
+// que esse insumo nunca teve).
+function _encherRecorte(id, valores, rotuloTodos, escolhido) {
+  const select = document.getElementById(id);
+  if (!select) return '';
+  const opcoes = [...new Set(valores.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const valor = opcoes.includes(escolhido) ? escolhido : '';
+  select.innerHTML = `<option value="">${rotuloTodos}</option>`
+    + opcoes.map((o) => `<option value="${escaparHtml(o)}"${o === valor ? ' selected' : ''}>${escaparHtml(o)}</option>`).join('');
+  select.disabled = opcoes.length < 2;
+  return valor;
+}
 
 async function abrirHistoricoPreco(insumoId) {
   try {
@@ -16398,7 +16444,16 @@ async function abrirHistoricoPreco(insumoId) {
     const corte = new Date();
     corte.setDate(corte.getDate() - precosDias);
     const corteIso = new Date(corte.getTime() - corte.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const todas = d.compras || [];
+    // Os recortes vêm do histórico inteiro do insumo, não do período: senão
+    // o fornecedor escolhido some do seletor quando o período encolhe.
+    precosRecorteLoja = _encherRecorte('precos-recorte-loja', (d.compras || []).map((c) => c.loja), 'Todas', precosRecorteLoja);
+    precosRecorteFornecedor = _encherRecorte(
+      'precos-recorte-fornecedor', (d.compras || []).map((c) => c.fornecedor), 'Todos', precosRecorteFornecedor);
+    document.getElementById('precos-recortes').hidden = !(d.compras || []).length;
+
+    const todas = (d.compras || []).filter((c) =>
+      (!precosRecorteLoja || c.loja === precosRecorteLoja)
+      && (!precosRecorteFornecedor || c.fornecedor === precosRecorteFornecedor));
     const noPeriodo = todas.filter((c) => c.data >= corteIso);
     // Menos de dois pontos no período não desenha linha nenhuma: aí vale
     // mais mostrar tudo e dizer que está mostrando tudo.
@@ -16410,7 +16465,9 @@ async function abrirHistoricoPreco(insumoId) {
     document.getElementById('precos-busca-insumo').value = d.insumo.nome;
 
     if (!compras.length) {
-      document.getElementById('precos-insumo-sub').textContent = 'Nenhuma compra recebida desse insumo ainda.';
+      document.getElementById('precos-insumo-sub').textContent = (precosRecorteLoja || precosRecorteFornecedor)
+        ? 'Nenhuma compra desse insumo com esse recorte. Volte pra "Todas" / "Todos" pra ver o histórico inteiro.'
+        : 'Nenhuma compra recebida desse insumo ainda.';
       ['precos-resumo', 'precos-grafico-area', 'precos-tabela-area'].forEach((id) => { document.getElementById(id).style.display = 'none'; });
       return;
     }
@@ -16445,8 +16502,45 @@ async function abrirHistoricoPreco(insumoId) {
     const estilo = getComputedStyle(document.body);
     const corTexto = estilo.getPropertyValue('--text-muted').trim() || '#71717A';
     const corGrade = estilo.getPropertyValue('--border-color').trim() || '#E6DDCC';
-    const pontos = compras.map((c) => ({ x: _instanteDoDia(c.data), y: c.preco, data: c.data, fornecedor: c.fornecedor, loja: c.loja }));
-    const ofertas = (d.cotacoes || []).map((c) => ({ x: _instanteDoDia(c.data), y: c.preco, data: c.data, fornecedor: c.fornecedor }));
+    const mediana = _medianaDePrecos(precos);
+    const ponto = (c) => ({
+      x: _instanteDoDia(c.data), y: c.preco, data: c.data,
+      fornecedor: c.fornecedor, loja: c.loja, quantidade: c.quantidade,
+      foraDaCurva: _foraDaCurva(c.preco, mediana),
+    });
+    // Sem recorte de fornecedor, cada fornecedor vira a própria linha: a
+    // zigue-zague entre dois fornecedores parecia o preço subindo e caindo.
+    const fornecedores = [...new Set(compras.map((c) => c.fornecedor || 'Sem fornecedor'))];
+    const porFornecedor = fornecedores.length > 1 && !precosRecorteFornecedor;
+    const seriesPagas = porFornecedor
+      ? fornecedores.map((nome, i) => ({
+          label: nome,
+          data: compras.filter((c) => (c.fornecedor || 'Sem fornecedor') === nome).map(ponto),
+          borderColor: CORES_GRAFICO[i % CORES_GRAFICO.length],
+          backgroundColor: CORES_GRAFICO[i % CORES_GRAFICO.length],
+          tension: 0.2, borderWidth: 2,
+          pointRadius: (ctx) => (ctx.raw && ctx.raw.foraDaCurva ? 6 : 3),
+          pointStyle: (ctx) => (ctx.raw && ctx.raw.foraDaCurva ? 'triangle' : 'circle'),
+        }))
+      : [{
+          label: 'Preço pago',
+          data: compras.map(ponto),
+          borderColor: CORES_GRAFICO[0], backgroundColor: CORES_GRAFICO[0],
+          tension: 0.2, borderWidth: 2,
+          pointRadius: (ctx) => (ctx.raw && ctx.raw.foraDaCurva ? 6 : 3),
+          pointStyle: (ctx) => (ctx.raw && ctx.raw.foraDaCurva ? 'triangle' : 'circle'),
+        }];
+    const ofertas = (d.cotacoes || [])
+      .filter((c) => !precosRecorteFornecedor || c.fornecedor === precosRecorteFornecedor)
+      .map((c) => ({ x: _instanteDoDia(c.data), y: c.preco, data: c.data, fornecedor: c.fornecedor }));
+
+    const foraDaCurva = compras.filter((c) => _foraDaCurva(c.preco, mediana)).length;
+    const lojasNaSerie = new Set(compras.map((c) => c.loja).filter(Boolean)).size;
+    document.getElementById('precos-recorte-aviso').textContent = [
+      foraDaCurva ? `${foraDaCurva} ${foraDaCurva === 1 ? 'compra muito fora' : 'compras muito fora'} da mediana (triângulo no gráfico) — quase sempre é embalagem ou unidade trocada no lançamento` : '',
+      !precosRecorteLoja && lojasNaSerie > 1 ? `${lojasNaSerie} lojas na mesma linha` : '',
+      porFornecedor ? `uma linha por fornecedor (${fornecedores.length})` : '',
+    ].filter(Boolean).join(' · ');
 
     if (precosGraficoInstance) precosGraficoInstance.destroy();
     document.getElementById('precos-grafico-area').style.display = '';
@@ -16454,8 +16548,8 @@ async function abrirHistoricoPreco(insumoId) {
       type: 'line',
       data: {
         datasets: [
-          { label: 'Preço pago', data: pontos, borderColor: CORES_GRAFICO[0], backgroundColor: CORES_GRAFICO[0], tension: 0.2, pointRadius: 3, borderWidth: 2 },
-          { label: 'Cotação recebida', data: ofertas, showLine: false, borderColor: CORES_GRAFICO[1], backgroundColor: CORES_GRAFICO[1], pointRadius: 3, pointStyle: 'rectRot' },
+          ...seriesPagas,
+          { label: 'Cotação recebida', data: ofertas, showLine: false, borderColor: corTexto, backgroundColor: corTexto, pointRadius: 3, pointStyle: 'rectRot' },
         ],
       },
       options: {
@@ -16468,7 +16562,9 @@ async function abrirHistoricoPreco(insumoId) {
           tooltip: {
             callbacks: {
               title: (itens) => _dataBR(itens[0].raw.data),
-              label: (item) => `${item.dataset.label}: R$ ${_formatarPrecoUnitario(item.raw.y)} · ${item.raw.fornecedor || '—'}${item.raw.loja ? ` · ${item.raw.loja}` : ''}`,
+              label: (item) => `${item.dataset.label}: R$ ${_formatarPrecoUnitario(item.raw.y)} · ${item.raw.fornecedor || '—'}${item.raw.loja ? ` · ${item.raw.loja}` : ''}`
+                + (item.raw.quantidade ? ` · ${_formatarQuantidade(item.raw.quantidade, unidade)}` : '')
+                + (item.raw.foraDaCurva ? ' · fora da curva: confira a embalagem desse lançamento' : ''),
             },
           },
         },
@@ -16503,6 +16599,17 @@ if (document.getElementById('precos-altas')) {
       precosDias = parseInt(botao.dataset.dias, 10);
       carregarVariacoesPreco();
       // O período agora vale também pro gráfico do insumo aberto.
+      if (precosInsumoAberto) abrirHistoricoPreco(precosInsumoAberto);
+    });
+  });
+
+  // Recorte por loja e por fornecedor (QA 22/09).
+  [['precos-recorte-loja', 'loja'], ['precos-recorte-fornecedor', 'fornecedor']].forEach(([id, qual]) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    select.addEventListener('change', () => {
+      if (qual === 'loja') precosRecorteLoja = select.value;
+      else precosRecorteFornecedor = select.value;
       if (precosInsumoAberto) abrirHistoricoPreco(precosInsumoAberto);
     });
   });
