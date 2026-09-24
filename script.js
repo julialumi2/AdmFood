@@ -17269,7 +17269,10 @@ async function abrirHistoricoPreco(insumoId) {
     const resposta = await fetch(`/api/precos/insumo/${insumoId}`);
     if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
     const d = await resposta.json();
-    const unidade = d.insumo.unidade_medida;
+    // A unidade é digitada à mão no cadastro do insumo e sai em texto na
+    // tela: escapada na origem, não tem como virar marcação (auditoria
+    // de segurança, 24/09).
+    const unidade = escaparHtml(d.insumo.unidade_medida || '');
     // Os botões de período não mexiam no gráfico: ele continuava mostrando
     // tudo desde a primeira compra, e nada na tela dizia isso (QA 22/09).
     const corte = new Date();

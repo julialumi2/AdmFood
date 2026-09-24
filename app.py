@@ -586,6 +586,50 @@ def _marcar_inicio_da_requisicao():
     g.inicio_requisicao = time.perf_counter()
 
 
+# Cabeçalhos de segurança. O equivalente Flask do `helmet` do Node é o
+# Flask-Talisman; aqui são quatro linhas e nenhuma dependência nova, que é o
+# que um sistema deste tamanho pede.
+#
+# A CSP é a parte que mais protege: mesmo que um XSS escape em algum canto,
+# o navegador só executa script do próprio domínio e dos dois CDNs que as
+# telas usam (já presos na versão e com integrity). 'unsafe-inline' fica no
+# script-src porque as páginas têm <script> inline e onclick=; tirar isso é
+# uma refatoração grande, e está anotada como dívida.
+POLITICA_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https://images.unsplash.com",
+    "connect-src 'self'",
+    # Nada de <object>/<embed>, e ninguém abre o sistema dentro de um iframe
+    # (clickjacking): o link de contagem e o de cotação vão por WhatsApp e
+    # seriam alvo fácil de uma página que os enquadra.
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+])
+
+
+@app.after_request
+def _cabecalhos_de_seguranca(resposta):
+    resposta.headers.setdefault('Content-Security-Policy', POLITICA_CSP)
+    # Navegador para de "adivinhar" o tipo do arquivo: upload de imagem que na
+    # verdade é HTML deixa de ser executável.
+    resposta.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resposta.headers.setdefault('X-Frame-Options', 'DENY')
+    # O token do link não vaza no Referer quando o fornecedor clica num link
+    # de fora da página.
+    resposta.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    resposta.headers.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+    # HSTS só faz sentido (e só é honesto) quando a resposta já veio por
+    # HTTPS — em desenvolvimento, no http://localhost, ele trancaria a porta.
+    if request.is_secure:
+        resposta.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    return resposta
+
+
 @app.after_request
 def _informar_tempo_da_requisicao(resposta):
     inicio = getattr(g, 'inicio_requisicao', None)
@@ -609,6 +653,10 @@ def _exigir_login():
             or caminho.startswith('/api/cotacoes/convite/')
             or caminho.startswith('/api/pedidos/confirmar/')
         ):
+            # Link público: o token é a senha, então o teto de tentativa por
+            # IP é o que existe no lugar do login (ver _token_bloqueado_*).
+            if caminho not in ROTAS_API_PUBLICAS and _token_bloqueado_por_tentativa():
+                return jsonify({"erro": "Muitas tentativas. Espere um minuto e abra o link de novo."}), 429
             return
         pessoa = _usuario_logado()
         if not pessoa:
@@ -1261,6 +1309,15 @@ def _erro_da_senha(senha):
     return None
 
 
+def _texto_curto_sem_marcacao(valor, limite=20, padrao=""):
+    """Campo curto que a tela imprime: tira marcação e corta o tamanho. A
+    unidade de medida é digitada à mão e sai em várias telas — sem isso, dava
+    pra guardar `<img onerror=...>` como unidade de um insumo e ele executar
+    na tela de quem abrisse (XSS armazenado)."""
+    limpo = re.sub(r"[<>\"\'`\\]", "", str(valor or "")).strip()
+    return limpo[:limite] or padrao
+
+
 def _formatar_usuario(usuario):
     return {
         "id": usuario["id"],
@@ -1279,6 +1336,43 @@ def _formatar_usuario(usuario):
 # Gunicorn, não compartilhado entre eles), suficiente pra travar um script
 # tentando milhares de senhas contra uma conta específica, sem precisar de
 # Redis ou outra dependência nova pra um sistema desse tamanho.
+# Os links públicos (contagem, cotação, confirmar pedido) não pedem login: o
+# token é a senha. Ele tem 192 bits de entropia (secrets.token_urlsafe(24)),
+# então adivinhar é inviável — mas nada impedia um script de tentar milhares
+# por minuto, o que além de inútil derruba o servidor. Um teto por IP resolve
+# os dois. Em memória, por processo, igual ao limite de login: suficiente pro
+# tamanho deste sistema, sem Redis.
+# Teto de sanidade pro preço que vem de fora: acima disso é unidade trocada
+# (preço da caixa no campo do grama), não preço.
+LIMITE_PRECO_UNITARIO = 1_000_000
+
+TENTATIVAS_MAXIMAS_TOKEN = 30
+JANELA_RATE_LIMIT_TOKEN_SEGUNDOS = 60
+_tentativas_de_token = {}
+_TRAVA_TENTATIVAS_TOKEN = threading.Lock()
+
+
+def _ip_de_quem_chamou():
+    """O IP real quando há proxy na frente (Fly/Render põem X-Forwarded-For)."""
+    encaminhado = request.headers.get('X-Forwarded-For', '')
+    return (encaminhado.split(',')[0].strip() if encaminhado else request.remote_addr) or 'desconhecido'
+
+
+def _token_bloqueado_por_tentativa():
+    """True quando esse IP já pediu link demais na última janela."""
+    agora = time.time()
+    ip = _ip_de_quem_chamou()
+    with _TRAVA_TENTATIVAS_TOKEN:
+        tentativas = [t for t in _tentativas_de_token.get(ip, []) if agora - t < JANELA_RATE_LIMIT_TOKEN_SEGUNDOS]
+        tentativas.append(agora)
+        _tentativas_de_token[ip] = tentativas
+        # Limpeza preguiçosa: sem isso o dicionário cresce pra sempre.
+        if len(_tentativas_de_token) > 2000:
+            for chave in [c for c, v in _tentativas_de_token.items() if not v or agora - v[-1] > JANELA_RATE_LIMIT_TOKEN_SEGUNDOS]:
+                _tentativas_de_token.pop(chave, None)
+        return len(tentativas) > TENTATIVAS_MAXIMAS_TOKEN
+
+
 JANELA_RATE_LIMIT_LOGIN_SEGUNDOS = 5 * 60
 MAX_TENTATIVAS_LOGIN_NA_JANELA = 5
 
@@ -2028,6 +2122,12 @@ def _formatar_item_cardapio(linha):
 
 @app.route('/api/precos-cardapio', methods=['GET'])
 def api_precos_cardapio():
+    # Estoque e Cardápio estão no menu da operação: aqui a guarda só
+    # garante perfil válido. O aperto pra gestão fica no que é de compra
+    # (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_equipe()
+    if erro_perfil:
+        return erro_perfil
     lojas = {}
     for linha in listar_precos_cardapio():
         loja = lojas.setdefault(linha['loja'], {})
@@ -2302,6 +2402,12 @@ def _formatar_insumos(linhas, com_custo=False):
 
 @app.route('/api/insumos', methods=['GET'])
 def api_listar_insumos():
+    # Estoque e Cardápio estão no menu da operação: aqui a guarda só
+    # garante perfil válido. O aperto pra gestão fica no que é de compra
+    # (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_equipe()
+    if erro_perfil:
+        return erro_perfil
     # Custo só pra admin, que é quem edita o cadastro do insumo.
     usuario = _usuario_logado()
     com_custo = bool(usuario and usuario['papel'] == 'admin')
@@ -2314,6 +2420,12 @@ def api_buscar_receita_insumo(insumo_id):
     insumo, pra tela montar a lista de ingredientes e recalcular o custo da
     batelada enquanto ela edita (a janela abre no Cardápio, que não tem a
     lista de insumos carregada)."""
+    # Estoque e Cardápio estão no menu da operação: aqui a guarda só
+    # garante perfil válido. O aperto pra gestão fica no que é de compra
+    # (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_equipe()
+    if erro_perfil:
+        return erro_perfil
     precos = _mapa_preco_insumo()
     receita = buscar_receita_insumo(insumo_id, precos)
     if receita is None:
@@ -2450,7 +2562,7 @@ def api_criar_insumo():
     dados = request.get_json(silent=True) or {}
     nome = (dados.get('nome') or '').strip()
     categoria = (dados.get('categoria') or 'Geral').strip() or 'Geral'
-    unidade_medida = (dados.get('unidadeMedida') or 'un').strip() or 'un'
+    unidade_medida = _texto_curto_sem_marcacao(dados.get('unidadeMedida'), padrao='un')
     if not nome:
         return jsonify({"erro": "Informe o nome do insumo."}), 400
     if unidade_medida not in UNIDADES_INSUMO:
@@ -2539,7 +2651,7 @@ def api_criar_insumos_em_lote():
         return jsonify({"erro": "Selecione ao menos uma loja válida."}), 400
 
     categoria = (dados.get('categoria') or 'Geral').strip() or 'Geral'
-    unidade_medida = (dados.get('unidadeMedida') or 'un').strip() or 'un'
+    unidade_medida = _texto_curto_sem_marcacao(dados.get('unidadeMedida'), padrao='un')
 
     resultado = criar_insumos_em_lote(nomes, categoria, unidade_medida, lojas)
     return jsonify(resultado)
@@ -2978,11 +3090,23 @@ def api_mais_vendidos_do_dia():
 
 @app.route('/api/vinculos-manuais', methods=['GET'])
 def api_listar_vinculos_manuais():
+    # Leitura da rede inteira (custo, compra, cadastro): sem isso, o perfil
+    # operação — que nem tem essa tela no menu — lia tudo chamando a API
+    # direto (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_gestao()
+    if erro_perfil:
+        return erro_perfil
     return jsonify({"vinculos": listar_vinculos_manuais()})
 
 
 @app.route('/api/itens-cardapio/todos', methods=['GET'])
 def api_listar_itens_cardapio_todos():
+    # Estoque e Cardápio estão no menu da operação: aqui a guarda só
+    # garante perfil válido. O aperto pra gestão fica no que é de compra
+    # (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_equipe()
+    if erro_perfil:
+        return erro_perfil
     return jsonify({"itens": listar_itens_cardapio_todos()})
 
 
@@ -2991,6 +3115,12 @@ def api_lotes_vencendo():
     """Lotes de validade vencendo (ou já vencidos) nos próximos `dias` dias,
     ainda não resolvidos — ver listar_lotes_vencendo em
     backend/armazenamento.py e seção 6.4 da documentação."""
+    # Estoque e Cardápio estão no menu da operação: aqui a guarda só
+    # garante perfil válido. O aperto pra gestão fica no que é de compra
+    # (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_equipe()
+    if erro_perfil:
+        return erro_perfil
     try:
         dias = int(request.args.get('dias', 7))
     except (TypeError, ValueError):
@@ -3625,6 +3755,12 @@ def api_criar_cotacao():
 
 @app.route('/api/cotacoes/<int:cotacao_id>', methods=['GET'])
 def api_detalhe_cotacao(cotacao_id):
+    # Leitura da rede inteira (custo, compra, cadastro): sem isso, o perfil
+    # operação — que nem tem essa tela no menu — lia tudo chamando a API
+    # direto (auditoria de segurança, 24/09).
+    erro_perfil = _exigir_gestao()
+    if erro_perfil:
+        return erro_perfil
     cotacao = buscar_cotacao(cotacao_id)
     if not cotacao:
         return jsonify({"erro": "Cotação não encontrada."}), 404
@@ -4063,8 +4199,12 @@ def api_responder_convite_cotacao(token):
             if preco is None or preco == '':
                 continue
             preco_float = float(preco)
-            if preco_float <= 0:
-                return jsonify({"erro": "Preço precisa ser maior que zero."}), 400
+            # float("Infinity") e float("NaN") passam no > 0 e viram custo de
+            # insumo, CMV e margem — o preço do link vem de fora, sem login.
+            if not math.isfinite(preco_float) or preco_float <= 0:
+                return jsonify({"erro": "Preço precisa ser um número maior que zero."}), 400
+            if preco_float > LIMITE_PRECO_UNITARIO:
+                return jsonify({"erro": f"Preço acima de R$ {LIMITE_PRECO_UNITARIO:,.0f} por unidade — confira a unidade antes de enviar."}), 400
             precos[int(insumo_id)] = preco_float
     except (TypeError, ValueError):
         return jsonify({"erro": "Preço inválido."}), 400

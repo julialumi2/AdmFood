@@ -5702,3 +5702,69 @@ relatório — #12 (fluxograma empilhado no celular) saiu na leva 6.91 e #19
 Fica uma coisa de fora, por decisão dela: **publicar a extensão na Chrome Web
 Store** tem custo. Enquanto isso, a instalação continua em seis passos
 manuais, com o pacote pronto em `extensao-whatsapp/publicacao/`.
+
+
+### 6.95 Auditoria de segurança (24/09)
+
+Varredura das quatro áreas que ela pediu: links públicos, controle de acesso,
+segredos e injeção. Cinco correções e um bom tanto de coisa que já estava
+certa — o que também interessa registrar, pra ninguém "corrigir" de novo.
+
+**O que estava aberto e foi fechado:**
+
+| | O que era | Risco |
+|---|---|---|
+| S-1 | Nenhum cabeçalho de segurança: sem CSP, sem `X-Frame-Options`, sem `nosniff`. O link de contagem e o de cotação vão por WhatsApp e podiam ser enquadrados num iframe (clickjacking), e um XSS em qualquer canto não tinha nada segurando | Alto |
+| S-2 | `GET /api/cotacoes/<id>` e `GET /api/vinculos-manuais` não conferiam perfil: operação, que não tem essas telas no menu, lia preço de fornecedor e histórico chamando a API direto | Médio |
+| S-3 | Os três links públicos não tinham teto de tentativa por IP | Médio |
+| S-4 | `Infinity` e `NaN` passavam na validação de preço do link do fornecedor — e viram custo de insumo, CMV e margem | Médio |
+| S-5 | A unidade do insumo saía sem escapar na Evolução do Preço | Baixo |
+
+O **S-1** é o mais importante: `POLITICA_CSP` no `app.py` só deixa executar
+script do próprio domínio e dos dois CDNs (já presos na versão com
+`integrity`), proíbe `<object>`, proíbe enquadrar o sistema em iframe, e o
+`Referrer-Policy` evita que o token do link vaze pro site de destino quando o
+fornecedor clica num link de fora. HSTS só sai quando a resposta já veio por
+HTTPS, senão trancaria o `localhost`. É o equivalente ao `helmet` do Node,
+sem dependência nova (no Flask seria o Flask-Talisman).
+
+Dívida anotada: `'unsafe-inline'` continua no `script-src`, porque as páginas
+têm `<script>` inline e `onclick=`. Tirar isso é refatoração grande.
+
+O **S-3** usa o mesmo padrão em memória do limite de login: 30 chamadas por
+IP por minuto nos caminhos de token, com `X-Forwarded-For` pra funcionar
+atrás de proxy. Não protege contra adivinhar o token (192 bits já resolvem
+isso) — protege contra alguém martelar o servidor.
+
+O **S-5** era defesa em profundidade, não buraco: a unidade já é barrada na
+entrada por uma lista fechada (g, ml, un) nas duas rotas. A escapada na saída
+entrou porque um campo que a pessoa digita e a tela imprime não deve depender
+de uma validação só.
+
+**O que foi conferido e já estava certo** (vale registrar):
+
+- **Token dos links públicos** — `secrets.token_urlsafe(24)`, 192 bits de
+  gerador criptográfico. Não é id sequencial nem UUIDv4 (que tem 122). Tem
+  prazo (`prazo_validade`, conferido em toda rota) e uso único (o convite vai
+  pra `respondida` e não aceita de novo).
+- **SQL injection** — varri as 482 chamadas de `execute`. Tudo que vem de
+  fora passa por `?`. As poucas interpolações em SQL são nome de tabela e de
+  coluna vindos de constante do próprio código, nunca da requisição.
+- **Segredos** — nada de chave no frontend nem no repositório (que é
+  público): tudo em variável de ambiente. A chave de sessão nunca é fixa no
+  código.
+- **Upload** — lista fechada de extensão, nome do arquivo trocado por
+  `uuid4().hex` (o nome que a pessoa mandou é descartado), rota de download
+  barra `..` e confere a extensão, backup só por regex de nome, e o teto
+  global de 25 MB.
+- **Senha** — `werkzeug.security`, que hoje usa **scrypt 32768:8:1** com salt
+  por senha. É mais forte que bcrypt no padrão dele.
+- **Cookie de sessão** — `HttpOnly`, `SameSite=Lax` e `Secure` por variável
+  de ambiente.
+- **Isolamento entre lojas** — as rotas que tratam dado de uma loja passam
+  por `_loja_visivel`/`_loja_no_escopo`; o link público de contagem só devolve
+  a contagem daquele token, e o de cotação só os itens daquele convite.
+- **Webhook de entrada** — não existe nenhum. O único webhook é de saída
+  (`MAKE_WEBHOOK_URL`), então validação de assinatura HMAC não se aplica.
+- **Valores negativos** — preço e quantidade são validados em todas as portas
+  de escrita, inclusive as sem login.
