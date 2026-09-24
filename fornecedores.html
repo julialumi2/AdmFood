@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.48.0/dist/umd/lucide.min.js" integrity="sha384-Hh7C333mXel+qppGoFs4qAOXp7h67eur4XsQVF2bvHAM3MQ4DX4cQI7oRCzb98J4" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -178,7 +178,16 @@
             <div class="fornecedores-acoes">
               <div class="search-box fornecedores-busca">
                 <i data-lucide="search"></i>
-                <input type="text" placeholder="Buscar fornecedor..." id="fornecedores-busca" aria-label="Buscar fornecedor por nome, CNPJ, categoria, contato ou loja">
+                <input type="text" placeholder="Buscar fornecedor..." id="fornecedores-busca" aria-label="Buscar fornecedor por nome, CNPJ, categoria, contato, loja, prazo de pagamento ou dia de entrega">
+              </div>
+              <!-- Os inativos ficavam misturados no fim da lista (QA 22/09) -->
+              <div class="select-wrapper">
+                <select id="fornecedores-filtro-ativos" aria-label="Mostrar fornecedores">
+                  <option value="ativos">Só os ativos</option>
+                  <option value="todos">Ativos e inativos</option>
+                  <option value="inativos">Só os inativos</option>
+                </select>
+                <i data-lucide="chevron-down"></i>
               </div>
               <div class="page-acoes-topo" id="fornecedores-acoes-admin" style="display:none;">
                 <button type="button" class="btn-registrar-entrada" id="btn-novo-fornecedor">

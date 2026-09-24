@@ -76,6 +76,22 @@
 
 .precos-busca { min-width: 260px; }
 
+/* "Vale hoje" e o homologado de cada loja (QA 22/09) */
+.precos-em-uso {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.precos-validade-vencida { color: var(--danger); font-weight: 600; }
+
 .precos-recortes {
   display: flex;
   flex-wrap: wrap;

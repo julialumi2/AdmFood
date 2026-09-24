@@ -1396,3 +1396,13 @@ body.dark-mode {
   background-color: var(--cardapio-alerta-bg);
   color: var(--cardapio-alerta);
 }
+
+
+/* Quem digitou o custo à mão e quando (QA 22/09) */
+.detalhe-custo-quem {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}

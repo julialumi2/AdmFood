@@ -742,3 +742,15 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
 @media (prefers-reduced-motion: reduce) {
   .page-content.mv-carregando { transition: none; }
 }
+
+
+/* "Dia em andamento": o dia de hoje está sempre pela metade (QA 22/09) */
+.mv-dia-parcial {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--warning, #F59E0B);
+  text-transform: none;
+  letter-spacing: 0;
+}

@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.48.0/dist/umd/lucide.min.js" integrity="sha384-Hh7C333mXel+qppGoFs4qAOXp7h67eur4XsQVF2bvHAM3MQ4DX4cQI7oRCzb98J4" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -265,16 +265,32 @@
           <p class="guia-mapa-atalho">As duas setas do meio trocam um item de bloco na hora, sem refazer a contagem.</p>
         </div>
 
+        <!-- Guia longo, sem índice e sem busca: quem estava no meio de uma
+             compra não tinha como pular pra "Cotação" (QA 22/09) -->
+        <nav class="guia-indice" aria-label="Etapas do fluxo de compras">
+          <span class="guia-indice-rotulo">Pular pra</span>
+          <a href="#etapa-requisicao">1. Requisição</a>
+          <a href="#etapa-contagem">2. Contagem</a>
+          <a href="#etapa-o-que-comprar">3. O que comprar</a>
+          <a href="#etapa-cotacao">4. Cotação</a>
+          <a href="#etapa-pedido">5. Pedido</a>
+          <a href="#etapa-recebimento">6. Recebimento</a>
+        </nav>
+
+        <!-- O texto é da compradora, mas a página aparece pra operação, que
+             lê passos marcados "você" e não consegue executar (QA 22/09) -->
+        <p class="guia-aviso-operacao" id="guia-aviso-operacao" hidden></p>
+
         <ol class="guia-etapas" style="margin-top: var(--space-8);">
 
           <li class="guia-etapa">
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">1</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Requisição</h3>
+                <h3 class="guia-etapa-nome" id="etapa-requisicao">Requisição</h3>
                 <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Compras → Requisições</b> → <span class="guia-btnref">Nova requisição</span></p>
+              <p class="guia-etapa-onde">Onde: <a href="contagens.html"><b>Compras → Requisições</b></a> → <span class="guia-btnref">Nova requisição</span></p>
               <p>
                 Dê um título (ex.: "Contagem 20/09"), um prazo e marque as lojas que entram. O
                 sistema abre uma contagem por loja, cada uma com o seu link, sem login, pra mandar
@@ -291,7 +307,7 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">2</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Contagem</h3>
+                <h3 class="guia-etapa-nome" id="etapa-contagem">Contagem</h3>
                 <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px solid var(--border-color);">Funcionário da loja</span>
               </div>
               <p class="guia-etapa-onde">Onde: o link que você mandou, sem login</p>
@@ -307,10 +323,10 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">3</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">O que comprar</h3>
+                <h3 class="guia-etapa-nome" id="etapa-o-que-comprar">O que comprar</h3>
                 <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Compras → Requisições</b> → abrir a requisição</p>
+              <p class="guia-etapa-onde">Onde: <a href="contagens.html"><b>Compras → Requisições</b></a> → abrir a requisição</p>
               <p>
                 Primeiro confira e aprove cada loja: abra a loja pelo ícone na linha dela e clique em
                 <span class="guia-btnref">Aprovar e conferir a compra</span>, ou aprove tudo de uma vez
@@ -352,11 +368,11 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">4</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Cotação</h3>
+                <h3 class="guia-etapa-nome" id="etapa-cotacao">Cotação</h3>
                 <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
                 <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px dashed var(--border-color);">Fornecedores</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Compras → Cotações</b> → abrir a cotação</p>
+              <p class="guia-etapa-onde">Onde: <a href="cotacoes.html"><b>Compras → Cotações</b></a> → abrir a cotação</p>
               <p>
                 Só entra aqui o que não tem homologado. Clique em
                 <span class="guia-btnref">Convidar fornecedores por WhatsApp</span> e marque quem vai
@@ -394,7 +410,9 @@
               <p>
                 Item que ninguém cota aparece no aviso amarelo <b>Sem fornecedor marcado</b> e não vai
                 em link nenhum. Você decide: marca quem cota em Insumos (na aba da loja), lança o preço
-                à mão ou clica em <span class="guia-btnref">tirar da cotação</span>, embaixo do nome do item.
+                à mão ou clica em <span class="guia-btnref">tirar da cotação</span>, embaixo do nome do item
+                — esse botão só existe na cotação que nasceu de uma requisição; na cotação lançada à mão,
+                apague o item pela própria lista.
               </p>
               <p>
                 Pra escolher o vencedor, clique no preço. Pode ser um fornecedor diferente em cada item.
@@ -430,13 +448,20 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">5</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Pedido</h3>
+                <h3 class="guia-etapa-nome" id="etapa-pedido">Pedido</h3>
                 <span class="badge-pill" style="background: var(--danger-soft); color: var(--danger);">Você</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Compras → Pedidos</b></p>
+              <p class="guia-etapa-onde">Onde: <a href="pedidos.html"><b>Compras → Pedidos</b></a></p>
               <p>
                 Aqui chegam os pedidos diretos dos homologados e os que saíram da cotação, um por
                 fornecedor e por loja, porque o pedido mínimo de cada fornecedor vale por loja.
+              </p>
+              <p>
+                <b>Pedido mínimo.</b> Se o valor do pedido ficar abaixo do mínimo que está no cadastro
+                daquele fornecedor, o pedido mostra o aviso em amarelo. O sistema não trava nada: quem
+                decide somar mais itens, juntar com outra loja ou mandar assim mesmo é você. Na cotação
+                esse número já aparece embaixo do nome de cada fornecedor, enquanto você escolhe os
+                vencedores.
               </p>
               <p>
                 Abra o pedido e clique em <span class="guia-btnref">Enviar por WhatsApp</span>: abre a
@@ -457,10 +482,10 @@
             <div class="guia-etapa-trilho"><div class="guia-etapa-num">6</div></div>
             <div class="guia-etapa-corpo">
               <div class="guia-etapa-head">
-                <h3 class="guia-etapa-nome">Recebimento</h3>
+                <h3 class="guia-etapa-nome" id="etapa-recebimento">Recebimento</h3>
                 <span class="badge-pill" style="background: var(--bg-main); color: var(--text-muted); border: 1px solid var(--border-color);">Quem recebe a entrega</span>
               </div>
-              <p class="guia-etapa-onde">Onde: <b>Compras → Recebimentos</b></p>
+              <p class="guia-etapa-onde">Onde: <a href="recebimentos.html"><b>Compras → Recebimentos</b></a></p>
               <p>
                 Chegou a entrega: busque o pedido e clique em
                 <span class="guia-btnref">Confirmar recebimento</span>. Digite quem recebeu e a data,

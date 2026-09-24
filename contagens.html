@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.48.0/dist/umd/lucide.min.js" integrity="sha384-Hh7C333mXel+qppGoFs4qAOXp7h67eur4XsQVF2bvHAM3MQ4DX4cQI7oRCzb98J4" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -228,6 +228,11 @@
                 <h3 class="table-title">Requisições abertas por loja</h3>
                 <p class="table-subtitle">Clique numa requisição pra conferir o preenchimento loja a loja</p>
               </div>
+              <!-- A tabela diz "abertas" e listava as aprovadas junto (QA 22/09) -->
+              <label class="contagens-mostrar-aprovadas">
+                <input type="checkbox" id="contagens-mostrar-aprovadas">
+                <span id="contagens-aprovadas-rotulo">Mostrar as já aprovadas</span>
+              </label>
             </div>
 
             <div class="table-responsive">

@@ -97,6 +97,7 @@ from backend.armazenamento import (
     definir_embalagem_viagem,
     buscar_embalagem_viagem_item,
     salvar_custo_item_cardapio,
+    quem_digitou_o_custo,
     remover_custo_item_cardapio,
     listar_produtos_por_loja,
     custos_da_ficha_por_item,
@@ -1564,6 +1565,9 @@ VARIACAO_FATURAMENTO_INSIGHT_PCT = 15
 # Curva ABC de 3 janelas × 4 lojas pesa (~1 s): a análise fica guardada 5
 # minutos em cada processo; estoque e atividades do dia são sempre na hora.
 TEMPO_CACHE_ANALISE_HOME_S = 300
+# Quantos escopos de loja cabem ao mesmo tempo (admin vê 4, cada gerente vê a
+# dele): 8 cobre a rede inteira sem virar memória à toa.
+MAXIMO_CACHE_ANALISE_HOME = 8
 _cache_analise_home = {}
 
 NOME_CURTO_LOJA = {"Hamburgueria Artesanos": "Artesanos"}
@@ -1739,7 +1743,16 @@ def _analise_da_home(lojas):
         "custosEmAlta": alertas[:3],
         "insights": [par[1] for par in insights[:4]],
     }
-    _cache_analise_home.clear()
+    # Guardava UMA entrada só: com admin (4 lojas) e gerente (1 loja) na Home
+    # ao mesmo tempo, um expulsava o outro e a Curva ABC de 3 janelas × 4
+    # lojas era refeita a cada chamada (QA 22/09). Agora cabem alguns
+    # escopos, e o que é de outro dia (ou mais velho) sai primeiro.
+    hoje_iso = hoje.isoformat()
+    for chave_velha in [c for c in _cache_analise_home if c[1] != hoje_iso]:
+        _cache_analise_home.pop(chave_velha, None)
+    while len(_cache_analise_home) >= MAXIMO_CACHE_ANALISE_HOME:
+        mais_velha = min(_cache_analise_home, key=lambda c: _cache_analise_home[c][0])
+        _cache_analise_home.pop(mais_velha, None)
     _cache_analise_home[chave] = (time.time(), resultado)
     return resultado
 
@@ -3117,6 +3130,9 @@ def api_buscar_ficha_tecnica_item(item_id):
         "insumos": formatar(buscar_ficha_tecnica_item(item_id, loja)),
         "embalagemViagem": formatar(buscar_embalagem_viagem_item(item_id, loja)),
         "insumosDisponiveis": insumos_disponiveis,
+        # Quem digitou o custo à mão e quando: é ele que manda na margem, e a
+        # tela não dizia de onde tinha vindo (QA 22/09).
+        "custoManual": quem_digitou_o_custo(item_id, loja),
         # Volta no Salvar pra detectar que alguém mexeu no meio (QA 22/09).
         "assinatura": assinatura_da_ficha(item_id, loja),
     })
@@ -3381,8 +3397,10 @@ def api_salvar_custo_item_cardapio(item_id):
     if custo < 0:
         return jsonify({"erro": "Custo não pode ser negativo."}), 400
 
-    salvar_custo_item_cardapio(item_id, loja, custo)
-    return jsonify({"ok": True})
+    salvar_custo_item_cardapio(item_id, loja, custo, quem=(_usuario_logado() or {}).get('nome'))
+    # Quem digitou e quando volta pra tela: é esse custo que manda na margem
+    # e não dava pra saber de onde tinha vindo (QA 22/09).
+    return jsonify({"ok": True, "custoManual": quem_digitou_o_custo(item_id, loja)})
 
 
 # --- FORNECEDORES (diretório da rede, semente do módulo de Compras) --------
@@ -5823,7 +5841,14 @@ def api_buscar_contagem_por_token(token):
 
     resposta = _formatar_contagem(contagem)
     resposta.pop('token', None)
-    resposta['itens'] = listar_itens_contagem(contagem['id'], contagem['loja'])
+    # O custo de cada insumo e o "Previsão compra" em R$ viajavam no link sem
+    # login: quem recebe o link (ou quem ele reenviar) via quanto a rede paga
+    # em cada item (QA 22/09). A sugestão de QUANTO comprar fica — é o que
+    # quem conta precisa ver; o dinheiro só aparece pra quem entra no sistema.
+    resposta['itens'] = [
+        {**item, 'custoUnitario': None}
+        for item in listar_itens_contagem(contagem['id'], contagem['loja'])
+    ]
     resposta['expirada'] = contagem['status'] == 'aberta' and _contagem_fora_do_prazo(contagem)
     return jsonify(resposta)
 

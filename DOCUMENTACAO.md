@@ -5626,3 +5626,79 @@ Com isso, os **123 médios da auditoria de 22/09 estão fechados** — sobram os
 26 baixos. Duas coisas dependem de gente, não de código: publicar a extensão
 na Chrome Web Store (#116) e cadastrar as lojas em Fornecedores, pro convite
 parar de cair no atalho de marcar todo mundo (#26).
+
+
+### 6.94 Os 26 baixos da auditoria
+
+Última leva do QA de 22/09. Dois eram de segurança e vieram primeiro:
+
+**Bibliotecas externas sem versão fixa (#29).** As 22 telas carregavam
+`lucide@latest` e o `chart.js` sem versão: quem controlasse esses endereços
+rodaria código dentro do sistema já logado. Agora as duas estão presas na
+versão (lucide 1.48.0, Chart.js 4.5.1) e com `integrity` (SRI) — o navegador
+confere o conteúdo e recusa qualquer arquivo diferente. Testado no navegador:
+as duas carregam com o hash valendo.
+
+**Custo no link público (#24).** O link de contagem, que vai por WhatsApp e
+não pede login, mandava o custo unitário de cada insumo e a "Previsão compra"
+em R$. A sugestão de **quanto** comprar continua — é o que quem conta precisa
+—, mas o dinheiro saiu do link e só aparece pra quem entra no sistema.
+
+**O resto, por tela:**
+
+- **Home (#1)** — o cache da análise das 4 lojas guardava uma entrada só:
+  admin (4 lojas) e gerente (1 loja) se expulsavam e a Curva ABC de 3 janelas
+  era refeita a cada chamada. Agora cabem 8 escopos, e o que é de outro dia
+  sai primeiro.
+- **Insumos (#2)** — "Excluir insumo" some pra quem não é admin, em vez de
+  aparecer e o servidor recusar.
+- **Requisições (#3)** — a tabela "Requisições **abertas** por loja" listava
+  as aprovadas junto; agora elas ficam atrás de uma caixinha que diz quantas
+  são.
+- **Cotações (#4)** — o "voltar" do navegador volta pra lista em vez de sair
+  da tela inteira (abrir uma cotação virou um passo no histórico).
+- **Fornecedores (#5, #6)** — a busca passou a ler prazo de pagamento e dia
+  de entrega ("quem entrega terça"), e existe filtro de ativos/inativos, com
+  os inativos escondidos por padrão e a contagem no subtítulo.
+- **Guia de Compras (#7–#10)** — ressalva no "tirar da cotação" (só existe na
+  cotação vinda de requisição), um parágrafo sobre pedido mínimo na etapa do
+  pedido, índice fixo com as 6 etapas, "Onde:" virou link de verdade pra cada
+  tela, e quem é de operação lê no topo o que é da parte dela.
+- **Cardápio (#13, #14)** — o custo digitado à mão passa a dizer por quem e
+  quando (coluna `quem` nova), e a porção de complemento aceita fração, não
+  só grama inteira.
+- **Curva ABC (#15)** — "Proteger" vale nas quatro lojas, e isso agora está
+  escrito no próprio controle.
+- **Vendas Diárias (#16)** — a atualização automática espera a pessoa ficar 8
+  segundos sem mexer, e não roda com modal aberto: antes redesenhava o
+  gráfico no meio da leitura.
+- **Mais Vendidos (#17, #18)** — a tela parou de gravar no banco a cada
+  abertura (o recasamento só tenta nomes ainda não tentados contra o catálogo
+  atual, e a digital do catálogo muda quando alguém cria item ou vínculo), e
+  o dia de hoje aparece marcado como "em andamento", com a hora.
+- **Vendas Semanais (#20)** — o resultado da importação passou a listar
+  quantas semanas foram lidas de cada loja.
+- **Evolução do Preço (#21–#23)** — o gráfico e a tabela falam em kg/L (a
+  unidade do fornecedor), não mais em grama com 4 casas; cotação muito longe
+  do que se paga sai do desenho e vira aviso, em vez de achatar a linha do
+  preço numa reta; e o topo diz **qual preço vale hoje**, de onde ele veio, e
+  o homologado de cada loja com a validade (em vermelho quando venceu).
+- **Preencher Cotação (#25)** — "Enviando…", o erro aparece na tela com os
+  preços preservados (não mais num alerta cru), e o cabeçalho diz de quem é a
+  cotação, pra quem é o link e por onde falar.
+- **Confirmar Pedido (#26)** — depois de aceitar fica um comprovante com
+  número do pedido, fornecedor, data, valor e a ressalva, com botão de
+  imprimir ou salvar em PDF.
+- **Preparo (#27)** — o período padrão parou de pular um dia depois das 21h
+  (era calculado em fuso de Londres). O mesmo ajuste valeu pros outros
+  lugares que montavam data assim.
+- **Extensão (#28)** — os avisos foram do `alert()` do navegador pro painel
+  da própria extensão.
+
+**#11, #12 e #19 não eram achados**, e sim as sugestões do plano de ação do
+relatório — #12 (fluxograma empilhado no celular) saiu na leva 6.91 e #19
+(tirar a gravação do caminho de leitura) é o #17 acima.
+
+Fica uma coisa de fora, por decisão dela: **publicar a extensão na Chrome Web
+Store** tem custo. Enquanto isso, a instalação continua em seis passos
+manuais, com o pacote pronto em `extensao-whatsapp/publicacao/`.

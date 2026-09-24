@@ -379,6 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4.098 TELA DE FORNECEDORES
   if (document.getElementById('fornecedores-tabela-body')) {
     document.getElementById('fornecedores-busca')?.addEventListener('input', () => renderFornecedoresTabela());
+    document.getElementById('fornecedores-filtro-ativos')?.addEventListener('change', () => renderFornecedoresTabela());
     carregarFornecedores();
   }
 
@@ -1370,10 +1371,10 @@ function validarIntervaloDatasInsights() {
 // Sem os dois campos preenchidos, usa o padrão dos últimos 30 dias.
 function periodoInsightsSelecionado() {
   const hoje = new Date();
-  const fimPadrao = hoje.toISOString().slice(0, 10);
+  const fimPadrao = _dataLocalParaCampo(hoje);
   const inicioPadraoData = new Date();
   inicioPadraoData.setDate(hoje.getDate() - 29);
-  const inicioPadrao = inicioPadraoData.toISOString().slice(0, 10);
+  const inicioPadrao = _dataLocalParaCampo(inicioPadraoData);
 
   const inicio = (dataInicioInput && dataInicioInput.value) || inicioPadrao;
   const fim = (dataFimInput && dataFimInput.value) || fimPadrao;
@@ -1429,12 +1430,18 @@ let preparoData = {};
 let preparoTabAtual = 'geral';
 let preparoHorarioChartInstance = null;
 
+// toISOString() devolve a data em Londres: depois das 21h aqui já é o dia
+// seguinte lá, e o período padrão do Preparo pulava um dia (QA 22/09).
+function _dataLocalParaCampo(data) {
+  return new Date(data.getTime() - data.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 function periodoPreparoSelecionado() {
   const hoje = new Date();
-  const fimPadrao = hoje.toISOString().slice(0, 10);
+  const fimPadrao = _dataLocalParaCampo(hoje);
   const inicioPadraoData = new Date();
   inicioPadraoData.setDate(hoje.getDate() - 29);
-  const inicioPadrao = inicioPadraoData.toISOString().slice(0, 10);
+  const inicioPadrao = _dataLocalParaCampo(inicioPadraoData);
 
   const inicioInput = document.getElementById('preparo-data-inicio');
   const fimInput = document.getElementById('preparo-data-fim');
@@ -1658,7 +1665,7 @@ document.querySelectorAll('#preparo-atalhos .curva-periodo-btn').forEach((botao)
     document.querySelectorAll('#preparo-atalhos .curva-periodo-btn').forEach((b) => b.classList.remove('active'));
     botao.classList.add('active');
     const hoje = new Date();
-    const paraCampo = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const paraCampo = _dataLocalParaCampo;
     let inicio;
     let fim = hoje;
     if (botao.dataset.atalho === 'mes') {
@@ -1717,7 +1724,7 @@ function _janelaConsumoRecente() {
   const fim = new Date();
   const inicio = new Date(fim);
   inicio.setDate(fim.getDate() - 13);
-  return { inicio: inicio.toISOString().slice(0, 10), fim: fim.toISOString().slice(0, 10) };
+  return { inicio: _dataLocalParaCampo(inicio), fim: _dataLocalParaCampo(fim) };
 }
 
 async function carregarInsumos() {
@@ -2344,7 +2351,9 @@ function renderEstoqueTab() {
             <button type="button" class="btn-acao-icone" data-acao="editar-insumo" data-insumo-id="${insumo.id}" title="Editar cadastro do insumo (fornecedores, marca)">
               <i data-lucide="settings-2"></i>
             </button>
-            <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)">
+            <!-- Excluir insumo é só do admin: o gerente via o botão e o
+                 servidor recusava com "não foi possível" (QA 22/09) -->
+            <button type="button" class="btn-acao-icone btn-excluir" data-acao="excluir-insumo" data-insumo-id="${insumo.id}" data-nome="${escaparHtml(insumo.nome)}" title="Excluir insumo (todas as lojas)" ${window.usuarioLogado?.papel === 'admin' ? '' : 'hidden'}>
               <i data-lucide="trash-2"></i>
             </button>
           </div></td>
@@ -3037,6 +3046,16 @@ function renderMaisVendidos(animar = true) {
   document.getElementById('mv-dia-semana').textContent = ehHoje ? 'Hoje, até agora' : semana;
   document.getElementById('mv-dia-data').textContent = texto;
   document.getElementById('mv-eyebrow-dia').textContent = `${ehHoje ? 'HOJE' : semana.toUpperCase()}, ${texto}`;
+  // O dia mostrado não dizia se estava completo: hoje é sempre meio dia de
+  // venda, e o número parecia o fechamento (QA 22/09).
+  const avisoParcial = document.getElementById('mv-dia-parcial');
+  if (avisoParcial) {
+    avisoParcial.hidden = !ehHoje;
+    if (ehHoje) {
+      const agora = new Date();
+      avisoParcial.textContent = `Dia em andamento — o que entrou até ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}. A sincronização roda de 15 em 15 minutos.`;
+    }
+  }
   const input = document.getElementById('mv-dia-input');
   input.value = dados.dia;
   input.max = dados.hoje;
@@ -3656,14 +3675,25 @@ function renderFornecedoresTabela() {
 
   // A busca acha por nome, CNPJ, categoria, contato e loja.
   const termoBusca = (document.getElementById('fornecedores-busca')?.value || '').trim().toLowerCase();
+  // Os inativos ficavam misturados no fim da lista, sem jeito de esconder
+  // (QA 22/09). O padrão é mostrar só quem está ativo.
+  const mostrar = document.getElementById('fornecedores-filtro-ativos')?.value || 'ativos';
   let linhas = fornecedoresLista;
+  if (mostrar === 'ativos') linhas = linhas.filter((f) => f.ativo);
+  else if (mostrar === 'inativos') linhas = linhas.filter((f) => !f.ativo);
   if (termoBusca) {
-    linhas = linhas.filter((f) => [f.nome, f.cnpj, f.categoria, f.contatoNome, f.contatoTelefone, f.contatoEmail, ...(f.lojas || [])]
+    // Prazo de pagamento e dia de entrega são texto livre, então não dava
+    // pra achar "quem entrega terça": agora a busca lê os dois (QA 22/09).
+    linhas = linhas.filter((f) => [f.nome, f.cnpj, f.categoria, f.contatoNome, f.contatoTelefone,
+      f.contatoEmail, f.prazoPagamento, f.diasEntrega, ...(f.lojas || [])]
       .some((campo) => String(campo || '').toLowerCase().includes(termoBusca)));
   }
-  document.getElementById('fornecedores-tabela-sub').textContent = termoBusca
+  const inativos = fornecedoresLista.filter((f) => !f.ativo).length;
+  document.getElementById('fornecedores-tabela-sub').textContent = (termoBusca || mostrar !== 'ativos')
     ? `${linhas.length} de ${fornecedoresLista.length} fornecedores`
-    : 'Contato, lojas atendidas e condições comerciais de cada fornecedor';
+    : (inativos
+      ? `Contato, lojas atendidas e condições comerciais · ${inativos} ${inativos === 1 ? 'inativo escondido' : 'inativos escondidos'}`
+      : 'Contato, lojas atendidas e condições comerciais de cada fornecedor');
 
   if (!linhas.length) {
     const colspan = 6 + (isAdmin ? 1 : 0);
@@ -4353,7 +4383,32 @@ document.getElementById('form-nova-cotacao')?.addEventListener('submit', async (
   }
 });
 
+// O "voltar" do navegador saía da tela inteira (QA 22/09): agora ele fecha
+// o detalhe e volta pra lista, como o botão.
+window.addEventListener('popstate', (evento) => {
+  if (!document.getElementById('cotacoes-detalhe-view')) return;
+  if (evento.state && evento.state.cotacaoId) {
+    abrirCotacaoDetalhe(evento.state.cotacaoId, true);
+    return;
+  }
+  if (cotacaoAtualId) _voltarPraListaDeCotacoes();
+});
+
+function _voltarPraListaDeCotacoes() {
+  _pararDeAcompanharCotacao();
+  document.getElementById('cotacoes-detalhe-view').style.display = 'none';
+  document.getElementById('cotacoes-lista-view').style.display = '';
+  document.getElementById('cotacoes-topo').style.display = '';
+  cotacaoAtualId = null;
+}
+
 document.getElementById('btn-cotacao-voltar')?.addEventListener('click', async () => {
+  // Um passo pra trás no histórico, pro botão e o "voltar" do navegador
+  // fazerem a mesma coisa.
+  if (history.state && history.state.cotacaoId) {
+    history.back();
+    return;
+  }
   _pararDeAcompanharCotacao();
   document.getElementById('cotacoes-detalhe-view').style.display = 'none';
   document.getElementById('cotacoes-lista-view').style.display = '';
@@ -4471,8 +4526,13 @@ document.getElementById('btn-cotacao-atualizar')?.addEventListener('click', asyn
   }
 });
 
-async function abrirCotacaoDetalhe(cotacaoId) {
+async function abrirCotacaoDetalhe(cotacaoId, doHistorico = false) {
   cotacaoAtualId = cotacaoId;
+  // O "voltar" do navegador saía da tela inteira, em vez de voltar pra lista
+  // (QA 22/09). Abrir uma cotação vira um passo no histórico.
+  if (!doHistorico) {
+    history.pushState({ cotacaoId }, '', `?cotacao=${cotacaoId}`);
+  }
   // Pode vir da aba Compras ("Nova cotação"); o detalhe tem título e ações
   // próprios, então o topo da lista some.
   _mostrarAbaCotacoes('cotacoes');
@@ -6553,9 +6613,22 @@ function renderContagensTabela() {
   }
   // Mesmo período da tabela de Requisições, logo acima.
   const inicio = _inicioDoPeriodo(document.getElementById('requisicoes-filtro-periodo')?.value);
-  const lista = contagensLista.filter((c) => !inicio || c.criadoEm.slice(0, 10) >= inicio);
+  // A tabela se chama "Requisições ABERTAS por loja" e listava as aprovadas
+  // junto (QA 22/09). As aprovadas ficam atrás da caixinha.
+  const comAprovadas = !!document.getElementById('contagens-mostrar-aprovadas')?.checked;
+  const noPeriodo = contagensLista.filter((c) => !inicio || c.criadoEm.slice(0, 10) >= inicio);
+  const lista = comAprovadas ? noPeriodo : noPeriodo.filter((c) => c.status !== 'aprovada');
+  const aprovadasEscondidas = noPeriodo.length - lista.length;
+  const rotuloAprovadas = document.getElementById('contagens-aprovadas-rotulo');
+  if (rotuloAprovadas) {
+    rotuloAprovadas.textContent = aprovadasEscondidas
+      ? `Mostrar as ${aprovadasEscondidas} já aprovadas`
+      : 'Mostrar as já aprovadas';
+  }
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">Nenhuma requisição nesse período.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="panel-subtitle">${
+      aprovadasEscondidas ? 'Nenhuma requisição aberta nesse período — só aprovadas.' : 'Nenhuma requisição nesse período.'
+    }</td></tr>`;
     return;
   }
 
@@ -6888,6 +6961,8 @@ function renderRequisicoesTabela() {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+document.getElementById('contagens-mostrar-aprovadas')?.addEventListener('change', renderContagensTabela);
 
 document.getElementById('requisicoes-filtro-periodo')?.addEventListener('change', () => {
   renderRequisicoesTabela();
@@ -8321,6 +8396,8 @@ async function inicializarContagemPublica() {
             <p class="contagem-aviso-unidade" data-aviso-insumo-id="${item.insumoId}" hidden></p>
             <span class="contagem-rotulo">Sugestão de compra</span>
             <div class="contagem-sugestao" data-sugestao-insumo-id="${item.insumoId}">—</div>
+            <!-- O link público não recebe mais custo (QA 22/09): o bloco de
+                 previsão em R$ só aparece pra quem está logado. -->
             ${item.custoUnitario != null ? `
               <div class="contagem-previsao-bloco" data-previsao-bloco="${item.insumoId}">
                 <span class="contagem-rotulo">Previsão compra</span>
@@ -8650,6 +8727,16 @@ async function inicializarPreencherCotacao() {
 
     document.getElementById('cotacao-publica-titulo').textContent = dados.cotacaoTitulo || 'Preencher cotação de preços';
     document.getElementById('cotacao-publica-subtitulo').textContent = `Válido até ${new Date(dados.prazoValidade).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+    // A tela não dizia pra quem era o link, de qual rede vinha nem com quem
+    // falar: o fornecedor recebia um link nu no WhatsApp (QA 22/09).
+    const quemEQuem = document.getElementById('cotacao-publica-quem');
+    if (quemEQuem) {
+      quemEQuem.innerHTML = `Cotação do <strong>Grupo Artesanos</strong>`
+        + (dados.fornecedorNome ? ` para <strong>${escaparHtml(dados.fornecedorNome)}</strong>` : '')
+        + (dados.cotacaoTitulo ? ` · ${escaparHtml(dados.cotacaoTitulo)}` : '')
+        + '.<br>Dúvida no preço ou na quantidade? Responda a mesma conversa do WhatsApp em que você recebeu este link.';
+      quemEQuem.hidden = false;
+    }
 
     // O fornecedor fala em kg/L/un, o banco guarda por g/ml/un: a tela pedia
     // "Preço Unitário (R$)" sem unidade nenhuma ao lado de uma quantidade em
@@ -8781,22 +8868,35 @@ async function inicializarPreencherCotacao() {
       if (semResposta && !confirm(`${semResposta === 1 ? 'Ficou 1 item' : `Ficaram ${semResposta} itens`} sem preço e sem marcar "não vendo esse item". Enviar assim mesmo?`)) return;
       if (!Object.keys(precos).length && !confirm('Você marcou todos os itens como "não vendo esse item". Enviar assim?')) return;
       if (!confirm('Após fechar, não vai dar pra alterar os preços. Tem certeza?')) return;
+      // Sem "enviando…", e o erro de rede virava alerta com texto cru
+      // (QA 22/09).
       const btn = document.getElementById('btn-cotacao-publica-enviar');
+      const textoBotao = btn.textContent;
+      const elErroEnvio = document.getElementById('cotacao-publica-erro-envio');
+      if (elErroEnvio) elErroEnvio.hidden = true;
       btn.disabled = true;
+      btn.textContent = 'Enviando…';
       try {
         const resp = await fetch(`/api/cotacoes/convite/${encodeURIComponent(token)}/responder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ precos, naoVende }),
         });
-        const respDados = await resp.json();
-        if (!resp.ok) throw new Error(respDados.erro || 'falha ao enviar');
+        const respDados = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(respDados.erro || await _erroDaResposta(resp));
         form.style.display = 'none';
         elObrigado.style.display = '';
       } catch (erro) {
         console.error('Falha ao enviar cotação:', erro);
-        alert(erro.message || 'Não foi possível enviar a cotação.');
+        if (elErroEnvio) {
+          elErroEnvio.textContent = `${erro.message} Os preços continuam preenchidos aqui — tente enviar de novo.`;
+          elErroEnvio.hidden = false;
+          elErroEnvio.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          alert(erro.message);
+        }
         btn.disabled = false;
+        btn.textContent = textoBotao;
       }
     });
   } catch (erro) {
@@ -8906,6 +9006,22 @@ async function inicializarConfirmarPedido() {
         document.getElementById('pedido-publico-confirmado-texto').textContent = observacao
           ? 'A compradora já está vendo que você recebeu o pedido, e a sua ressalva foi junto.'
           : 'A compradora já está vendo que você recebeu o pedido e vai entregar.';
+        // Depois de confirmar não sobrava comprovante: nem número, nem data,
+        // nem valor, nem como guardar (QA 22/09).
+        const comprovante = document.getElementById('pedido-comprovante');
+        if (comprovante) {
+          const linhas = [
+            ['Pedido', (dados.pedidos || []).map((p) => `nº ${p.id}`).join(', ') || '—'],
+            ['Fornecedor', dados.fornecedorNome || '—'],
+            ['Aceito em', new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })],
+            ['Valor total', document.getElementById('pedido-publico-valor-total').textContent],
+          ];
+          if (observacao) linhas.push(['Sua ressalva', observacao]);
+          document.getElementById('pedido-comprovante-dados').innerHTML = linhas
+            .map(([rotulo, valor]) => `<div><dt>${escaparHtml(rotulo)}</dt><dd>${escaparHtml(valor)}</dd></div>`).join('');
+          comprovante.hidden = false;
+          document.getElementById('btn-comprovante-imprimir').onclick = () => window.print();
+        }
         elConfirmado.style.display = '';
       } catch (erro) {
         console.error('Falha ao confirmar pedido:', erro);
@@ -11954,9 +12070,22 @@ async function carregarCanalRedeHome() {
 // — o usuário não tá olhando mesmo). O backend sincroniza com a Cardápio
 // Web a cada 15 min; aqui a tela busca de novo com mais frequência porque é
 // só ler do banco local do Flask, sem custo de API externa.
+// A atualização redesenhava o gráfico debaixo de quem estava lendo
+// (QA 22/09): além de pausar com a aba escondida, ela espera a pessoa ficar
+// alguns segundos sem mexer na tela.
+const SEGUNDOS_PARADA_PRA_ATUALIZAR = 8;
+let _ultimaInteracao = Date.now();
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((evento) => {
+  document.addEventListener(evento, () => { _ultimaInteracao = Date.now(); }, { passive: true, capture: true });
+});
+
 function iniciarAtualizacaoAutomatica(callback, intervaloMs = 2 * 60 * 1000) {
   setInterval(() => {
-    if (document.visibilityState === 'visible') callback();
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - _ultimaInteracao < SEGUNDOS_PARADA_PRA_ATUALIZAR * 1000) return;
+    // Modal aberto é alguém no meio de uma tarefa: não é hora de redesenhar.
+    if (document.querySelector('.modal-overlay[style*="flex"]')) return;
+    callback();
   }, intervaloMs);
 }
 
@@ -12809,6 +12938,16 @@ async function carregarUsuarioLogado() {
     if (saudacao) saudacao.textContent = `Olá ${usuario.nome.split(' ')[0]}, seja bem-vindo(a)!`;
     _ajustarMenuAoPerfil();
     _travarNaLojaDoFuncionario();
+    // O Guia é escrito pra quem compra ("você faz isso"), mas abre pra
+    // operação também, que lê passos que não consegue executar (QA 22/09).
+    const avisoGuia = document.getElementById('guia-aviso-operacao');
+    if (avisoGuia && usuario.papel === 'operacao') {
+      avisoGuia.hidden = false;
+      avisoGuia.innerHTML = 'Este guia é escrito pra quem faz as compras, então o "você" dos passos '
+        + 'é a compradora. Da sua parte são a <strong>etapa 2 (Contagem)</strong>, que chega pelo link '
+        + 'no WhatsApp, e a <strong>etapa 6 (Recebimento)</strong>, quando a mercadoria chega. O resto '
+        + 'é pra você entender de onde vem o pedido que aparece na sua porta.';
+    }
     carregarContadoresMenuCompras();
     // Se a lista de fornecedores respondeu antes do perfil, a tela ficava
     // como se fosse só leitura — sem "Cadastrar fornecedor" e sem a coluna
@@ -14279,6 +14418,8 @@ let fichaTecnicaProdutos = [];
 let fichaTecnicaComplementos = [];
 let fichaTecnicaMisturas = [];
 let fichaTecnicaInsumosDisponiveis = [];
+// Quem digitou o custo à mão do produto aberto (QA 22/09).
+let fichaTecnicaCustoManual = null;
 let fichaTecnicaAssinatura = null;
 let fichaTecnicaEditandoItemId = null;
 const fichaTecnicaExpandidos = new Set();
@@ -15032,14 +15173,17 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   const porcoesHTML = temPorcoes && porcoesComplemento.length ? `
     <details class="detalhe-produto-secao">
       <summary class="receita-eyebrow" style="cursor:pointer;">Complementos que o cliente escolhe (${porcoesPreenchidas} com porção)</summary>
-      <p class="panel-subtitle">Quanto sai de cada complemento escolhido neste produto. Em branco, vale a ficha do complemento.</p>
+      <p class="panel-subtitle">Quanto sai de cada complemento escolhido neste produto, na unidade dele (g, ml ou unidade). Em branco, vale a ficha do complemento.</p>
       <div class="detalhe-produto-linha">
         ${porcoesComplemento.map((c, indice) => `
           <div class="detalhe-produto-campo">
             <label>${escaparHtml(c.nome)}</label>
             ${isAdmin
-              ? `<input type="number" step="1" min="0" data-acao="detalhe-porcao-complemento" data-indice="${indice}" value="${c.gramas ?? ''}" placeholder="g">`
-              : `<span>${c.gramas != null ? `${c.gramas} g` : '—'}</span>`}
+              // step="1" travava a porção em grama inteira, e complemento em
+              // ml (calda, leite condensado) não tinha como entrar com meia
+              // medida (QA 22/09).
+              ? `<input type="number" step="0.01" min="0" data-acao="detalhe-porcao-complemento" data-indice="${indice}" value="${c.gramas ?? ''}" placeholder="${escaparHtml(c.unidadeMedida || 'g')}">`
+              : `<span>${c.gramas != null ? `${_numeroBR(c.gramas)} ${escaparHtml(c.unidadeMedida || 'g')}` : '—'}</span>`}
           </div>
         `).join('')}
       </div>
@@ -15107,6 +15251,8 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         ${isAdmin && produto.itemCardapioId ? `
           <label class="detalhe-custo-manual">Custo digitado
             <input type="number" step="0.01" min="0" id="detalhe-produto-input-custo" value="${produto.custo ?? ''}" placeholder="${produto.custoFicha != null ? `ficha: ${_formatarMoedaBR(produto.custoFicha)}` : 'R$ 0,00'}">
+            ${fichaTecnicaCustoManual && fichaTecnicaCustoManual.atualizado_em ? `
+              <small class="detalhe-custo-quem">digitado ${fichaTecnicaCustoManual.quem ? `por ${escaparHtml(fichaTecnicaCustoManual.quem)} ` : ''}em ${escaparHtml(_quandoLegivel(fichaTecnicaCustoManual.atualizado_em))}</small>` : ''}
           </label>
         ` : ''}
       </div>
@@ -15871,6 +16017,9 @@ async function abrirModalFichaTecnicaItem(itemId) {
     return;
   }
   fichaTecnicaInsumosDisponiveis = dados.insumosDisponiveis;
+  // Quem digitou o custo à mão e quando: é ele que manda na margem
+  // (QA 22/09).
+  fichaTecnicaCustoManual = dados.custoManual || null;
   // Guarda como a ficha estava ao abrir: se alguém salvar no meio, o Salvar
   // é recusado em vez de apagar o trabalho do outro (QA 22/09).
   fichaTecnicaAssinatura = dados.assinatura || null;
@@ -16194,7 +16343,9 @@ function _curvaCheckProtegidoHTML(item) {
   if (!isAdmin) {
     return item.protegido ? '<span class="curva-badge-protegido">protegido</span>' : '<span class="curva-sem-dado">—</span>';
   }
-  return `<input type="checkbox" class="curva-check-protegido" data-item-id="${item.itemCardapioId}" ${item.protegido ? 'checked' : ''} title="Nunca sugerir corte desse produto">`;
+  // Proteger é do produto, não da loja: proteger o vegetariano no Artesanos
+  // protege também na Tradiça, e a tela não dizia isso (QA 22/09).
+  return `<input type="checkbox" class="curva-check-protegido" data-item-id="${item.itemCardapioId}" ${item.protegido ? 'checked' : ''} title="Nunca sugerir corte desse produto — vale nas quatro lojas, não só nesta">`;
 }
 
 // --- POR QUE O PRODUTO ESTÁ SEM CMV (card #39, 18/09) ---
@@ -16770,6 +16921,11 @@ async function importarPlanilhaVendasSemanais(event) {
     if (dados.avisos?.length) {
       partes.push(`${dados.avisos.length} linha(s) ficaram de fora: ${dados.avisos.join('; ')}`);
     }
+    // Não havia lista do que foi gravado: só contadores soltos (QA 22/09).
+    const porLoja = Object.entries(dados.semanasPorLoja || {});
+    if (porLoja.length) {
+      partes.push(`semanas lidas — ${porLoja.map(([loja, n]) => `${_nomeCurtoLoja(loja)}: ${n}`).join(', ')}`);
+    }
     statusEl.textContent = partes.join(' · ');
     await carregarVendasSemanais(vendasSemanaisLojaAtual);
   } catch (erro) {
@@ -17028,6 +17184,44 @@ function _dataCurtaDoInstante(ms) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}`;
 }
 
+// O preço que está valendo hoje e até quando vale o homologado: a tela
+// mostrava o histórico e não respondia a pergunta de quem compra (QA 22/09).
+const ORIGEM_DO_CUSTO = {
+  compra: 'da última compra recebida',
+  cotacao: 'da cotação mais recente',
+  cadastro: 'digitado no cadastro do insumo',
+  receita: 'calculado pela receita da mistura',
+};
+
+function _mostrarPrecoEmUso(dados, unidade) {
+  const alvo = document.getElementById('precos-em-uso');
+  if (!alvo) return;
+  const emUso = dados.precoEmUso;
+  const homologados = dados.homologados || [];
+  if (!emUso && !homologados.length) {
+    alvo.hidden = true;
+    return;
+  }
+  const hoje = new Date().toISOString().slice(0, 10);
+  const partes = [];
+  if (emUso) {
+    partes.push(`<span><strong>Vale hoje:</strong> ${escaparHtml(_formatarCustoPorUnidade(emUso.valor, unidade))}`
+      + ` <span class="text-muted">(${escaparHtml(ORIGEM_DO_CUSTO[emUso.origem] || emUso.origem)}${emUso.fornecedor ? ` · ${escaparHtml(emUso.fornecedor)}` : ''}${emUso.data ? ` · ${_dataBR(String(emUso.data).slice(0, 10))}` : ''})</span></span>`);
+  }
+  homologados.forEach((h) => {
+    const vencido = h.validade && h.validade < hoje;
+    partes.push(`<span><strong>Homologado ${escaparHtml(_nomeCurtoLoja(h.loja))}:</strong> `
+      + `${h.preco ? escaparHtml(_formatarCustoPorUnidade(h.preco, unidade)) : 'sem preço'}`
+      + `${h.fornecedor ? ` · ${escaparHtml(h.fornecedor)}` : ''}`
+      + (h.validade
+        ? ` · <span class="${vencido ? 'precos-validade-vencida' : 'text-muted'}">${vencido ? 'venceu' : 'vale até'} ${_dataBR(h.validade)}</span>`
+        : ' · <span class="text-muted">sem validade</span>')
+      + '</span>');
+  });
+  alvo.innerHTML = partes.join('');
+  alvo.hidden = false;
+}
+
 // Qual insumo está aberto, pra o botão de período redesenhar o gráfico dele.
 let precosInsumoAberto = null;
 // Recorte da série de um insumo. A linha misturava loja, fornecedor e
@@ -17129,9 +17323,9 @@ async function abrirHistoricoPreco(insumoId) {
       + (mesesDeDistancia >= 6 ? ` · a comparação "desde a primeira" olha ${mesesDeDistancia} meses atrás${suspeita}` : suspeita);
 
     document.getElementById('precos-resumo').innerHTML = `
-      <div><span class="precos-rotulo">Último preço</span><strong>R$ ${_formatarPrecoUnitario(ultima.preco)}</strong><small>${_dataBR(ultima.data)} · ${escaparHtml(ultima.fornecedor || '—')}</small></div>
-      <div><span class="precos-rotulo">Menor pago</span><strong>R$ ${_formatarPrecoUnitario(Math.min(...precos))}</strong></div>
-      <div><span class="precos-rotulo">Maior pago</span><strong>R$ ${_formatarPrecoUnitario(Math.max(...precos))}</strong></div>
+      <div><span class="precos-rotulo">Último preço</span><strong>${escaparHtml(_formatarCustoPorUnidade(ultima.preco, unidade))}</strong><small>${_dataBR(ultima.data)} · ${escaparHtml(ultima.fornecedor || '—')}</small></div>
+      <div><span class="precos-rotulo">Menor pago</span><strong>${escaparHtml(_formatarCustoPorUnidade(Math.min(...precos), unidade))}</strong></div>
+      <div><span class="precos-rotulo">Maior pago</span><strong>${escaparHtml(_formatarCustoPorUnidade(Math.max(...precos), unidade))}</strong></div>
       <div><span class="precos-rotulo">Desde a primeira compra</span><strong>${_variacaoHTML({variacaoPct: Math.round(variacaoTotal * 10) / 10})}</strong></div>
     `;
     document.getElementById('precos-resumo').style.display = '';
@@ -17139,9 +17333,14 @@ async function abrirHistoricoPreco(insumoId) {
     const estilo = getComputedStyle(document.body);
     const corTexto = estilo.getPropertyValue('--text-muted').trim() || '#71717A';
     const corGrade = estilo.getPropertyValue('--border-color').trim() || '#E6DDCC';
+    // O preço aparecia por grama, com 4 casas ("R$ 0,0234"), impossível de
+    // comparar com o do fornecedor, que fala em kg (QA 22/09). O gráfico
+    // passa a falar na mesma unidade da cotação.
+    const escalaPreco = _escalaDeCusto(unidade);
+    const naEscalaDeVenda = (v) => v * escalaPreco.fator;
     const mediana = _medianaDePrecos(precos);
     const ponto = (c) => ({
-      x: _instanteDoDia(c.data), y: c.preco, data: c.data,
+      x: _instanteDoDia(c.data), y: naEscalaDeVenda(c.preco), data: c.data,
       fornecedor: c.fornecedor, loja: c.loja, quantidade: c.quantidade,
       foraDaCurva: _foraDaCurva(c.preco, mediana),
     });
@@ -17169,14 +17368,28 @@ async function abrirHistoricoPreco(insumoId) {
         }];
     const ofertas = (d.cotacoes || [])
       .filter((c) => !precosRecorteFornecedor || c.fornecedor === precosRecorteFornecedor)
-      .map((c) => ({ x: _instanteDoDia(c.data), y: c.preco, data: c.data, fornecedor: c.fornecedor }));
+      .map((c) => ({ x: _instanteDoDia(c.data), y: naEscalaDeVenda(c.preco), data: c.data, fornecedor: c.fornecedor }));
+    // Cotação digitada errada (preço da caixa no campo do kg) esticava o eixo
+    // e achatava a linha do preço pago numa reta no rodapé, sem aviso
+    // (QA 22/09). O eixo é o das COMPRAS; a cotação fora dele fica de fora do
+    // desenho e vira um aviso embaixo do gráfico.
+    const pagos = compras.map((c) => naEscalaDeVenda(c.preco));
+    const menorPago = Math.min(...pagos);
+    const maiorPago = Math.max(...pagos);
+    const folga = Math.max((maiorPago - menorPago) * 0.6, maiorPago * 0.25) || 1;
+    const limiteBaixo = Math.max(0, menorPago - folga);
+    const limiteAlto = maiorPago + folga;
+    const ofertasNoEixo = ofertas.filter((o) => o.y >= limiteBaixo && o.y <= limiteAlto);
+    const ofertasForaDoEixo = ofertas.length - ofertasNoEixo.length;
 
     const foraDaCurva = compras.filter((c) => _foraDaCurva(c.preco, mediana)).length;
+    _mostrarPrecoEmUso(d, unidade);
     const lojasNaSerie = new Set(compras.map((c) => c.loja).filter(Boolean)).size;
     document.getElementById('precos-recorte-aviso').textContent = [
       foraDaCurva ? `${foraDaCurva} ${foraDaCurva === 1 ? 'compra muito fora' : 'compras muito fora'} da mediana (triângulo no gráfico) — quase sempre é embalagem ou unidade trocada no lançamento` : '',
       !precosRecorteLoja && lojasNaSerie > 1 ? `${lojasNaSerie} lojas na mesma linha` : '',
       porFornecedor ? `uma linha por fornecedor (${fornecedores.length})` : '',
+      ofertasForaDoEixo ? `${ofertasForaDoEixo} ${ofertasForaDoEixo === 1 ? 'cotação ficou' : 'cotações ficaram'} fora do gráfico por estar muito longe do que se paga — confira a unidade de quem lançou` : '',
     ].filter(Boolean).join(' · ');
 
     if (precosGraficoInstance) precosGraficoInstance.destroy();
@@ -17186,7 +17399,7 @@ async function abrirHistoricoPreco(insumoId) {
       data: {
         datasets: [
           ...seriesPagas,
-          { label: 'Cotação recebida', data: ofertas, showLine: false, borderColor: corTexto, backgroundColor: corTexto, pointRadius: 3, pointStyle: 'rectRot' },
+          { label: 'Cotação recebida', data: ofertasNoEixo, showLine: false, borderColor: corTexto, backgroundColor: corTexto, pointRadius: 3, pointStyle: 'rectRot' },
         ],
       },
       options: {
@@ -17199,7 +17412,7 @@ async function abrirHistoricoPreco(insumoId) {
           tooltip: {
             callbacks: {
               title: (itens) => _dataBR(itens[0].raw.data),
-              label: (item) => `${item.dataset.label}: R$ ${_formatarPrecoUnitario(item.raw.y)} · ${item.raw.fornecedor || '—'}${item.raw.loja ? ` · ${item.raw.loja}` : ''}`
+              label: (item) => `${item.dataset.label}: R$ ${_formatarMoedaBR(item.raw.y)}/${escalaPreco.rotulo} · ${item.raw.fornecedor || '—'}${item.raw.loja ? ` · ${item.raw.loja}` : ''}`
                 + (item.raw.quantidade ? ` · ${_formatarQuantidade(item.raw.quantidade, unidade)}` : '')
                 + (item.raw.foraDaCurva ? ' · fora da curva: confira a embalagem desse lançamento' : ''),
             },
@@ -17207,7 +17420,13 @@ async function abrirHistoricoPreco(insumoId) {
         },
         scales: {
           x: { type: 'linear', ticks: { color: corTexto, maxTicksLimit: 8, callback: (v) => _dataCurtaDoInstante(v) }, grid: { color: corGrade } },
-          y: { beginAtZero: false, ticks: { color: corTexto, callback: (v) => `R$ ${_formatarPrecoUnitario(v)}` }, grid: { color: corGrade } },
+          y: {
+            beginAtZero: false,
+            suggestedMin: limiteBaixo,
+            suggestedMax: limiteAlto,
+            ticks: { color: corTexto, callback: (v) => `R$ ${_formatarMoedaBR(v)}/${escalaPreco.rotulo}` },
+            grid: { color: corGrade },
+          },
         },
       },
     });
@@ -17218,7 +17437,7 @@ async function abrirHistoricoPreco(insumoId) {
         <td>${escaparHtml(c.fornecedor || '—')}</td>
         <td class="text-muted">${escaparHtml(c.loja || '—')}</td>
         <td>${_formatarQuantidade(c.quantidade, unidade)}</td>
-        <td class="font-bold">R$ ${_formatarPrecoUnitario(c.preco)}</td>
+        <td class="font-bold">${escaparHtml(_formatarCustoPorUnidade(c.preco, unidade))}</td>
       </tr>
     `).join('');
     document.getElementById('precos-tabela-area').style.display = '';

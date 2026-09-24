@@ -84,7 +84,8 @@ document.addEventListener('click', async (evento) => {
   try {
     lidos = lerFornecedoresDaPagina();
   } catch (erro) {
-    alert(erro.message);
+    renderizarPainel({ ativa: false, total: 0, feitos: 0, enviados: 0, falhas: [], naFila: [],
+      mensagemFinal: erro.message });
     return;
   }
   let { itens, ignorados } = lidos;
@@ -94,7 +95,8 @@ document.addEventListener('click', async (evento) => {
     ignorados = [];
   }
   if (!itens.length) {
-    alert('Nenhum fornecedor com telefone e link pra enviar.');
+    renderizarPainel({ ativa: false, total: 0, feitos: 0, enviados: 0, falhas: [], naFila: [],
+      mensagemFinal: 'Nenhum fornecedor com telefone e link pra enviar.' });
     return;
   }
 
@@ -126,12 +128,14 @@ document.addEventListener('click', async (evento) => {
   try {
     const resposta = await chrome.runtime.sendMessage({ tipo: 'iniciar-fila', itens, ensaio });
     if (resposta?.erro) {
-      alert(resposta.erro);
+      renderizarPainel({ ativa: false, total: 0, feitos: 0, enviados: 0, falhas: [], naFila: [],
+        mensagemFinal: resposta.erro });
       return;
     }
     renderizarPainel(resposta.resumo);
   } catch (erro) {
-    alert('A extensão não respondeu. Recarregue a página e tente de novo.');
+    renderizarPainel({ ativa: false, total: 0, feitos: 0, enviados: 0, falhas: [], naFila: [],
+      mensagemFinal: 'A extensão não respondeu. Recarregue a página e tente de novo.' });
   }
 }, true);
 

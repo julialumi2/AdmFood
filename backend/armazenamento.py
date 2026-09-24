@@ -443,6 +443,11 @@ def inicializar_banco():
             )
             """
         )
+        # Quem digitou o custo à mão: a data já era gravada e nem ela voltava
+        # pra tela, e é esse custo que manda na margem (QA 22/09).
+        colunas_custo = {c["name"] for c in conn.execute("PRAGMA table_info(item_cardapio_custo)").fetchall()}
+        if "quem" not in colunas_custo:
+            conn.execute("ALTER TABLE item_cardapio_custo ADD COLUMN quem TEXT")
         colunas_item_cardapio = {c["name"] for c in conn.execute("PRAGMA table_info(item_cardapio)").fetchall()}
         if "tipo" not in colunas_item_cardapio:
             # Complemento (Granola, Leite em pó...) vira o mesmo tipo de
@@ -2444,6 +2449,26 @@ def _catalogo_e_vinculos(conn):
     return produtos, complementos, vinculos_manuais
 
 
+# Quais nomes já foram tentados contra o catálogo de agora, por loja. Cada
+# abertura de Mais Vendidos rodava o recasamento das 4 lojas — uma gravação
+# no caminho de leitura, e sempre nos MESMOS nomes que não casam (esses
+# nunca vão casar sem alguém criar o item ou o vínculo). A digital do
+# catálogo muda quando isso acontece, e aí tudo é tentado de novo (QA 22/09).
+_ja_tentou_recasar = {}
+
+
+def _digital_do_catalogo(conn):
+    linha = conn.execute(
+        """
+        SELECT (SELECT COUNT(*) FROM item_cardapio) AS itens,
+               (SELECT COALESCE(MAX(id), 0) FROM item_cardapio) AS ultimo_item,
+               (SELECT COUNT(*) FROM vinculo_produto_venda) AS vinculos,
+               (SELECT COALESCE(MAX(criado_em), '') FROM vinculo_produto_venda) AS ultimo_vinculo
+        """
+    ).fetchone()
+    return (linha["itens"], linha["ultimo_item"], linha["vinculos"], linha["ultimo_vinculo"])
+
+
 def _recasar_vendas_sem_item(conn, unidade):
     """Venda gravada antes de o item existir (ou antes do vínculo manual)
     ficou sem item_cardapio_id, e só casaria de novo quando o dia fosse
@@ -2451,10 +2476,21 @@ def _recasar_vendas_sem_item(conn, unidade):
     Aqui casa com o catálogo e os vínculos de hoje, pelo mesmo critério da
     sincronização. Sem isso a fila de pendências mostrava como pendente o
     "Tradiça Duplo" que já tinha ficha, só porque foi vendido antes dela."""
+    digital = _digital_do_catalogo(conn)
+    tentados = _ja_tentou_recasar.get(unidade)
+    if not tentados or tentados[0] != digital:
+        tentados = (digital, set())
+        _ja_tentou_recasar[unidade] = tentados
+    vistos = tentados[1]
     catalogo, catalogo_complementos, vinculos = _catalogo_e_vinculos(conn)
-    for linha in conn.execute(
-        "SELECT DISTINCT nome_produto FROM venda_item WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
-    ).fetchall():
+    pendentes = [
+        linha for linha in conn.execute(
+            "SELECT DISTINCT nome_produto FROM venda_item WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
+        ).fetchall()
+        if linha["nome_produto"] not in vistos
+    ]
+    for linha in pendentes:
+        vistos.add(linha["nome_produto"])
         item_id, multiplicador = _casar_item_cardapio(linha["nome_produto"], catalogo, vinculos)
         if item_id:
             conn.execute(
@@ -2462,9 +2498,14 @@ def _recasar_vendas_sem_item(conn, unidade):
                 "WHERE unidade = ? AND nome_produto = ? AND item_cardapio_id IS NULL",
                 (item_id, multiplicador, unidade, linha["nome_produto"]),
             )
-    for linha in conn.execute(
-        "SELECT DISTINCT nome_complemento FROM venda_complemento WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
-    ).fetchall():
+    pendentes_complemento = [
+        linha for linha in conn.execute(
+            "SELECT DISTINCT nome_complemento FROM venda_complemento WHERE unidade = ? AND item_cardapio_id IS NULL", (unidade,)
+        ).fetchall()
+        if ("c:" + linha["nome_complemento"]) not in vistos
+    ]
+    for linha in pendentes_complemento:
+        vistos.add("c:" + linha["nome_complemento"])
         item_id, _ = _casar_item_cardapio(linha["nome_complemento"], catalogo_complementos, vinculos)
         if item_id:
             conn.execute(
@@ -4084,7 +4125,7 @@ def remover_custo_item_cardapio(item_id, loja):
             )
 
 
-def salvar_custo_item_cardapio(item_id, loja, custo):
+def salvar_custo_item_cardapio(item_id, loja, custo, quem=None):
     """O custo à mão segue a mesma regra da ficha: nas lojas que dividem a
     receita (as Tradiças), vale nas duas. Antes a ficha era compartilhada e o
     custo não, então ZN e Simus mostravam custo e margem diferentes pro mesmo
@@ -4094,13 +4135,14 @@ def salvar_custo_item_cardapio(item_id, loja, custo):
         for cada_loja in lojas_da_mesma_ficha(loja):
             conn.execute(
                 """
-                INSERT INTO item_cardapio_custo (item_id, loja, custo, atualizado_em)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO item_cardapio_custo (item_id, loja, custo, atualizado_em, quem)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(item_id, loja) DO UPDATE SET
                     custo = excluded.custo,
-                    atualizado_em = excluded.atualizado_em
+                    atualizado_em = excluded.atualizado_em,
+                    quem = excluded.quem
                 """,
-                (item_id, cada_loja, custo, agora),
+                (item_id, cada_loja, custo, agora, quem),
             )
 
 
@@ -4943,6 +4985,17 @@ def mapa_custos_item_cardapio():
     with conexao() as conn:
         linhas = conn.execute("SELECT item_id, loja, custo FROM item_cardapio_custo").fetchall()
         return {(l["item_id"], l["loja"]): l["custo"] for l in linhas}
+
+
+def quem_digitou_o_custo(item_id, loja):
+    """Quando e por quem o custo à mão foi digitado. É ele que manda na
+    margem, e a tela não dizia nem a data, que já era gravada (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute(
+            "SELECT custo, atualizado_em, quem FROM item_cardapio_custo WHERE item_id = ? AND loja = ?",
+            (item_id, loja),
+        ).fetchone()
+        return dict(linha) if linha else None
 
 
 # Lojas em que a categoria de combo não aparece na tela de Cardápio (ver
@@ -8900,10 +8953,28 @@ def historico_precos_insumo(insumo_id):
             """,
             (insumo_id,),
         ).fetchall()
+    # Qual preço está valendo hoje e até quando vale o homologado — que é a
+    # pergunta de quem compra, e a tela não respondia (QA 22/09).
+    em_uso = custo_em_uso_por_insumo().get(insumo_id)
+    with conexao() as conn:
+        homologados = [
+            dict(l) for l in conn.execute(
+                """
+                SELECT ilh.loja, ilh.preco, ilh.validade, f.nome AS fornecedor
+                FROM insumo_loja_homologado ilh
+                LEFT JOIN fornecedor f ON f.id = ilh.fornecedor_id
+                WHERE ilh.insumo_id = ?
+                ORDER BY ilh.loja
+                """,
+                (insumo_id,),
+            )
+        ]
     return {
         "insumo": dict(insumo),
         "compras": [dict(c) for c in compras],
         "cotacoes": [dict(c) for c in cotacoes],
+        "precoEmUso": em_uso,
+        "homologados": homologados,
     }
 
 

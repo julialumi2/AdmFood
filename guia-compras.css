@@ -356,6 +356,55 @@ body.dark-mode {
 /* No celular a moldura rolava de lado e o texto do fluxograma ficava
    minúsculo (QA 22/09): abaixo de 720px o desenho vira uma lista de passos,
    que cabe na tela e dá pra ler. */
+/* Índice das 6 etapas: o guia é longo e não tinha como pular (QA 22/09) */
+.guia-indice {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: var(--space-6);
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background-color: var(--surface-color);
+}
+
+.guia-indice-rotulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.guia-indice a {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  color: var(--text-dark);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guia-indice a:hover { background-color: var(--border-color); }
+
+/* O guia é escrito pra quem compra, mas a página abre pra operação também */
+.guia-aviso-operacao {
+  margin: var(--space-3) 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--info, #2563EB);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.guia-etapa-nome { scroll-margin-top: 72px; }
+
 .guia-fluxo-moldura { overflow-x: auto; }
 
 .guia-fluxo-lista { display: none; }

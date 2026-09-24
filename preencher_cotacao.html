@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.48.0/dist/umd/lucide.min.js" integrity="sha384-Hh7C333mXel+qppGoFs4qAOXp7h67eur4XsQVF2bvHAM3MQ4DX4cQI7oRCzb98J4" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -47,6 +47,9 @@
     <form id="form-cotacao-publica" class="contagem-publica-card" style="display:none;">
       <h2 id="cotacao-publica-titulo">Preencher cotação de preços</h2>
       <p class="contagem-publica-prazo" id="cotacao-publica-subtitulo">—</p>
+      <!-- Não dizia o nome do fornecedor, de qual rede era a cotação nem com
+           quem falar (QA 22/09) -->
+      <p class="cotacao-publica-quem" id="cotacao-publica-quem" hidden></p>
       <p class="panel-subtitle">Preencha o preço unitário do que você vende — marque "não vendo esse item" pra quem não faz parte do seu catálogo.</p>
 
       <!-- Nada mostrava o andamento: sem contador, sem "próximo", sem linha
@@ -79,6 +82,7 @@
       </table>
       </div>
 
+      <p class="form-erro" id="cotacao-publica-erro-envio" hidden></p>
       <button type="submit" class="btn-primary" id="btn-cotacao-publica-enviar">Enviar cotação</button>
     </form>
   </div>
