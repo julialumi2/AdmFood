@@ -13274,6 +13274,34 @@ function _precoDoCampo(campo) {
   return { valor: Math.round(valor * 100) / 100, ilegivel: false };
 }
 
+// O que some junto com um item do cardápio, escrito antes de apagar.
+async function _confirmarExclusaoDoItemCardapio(itemId, nome) {
+  let junto = null;
+  try {
+    const resposta = await fetch(`/api/itens-cardapio/${itemId}/o-que-vai-junto`);
+    if (resposta.ok) junto = await resposta.json();
+  } catch (erro) {
+    /* sem a contagem o aviso continua, só mais genérico */
+  }
+  const SALTO = String.fromCharCode(10);
+  if (!junto) {
+    return confirm(`Excluir "${nome}"? Vão junto a ficha técnica, a embalagem, as porções e o custo digitado, em todas as lojas.`);
+  }
+  const leva = [
+    junto.insumos ? `${_qtdTexto(junto.insumos, 'insumo na ficha', 'insumos na ficha')}${junto.fichas > 1 ? ` (${junto.fichas} lojas)` : ''}` : null,
+    junto.embalagens ? _qtdTexto(junto.embalagens, 'item de embalagem', 'itens de embalagem') : null,
+    junto.porcoes ? _qtdTexto(junto.porcoes, 'porção de complemento', 'porções de complemento') : null,
+    junto.custos ? _qtdTexto(junto.custos, 'custo digitado', 'custos digitados') : null,
+  ].filter(Boolean);
+  const vendido = junto.vendas
+    ? SALTO + SALTO + `Atenção: este item já aparece em ${_qtdTexto(junto.vendas, 'venda registrada', 'vendas registradas')}. Sem a ficha, a baixa de estoque dessas vendas para de funcionar.`
+    : '';
+  return confirm(`Excluir "${junto.nome}"?`
+    + SALTO + SALTO + (leva.length ? `Vai junto, em todas as lojas: ${leva.join(', ')}.` : 'Ele não tem ficha nem porção cadastrada.')
+    + vendido
+    + SALTO + SALTO + 'Essa ação não pode ser desfeita.');
+}
+
 function _margemProduto(custo, preco) {
   return custo != null && typeof preco === 'number' && preco > 0 ? 1 - custo / preco : null;
 }
@@ -13420,9 +13448,17 @@ function _lojaTemMisturas(loja) {
   return loja !== 'Açaí Na Lata';
 }
 
+// Trocar de loja e clicar rápido misturava as lojas: a grade antiga ficava
+// na tela até a resposta chegar, e clicando nesse intervalo o preço ia pra
+// loja antiga e o custo pra loja nova (QA 22/09).
+let _buscaCardapioAtual = 0;
+
 function carregarFichaTecnicaAtual() {
   const conteudoEl = document.getElementById('ficha-tecnica-conteudo');
   if (!conteudoEl) return;
+  const minhaBusca = ++_buscaCardapioAtual;
+  const lojaDaBusca = fichaTecnicaLojaAtual;
+  conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Carregando ${escaparHtml(lojaDaBusca)}…</p>`;
   const temComplementos = fichaTecnicaLojaAtual === 'Açaí Na Lata';
   const temMisturas = _lojaTemMisturas(fichaTecnicaLojaAtual);
   return Promise.all([
@@ -13432,6 +13468,8 @@ function carregarFichaTecnicaAtual() {
       : Promise.resolve({ complementos: [] }),
     temMisturas ? fetch('/api/misturas').then(r => r.json()) : Promise.resolve({ misturas: [] }),
   ]).then(([dadosProdutos, dadosComplementos, dadosMisturas]) => {
+    // Resposta de uma loja que já não é a da tela: joga fora.
+    if (minhaBusca !== _buscaCardapioAtual || lojaDaBusca !== fichaTecnicaLojaAtual) return;
     fichaTecnicaMisturas = dadosMisturas.misturas || [];
     fichaTecnicaProdutos = dadosProdutos.produtos || [];
     if (dadosProdutos.cmvLimites) cardapioCmvLimites = dadosProdutos.cmvLimites;
@@ -13607,6 +13645,26 @@ function _wireReceitaCardsEventos(conteudoEl) {
 // Busca do Cardápio (QA 22/09): com termo digitado, a categoria escolhida
 // deixa de mandar e a tela mostra o que casa, de qualquer categoria.
 let fichaTecnicaBusca = '';
+// Filtro "só os sem custo": produto sem ficha (ou com ficha incompleta) só
+// tinha uma etiqueta cinza na grade, sem contagem nem filtro (QA 22/09).
+let cardapioSoSemCusto = false;
+
+function _atualizarBotaoSemCusto() {
+  const botao = document.getElementById('btn-cardapio-sem-custo');
+  if (!botao) return;
+  const semCusto = fichaTecnicaProdutos.filter((p) => _custoEmUsoProduto(p) == null).length;
+  botao.hidden = !semCusto && !cardapioSoSemCusto;
+  botao.classList.toggle('ativo', cardapioSoSemCusto);
+  botao.textContent = cardapioSoSemCusto
+    ? `Mostrando só os ${semCusto} sem custo · ver todos`
+    : `${semCusto} ${semCusto === 1 ? 'produto sem custo' : 'produtos sem custo'}`;
+  botao.title = 'Produto sem ficha técnica, ou com insumo sem preço ou sem quantidade: ele não entra no CMV nem na margem.';
+}
+
+document.getElementById('btn-cardapio-sem-custo')?.addEventListener('click', () => {
+  cardapioSoSemCusto = !cardapioSoSemCusto;
+  renderFichaTecnicaConteudo();
+});
 
 function _textoBuscaCardapio(texto) {
   // Sem acento e sem maiúscula: "açai" acha "Açaí".
@@ -13631,7 +13689,13 @@ function renderFichaTecnicaConteudo() {
   if (!fichaTecnicaProdutos.length) {
     document.getElementById('ficha-tecnica-categorias-sidebar').innerHTML = '';
     _atualizarSetasCategorias();
-    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto encontrado pra essa loja em Preços — importe a planilha de preços primeiro.</p>`;
+    // Mandava pra uma aba "Preços" que saiu do sistema, e nesse estado
+    // Complementos e Misturas nem apareciam (QA 22/09).
+    conteudoEl.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">
+      Nenhum produto cadastrado em <strong>${escaparHtml(fichaTecnicaLojaAtual)}</strong> ainda.
+      Use <strong>"Novo item"</strong> aqui em cima pra cadastrar um a um, ou
+      <strong>"Importar planilha"</strong> pra trazer o cardápio inteiro de uma vez.
+    </p>`;
     return;
   }
 
@@ -13678,6 +13742,8 @@ function renderFichaTecnicaConteudo() {
   if (subtitulo) subtitulo.hidden = !subtitulo.textContent;
   if (btnNovoTexto) btnNovoTexto.textContent = ehMistura ? 'Nova mistura' : ehComplemento ? 'Novo complemento' : 'Novo item';
   if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
+
+  _atualizarBotaoSemCusto();
 
   if (fichaTecnicaBusca) {
     // Com busca aberta, a categoria some da conta: o que interessa é achar o
@@ -13730,6 +13796,14 @@ function renderFichaTecnicaConteudo() {
 // aberto (clique no cartão), não antecipado pra todo mundo — ver
 // abrirModalDetalheProduto.
 function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria, canais) {
+  // Filtro "só os sem custo" vale em cima do que já está filtrado.
+  if (cardapioSoSemCusto) {
+    produtosDaCategoria = produtosDaCategoria.filter((p) => _custoEmUsoProduto(p) == null);
+    if (!produtosDaCategoria.length) {
+      conteudoEl.innerHTML = '<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto sem custo nesta categoria — todos já têm ficha com preço e quantidade.</p>';
+      return;
+    }
+  }
   conteudoEl.innerHTML = `
     <div class="cardapio-lista">
       ${produtosDaCategoria.map(p => `
@@ -13932,22 +14006,23 @@ document.getElementById('form-nova-mistura')?.addEventListener('submit', async (
 
 async function salvarCustoProduto(itemId, valor) {
   // Campo em branco apaga o custo à mão (o produto volta a usar o custo
-  // calculado pela receita); texto invalido é ignorado.
-  const custo = valor === '' ? null : parseFloat(valor);
-  if (custo !== null && isNaN(custo)) return;
-  try {
-    const resposta = await fetch(`/api/itens-cardapio/${itemId}/custo`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loja: fichaTecnicaLojaAtual, custo }),
-    });
-    if (!resposta.ok) throw new Error('falha ao salvar custo');
-    const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
-    if (produto) produto.custo = custo;
-  } catch (erro) {
-    console.error('Falha ao salvar custo:', erro);
-    alert('Não foi possível salvar o custo.');
+  // calculado pela receita).
+  const custo = valor === '' ? null : _lerNumeroBR(valor);
+  if (custo !== null && !Number.isFinite(custo)) {
+    throw new Error(`Não deu pra ler o custo "${valor}". Escreva só o número (ex: 12,50).`);
   }
+  // O erro aqui era engolido — avisava e seguia como se tivesse dado certo, o
+  // Salvar continuava, o modal fechava e o valor digitado sumia (QA 22/09).
+  // Agora a falha sobe e interrompe o Salvar, com o motivo do servidor.
+  const resposta = await fetch(`/api/itens-cardapio/${itemId}/custo`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loja: fichaTecnicaLojaAtual, custo }),
+  });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(dados.erro || `Não foi possível salvar o custo (código ${resposta.status}).`);
+  const produto = fichaTecnicaProdutos.find(p => p.itemCardapioId === itemId);
+  if (produto) produto.custo = custo;
 }
 
 async function alternarProdutoFichaTecnica(itemId) {
@@ -13996,7 +14071,10 @@ async function renderPainelFichaTecnicaExpandido(itemId) {
 
     painel.querySelector('[data-acao="editar-ficha-tecnica"]')?.addEventListener('click', () => abrirModalFichaTecnicaItem(itemId));
     painel.querySelector('[data-acao="excluir-item-cardapio"]')?.addEventListener('click', async (evento) => {
-      if (!confirm(`Excluir "${evento.currentTarget.dataset.nome}" e sua ficha técnica (em todas as lojas)?`)) return;
+      // A pergunta falava só da ficha: sumiam também embalagem, porções e o
+      // custo digitado, em todas as lojas, e nada dizia se o item já tinha
+      // sido vendido (QA 22/09).
+      if (!(await _confirmarExclusaoDoItemCardapio(itemId, evento.currentTarget.dataset.nome))) return;
       try {
         const resposta = await fetch(`/api/itens-cardapio/${itemId}`, { method: 'DELETE' });
         if (!resposta.ok) throw new Error('falha ao excluir');
@@ -14385,6 +14463,14 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         return;
       }
       const novo = alteracoesPreco[canal];
+      // Preço abaixo do custo só aparecia como margem vermelha dentro do
+      // modal, e nada avisava na hora de salvar (QA 22/09).
+      const custoAgora = (custoAlterado !== null && Number.isFinite(_lerNumeroBR(custoAlterado)))
+        ? _lerNumeroBR(custoAlterado)
+        : (produto.custo ?? produto.custoFicha ?? null);
+      if (novo !== null && novo > 0 && custoAgora != null && novo <= custoAgora) {
+        avisosPreco.push(`${nomeCanal}: ${_formatarMoedaBRL(novo)} está ${novo === custoAgora ? 'igual ao' : 'ABAIXO do'} custo (${_formatarMoedaBRL(custoAgora)}) — margem ${novo === custoAgora ? 'zero' : 'negativa'}.`);
+      }
       if (novo === null && anterior > 0) {
         avisosPreco.push(`${nomeCanal}: vai ficar SEM preço (estava ${_formatarMoedaBRL(anterior)}). Se é "não vendo nesse canal", digite 0.`);
       } else if (novo !== null && anterior > 0 && novo > 0 && (novo >= anterior * 3 || novo * 3 <= anterior)) {
@@ -14403,6 +14489,12 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       return false;
     }
 
+    // Até 4 chamadas em sequência (nome, preços, custo, porções) e nenhuma
+    // transação: caindo no meio, metade fica gravada. Não dá pra juntar as
+    // quatro num POST só sem refazer as rotas, então o que já passou é
+    // anotado aqui (fora do try, pra o aviso enxergar) e a mensagem diz onde
+    // parou (QA 22/09).
+    const jaGravado = [];
     try {
       if (Object.keys(alteracoesPreco).length) {
         const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}`, {
@@ -14413,9 +14505,11 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         const dados = await resposta.json();
         if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar preço');
         Object.assign(produto, { ifood: dados.ifood, food99: dados.food99, beefood: dados.beefood, cardapioWeb: dados.cardapioWeb, valorVenda: dados.cardapioWeb });
+        jaGravado.push('os preços');
       }
       if (custoAlterado !== null && produto.itemCardapioId) {
         await salvarCustoProduto(produto.itemCardapioId, custoAlterado);
+        jaGravado.push('o custo');
       }
       if (porcoesAlteradas) {
         const resposta = await fetch(`/api/itens-cardapio/${produto.itemCardapioId}/porcoes-complemento`, {
@@ -14425,6 +14519,7 @@ async function abrirModalDetalheProduto(precoCardapioId) {
         });
         const dados = await resposta.json();
         if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar porções');
+        jaGravado.push('as porções');
       }
       Object.keys(alteracoesPreco).forEach((k) => delete alteracoesPreco[k]);
       custoAlterado = null;
@@ -14435,7 +14530,18 @@ async function abrirModalDetalheProduto(precoCardapioId) {
       return true;
     } catch (erro) {
       console.error('Falha ao salvar produto do cardápio:', erro);
-      alert('Não foi possível salvar. Tenta de novo.');
+      if (jaGravado.length) {
+        alert(`${erro.message || 'Não foi possível terminar de salvar.'}`
+          + String.fromCharCode(10) + String.fromCharCode(10)
+          + `Atenção: ${jaGravado.join(' e ')} ${jaGravado.length === 1 ? 'já foi gravado' : 'já foram gravados'}. Confira antes de tentar de novo.`);
+        botao.disabled = false;
+        botao.textContent = 'Salvar';
+        return false;
+      }
+      // "Não foi possível salvar. Tenta de novo." cobria sessão vencida,
+      // falta de permissão e formato de foto recusado, jogando fora a
+      // explicação que o servidor mandou (QA 22/09).
+      alert(erro.message || 'Não foi possível salvar. Tenta de novo.');
       botao.disabled = false;
       botao.textContent = 'Salvar';
       return false;

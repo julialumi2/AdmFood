@@ -1388,3 +1388,11 @@ body.dark-mode {
    produtos obrigava a voltar pra grade e procurar o card seguinte. */
 .detalhe-produto-navegar { display: flex; gap: var(--space-2); margin-right: var(--space-4); }
 .detalhe-produto-navegar button { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Contagem e filtro de produto sem custo (QA 22/09) */
+.cardapio-pendencias[hidden] { display: none; }
+.cardapio-pendencias.ativo {
+  border-color: var(--cardapio-alerta);
+  background-color: var(--cardapio-alerta-bg);
+  color: var(--cardapio-alerta);
+}

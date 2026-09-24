@@ -203,6 +203,10 @@
           <i data-lucide="search"></i>
           <input type="text" id="cardapio-busca" placeholder="Buscar produto pelo nome..." aria-label="Buscar produto pelo nome">
         </div>
+        <!-- Produto sem custo só tinha uma etiqueta cinza na grade: nada de
+             contagem nem de filtro, e o diagnóstico só existia na Curva ABC
+             (QA 22/09). -->
+        <button type="button" class="btn-limpar-filtro cardapio-pendencias" id="btn-cardapio-sem-custo" hidden></button>
 
         <!-- Loja e categorias (setas só quando as pills não cabem) -->
         <div class="cardapio-navegacao">
@@ -392,8 +396,14 @@
             Se o insumo já existe (o tempero que a batata já usa na ficha, por exemplo), escolha ele na lista: a receita vai pra ele.
           </p>
           <div class="form-group" id="nova-mistura-unidade-grupo">
+            <!-- Era texto livre e aceitava "kg": com o rendimento na
+                 unidade errada, o custo da mistura sai 1000× (QA 22/09). -->
             <label for="nova-mistura-unidade">Unidade (insumo novo)</label>
-            <input type="text" id="nova-mistura-unidade" value="g" placeholder="g, ml, kg...">
+            <select id="nova-mistura-unidade">
+              <option value="g" selected>g (grama)</option>
+              <option value="ml">ml (mililitro)</option>
+              <option value="un">un (unidade)</option>
+            </select>
           </div>
           <p id="nova-mistura-erro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
           <div class="modal-actions">

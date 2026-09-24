@@ -3871,24 +3871,58 @@ def remover_custo_item_cardapio(item_id, loja):
     quilo no lugar do da porção, 10x pra cima) fica escondendo o cálculo
     pra sempre, e a tela não tinha como desfazer."""
     with conexao() as conn:
-        conn.execute(
-            "DELETE FROM item_cardapio_custo WHERE item_id = ? AND loja = ?",
-            (item_id, loja),
-        )
+        # Apagar também vale nas duas Tradiças, igual ao gravar.
+        for cada_loja in lojas_da_mesma_ficha(loja):
+            conn.execute(
+                "DELETE FROM item_cardapio_custo WHERE item_id = ? AND loja = ?",
+                (item_id, cada_loja),
+            )
 
 
 def salvar_custo_item_cardapio(item_id, loja, custo):
+    """O custo à mão segue a mesma regra da ficha: nas lojas que dividem a
+    receita (as Tradiças), vale nas duas. Antes a ficha era compartilhada e o
+    custo não, então ZN e Simus mostravam custo e margem diferentes pro mesmo
+    prato (QA 22/09)."""
+    agora = datetime.now().isoformat()
     with conexao() as conn:
-        conn.execute(
-            """
-            INSERT INTO item_cardapio_custo (item_id, loja, custo, atualizado_em)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(item_id, loja) DO UPDATE SET
-                custo = excluded.custo,
-                atualizado_em = excluded.atualizado_em
-            """,
-            (item_id, loja, custo, datetime.now().isoformat()),
-        )
+        for cada_loja in lojas_da_mesma_ficha(loja):
+            conn.execute(
+                """
+                INSERT INTO item_cardapio_custo (item_id, loja, custo, atualizado_em)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(item_id, loja) DO UPDATE SET
+                    custo = excluded.custo,
+                    atualizado_em = excluded.atualizado_em
+                """,
+                (item_id, cada_loja, custo, agora),
+            )
+
+
+def o_que_vai_junto_com_o_item(item_id):
+    """O que some junto com um item do cardápio: ficha, embalagem, porções,
+    custo digitado — e se ele já foi vendido. A tela só perguntava "excluir
+    X e sua ficha técnica?", sem dizer o resto (QA 22/09)."""
+    with conexao() as conn:
+        linha = conn.execute("SELECT nome, tipo FROM item_cardapio WHERE id = ?", (item_id,)).fetchone()
+        if not linha:
+            return None
+        def conta(sql, parametros=(item_id,)):
+            return conn.execute(sql, parametros).fetchone()[0]
+        return {
+            "nome": linha["nome"],
+            "tipo": linha["tipo"],
+            "fichas": conta("SELECT COUNT(DISTINCT loja) FROM ficha_tecnica WHERE item_id = ?"),
+            "insumos": conta("SELECT COUNT(*) FROM ficha_tecnica WHERE item_id = ?"),
+            "embalagens": conta("SELECT COUNT(*) FROM embalagem_viagem WHERE item_id = ?"),
+            "custos": conta("SELECT COUNT(*) FROM item_cardapio_custo WHERE item_id = ?"),
+            "porcoes": conta(
+                "SELECT COUNT(*) FROM porcao_complemento_item "
+                "WHERE complemento_item_id = ? OR produto_item_id = ?",
+                (item_id, item_id),
+            ),
+            "vendas": conta("SELECT COUNT(*) FROM venda_item WHERE item_cardapio_id = ?"),
+        }
 
 
 def curva_abc_insumos(dias=90):

@@ -5114,3 +5114,44 @@ porta, com pressa:
 - A conferência também passou a receber **o que já tinha chegado** em entregas
   anteriores (`quantidadePedida`/`quantidadeRecebida`), que a tela usava mas a
   rota não mandava.
+
+### 6.82 Médios do Cardápio
+
+Os 8 médios das duas telas de Cardápio.
+
+- **Salvar são até 4 chamadas em sequência** (nome, preços, custo, porções) e
+  nenhuma transação: caindo no meio, metade fica gravada. A do custo era a
+  pior — **engolia o erro**, avisava e seguia como se tivesse dado certo, o
+  modal fechava e o valor digitado sumia. Agora a falha interrompe o Salvar, e
+  quando já havia algo gravado a mensagem diz o quê: *"os preços já foram
+  gravados. Confira antes de tentar de novo."*
+- **Mensagem genérica.** "Não foi possível salvar. Tenta de novo." cobria
+  sessão vencida, falta de permissão e formato de foto recusado, jogando fora
+  a explicação do servidor. Agora o motivo chega até a pessoa.
+- **Trocar de loja e clicar rápido misturava as lojas:** a grade antiga ficava
+  na tela até a resposta chegar, e nesse intervalo o preço ia pra loja antiga
+  e o custo pra nova. Agora a grade diz "Carregando Açaí Na Lata…" e só a
+  busca mais recente tem direito de desenhar. Conferido forçando a resposta da
+  primeira loja a chegar depois da segunda: fica a certa.
+- **Loja sem produto mandava pra uma tela que não existe** ("importe a
+  planilha de preços primeiro", falando de uma aba Preços que saiu do
+  sistema). Agora aponta os dois caminhos que existem: "Novo item" e
+  "Importar planilha".
+- **Nas Tradiças a ficha é compartilhada, mas o custo digitado não era:** ZN e
+  Simus podiam mostrar custo e margem diferentes pro mesmo prato. O custo à
+  mão passou a seguir a mesma regra da ficha — gravar numa grava nas duas, e
+  apagar também. Conferido: R$ 7,50 na ZN aparece nas duas; apagar na Simus
+  limpa as duas; Artesanos continua sozinha.
+- **A "Unidade (insumo novo)" da mistura era texto livre** e aceitava "kg" —
+  com o rendimento na unidade errada, o custo da mistura sai 1000× errado.
+  Virou lista g / ml / un.
+- **Produto sem custo** só tinha uma etiqueta cinza na grade, sem contagem nem
+  filtro: o diagnóstico existia só na Curva ABC. Agora um botão ao lado da
+  busca mostra **"37 produtos sem custo"** e filtra a grade num clique.
+- **Preço abaixo do custo** só aparecia como margem vermelha dentro do modal.
+  Agora o Salvar avisa: *"Cardápio Web: R$ 3,24 está ABAIXO do custo
+  (R$ 6,48) — margem negativa."*
+- **Excluir item** perguntava só da ficha. Agora conta tudo o que vai junto —
+  insumos da ficha (e em quantas lojas), embalagem, porções e custo digitado —
+  e avisa quando o item **já foi vendido**, porque sem a ficha a baixa de
+  estoque dessas vendas para de funcionar.

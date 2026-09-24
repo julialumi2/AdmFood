@@ -43,6 +43,7 @@ from backend.armazenamento import (
     atualizar_tarefa,
     excluir_tarefa,
     o_que_vai_junto_com_a_tarefa,
+    o_que_vai_junto_com_o_item,
     adicionar_subtarefa,
     alternar_subtarefa,
     adicionar_comentario,
@@ -3058,6 +3059,19 @@ def api_criar_complementos_em_lote():
 
     resultado = criar_complementos_em_lote(nomes)
     return jsonify(resultado)
+
+
+@app.route('/api/itens-cardapio/<int:item_id>/o-que-vai-junto', methods=['GET'])
+def api_o_que_vai_junto_com_o_item(item_id):
+    """Ficha, embalagem, porções, custo e vendas que somem junto com o item —
+    pro aviso de exclusão dizer o que está em jogo (QA 22/09)."""
+    erro = _exigir_gestao()
+    if erro:
+        return erro
+    junto = o_que_vai_junto_com_o_item(item_id)
+    if not junto:
+        return jsonify({"erro": "Item não encontrado."}), 404
+    return jsonify(junto)
 
 
 @app.route('/api/itens-cardapio/<int:item_id>/ficha-tecnica', methods=['PUT'])
