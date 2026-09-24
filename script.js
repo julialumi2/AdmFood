@@ -13545,6 +13545,13 @@ const STATUS_LABEL_TAREFA = { todo: 'A Fazer', doing: 'Em Andamento', done: 'Fei
 async function carregarTarefas() {
   const board = document.querySelector('.kanban-board');
   if (!board) return;
+  // Sem "carregando", a tela ficava com as colunas em branco e parecia
+  // quebrada enquanto buscava (QA 22/09).
+  if (!tarefasData.length) {
+    document.querySelectorAll('.kanban-column .task-list').forEach((coluna) => {
+      coluna.innerHTML = '<p class="task-vazia">Carregando...</p>';
+    });
+  }
   try {
     const resposta = await fetch('/api/tarefas');
     if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
@@ -13563,7 +13570,7 @@ function renderKanban() {
     const contagem = document.querySelector(`.kanban-column[data-status="${status}"] .task-count`);
     if (!coluna) return;
 
-    const tarefas = tarefasData.filter(t => t.status === status);
+    const tarefas = _tarefasFiltradas().filter(t => t.status === status);
     if (contagem) contagem.textContent = tarefas.length;
 
     coluna.innerHTML = tarefas.length
@@ -13590,16 +13597,111 @@ function renderKanban() {
                 ? `<span class="avatar avatar-sm">${escaparHtml(_iniciaisFornecedor(t.responsavelNome))}</span><span>${escaparHtml(t.responsavelNome)}</span>`
                 : '<i data-lucide="user-plus"></i><span>sem responsável</span>'}
             </div>
+            <!-- No celular não dá pra arrastar: as setas movem o card sem
+                 abrir nada, pros dois lados (QA 22/09) -->
+            <div class="task-mover">
+              ${status !== 'todo' ? `<button type="button" class="btn-acao-icone" data-mover="${t.id}" data-para="${ORDEM_STATUS_TAREFA[ORDEM_STATUS_TAREFA.indexOf(status) - 1]}" title="Voltar pra ${STATUS_LABEL_TAREFA[ORDEM_STATUS_TAREFA[ORDEM_STATUS_TAREFA.indexOf(status) - 1]]}"><i data-lucide="chevron-left"></i></button>` : ''}
+              ${status !== 'done' ? `<button type="button" class="btn-acao-icone" data-mover="${t.id}" data-para="${ORDEM_STATUS_TAREFA[ORDEM_STATUS_TAREFA.indexOf(status) + 1]}" title="Avançar pra ${STATUS_LABEL_TAREFA[ORDEM_STATUS_TAREFA[ORDEM_STATUS_TAREFA.indexOf(status) + 1]]}"><i data-lucide="chevron-right"></i></button>` : ''}
+            </div>
           </div>
         `).join('')
-      : '';
+      // Coluna vazia ficava em branco, igualzinha a "ainda carregando".
+      : `<p class="task-vazia">${_filtroTarefasAtivo() ? 'Nada aqui com esse filtro.' : VAZIO_COLUNA_TAREFA[status]}</p>`;
   });
+  _atualizarResumoDoQuadro();
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
   wireTaskCardEvents();
 }
 
+// O quadro só carregava ao abrir a página: com dois admins mexendo, cada um
+// olhava uma foto velha e vencia quem salvasse por último (QA 22/09). Ele se
+// relê enquanto a tela está na frente da pessoa — e o salvamento ainda
+// confere o carimbo, pra ninguém escrever por cima.
+const SEGUNDOS_ENTRE_ATUALIZACOES_DO_QUADRO = 45;
+
+if (document.querySelector('.kanban-board')) {
+  setInterval(() => {
+    // Nada de recarregar com a aba escondida ou com um card aberto: trocar o
+    // conteúdo debaixo de quem está digitando é pior que a foto velha.
+    if (document.hidden || tarefaSelecionadaId) return;
+    if (document.getElementById('modalCriarTarefa')?.style.display === 'flex') return;
+    carregarTarefas();
+  }, SEGUNDOS_ENTRE_ATUALIZACOES_DO_QUADRO * 1000);
+}
+
+const ORDEM_STATUS_TAREFA = ['todo', 'doing', 'done'];
+const VAZIO_COLUNA_TAREFA = {
+  todo: 'Nada a fazer por enquanto.',
+  doing: 'Nada em andamento.',
+  done: 'Nada concluído ainda.',
+};
+const ORDENACOES_TAREFA = {
+  prazo: (a, b) => (a.dataLimite || '9999').localeCompare(b.dataLimite || '9999'),
+  prioridade: (a, b) => PESO_PRIORIDADE_TAREFA[b.prioridade] - PESO_PRIORIDADE_TAREFA[a.prioridade],
+  titulo: (a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'),
+};
+const PESO_PRIORIDADE_TAREFA = { alta: 3, media: 2, baixa: 1 };
+
+function _filtroTarefasAtivo() {
+  return !!((document.getElementById('tarefas-busca')?.value || '').trim()
+    || document.getElementById('tarefas-filtro-responsavel')?.value);
+}
+
+// O quadro não tinha busca, filtro nem ordenação: com 30 cards, achar um era
+// ler as três colunas inteiras (QA 22/09).
+function _tarefasFiltradas() {
+  const termo = (document.getElementById('tarefas-busca')?.value || '').trim().toLowerCase();
+  const dono = document.getElementById('tarefas-filtro-responsavel')?.value || '';
+  const ordem = document.getElementById('tarefas-ordem')?.value || 'prazo';
+  let lista = tarefasData;
+  if (termo) {
+    lista = lista.filter((t) => [t.titulo, t.descricao, t.categoria, t.responsavelNome]
+      .some((campo) => String(campo || '').toLowerCase().includes(termo)));
+  }
+  if (dono) {
+    lista = dono === 'sem-dono'
+      ? lista.filter((t) => !t.responsavelId)
+      : lista.filter((t) => String(t.responsavelId) === dono);
+  }
+  return [...lista].sort(ORDENACOES_TAREFA[ordem] || ORDENACOES_TAREFA.prazo);
+}
+
+function _atualizarResumoDoQuadro() {
+  const alvo = document.getElementById('tarefas-resumo');
+  if (!alvo) return;
+  const mostrando = _tarefasFiltradas().length;
+  alvo.textContent = _filtroTarefasAtivo()
+    ? `${mostrando} de ${tarefasData.length} cards`
+    : `${_qtdTexto(tarefasData.length, 'card', 'cards')} no quadro`;
+  // Seletor de responsável montado do que está no quadro, sem rota nova.
+  const seletor = document.getElementById('tarefas-filtro-responsavel');
+  if (seletor) {
+    const donos = new Map();
+    tarefasData.forEach((t) => { if (t.responsavelId) donos.set(String(t.responsavelId), t.responsavelNome); });
+    const opcoes = ['<option value="">Todo mundo</option>', '<option value="sem-dono">Sem responsável</option>']
+      .concat([...donos.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+        .map(([id, nome]) => `<option value="${id}">${escaparHtml(nome)}</option>`));
+    const escolhido = seletor.value;
+    const novo = opcoes.join('');
+    if (seletor.innerHTML !== novo) {
+      seletor.innerHTML = novo;
+      seletor.value = [...seletor.options].some((o) => o.value === escolhido) ? escolhido : '';
+    }
+  }
+}
+
+['tarefas-busca', 'tarefas-filtro-responsavel', 'tarefas-ordem'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('input', renderKanban);
+});
+
 function wireTaskCardEvents() {
+  document.querySelectorAll('[data-mover]').forEach((botao) => {
+    botao.addEventListener('click', async (evento) => {
+      evento.stopPropagation();  // senão o clique abre o card junto
+      await moverTarefa(botao.dataset.mover, botao.dataset.para);
+    });
+  });
   document.querySelectorAll('.task-card').forEach(card => {
     card.addEventListener('click', () => abrirDetalhesTarefa(card.dataset.id));
     card.addEventListener('dragstart', (e) => {
@@ -13672,9 +13774,17 @@ function _ligarTrocaDeDonoDaTarefa() {
         const resposta = await fetch(`/api/tarefas/${tarefaSelecionadaId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ [campo]: valor || null }),
+          // O carimbo de quando este card foi aberto: o servidor recusa se
+          // outra pessoa mexeu no meio, em vez de escrever por cima
+          // (QA 22/09).
+          body: JSON.stringify({ [campo]: valor || null, atualizadoEm: _tarefaAbertaEm }),
         });
         const dados = await resposta.json().catch(() => ({}));
+        if (resposta.status === 409) {
+          alert(dados.erro);
+          await recarregarTarefaSelecionada();
+          return;
+        }
         if (!resposta.ok) throw new Error(dados.erro || 'falha ao salvar');
         if (campo === 'titulo') _tituloDaTarefaAberta = valor;
         if (campo === 'prioridade') {
@@ -13770,10 +13880,16 @@ async function salvarNovaTarefa(event) {
 }
 
 // --- MODAL: DETALHES / EDITAR / EXCLUIR TAREFA ---
+// Carimbo de quando este card foi aberto: vai junto no salvamento, pro
+// servidor recusar se outra pessoa mexeu no meio (QA 22/09).
+let _tarefaAbertaEm = null;
+
 function abrirDetalhesTarefa(id) {
   const tarefa = tarefasData.find(t => String(t.id) === String(id));
   if (!tarefa) return;
   tarefaSelecionadaId = tarefa.id;
+  _tarefaAbertaEm = tarefa.atualizadoEm || null;
+  _atualizarBotoesDeStatus(tarefa);
 
   const badge = document.getElementById('detalhePrioridade');
   if (badge) {
@@ -13834,9 +13950,11 @@ function renderComentarios(tarefa) {
   const container = document.getElementById('commentsContainer');
   if (!container) return;
   container.innerHTML = tarefa.comentarios.length
+    // A data vinha da API e a tela não mostrava: dois comentários seguidos
+    // pareciam do mesmo momento (QA 22/09).
     ? tarefa.comentarios.map(c => `
         <div class="comment-card">
-          <div class="comment-author">${escaparHtml(c.autor)}</div>
+          <div class="comment-author">${escaparHtml(c.autor)}<span class="comment-date" title="${escaparHtml(c.criadoEm || '')}">${c.criadoEm ? escaparHtml(_quandoLegivel(c.criadoEm)) : ''}</span></div>
           <div class="comment-text">${escaparHtml(c.texto)}</div>
         </div>
       `).join('')
@@ -13956,16 +14074,31 @@ async function excluirTarefa() {
   }
 }
 
-// Botão "Mover de Status" no modal de detalhes: avança pra próxima coluna
-// (A Fazer -> Em Andamento -> Feito -> volta pra A Fazer).
-async function alterarStatusModal() {
+// Botões de status no modal: o único que existia só andava pra frente e,
+// no Feito, voltava pro "A Fazer" em círculo — corrigir um clique errado
+// era dar mais duas voltas (QA 22/09). Agora são dois, e o do fim some.
+async function alterarStatusModal(direcao = 1) {
   if (!tarefaSelecionadaId) return;
   const tarefa = tarefasData.find(t => t.id === tarefaSelecionadaId);
   if (!tarefa) return;
-  const ordem = ['todo', 'doing', 'done'];
-  const proximoStatus = ordem[(ordem.indexOf(tarefa.status) + 1) % ordem.length];
-  await moverTarefa(tarefaSelecionadaId, proximoStatus);
+  const destino = ORDEM_STATUS_TAREFA[ORDEM_STATUS_TAREFA.indexOf(tarefa.status) + direcao];
+  if (!destino) return;
+  await moverTarefa(tarefaSelecionadaId, destino);
   await recarregarTarefaSelecionada();
+}
+
+function _atualizarBotoesDeStatus(tarefa) {
+  const voltar = document.getElementById('btn-tarefa-voltar-status');
+  const avancar = document.getElementById('btn-tarefa-avancar-status');
+  const posicao = ORDEM_STATUS_TAREFA.indexOf(tarefa.status);
+  if (voltar) {
+    voltar.hidden = posicao <= 0;
+    if (posicao > 0) voltar.textContent = `Voltar pra ${STATUS_LABEL_TAREFA[ORDEM_STATUS_TAREFA[posicao - 1]]}`;
+  }
+  if (avancar) {
+    avancar.hidden = posicao < 0 || posicao >= ORDEM_STATUS_TAREFA.length - 1;
+    if (!avancar.hidden) avancar.textContent = `Mover pra ${STATUS_LABEL_TAREFA[ORDEM_STATUS_TAREFA[posicao + 1]]}`;
+  }
 }
 
 // --- TELA DE CARDÁPIO (Preços + Ficha Técnica numa tela só, 2026-09-09) ---

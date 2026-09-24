@@ -1937,9 +1937,14 @@ def criar_tarefa(titulo, descricao, categoria, prioridade, data_limite, visivel_
         return cursor.lastrowid
 
 
-def atualizar_tarefa(tarefa_id, campos):
+def atualizar_tarefa(tarefa_id, campos, visto_em=None):
     """campos: dict com as colunas a mudar (titulo, descricao, categoria,
-    prioridade, status, data_limite) — só atualiza o que vier no dict."""
+    prioridade, status, data_limite) — só atualiza o que vier no dict.
+
+    `visto_em` é o `atualizado_em` que a tela tinha quando abriu o card. Se
+    alguém tiver salvado nesse meio tempo, levanta ValueError em vez de
+    escrever por cima: o quadro só carregava ao abrir a página e vencia quem
+    salvasse por último, sem ninguém ficar sabendo (QA 22/09)."""
     if not campos:
         return
     campos = dict(campos)
@@ -1947,6 +1952,14 @@ def atualizar_tarefa(tarefa_id, campos):
     colunas = ", ".join(f"{chave} = ?" for chave in campos)
     valores = list(campos.values()) + [tarefa_id]
     with conexao() as conn:
+        travar_para_escrita(conn)
+        if visto_em:
+            linha = conn.execute("SELECT atualizado_em FROM tarefa WHERE id = ?", (tarefa_id,)).fetchone()
+            if linha and linha["atualizado_em"] and linha["atualizado_em"] > visto_em:
+                raise ValueError(
+                    "Outra pessoa mexeu neste card enquanto você editava. "
+                    "Feche e abra de novo pra ver o que mudou antes de salvar."
+                )
         conn.execute(f"UPDATE tarefa SET {colunas} WHERE id = ?", valores)
 
 
@@ -1989,12 +2002,17 @@ def adicionar_subtarefa(tarefa_id, titulo):
         return cursor.lastrowid
 
 
-def alternar_subtarefa(subtarefa_id, concluida):
+def alternar_subtarefa(tarefa_id, subtarefa_id, concluida):
+    """A rota conferia o card, mas a subtarefa era marcada só pelo id dela:
+    passando o id de uma subtarefa de card particular alheio junto com o id
+    de um card visível, dava pra mexer no card dos outros (QA 22/09).
+    Devolve False quando a subtarefa não é desse card."""
     with conexao() as conn:
-        conn.execute(
-            "UPDATE tarefa_subtarefa SET concluida = ? WHERE id = ?",
-            (1 if concluida else 0, subtarefa_id),
+        cursor = conn.execute(
+            "UPDATE tarefa_subtarefa SET concluida = ? WHERE id = ? AND tarefa_id = ?",
+            (1 if concluida else 0, subtarefa_id, tarefa_id),
         )
+        return cursor.rowcount > 0
 
 
 def adicionar_comentario(tarefa_id, autor, texto):

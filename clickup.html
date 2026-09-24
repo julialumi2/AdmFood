@@ -181,6 +181,28 @@
         </div>
 
         <!-- QUADRO KANBAN — colunas renderizadas dinamicamente via JS (carregarTarefas) -->
+        <!-- Sem busca, filtro ou ordenação: com 30 cards, achar um era ler
+             as três colunas inteiras (QA 22/09) -->
+        <div class="tarefas-barra">
+          <div class="search-box tarefas-busca">
+            <i data-lucide="search"></i>
+            <input type="search" id="tarefas-busca" placeholder="Buscar card, categoria ou responsável...">
+          </div>
+          <div class="select-wrapper">
+            <select id="tarefas-filtro-responsavel"><option value="">Todo mundo</option></select>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <div class="select-wrapper">
+            <select id="tarefas-ordem">
+              <option value="prazo">Por prazo</option>
+              <option value="prioridade">Por prioridade</option>
+              <option value="titulo">Por título</option>
+            </select>
+            <i data-lucide="chevron-down"></i>
+          </div>
+          <span class="panel-subtitle" id="tarefas-resumo"></span>
+        </div>
+
         <div class="kanban-board">
 
           <!-- Coluna: A Fazer -->
@@ -405,7 +427,10 @@
 
       <div class="modal-actions border-top">
         <button type="button" class="btn-secondary" onclick="fecharModalDetalhes()">Fechar</button>
-        <button type="button" class="btn-primary" onclick="alterarStatusModal()">Mover de Status</button>
+        <!-- Um botão só que andava em círculo: no Feito, o próximo clique
+             voltava tudo pro "A Fazer" (QA 22/09) -->
+        <button type="button" class="btn-secondary" id="btn-tarefa-voltar-status" onclick="alterarStatusModal(-1)" hidden>Voltar</button>
+        <button type="button" class="btn-primary" id="btn-tarefa-avancar-status" onclick="alterarStatusModal(1)">Mover de Status</button>
       </div>
     </div>
   </div>

@@ -5579,3 +5579,50 @@ outros quatro:
   publicar na Chrome Web Store, e o pacote e os textos da loja já estão
   prontos em `extensao-whatsapp/publicacao/`. A página de instalação agora
   explica isso em vez de deixar a impressão de que é assim mesmo.
+
+
+### 6.93 Médios do quadro de Tarefas (ClickUp) — os últimos
+
+Os seis últimos médios da auditoria. O #99 (mensagens em língua de
+programador, "Erro no servidor Flask: 404") já tinha caído na varredura do
+`_erroDaResposta`, na leva de Segurança. Os outros cinco:
+
+**Checklist de card alheio (#96).** A rota conferia o card, mas
+`alternar_subtarefa` marcava a subtarefa só pelo id dela: passando o id de
+uma subtarefa de card particular de outra pessoa junto com o id de um card
+visível, dava pra mexer no card dos outros. O `UPDATE` agora exige
+`tarefa_id` junto, e a rota responde 404 quando a subtarefa não é daquele
+card.
+
+**Dois admins não se atropelam mais (#97).** O quadro só carregava ao abrir a
+página e vencia quem salvasse por último, em silêncio. Duas coisas mudaram: o
+quadro se relê de 45 em 45 segundos enquanto a tela está na frente da pessoa
+(nunca com a aba escondida nem com um card aberto, pra não trocar o texto
+debaixo de quem está digitando), e cada card carrega o carimbo
+`atualizadoEm` de quando foi aberto. Ao salvar, o carimbo vai junto: se
+alguém mexeu nesse meio tempo, o servidor responde 409 e a tela avisa em vez
+de escrever por cima. Arrastar o card no quadro não manda carimbo de
+propósito — mudar de coluna é um campo só e não pisa no texto de ninguém.
+
+**Carregando e coluna vazia (#98).** Enquanto buscava, as três colunas
+ficavam em branco e a tela parecia quebrada; coluna sem card ficava
+igualzinha. Agora existe "Carregando..." e cada coluna vazia diz o que está
+vazia ("Nada em andamento.").
+
+**Mover pros dois lados (#100).** No celular não dá pra arrastar, e o único
+botão do modal só andava pra frente — no Feito, o clique seguinte voltava
+tudo pro "A Fazer" em círculo. Cada card ganhou setas de avançar e voltar no
+próprio quadro (com o clique parando ali, sem abrir o card), e o modal tem
+dois botões que somem nas pontas.
+
+**Busca, filtro e ordenação (#101).** O quadro não tinha nada disso: com 30
+cards, achar um era ler as três colunas inteiras. A barra de cima tem busca
+(título, descrição, categoria ou responsável), filtro por responsável
+(inclusive "sem responsável") e ordenação por prazo, prioridade ou título,
+mais a contagem do que está sendo mostrado. E o comentário passou a mostrar a
+data, que a API já mandava.
+
+Com isso, os **123 médios da auditoria de 22/09 estão fechados** — sobram os
+26 baixos. Duas coisas dependem de gente, não de código: publicar a extensão
+na Chrome Web Store (#116) e cadastrar as lojas em Fornecedores, pro convite
+parar de cair no atalho de marcar todo mundo (#26).

@@ -6857,6 +6857,9 @@ def _formatar_tarefa(tarefa):
         "responsavelId": tarefa.get("responsavel_id"),
         "responsavelNome": tarefa.get("responsavel_nome"),
         "loja": tarefa.get("loja"),
+        # Carimbo da última alteração: a tela devolve ele ao salvar, e o
+        # servidor recusa se outra pessoa mexeu no meio (QA 22/09).
+        "atualizadoEm": tarefa.get("atualizado_em"),
     }
 
 
@@ -6959,7 +6962,15 @@ def api_atualizar_tarefa(tarefa_id):
         return jsonify({"erro": "Prioridade inválida."}), 400
     if 'status' in campos and campos['status'] not in STATUS_TAREFA_VALIDOS:
         return jsonify({"erro": "Status inválido."}), 400
-    atualizar_tarefa(tarefa_id, campos)
+    # Dois admins com a tela aberta se atropelavam em silêncio: vencia quem
+    # salvasse por último. A tela manda o `atualizadoEm` de quando abriu o
+    # card, e o servidor recusa se outra pessoa mexeu nesse meio tempo
+    # (QA 22/09). Arrastar o card no quadro não manda nada disso: mudança de
+    # status é ação de um campo só, não pisa no texto de ninguém.
+    try:
+        atualizar_tarefa(tarefa_id, campos, visto_em=dados.get('atualizadoEm'))
+    except ValueError as recusa:
+        return jsonify({"erro": str(recusa), "conflito": True}), 409
     return jsonify({"ok": True})
 
 
@@ -7024,7 +7035,10 @@ def api_alternar_subtarefa(tarefa_id, subtarefa_id):
     if erro:
         return erro
     dados = request.get_json(silent=True) or {}
-    alternar_subtarefa(subtarefa_id, bool(dados.get('concluida')))
+    # A subtarefa precisa ser DESSE card: só o id dela era conferido, e o de
+    # card particular alheio passava (QA 22/09).
+    if not alternar_subtarefa(tarefa_id, subtarefa_id, bool(dados.get('concluida'))):
+        return jsonify({"erro": "Essa subtarefa não é desse card."}), 404
     return jsonify({"ok": True})
 
 

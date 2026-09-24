@@ -416,3 +416,51 @@
 .badge-select.priority-alta { background-color: var(--danger-soft); color: var(--danger); }
 .badge-select.priority-media { background-color: var(--warning-soft); color: var(--warning-texto); }
 .badge-select.priority-baixa { background-color: var(--info-soft); color: var(--info); }
+
+
+/* Busca, filtro por responsável e ordenação do quadro (QA 22/09) */
+.tarefas-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.tarefas-busca { min-width: 240px; flex: 1 1 240px; }
+
+.tarefas-barra .panel-subtitle { margin: 0; white-space: nowrap; }
+
+/* Coluna vazia ficava em branco, igual a "ainda carregando" (QA 22/09) */
+.task-vazia {
+  margin: 0;
+  padding: 18px 12px;
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+/* No celular não dá pra arrastar: as setas movem o card (QA 22/09) */
+.task-mover {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+/* O comentário não mostrava a data, mesmo a API mandando (QA 22/09) */
+.comment-date {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .tarefas-barra > * { flex: 1 1 100%; }
+  .tarefas-busca { min-width: 0; }
+}
