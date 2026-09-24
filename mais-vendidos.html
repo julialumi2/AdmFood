@@ -164,22 +164,21 @@
       <!-- PÁGINA DE MAIS VENDIDOS -->
       <div class="page-content">
 
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="receipt-text" class="icon-pin"></i>
-            <span>PRODUTOS VENDIDOS · <span id="mv-eyebrow-dia">—</span></span>
-            <!-- O dia de hoje está sempre pela metade e a tela não dizia
-                 (QA 22/09) -->
-            <span class="mv-dia-parcial" id="mv-dia-parcial" hidden></span>
-          </div>
-          <div class="title-row mv-title-row">
-            <div class="mv-titulo">
-              <h1>Mais vendidos por loja</h1>
-              <p class="mv-explica">
-                Unidades, faturamento e ranking das 4 lojas no dia, comparados com o mesmo dia da semana anterior.
-              </p>
+        <!-- Cabeçalho numa linha: título e apoio à esquerda, o dia à
+             direita (briefing 24/09). -->
+        <div class="mv-cabecalho">
+          <div class="mv-titulo">
+            <div class="title-top">
+              <i data-lucide="receipt-text" class="icon-pin"></i>
+              <span>PRODUTOS VENDIDOS · <span id="mv-eyebrow-dia">—</span></span>
             </div>
+            <h1>Mais vendidos por loja</h1>
+            <p class="mv-explica">
+              Unidades, faturamento e ranking das 4 lojas no dia, comparados com o mesmo dia da semana anterior.
+            </p>
+          </div>
 
+          <div class="mv-cabecalho-dia">
             <!-- Anda de dia em dia com venda (pula segunda, que as lojas não abrem) -->
             <div class="dia-navegador" id="mv-dia-navegador">
               <button type="button" class="dia-seta" id="mv-dia-anterior" aria-label="Dia anterior com venda">
@@ -194,6 +193,9 @@
                 <i data-lucide="chevron-right"></i>
               </button>
             </div>
+            <!-- O dia de hoje está sempre pela metade e a tela não dizia
+                 (QA 22/09) -->
+            <span class="mv-dia-parcial" id="mv-dia-parcial" hidden></span>
           </div>
         </div>
 
@@ -221,6 +223,32 @@
             <span>Tradiça Simus</span>
           </button>
         </div>
+
+        <!-- RESUMO DO DIA: quatro números numa superfície só, divididos
+             por fio — o resumo que o briefing pede, sem virar quatro
+             cartões soltos. -->
+        <section class="mv-indicadores" id="mv-indicadores" aria-label="Resumo do dia">
+          <div class="mv-indicador">
+            <span class="mv-indicador-rotulo">Itens vendidos</span>
+            <strong class="mv-indicador-valor" id="mv-kpi-itens">—</strong>
+            <span class="mv-indicador-apoio" id="mv-kpi-itens-sub">—</span>
+          </div>
+          <div class="mv-indicador">
+            <span class="mv-indicador-rotulo">Campeão do dia</span>
+            <strong class="mv-indicador-valor mv-indicador-texto" id="mv-kpi-campeao">—</strong>
+            <span class="mv-indicador-apoio" id="mv-kpi-campeao-sub">—</span>
+          </div>
+          <div class="mv-indicador">
+            <span class="mv-indicador-rotulo">Categoria líder</span>
+            <strong class="mv-indicador-valor mv-indicador-texto" id="mv-kpi-categoria">—</strong>
+            <span class="mv-indicador-apoio" id="mv-kpi-categoria-sub">—</span>
+          </div>
+          <div class="mv-indicador">
+            <span class="mv-indicador-rotulo">Preço médio do mix</span>
+            <strong class="mv-indicador-valor" id="mv-kpi-ticket">—</strong>
+            <span class="mv-indicador-apoio" id="mv-kpi-ticket-sub">—</span>
+          </div>
+        </section>
 
         <!-- TOP PRODUTOS + RECEITA POR CATEGORIA -->
         <div class="mv-graficos">

@@ -3065,10 +3065,99 @@ function renderMaisVendidos(animar = true) {
   document.querySelector('.page-content').classList.toggle('mv-animar', animar);
   const lojas = _mvLojasFiltradas();
   const rotuloComparado = _mvRotuloComparado();
+  _renderMvIndicadores(lojas, ehHoje, rotuloComparado);
   _renderMvTopProdutos(lojas);
   _renderMvCategorias(lojas);
   _renderMvComparativo(dados.lojas, rotuloComparado, ehHoje);
   _renderMvRanking();
+}
+
+// --- Resumo do dia: quatro números no topo (briefing 24/09) ---
+// Nada disso precisou de servidor: a API já manda o dia e o mesmo dia da
+// semana anterior, produto a produto.
+function _renderMvIndicadores(lojas, diaParcial, rotuloComparado) {
+  const faixa = document.getElementById('mv-indicadores');
+  if (!faixa) return;
+  const escrever = (id, texto, html = false) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (html) el.innerHTML = texto; else el.textContent = texto;
+  };
+  const produtos = _mvProdutos(lojas);
+  const onde = mvLojaFiltro === 'todas' ? 'na rede' : `em ${MV_LOJAS[mvLojaFiltro]?.curto || mvLojaFiltro}`;
+
+  if (!produtos.length) {
+    ['mv-kpi-itens', 'mv-kpi-campeao', 'mv-kpi-categoria', 'mv-kpi-ticket'].forEach((id) => escrever(id, '—'));
+    ['mv-kpi-itens-sub', 'mv-kpi-campeao-sub', 'mv-kpi-categoria-sub', 'mv-kpi-ticket-sub']
+      .forEach((id) => escrever(id, _mvTextoSemVenda()));
+    return;
+  }
+
+  // 1) Itens vendidos. A variação só entra quando dá pra comparar: hoje
+  // está pela metade, e o dia comparado pode ter sincronizado pela metade
+  // também (mesma regra do comparativo entre lojas, QA 22/09).
+  const itens = lojas.reduce((s, l) => s + l.itens, 0);
+  escrever('mv-kpi-itens', `${_formatarQuantidadeVendida(itens)} un.`);
+  const comparaveis = lojas.filter((l) => !l.comparadoParcial && l.itensComparado > 0);
+  if (diaParcial) {
+    escrever('mv-kpi-itens-sub', `${onde}, dia em andamento`);
+  } else if (!comparaveis.length) {
+    escrever('mv-kpi-itens-sub', `${onde} · sem base em ${rotuloComparado}`);
+  } else {
+    const variacao = _mvVariacao(
+      comparaveis.reduce((s, l) => s + l.itens, 0),
+      comparaveis.reduce((s, l) => s + l.itensComparado, 0),
+    );
+    const pct = Math.round(variacao * 100);
+    const classe = pct > 0 ? 'mv-indicador-alta' : pct < 0 ? 'mv-indicador-baixa' : '';
+    escrever('mv-kpi-itens-sub',
+      `<span class="${classe}">${pct > 0 ? '+' : ''}${pct}%</span> contra ${escaparHtml(rotuloComparado)}`, true);
+  }
+
+  // 2) Campeão do dia.
+  const campeao = produtos.slice().sort((a, b) => b.quantidade - a.quantidade
+    || a.nome.localeCompare(b.nome, 'pt-BR'))[0];
+  escrever('mv-kpi-campeao', campeao.nome);
+  document.getElementById('mv-kpi-campeao').title = campeao.nome;
+  escrever('mv-kpi-campeao-sub',
+    `${_formatarQuantidadeVendida(campeao.quantidade)} un. · ${MV_LOJAS[campeao.loja]?.curto || campeao.loja}`);
+
+  // 3) Categoria líder, por receita. "Estimada" porque a venda por item
+  // não traz preço: é unidade × preço de tabela do canal.
+  const porCategoria = new Map();
+  let receitaTotal = 0;
+  let unidadesComPreco = 0;
+  produtos.forEach((p) => {
+    if (p.receita === null || p.receita === undefined) return;
+    receitaTotal += p.receita;
+    unidadesComPreco += p.quantidade;
+    const cat = _mvCategoria(p.categoria);
+    porCategoria.set(cat, (porCategoria.get(cat) || 0) + p.receita);
+  });
+  const lider = [...porCategoria.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (lider && receitaTotal > 0) {
+    escrever('mv-kpi-categoria', lider[0]);
+    document.getElementById('mv-kpi-categoria').title = lider[0];
+    escrever('mv-kpi-categoria-sub',
+      `${Math.round((lider[1] / receitaTotal) * 100)}% da receita estimada`);
+  } else {
+    escrever('mv-kpi-categoria', '—');
+    escrever('mv-kpi-categoria-sub', 'nenhum produto com preço de tabela');
+  }
+
+  // 4) Preço médio do mix. Divide só pelas unidades que TÊM preço — usar o
+  // total de unidades puxaria a média pra baixo por causa do que não tem
+  // preço cadastrado.
+  if (unidadesComPreco > 0) {
+    escrever('mv-kpi-ticket', _mvMoeda(receitaTotal / unidadesComPreco));
+    const deFora = itens - unidadesComPreco;
+    escrever('mv-kpi-ticket-sub', deFora > 0
+      ? `por unidade · ${_formatarQuantidadeVendida(deFora)} un. sem preço de tabela`
+      : 'por unidade vendida, pelo preço de tabela');
+  } else {
+    escrever('mv-kpi-ticket', '—');
+    escrever('mv-kpi-ticket-sub', 'nenhum produto com preço de tabela');
+  }
 }
 
 // --- Top produtos por volume (barras deitadas) ---

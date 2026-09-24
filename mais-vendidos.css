@@ -40,14 +40,107 @@ body.dark-mode {
 }
 
 /* --- Cabeçalho ----------------------------------------------------------- */
-.mv-title-row { align-items: flex-end; }
+/* Uma linha só: título e apoio à esquerda, o dia à direita. O aviso de
+   "dia em andamento" desceu pra debaixo do navegador, onde ele fala do
+   dia escolhido em vez de empurrar o título (briefing 24/09). */
+.mv-cabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.mv-titulo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.mv-cabecalho-dia {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
 
 .mv-explica {
-  max-width: 560px;
-  margin-top: 4px;
-  font-size: 0.85rem;
+  max-width: 62ch;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   line-height: 1.45;
+}
+
+/* --- Resumo do dia: quatro números numa superfície só --------------------- */
+/* Divididos por fio, não quatro cartões soltos: lê como um instrumento e
+   não como um painel de cartõezinhos. */
+.mv-indicadores {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.mv-indicador {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--space-4);
+  border-right: 1px solid var(--border-color);
+  min-width: 0;
+}
+
+.mv-indicador:last-child { border-right: none; }
+
+.mv-indicador-rotulo {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.mv-indicador-valor {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nome de produto e de categoria não são número: fonte menor, e corta com
+   reticências em vez de esticar a coluna. */
+.mv-indicador-texto {
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mv-indicador-apoio {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mv-indicador-alta { color: var(--success-texto); font-weight: 600; }
+.mv-indicador-baixa { color: var(--danger-texto); font-weight: 600; }
+
+@media (max-width: 1000px) {
+  .mv-indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mv-indicador:nth-child(2n) { border-right: none; }
+  .mv-indicador:nth-child(-n+2) { border-bottom: 1px solid var(--border-color); }
+}
+
+@media (max-width: 560px) {
+  .mv-indicadores { grid-template-columns: minmax(0, 1fr); }
+  .mv-indicador { border-right: none; border-bottom: 1px solid var(--border-color); }
+  .mv-indicador:last-child { border-bottom: none; }
 }
 
 /* Navegador de dia: ‹ domingo 13/09 › */
@@ -129,9 +222,11 @@ body.dark-mode {
 #mv-lojas-tabs .tab-btn:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 
 /* --- Top produtos (barras deitadas) + categorias (rosca) ---------------- */
+/* 50/50: as duas caixas alinhadas, mesma largura e mesma altura
+   (briefing 24/09). */
 .mv-graficos {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
   align-items: stretch;
 }
@@ -332,7 +427,7 @@ body.dark-mode {
 
 /* --- Comparativo entre lojas (colunas) ---------------------------------- */
 .mv-colunas {
-  --altura: 220px;
+  --altura: 168px;
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 0 var(--space-3);
@@ -754,3 +849,27 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
   text-transform: none;
   letter-spacing: 0;
 }
+
+
+/* --- Densidade (briefing 24/09) ------------------------------------------ */
+/* A tela toda com respiro menor: menos rolagem, sem apertar a leitura. */
+.page-content { gap: var(--space-4); padding: var(--space-6) var(--space-8); }
+
+/* Com a rosca ocupando metade da largura, empilhar rosca e legenda deixava
+   uns 300px de branco dentro da caixa pra ela alcançar a altura da caixa de
+   barras ao lado. Lado a lado, as duas caixas ficam parecidas de altura
+   sem esticar sobre vazio. */
+@media (min-width: 1100px) {
+  .mv-rosca-area {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-5);
+    row-gap: var(--space-3);
+  }
+  .mv-rosca { width: 200px; margin: 0; }
+  .mv-rosca-area > .mv-nota { grid-column: 1 / -1; }
+}
+.page-content > .panel,
+.mv-graficos > .panel { padding: var(--space-4) var(--space-5); gap: var(--space-3); }
+.mv-ranking .panel-header { padding: var(--space-4) var(--space-5) 0; }
