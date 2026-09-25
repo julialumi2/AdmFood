@@ -2,7 +2,10 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- A barra do navegador no celular acompanha o fundo do sistema; o
+         script troca pro escuro quando o modo noturno está ligado. -->
+    <meta name="theme-color" content="#F3EBDB">
   <title>AdmFood - Configurações</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
@@ -400,7 +403,7 @@
                       <select id="registro-filtro-pessoa">
                         <option value="">Todo mundo</option>
                       </select>
-                      <i data-lucide="chevron-down"></i>
+                      <i data-lucide="chevron-down" class="select-icon"></i>
                     </div>
                     <div class="select-wrapper">
                       <select id="registro-filtro-dias">
@@ -409,7 +412,7 @@
                         <option value="30">Últimos 30 dias</option>
                         <option value="90">Últimos 90 dias</option>
                       </select>
-                      <i data-lucide="chevron-down"></i>
+                      <i data-lucide="chevron-down" class="select-icon"></i>
                     </div>
                   </div>
                 </div>

@@ -42,10 +42,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 2. TOGGLE MODO NOTURNO (a tela de Configurações tem 2 interruptores na
   // mesma página — cabeçalho + painel de Aparência — mantidos sincronizados)
+  // No celular a barra do navegador tem cor própria: sem isso ela fica
+  // branca em volta do creme, e clara em volta do modo noturno (25/09).
+  function _corDaBarraDoNavegador() {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) return;
+    meta.setAttribute('content', getComputedStyle(document.body).backgroundColor);
+  }
   const togglesTema = document.querySelectorAll('#theme-toggle-checkbox, #theme-toggle-checkbox-config');
   if (togglesTema.length) {
     const temaEscuroSalvo = localStorage.getItem('theme') === 'dark';
     document.body.classList.toggle('dark-mode', temaEscuroSalvo);
+    _corDaBarraDoNavegador();
     togglesTema.forEach(chk => { chk.checked = temaEscuroSalvo; });
 
     togglesTema.forEach(chk => {
@@ -54,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.toggle('dark-mode', ligado);
         localStorage.setItem('theme', ligado ? 'dark' : 'light');
         togglesTema.forEach(outro => { outro.checked = ligado; });
+        _corDaBarraDoNavegador();
       });
     });
   }

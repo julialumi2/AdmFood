@@ -1156,3 +1156,82 @@
   #estoque-tabela-scroll .inventory-table tbody td.col-nivel { flex-direction: column; align-items: flex-end; }
   #estoque-tabela-scroll .inventory-table tbody td.col-nivel::before { align-self: flex-start; }
 }
+
+/* MOBILE: a loja ocupa a linha inteira e as três ações ficam lado a lado
+   logo abaixo dela, em vez de empilhadas (anotação dela, 25/09). Os ícones
+   saem pra caber os três nomes em 375px. */
+@media (max-width: 768px) {
+  .estoque-topo-direita { width: 100%; gap: var(--space-2); }
+
+  .estoque-topo-direita .loja-select,
+  .estoque-topo-direita .loja-select-trigger { width: 100%; }
+
+  .estoque-topo-direita .page-acoes-topo {
+    width: 100%;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .estoque-topo-direita .page-acoes-topo > * { flex: 1 1 0; min-width: 0; }
+
+  .estoque-topo-direita .page-acoes-topo .btn-secondary,
+  .estoque-topo-direita .page-acoes-topo .btn-registrar-entrada {
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 6px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .estoque-topo-direita .page-acoes-topo .btn-secondary > i,
+  .estoque-topo-direita .page-acoes-topo .btn-secondary > svg { display: none; }
+
+  .estoque-topo-direita .page-acoes-topo .acoes-menu-trigger .loja-select-chevron { display: inline-flex; }
+}
+
+/* MOBILE: dentro do cartão de cada insumo (anotações dela, 25/09). */
+@media (max-width: 768px) {
+  /* "Mínimo e compra": a barrinha fica ao lado do texto, não em cima dele,
+     e a célula para de estourar a linha do rótulo. */
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel {
+    min-width: 0;
+    align-items: center;
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel .nivel-cell {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px 8px;
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel .nivel-gauge {
+    width: 64px;
+    flex: none;
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel .nivel-legenda,
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel .nivel-comprar,
+  #estoque-tabela-scroll .inventory-table tbody td.col-nivel .tendencia-texto {
+    text-align: right;
+  }
+
+  /* Fornecedores: as bolinhas quebram pra segunda linha em vez de espremer
+     o rótulo ou vazar do cartão. */
+  #estoque-tabela-scroll .inventory-table tbody td.col-fornecedores {
+    min-width: 0;
+    max-width: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  #estoque-tabela-scroll .inventory-table tbody td.col-fornecedores::before {
+    margin-right: auto;
+  }
+}

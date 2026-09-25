@@ -2,7 +2,10 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- A barra do navegador no celular acompanha o fundo do sistema; o
+         script troca pro escuro quando o modo noturno está ligado. -->
+    <meta name="theme-color" content="#F3EBDB">
   <title>AdmFood - ClickUp</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
@@ -196,7 +199,7 @@
           </div>
           <div class="select-wrapper">
             <select id="tarefas-filtro-responsavel"><option value="">Todo mundo</option></select>
-            <i data-lucide="chevron-down"></i>
+            <i data-lucide="chevron-down" class="select-icon"></i>
           </div>
           <div class="select-wrapper">
             <select id="tarefas-ordem">
@@ -204,7 +207,7 @@
               <option value="prioridade">Por prioridade</option>
               <option value="titulo">Por título</option>
             </select>
-            <i data-lucide="chevron-down"></i>
+            <i data-lucide="chevron-down" class="select-icon"></i>
           </div>
           <span class="panel-subtitle" id="tarefas-resumo"></span>
         </div>

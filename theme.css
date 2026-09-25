@@ -148,6 +148,12 @@ html {
   scrollbar-color: var(--border-color) transparent;
 }
 
+/* No celular a rolagem passa do fim da página e mostra o que está atrás
+   do body — sem isso, um piscar branco no meio do creme. */
+html {
+  background-color: var(--bg-main);
+}
+
 body {
   background-color: var(--bg-main);
   color: var(--text-dark);

@@ -279,7 +279,56 @@
 .fornecedor-detalhes a { color: var(--info); }
 
 @media (max-width: 768px) {
-  .fornecedores-acoes { width: 100%; }
+  .fornecedores-acoes { width: 100%; gap: var(--space-2); }
   .fornecedores-busca { width: 100%; }
   .fornecedor-detalhes { grid-template-columns: 1fr; }
+
+  /* Cartões 2x2: o auto-fit de 200px cabe uma coluna só em 375px. */
+  .fornecedores-kpis { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+
+  /* Busca ocupa a linha; o filtro de ativos e o "Cadastrar fornecedor"
+     dividem a de baixo (anotação dela, 25/09). */
+  .fornecedores-acoes { align-items: stretch; }
+
+  .fornecedores-acoes .select-wrapper { flex: 1 1 0; min-width: 0; }
+
+  .fornecedores-acoes .select-wrapper select { width: 100%; }
+
+  .fornecedores-acoes .page-acoes-topo {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: row;
+  }
+
+  .fornecedores-acoes .page-acoes-topo .btn-registrar-entrada {
+    width: 100%;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 8px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  /* TABELA: continua tabela, só com as colunas que importam no celular —
+     lojas atendidas, categoria e condições comerciais saem, e a linha
+     inteira abre o modal com tudo. */
+  .fornecedores-tabela th:nth-child(2),
+  .fornecedores-tabela td:nth-child(2),
+  .fornecedores-tabela th:nth-child(3),
+  .fornecedores-tabela td:nth-child(3),
+  .fornecedores-tabela th:nth-child(5),
+  .fornecedores-tabela td:nth-child(5) { display: none; }
+
+  .fornecedores-tabela-card .table-responsive { overflow-x: visible; }
+
+  .fornecedores-tabela { width: 100%; table-layout: fixed; }
+
+  .fornecedores-tabela th,
+  .fornecedores-tabela td {
+    padding: 10px 6px;
+    font-size: 0.78rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }

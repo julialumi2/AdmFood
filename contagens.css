@@ -43,23 +43,46 @@
   accent-color: var(--info);
 }
 
+/* Uma loja por bloco: nome em cima, o link com o "Copiar" no meio e os
+   envios embaixo. Era tudo numa linha só sem quebra, então o link ficava
+   espremido e os botões viravam palavras empilhadas (25/09). */
 .contagem-link-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
 }
 
 .contagem-link-item .contagem-link-loja {
-  flex: 0 0 auto;
-  min-width: 150px;
+  flex: 1 0 100%;
   font-weight: 600;
   font-size: 0.85rem;
 }
 
 .contagem-link-item input {
-  flex: 1 1 auto;
+  flex: 1 1 160px;
+  min-width: 0;
 }
+
+.contagem-link-item > .btn-secondary-sm { flex: 0 0 auto; }
+
+.envio-contagem .btn-limpar-filtro,
+.envio-contagem .btn-secondary-sm { white-space: nowrap; }
+
+/* O ícone do "Copiar link" ficava flutuando acima da palavra. */
+.envio-contagem .btn-limpar-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.envio-contagem .btn-limpar-filtro i,
+.envio-contagem .btn-limpar-filtro svg { width: 14px; height: 14px; }
 
 /* CONFERÊNCIA — "O que comprar" (2026-09-21, pedido dela): uma coluna por
    loja com a quantidade que vai pra compra, editável; item sem estoque
