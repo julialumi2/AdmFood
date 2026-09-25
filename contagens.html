@@ -166,29 +166,30 @@
 
         <!-- VISÃO: LISTA DE CONTAGENS -->
         <div id="contagens-lista-view">
-          <div class="dashboard-title-area">
-            <div class="title-top">
-              <i data-lucide="clipboard-list" class="icon-pin"></i>
-              <span>REQUISIÇÃO DE ESTOQUE POR LOJA</span>
-            </div>
-            <div class="title-row">
-              <h1>Requisições</h1>
-              <div class="page-acoes-topo" id="contagens-acoes-admin" style="display:none;">
-                <button type="button" class="btn-secondary" id="btn-contatos-contagem">
-                  <i data-lucide="users"></i>
-                  Quem conta o estoque
-                </button>
-                <button type="button" class="btn-registrar-entrada" id="btn-nova-contagem">
-                  <i data-lucide="plus"></i>
-                  Nova requisição
-                </button>
+          <div class="tela-cabecalho">
+            <div class="tela-cabecalho-titulo">
+              <div class="title-top">
+                <i data-lucide="clipboard-list" class="icon-pin"></i>
+                <span>REQUISIÇÃO DE ESTOQUE POR LOJA</span>
               </div>
+              <h1>Requisições</h1>
+              <p class="tela-cabecalho-apoio">
+                Abre o preenchimento em uma ou mais lojas de uma vez e gera um link sem login por
+                loja, pro funcionário dizer quanto tem de cada insumo. Depois de preenchido, você
+                confere aqui antes de aprovar.
+              </p>
+            </div>
+            <div class="tela-cabecalho-acoes" id="contagens-acoes-admin" style="display:none;">
+              <button type="button" class="btn-secondary" id="btn-contatos-contagem">
+                <i data-lucide="users"></i>
+                Quem conta o estoque
+              </button>
+              <button type="button" class="btn-registrar-entrada" id="btn-nova-contagem">
+                <i data-lucide="plus"></i>
+                Nova requisição
+              </button>
             </div>
           </div>
-
-          <p class="panel-subtitle" style="margin-top: var(--space-2); max-width: 640px;">
-            Uma requisição abre o preenchimento em uma ou mais lojas de uma vez — gera um link sem login por loja pro funcionário preencher a quantidade em estoque de cada insumo. Depois de preenchido, confira aqui antes de aprovar.
-          </p>
 
           <div class="chart-card">
             <div class="table-header-row">
