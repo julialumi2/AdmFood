@@ -1348,6 +1348,9 @@ def _formatar_usuario(usuario):
 # Teto de sanidade pro preço que vem de fora: acima disso é unidade trocada
 # (preço da caixa no campo do grama), não preço.
 LIMITE_PRECO_UNITARIO = 1_000_000
+# Teto da quantidade contada no link da loja. Não existe insumo em gramas
+# que chegue nisso; o que chega é dedo no teclado ou requisição forjada.
+LIMITE_QUANTIDADE_CONTAGEM = 10_000_000
 
 TENTATIVAS_MAXIMAS_TOKEN = 30
 JANELA_RATE_LIMIT_TOKEN_SEGUNDOS = 60
@@ -5601,11 +5604,18 @@ def api_aprovar_requisicao():
         return jsonify({"erro": "Requisição não encontrada."}), 404
 
     aprovadas = 0
+    # Contagem respondida sem nenhum item preenchido (possível nas que a loja
+    # mandou antes da trava de 25/09) era aprovada em silêncio e o estoque
+    # dela ficava com o número velho. Aprova mesmo assim — segurar travaria a
+    # requisição inteira —, mas devolve quais foram pra tela avisar.
+    vazias = []
     for contagem in grupo['contagens']:
         if contagem['status'] == 'respondida':
+            if not contagem.get('itens_preenchidos'):
+                vazias.append(contagem['loja'])
             aprovar_contagem(contagem['id'])
             aprovadas += 1
-    return jsonify({"ok": True, "aprovadas": aprovadas})
+    return jsonify({"ok": True, "aprovadas": aprovadas, "vazias": vazias})
 
 
 @app.route('/api/requisicoes/conferencia/gerar-cotacao', methods=['POST'])
@@ -6060,11 +6070,25 @@ def api_responder_contagem(token):
         for insumo_id, quantidade in valores_brutos.items():
             if quantidade is None or quantidade == '':
                 continue
-            valores[int(insumo_id)] = float(quantidade)
+            quantidade_float = float(quantidade)
+            # Mesma trava do link do fornecedor (QA 22/09), que aqui faltava:
+            # o JSON aceita Infinity e NaN escritos na mão, e os dois passam
+            # no teste de negativo. Infinity vira quantidade_atual da loja e
+            # contamina soma, déficit e CMV; NaN o SQLite grava como NULL, e
+            # o item conta como não preenchido sem ninguém perceber. O link é
+            # público, sem login.
+            if not math.isfinite(quantidade_float) or quantidade_float < 0:
+                return jsonify({"erro": "Quantidade precisa ser um número de 0 pra cima."}), 400
+            if quantidade_float > LIMITE_QUANTIDADE_CONTAGEM:
+                return jsonify({"erro": "Quantidade alta demais — confira a unidade antes de enviar."}), 400
+            valores[int(insumo_id)] = quantidade_float
     except (TypeError, ValueError):
         return jsonify({"erro": "Quantidade inválida."}), 400
-    if any(v < 0 for v in valores.values()):
-        return jsonify({"erro": "Quantidade não pode ser negativa."}), 400
+    # Envio sem nenhum item preenchido fechava a contagem do mesmo jeito: a
+    # loja aparecia como "respondida", a aprovação não gravava nada e a
+    # requisição seguia como se tivessem contado.
+    if not valores:
+        return jsonify({"erro": "Preencha a quantidade de pelo menos um item antes de enviar."}), 400
 
     responder_contagem(token, valores)
     return jsonify({"ok": True})

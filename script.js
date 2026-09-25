@@ -8141,6 +8141,13 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao aprovar');
+    // Loja que respondeu sem preencher nada: o estoque dela fica com o
+    // número velho e o déficit sai errado (QA 25/09).
+    if (dados.vazias?.length) {
+      alert(`${dados.vazias.join(', ')} ${dados.vazias.length === 1 ? 'respondeu' : 'responderam'} sem preencher nenhum item.`
+        + ` O estoque ${dados.vazias.length === 1 ? 'dessa loja continua' : 'dessas lojas continua'} com o número de antes,`
+        + ' e o que comprar pra ela sai por esse número. Vale reabrir a requisição pra loja contar de novo.');
+    }
     await abrirConferenciaRequisicao(r.titulo, r.prazoValidade);
   } catch (erro) {
     console.error('Falha ao aprovar requisição:', erro);
