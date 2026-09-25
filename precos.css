@@ -227,3 +227,28 @@
 .page-content { gap: var(--space-4); }
 .page-content table th { padding: 9px var(--space-5); font-size: 0.65rem; }
 .page-content table td { padding: 9px var(--space-5); font-size: 0.82rem; }
+
+/* MOBILE: a tabela das compras do insumo rolava de lado e encostava na
+   borda do cartão (anotação dela, 25/09). Ficam a data, o fornecedor e o
+   preço pago — loja e quantidade saem, e sobra margem dos dois lados. */
+@media (max-width: 768px) {
+  #precos-tabela-area { overflow-x: visible; }
+
+  #precos-tabela-area th:nth-child(3),
+  #precos-tabela-area td:nth-child(3),
+  #precos-tabela-area th:nth-child(4),
+  #precos-tabela-area td:nth-child(4) { display: none; }
+
+  #precos-tabela-area th,
+  #precos-tabela-area td {
+    padding: 8px 6px;
+    font-size: 0.78rem;
+    white-space: normal;
+  }
+
+  #precos-tabela-area th:first-child,
+  #precos-tabela-area td:first-child { padding-left: 0; }
+
+  #precos-tabela-area th:last-child,
+  #precos-tabela-area td:last-child { padding-right: 0; text-align: right; }
+}

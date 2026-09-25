@@ -1448,3 +1448,40 @@ body.dark-mode {
 
   .cardapio-topo .page-acoes-topo .action-controls > button { flex: 1 1 0; min-width: 0; }
 }
+
+/* MOBILE: o modal do produto ocupava a tela inteira, de ponta a ponta —
+   não dava pra ver que tinha uma tela atrás (anotação dela, 25/09). Agora
+   sobra margem dos dois lados e em cima, o desfoque aparece em volta e o
+   respiro interno encolhe. */
+@media (max-width: 768px) {
+  .modal-content.modal-detalhe-produto {
+    max-width: 100%;
+    max-height: 78vh;
+    padding: var(--space-4) var(--space-4) 0;
+    border-radius: var(--radius-lg);
+  }
+
+  .modal-detalhe-produto .modal-header { margin-bottom: var(--space-2); }
+
+  .modal-detalhe-produto .panel-title { font-size: 1rem; }
+
+  .modal-detalhe-produto #detalhe-produto-corpo { font-size: 0.85rem; }
+
+  /* O rodapé tomava 173px dos 633 do modal, com cada botão numa linha.
+     A sangria negativa também era a do respiro de desktop. */
+  .detalhe-produto-rodape {
+    flex-wrap: wrap;
+    margin: 0 calc(-1 * var(--space-4));
+    padding: var(--space-2) var(--space-4);
+    gap: 6px;
+  }
+
+  .detalhe-produto-rodape .btn-secondary-sm,
+  .detalhe-produto-rodape .btn-primary-sm,
+  .detalhe-produto-btn-editar {
+    padding: 7px 10px;
+    font-size: 0.76rem;
+  }
+
+  .detalhe-produto-btn-tirar { flex: 1 0 100%; justify-content: center; }
+}

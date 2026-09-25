@@ -899,3 +899,19 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
 
   #painel-integracoes-estoque .integracoes-loja { width: 100%; }
 }
+
+/* MOBILE: o seletor de dia saía da tela — flex-shrink: 0 no bloco dele
+   mantinha a largura do desktop (anotação dela, 25/09). */
+@media (max-width: 768px) {
+  .mv-cabecalho-dia {
+    flex: 1 1 100%;
+    min-width: 0;
+    align-items: stretch;
+  }
+
+  .dia-navegador { width: 100%; justify-content: space-between; min-width: 0; }
+
+  .dia-rotulo { min-width: 0; }
+
+  .mv-explica { max-width: 100%; }
+}

@@ -1605,10 +1605,16 @@ tr:hover { background-color: var(--surface-muted); }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  /* Fundo desfocado atrás do modal (pedido dela, 25/09): o escurecido
+     sozinho não separava o modal da tela, ainda mais no celular, onde ele
+     ocupa quase tudo. Menos preto porque o desfoque já faz o trabalho. */
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: var(--space-4);
   z-index: 1000;
 }
 

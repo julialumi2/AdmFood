@@ -1191,6 +1191,23 @@
   .estoque-topo-direita .page-acoes-topo .btn-secondary > svg { display: none; }
 
   .estoque-topo-direita .page-acoes-topo .acoes-menu-trigger .loja-select-chevron { display: inline-flex; }
+
+  /* O menu do "Mais ações" tem right: 0 e 300px fixos: preso à borda
+     direita do botão do meio, ele sumia pela esquerda da tela (print dela,
+     25/09). No celular passa a ser ancorado na linha dos três botões e
+     ocupa a largura toda. */
+  .estoque-topo-direita .page-acoes-topo { position: relative; }
+
+  .estoque-topo-direita .acoes-menu { position: static; }
+
+  .estoque-topo-direita .acoes-menu-lista {
+    left: 0;
+    right: 0;
+    min-width: 0;
+    width: auto;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
 }
 
 /* MOBILE: dentro do cartão de cada insumo (anotações dela, 25/09). */

@@ -283,11 +283,44 @@
      então o "Até" ficava metade fora da tela e a página rolava de lado. */
   .insight-controles { flex: 1 1 100%; min-width: 0; }
 
-  /* Três cartões inteiros um embaixo do outro tomavam a tela toda antes de
-     qualquer número aparecer. Mesmo conteúdo, dois por linha. */
-  .metrics-grid { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  /* O "Exportar para WhatsApp" ficava sozinho numa linha embaixo de tudo.
+     display: contents solta os três campos de data dentro da mesma linha
+     do botão, então dá: De | Até em cima, Dia da semana | Exportar embaixo
+     (pedido dela, 25/09). */
+  .insight-controles .date-range-picker { display: contents; }
 
-  .metrics-grid .metric-card { padding: var(--space-3); }
+  .insight-controles { gap: var(--space-2); }
+
+  .insight-controles .date-range-field { flex: 1 1 140px; min-width: 0; }
+
+  .insight-controles .btn-whatsapp {
+    flex: 1 1 150px;
+    min-width: 0;
+    justify-content: center;
+    align-self: flex-end;
+    padding: 9px var(--space-3);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  /* Cartões em carrossel: um por vez, deslizando, com o pedaço do próximo
+     aparecendo pra dizer que tem mais (pedido dela, 25/09). */
+  .metrics-grid {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .metrics-grid::-webkit-scrollbar { display: none; }
+
+  .metrics-grid .metric-card {
+    flex: 0 0 78%;
+    scroll-snap-align: start;
+    padding: var(--space-3);
+  }
 
   .metrics-grid .metric-value { font-size: 1.3rem; }
 

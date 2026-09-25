@@ -559,3 +559,33 @@
   color: var(--warning-texto);
   text-align: right;
 }
+
+/* MOBILE: "Quem conta o estoque" e "Nova requisição" saíam da tela — o
+   flex-shrink: 0 do bloco segurava a largura do desktop (anotação dela,
+   25/09). Agora dividem a linha, sem ícone, que é o que faz os dois nomes
+   caberem em 375px. */
+@media (max-width: 768px) {
+  .tela-cabecalho-acoes {
+    flex: 1 1 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .tela-cabecalho-acoes > button { flex: 1 1 0; min-width: 0; }
+
+  .tela-cabecalho-acoes .btn-secondary,
+  .tela-cabecalho-acoes .btn-registrar-entrada {
+    width: 100%;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 6px;
+    font-size: 0.74rem;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .tela-cabecalho-acoes button > i,
+  .tela-cabecalho-acoes button > svg { display: none; }
+}
