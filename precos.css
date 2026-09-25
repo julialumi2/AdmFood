@@ -180,3 +180,50 @@
 }
 
 .precos-sem-comparacao[hidden] { display: none; }
+
+
+/* `display: flex` nas regras acima ganha do atributo `hidden`, e os dois
+   blocos apareciam vazios antes de escolher um insumo — os seletores de
+   Loja e Fornecedor ficavam na tela sem nada pra filtrar. Bug que já
+   existia; achado no redesenho de 25/09. */
+.precos-recortes[hidden],
+.precos-em-uso[hidden],
+.precos-busca-aviso[hidden],
+.precos-sem-comparacao[hidden] { display: none; }
+
+/* ==========================================================================
+   REDESENHO 25/09 — cabeçalho numa linha e tabela mais densa
+   ========================================================================== */
+.precos-cabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* Mesmo motivo do Vendas Semanais: encolhe pra caber ao lado do período. */
+.precos-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+.precos-apoio {
+  max-width: 56ch;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* O grupo de período perdeu a margem de baixo: agora ele mora no
+   cabeçalho, não numa faixa própria. */
+.precos-filtros { margin-bottom: 0; flex-shrink: 0; }
+
+/* O histórico de um insumo é uma lista de compras: cabe mais linha por
+   tela com o respiro vertical menor. */
+.page-content { gap: var(--space-4); }
+.page-content table th { padding: 9px var(--space-5); font-size: 0.65rem; }
+.page-content table td { padding: 9px var(--space-5); font-size: 0.82rem; }

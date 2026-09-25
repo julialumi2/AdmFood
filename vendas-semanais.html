@@ -164,14 +164,50 @@
       <!-- PÁGINA DE VENDAS SEMANAIS -->
       <div class="page-content">
 
-        <!-- TÍTULO -->
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="calendar-range" class="icon-pin"></i>
-            <span>HISTÓRICO DE DESEMPENHO</span>
-          </div>
-          <div class="title-row">
+        <!-- CABEÇALHO: título e apoio à esquerda, loja e importação à
+             direita. O parágrafo comprido que ficava solto embaixo virou o
+             apoio do título. -->
+        <div class="vs-cabecalho">
+          <div class="vs-titulo">
+            <div class="title-top">
+              <i data-lucide="calendar-range" class="icon-pin"></i>
+              <span>HISTÓRICO DE DESEMPENHO</span>
+            </div>
             <h1>Vendas Semanais</h1>
+            <p class="vs-apoio">
+              Fechamento de cada semana por loja. O faturamento vem do próprio AdmFood assim que ele
+              já tem a semana inteira sincronizada; nas semanas mais antigas vem da planilha
+              importada. O %CMV é sempre recalculado aqui.
+            </p>
+          </div>
+
+          <div class="vs-controles">
+            <div class="loja-select" id="vendas-semanais-loja-select">
+              <button type="button" class="loja-select-trigger" id="vendas-semanais-loja-trigger">
+                <i data-lucide="store"></i>
+                <span class="loja-select-label">Hamburgueria Artesanos</span>
+                <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+              </button>
+              <div class="loja-select-menu" id="vendas-semanais-loja-menu">
+                <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
+                  <i data-lucide="store"></i>
+                  <span>Hamburgueria Artesanos</span>
+                </button>
+                <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
+                  <i data-lucide="store"></i>
+                  <span>Tradiça ZN</span>
+                </button>
+                <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
+                  <i data-lucide="store"></i>
+                  <span>Tradiça Simus</span>
+                </button>
+                <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
+                  <i data-lucide="store"></i>
+                  <span>Açaí Na Lata</span>
+                </button>
+              </div>
+            </div>
+
             <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
             <div id="vendas-semanais-importar-area" style="display:none;">
               <input type="file" id="vendas-semanais-importar-arquivo" accept=".xlsx" style="display:none;">
@@ -183,40 +219,7 @@
           </div>
         </div>
 
-        <p class="panel-subtitle" style="max-width: 660px;">
-          Fechamento de cada semana por loja. O faturamento vem do próprio AdmFood assim que ele
-          já tem a semana inteira sincronizada; nas semanas mais antigas vem da planilha importada.
-          O %CMV é sempre recalculado aqui.
-        </p>
-
         <p id="vendas-semanais-importar-status" class="panel-subtitle" style="display:none;"></p>
-
-        <!-- SELETOR DE LOJA -->
-        <div class="loja-select" id="vendas-semanais-loja-select">
-          <button type="button" class="loja-select-trigger" id="vendas-semanais-loja-trigger">
-            <i data-lucide="store"></i>
-            <span class="loja-select-label">Hamburgueria Artesanos</span>
-            <i data-lucide="chevron-down" class="loja-select-chevron"></i>
-          </button>
-          <div class="loja-select-menu" id="vendas-semanais-loja-menu">
-            <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
-              <i data-lucide="store"></i>
-              <span>Hamburgueria Artesanos</span>
-            </button>
-            <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
-              <i data-lucide="store"></i>
-              <span>Tradiça ZN</span>
-            </button>
-            <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
-              <i data-lucide="store"></i>
-              <span>Tradiça Simus</span>
-            </button>
-            <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
-              <i data-lucide="store"></i>
-              <span>Açaí Na Lata</span>
-            </button>
-          </div>
-        </div>
 
         <!-- SEMANA SELECIONADA -->
         <div id="semana-hero-container"><!-- Renderizado dinamicamente via JS --></div>

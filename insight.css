@@ -243,3 +243,36 @@
   color: var(--warning-texto);
   font-weight: 600;
 }
+
+
+/* ==========================================================================
+   REDESENHO 25/09 — cabeçalho compacto e os três números numa faixa
+   ========================================================================== */
+.insight-cabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* Encolhe pra não empurrar o seletor de período pra outra linha. */
+.insight-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.insight-controles {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* Respiro menor na tela toda: ela é comprida. */
+.page-content { gap: var(--space-4); }
+.page-content > .panel { padding: var(--space-4) var(--space-5); gap: var(--space-3); }

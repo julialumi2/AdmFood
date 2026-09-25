@@ -470,3 +470,46 @@
     text-align: right;
   }
 }
+
+
+/* ==========================================================================
+   REDESENHO 25/09 — cabeçalho numa linha e tabela mais densa
+   ========================================================================== */
+.vs-cabecalho {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* flex-basis pequeno: o bloco de título encolhe pra caber ao lado dos
+   controles numa tela de 1366, em vez de empurrar eles pra outra linha. */
+.vs-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+.vs-apoio {
+  max-width: 56ch;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.vs-controles {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* Semana a semana é uma tabela longa: menos respiro vertical mostra mais
+   semana por tela, que é o ponto de olhar o histórico. */
+.page-content { gap: var(--space-4); }
+.page-content table th { padding: 9px var(--space-5); font-size: 0.65rem; }
+.page-content table td { padding: 9px var(--space-5); font-size: 0.82rem; }

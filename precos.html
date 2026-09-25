@@ -166,27 +166,27 @@
       <!-- PÁGINA DE CURVA ABC -->
       <div class="page-content">
 
-        <div class="dashboard-title-area">
-          <div class="title-top">
-            <i data-lucide="trending-up" class="icon-pin"></i>
-            <span>HISTÓRICO DE COMPRAS</span>
-          </div>
-          <div class="title-row">
+        <!-- CABEÇALHO: título e apoio à esquerda, período à direita -->
+        <div class="precos-cabecalho">
+          <div class="precos-titulo">
+            <div class="title-top">
+              <i data-lucide="trending-up" class="icon-pin"></i>
+              <span>HISTÓRICO DE COMPRAS</span>
+            </div>
             <h1>Evolução do preço</h1>
+            <p class="precos-apoio">
+              Quanto se pagou por cada insumo em cada compra recebida, desde dezembro de 2024.
+              A comparação usa o último preço pago antes do período contra o último pago dentro dele.
+            </p>
           </div>
-        </div>
 
-        <p class="panel-subtitle" style="max-width: 680px;">
-          Quanto se pagou por cada insumo em cada compra recebida, desde dezembro de 2024.
-          A comparação usa o último preço pago antes do período contra o último pago dentro dele.
-        </p>
-
-        <div class="precos-filtros">
-          <div class="curva-periodo" id="precos-periodo">
-            <button type="button" class="curva-periodo-btn" data-dias="30">30 dias</button>
-            <button type="button" class="curva-periodo-btn active" data-dias="90">90 dias</button>
-            <button type="button" class="curva-periodo-btn" data-dias="180">6 meses</button>
-            <button type="button" class="curva-periodo-btn" data-dias="365">1 ano</button>
+          <div class="precos-filtros">
+            <div class="curva-periodo" id="precos-periodo">
+              <button type="button" class="curva-periodo-btn" data-dias="30">30 dias</button>
+              <button type="button" class="curva-periodo-btn active" data-dias="90">90 dias</button>
+              <button type="button" class="curva-periodo-btn" data-dias="180">6 meses</button>
+              <button type="button" class="curva-periodo-btn" data-dias="365">1 ano</button>
+            </div>
           </div>
         </div>
 
