@@ -515,3 +515,24 @@
 }
 
 .page-content { gap: var(--space-4); }
+
+
+/* --- Por que não dá pra gerar (25/09) -----------------------------------
+   Botão desabilitado não dispara clique nenhum — nem erro. O motivo tem
+   que estar do lado dele, não só no subtítulo do bloco.
+   ------------------------------------------------------------------------ */
+.bloco-compra-acoes-topo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.bloco-compra-motivo {
+  max-width: 44ch;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--warning-texto);
+  text-align: right;
+}

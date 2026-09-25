@@ -7761,6 +7761,22 @@ function _situacaoCotacaoHTML(item) {
 
 // Resumo e botão de cada bloco, e o total de cada fornecedor — sem redesenhar
 // a tabela (a Ket vai de campo em campo no Tab).
+// Uma frase só dizendo por que "Gerar pedidos homologados" não pode ser
+// usado agora, ou null quando pode.
+function _motivoNaoGerarPedidos(r, direto) {
+  if (r.motivoPedidos) return r.motivoPedidos;
+  if (!direto.length) return null;
+  if (r.totalmenteAprovada) return null;
+  const total = r.totalLojas ?? 0;
+  const responderam = r.lojasRespondidas ?? 0;
+  if (responderam < total) {
+    const faltam = total - responderam;
+    return `${_qtdTexto(faltam, 'loja ainda não preencheu', 'lojas ainda não preencheram')} a contagem. Os números abaixo são a sugestão do sistema, não o que foi contado.`;
+  }
+  const faltaAprovar = total - (r.lojasAprovadas ?? 0);
+  return `Falta aprovar ${_qtdTexto(faltaAprovar, 'loja', 'lojas')} — use "Aprovar todas as lojas", no topo da tela.`;
+}
+
 function _atualizarResumoCompraConferencia(r) {
   const { itensHomologados: direto, itensParaCotacao: cotacao } = _pendentesDaCompra(r);
 
@@ -7776,10 +7792,21 @@ function _atualizarResumoCompraConferencia(r) {
     else if (jaPedidos) resumoDireto.textContent = 'Pedidos gerados. Mande cada um pelo WhatsApp: o fornecedor confirma pelo link.';
     else resumoDireto.textContent = 'Fornecedor e preço combinados no cadastro do insumo: sai em pedido direto, sem cotação.';
   }
+  // Por que não dá pra gerar, calculado num lugar só e mostrado em três:
+  // no botão (title), do lado dele e no subtítulo do bloco. Ela clicou num
+  // botão apagado em 25/09 e nada aconteceu — botão desabilitado não
+  // dispara nem erro, e o motivo estava longe do clique.
+  const motivo = _motivoNaoGerarPedidos(r, direto);
   if (btnPedidos) {
-    btnPedidos.disabled = !r.totalmenteAprovada || !direto.length || !!r.motivoPedidos;
+    btnPedidos.disabled = !!motivo;
     // Nada pra gerar depois de aprovado: some (o botão desativado parecia ativo).
     btnPedidos.hidden = !!r.totalmenteAprovada && !direto.length;
+    btnPedidos.title = motivo || 'Gera um pedido por fornecedor com o preço combinado';
+  }
+  const alvoMotivo = document.getElementById('bloco-homologados-motivo');
+  if (alvoMotivo) {
+    alvoMotivo.textContent = motivo || '';
+    alvoMotivo.hidden = !motivo || (btnPedidos ? btnPedidos.hidden : false);
   }
   document.querySelectorAll('[data-resumo-grupo]').forEach((alvo) => {
     const id = Number(alvo.dataset.resumoGrupo);

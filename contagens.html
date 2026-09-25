@@ -306,10 +306,15 @@
                 <h3 class="table-title">Pedido direto · homologados</h3>
                 <p class="table-subtitle" id="bloco-homologados-resumo"></p>
               </div>
-              <button type="button" class="btn-primary" id="btn-gerar-pedidos-homologados">
-                <i data-lucide="send"></i>
-                Gerar pedidos homologados
-              </button>
+              <div class="bloco-compra-acoes-topo">
+                <button type="button" class="btn-primary" id="btn-gerar-pedidos-homologados">
+                  <i data-lucide="send"></i>
+                  Gerar pedidos homologados
+                </button>
+                <!-- Por que o botão está apagado, do lado dele. Antes isso só
+                     existia no subtítulo do bloco e no aviso do topo da tela. -->
+                <span class="bloco-compra-motivo" id="bloco-homologados-motivo" hidden></span>
+              </div>
             </div>
             <div id="bloco-homologados-corpo"></div>
             <p class="bloco-compra-nota">Preço ou fornecedor errado? Isso muda no cadastro do insumo, em <a href="estoque.html">Insumos</a>, não aqui.</p>
