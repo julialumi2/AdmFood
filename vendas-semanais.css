@@ -513,3 +513,25 @@
 .page-content { gap: var(--space-4); }
 .page-content table th { padding: 9px var(--space-5); font-size: 0.65rem; }
 .page-content table td { padding: 9px var(--space-5); font-size: 0.82rem; }
+
+/* MOBILE (anotações dela, 25/09): os controles do topo não quebravam e
+   empurravam a página inteira pro lado. A tabela de canais continua
+   inteira, rolando dentro do próprio quadro — comparar semana a semana por
+   canal é o que a tela existe pra fazer. */
+@media (max-width: 768px) {
+  .vs-controles {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: var(--space-2);
+  }
+
+  .vs-controles > * { min-width: 0; }
+
+  .vs-controles .btn-secondary {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .vendas-semanais-tabela-wrap th,
+  .vendas-semanais-tabela-wrap td { padding: 8px 8px; font-size: 0.78rem; }
+}

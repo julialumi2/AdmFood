@@ -276,3 +276,32 @@
 /* Respiro menor na tela toda: ela é comprida. */
 .page-content { gap: var(--space-4); }
 .page-content > .panel { padding: var(--space-4) var(--space-5); gap: var(--space-3); }
+
+/* MOBILE (anotações dela, 25/09) */
+@media (max-width: 768px) {
+  /* flex-shrink: 0 mantinha o bloco de controles com a largura do desktop,
+     então o "Até" ficava metade fora da tela e a página rolava de lado. */
+  .insight-controles { flex: 1 1 100%; min-width: 0; }
+
+  /* Três cartões inteiros um embaixo do outro tomavam a tela toda antes de
+     qualquer número aparecer. Mesmo conteúdo, dois por linha. */
+  .metrics-grid { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+
+  .metrics-grid .metric-card { padding: var(--space-3); }
+
+  .metrics-grid .metric-value { font-size: 1.3rem; }
+
+  .metrics-grid .metric-label { font-size: 0.66rem; }
+
+  .metrics-grid .metric-icon-box { width: 30px; height: 30px; }
+
+  /* Canais: ficam o canal, o faturamento e a fatia; ticket e nº de pedidos
+     saem, que é o que fazia a tabela rolar de lado. */
+  .canal-table-wrapper table th:nth-child(3),
+  .canal-table-wrapper table td:nth-child(3),
+  .canal-table-wrapper table th:nth-child(4),
+  .canal-table-wrapper table td:nth-child(4) { display: none; }
+
+  .canal-table-wrapper table th,
+  .canal-table-wrapper table td { padding: 8px 6px; font-size: 0.78rem; }
+}

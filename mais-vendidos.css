@@ -873,3 +873,29 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
 .page-content > .panel,
 .mv-graficos > .panel { padding: var(--space-4) var(--space-5); gap: var(--space-3); }
 .mv-ranking .panel-header { padding: var(--space-4) var(--space-5) 0; }
+
+/* MOBILE (anotações dela, 25/09): as duas tabelas de "Vendas não
+   reconhecidas" rolavam de lado. Ficam a identificação e a ação; o resto é
+   detalhe que se vê no computador. */
+@media (max-width: 768px) {
+  #painel-integracoes-estoque .table-responsive { overflow-x: visible; }
+
+  #painel-integracoes-estoque table th,
+  #painel-integracoes-estoque table td { padding: 8px 6px; font-size: 0.78rem; white-space: normal; }
+
+  /* Pendentes: o produto vendido, quantas vendas e o botão de vincular. */
+  #painel-integracoes-estoque > .table-responsive table th:nth-child(3),
+  #painel-integracoes-estoque > .table-responsive table td:nth-child(3),
+  #painel-integracoes-estoque > .table-responsive table th:nth-child(4),
+  #painel-integracoes-estoque > .table-responsive table td:nth-child(4) { display: none; }
+
+  /* Histórico: o que foi vendido e a que produto ficou ligado. */
+  #painel-integracoes-estoque details table th:nth-child(3),
+  #painel-integracoes-estoque details table td:nth-child(3),
+  #painel-integracoes-estoque details table th:nth-child(4),
+  #painel-integracoes-estoque details table td:nth-child(4) { display: none; }
+
+  #painel-integracoes-estoque .panel-header { flex-wrap: wrap; gap: var(--space-2); }
+
+  #painel-integracoes-estoque .integracoes-loja { width: 100%; }
+}

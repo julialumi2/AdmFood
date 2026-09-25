@@ -1925,6 +1925,21 @@ tr:hover { background-color: var(--surface-muted); }
     flex-direction: column;
   }
 
+  /* De / Até / Dia da semana numa linha só empurravam a página pro lado:
+     o "Até" ficava metade fora da tela (anotação dela, 25/09). */
+  .date-range-picker {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: var(--space-2);
+  }
+
+  .date-range-field { flex: 1 1 140px; min-width: 0; }
+
+  .date-range-field input,
+  .date-range-field select { width: 100%; min-width: 0; }
+
+  .date-range-sep { display: none; }
+
   /* Cards de resumo curtos (Estoque, Fornecedores) — 2x2 em vez da coluna
      única padrão do .cards-grid. */
   .cards-grid-2x2-mobile {
