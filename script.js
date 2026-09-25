@@ -7408,6 +7408,13 @@ const _reais = (valor) => `R$ ${_formatarMoedaBR(Math.round((valor || 0) * 100) 
 // fica nos homologados; o que já está na cotação (ou num pedido que saiu
 // dela) fica na cotação; o resto vai pelo homologado, se tiver e não foi
 // movido. Mesma regra do servidor (_plano_reaplicacao).
+// O cabeçalho da coluna de loja mandava na largura da tabela:
+// "Hamburgueria Artesanos" com white-space:nowrap segurava 217px, vezes
+// quatro lojas. O nome curto é o mesmo já usado no Mais Vendidos.
+function _lojaCurta(nome) {
+  return MV_LOJAS[nome]?.curto || nome;
+}
+
 function _blocoDaLoja(l) {
   const s = l.situacao;
   if (s?.tipo === 'pedido') return s.direto ? 'direto' : 'cotacao';
@@ -7536,9 +7543,11 @@ function _renderBlocoCotacao(r) {
   if (!head || !body) return;
   const lojas = r.contagens.map((c) => c.loja);
   const itens = r.itens.filter((item) => item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao'));
-  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th>${escaparHtml(loja)}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Situação</th><th class="col-acao-bloco"></th></tr>`;
+  // Situação e ação dividem a mesma coluna: eram duas, e a última (a do
+  // botão de voltar pro pedido direto) era a que a rolagem comia.
+  head.innerHTML = `<tr><th>Insumo</th>${lojas.map((loja) => `<th title="${escaparHtml(loja)}">${escaparHtml(_lojaCurta(loja))}</th>`).join('')}<th class="col-total-compra">Total</th><th class="col-destino-compra">Situação</th></tr>`;
   if (!itens.length) {
-    body.innerHTML = `<tr><td colspan="${lojas.length + 4}" class="panel-subtitle">Nada pra cotar: tudo o que precisa comprar sai pelo homologado.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${lojas.length + 3}" class="panel-subtitle">Nada pra cotar: tudo o que precisa comprar sai pelo homologado.</td></tr>`;
     return;
   }
   body.innerHTML = itens.map((item) => {
@@ -7563,9 +7572,8 @@ function _renderBlocoCotacao(r) {
           return `<td>${_celulaCompraHTML(item, l, _travadaNaCompra(l))}${voltar}</td>`;
         }).join('')}
         <td class="col-total-compra" data-total-insumo="${item.insumoId}">${_totalCompraHTML(item)}</td>
-        <td class="col-destino-compra">${_situacaoCotacaoHTML(item)}</td>
-        <td class="col-acao-bloco">${!r.motivoPedidos && item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l))
-          ? `<button type="button" class="btn-limpar-filtro" data-acao="comprar-direto" data-insumo="${item.insumoId}" title="Comprar direto de um fornecedor, sem cotar">Comprar direto</button>`
+        <td class="col-destino-compra">${_situacaoCotacaoHTML(item)}${!r.motivoPedidos && item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l))
+          ? `<button type="button" class="btn-limpar-filtro btn-mover-direto" data-acao="comprar-direto" data-insumo="${item.insumoId}" title="Tira este item da cotação e manda pro pedido direto, escolhendo fornecedor e preço">Mover pro pedido direto</button>`
           : ''}</td>
       </tr>`;
   }).join('');
@@ -7732,7 +7740,9 @@ function _situacaoCotacaoHTML(item) {
     if (s?.tipo === 'pedido') rotulos.set(`p${s.pedidoId}`, `<span class="destino-compra feito">Pedido nº ${s.pedidoId} · ${escaparHtml(s.fornecedor)}</span>`);
     else if (s?.tipo === 'cotacao') rotulos.set('c', '<span class="destino-compra cotacao">Na cotação</span>');
   });
-  return rotulos.size ? [...rotulos.values()].join('<br>') : '<span class="text-muted">—</span>';
+  // Vazio devolve nada: a mesma célula agora leva o botão embaixo, e um
+  // "—" em cima dele em toda linha era só ruído.
+  return rotulos.size ? [...rotulos.values()].join('<br>') : '';
 }
 
 // Resumo e botão de cada bloco, e o total de cada fornecedor — sem redesenhar

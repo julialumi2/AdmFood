@@ -293,6 +293,47 @@
 /* "Comprar direto" no bloco da cotação (2026-09-22) */
 .conferencia-compra-tabela .col-acao-bloco { text-align: right; white-space: nowrap; }
 
+/* ---------------------------------------------------------------------
+   TABELA DA COTAÇÃO SEM ROLAGEM LATERAL (25/09)
+   Com as quatro lojas ela media 1346px num espaço de 1162: sobrava
+   rolagem, e o que ficava escondido à direita era justo o botão de tirar
+   o item da cotação. Três coisas seguravam a largura — o cabeçalho com o
+   nome inteiro da loja, a linha de referência que não quebrava, e uma
+   coluna só pra ação.
+   --------------------------------------------------------------------- */
+
+/* A referência ("contou 3 kg · mínimo 2 kg") pode ocupar duas linhas: era
+   ela que definia a largura mínima da célula. */
+.conferencia-compra-tabela .comprar-ref {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+/* O campo de quantidade não precisa da largura toda da coluna. */
+.conferencia-compra-tabela .comprar-cel { min-width: 118px; }
+.conferencia-compra-tabela .comprar-input { max-width: 76px; }
+
+/* O nome do insumo quebra em vez de esticar a coluna. */
+.conferencia-compra-tabela .conferencia-insumo {
+  min-width: 150px;
+  max-width: 230px;
+  white-space: normal;
+}
+
+/* Situação e ação na mesma célula, empilhadas. */
+.conferencia-compra-tabela .col-destino-compra {
+  white-space: normal;
+  min-width: 132px;
+}
+
+.btn-mover-direto {
+  display: inline-block;
+  margin-top: 4px;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.3;
+}
+
 .comprar-direto-subtitulo { margin: 4px 0 0; font-size: 0.8rem; }
 
 .comprar-direto-lojas { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.85rem; }
