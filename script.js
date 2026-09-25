@@ -14986,25 +14986,6 @@ function _wireReceitaCardsEventos(conteudoEl) {
 let fichaTecnicaBusca = '';
 // Filtro "só os sem custo": produto sem ficha (ou com ficha incompleta) só
 // tinha uma etiqueta cinza na grade, sem contagem nem filtro (QA 22/09).
-let cardapioSoSemCusto = false;
-
-function _atualizarBotaoSemCusto() {
-  const botao = document.getElementById('btn-cardapio-sem-custo');
-  if (!botao) return;
-  const semCusto = fichaTecnicaProdutos.filter((p) => _custoEmUsoProduto(p) == null).length;
-  botao.hidden = !semCusto && !cardapioSoSemCusto;
-  botao.classList.toggle('ativo', cardapioSoSemCusto);
-  botao.textContent = cardapioSoSemCusto
-    ? `Mostrando só os ${semCusto} sem custo · ver todos`
-    : `${semCusto} ${semCusto === 1 ? 'produto sem custo' : 'produtos sem custo'}`;
-  botao.title = 'Produto sem ficha técnica, ou com insumo sem preço ou sem quantidade: ele não entra no CMV nem na margem.';
-}
-
-document.getElementById('btn-cardapio-sem-custo')?.addEventListener('click', () => {
-  cardapioSoSemCusto = !cardapioSoSemCusto;
-  renderFichaTecnicaConteudo();
-});
-
 function _textoBuscaCardapio(texto) {
   // Sem acento e sem maiúscula: "açai" acha "Açaí".
   return (texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -15082,7 +15063,6 @@ function renderFichaTecnicaConteudo() {
   if (btnNovoTexto) btnNovoTexto.textContent = ehMistura ? 'Nova mistura' : ehComplemento ? 'Novo complemento' : 'Novo item';
   if (btnColarComplementos) btnColarComplementos.style.display = ehComplemento ? '' : 'none';
 
-  _atualizarBotaoSemCusto();
 
   if (fichaTecnicaBusca) {
     // Com busca aberta, a categoria some da conta: o que interessa é achar o
@@ -15135,14 +15115,6 @@ function renderFichaTecnicaConteudo() {
 // aberto (clique no cartão), não antecipado pra todo mundo — ver
 // abrirModalDetalheProduto.
 function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria, canais) {
-  // Filtro "só os sem custo" vale em cima do que já está filtrado.
-  if (cardapioSoSemCusto) {
-    produtosDaCategoria = produtosDaCategoria.filter((p) => _custoEmUsoProduto(p) == null);
-    if (!produtosDaCategoria.length) {
-      conteudoEl.innerHTML = '<p class="panel-subtitle" style="padding: var(--space-4);">Nenhum produto sem custo nesta categoria — todos já têm ficha com preço e quantidade.</p>';
-      return;
-    }
-  }
   conteudoEl.innerHTML = `
     <div class="cardapio-lista">
       ${produtosDaCategoria.map(p => `
