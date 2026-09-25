@@ -260,6 +260,9 @@ from backend.armazenamento import (
     marcar_bootstrap_aplicado,
     responder_convite_cotacao,
     listar_recusas_cotacao,
+    horas_virada_das_lojas,
+    definir_hora_virada,
+    VIRADA_PADRAO,
     insumos_que_o_fornecedor_nao_vende,
     voltar_a_pedir_preco,
     reabrir_convite_cotacao,
@@ -934,10 +937,19 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
 
         def _rodar_sincronizacao_hoje():
             sincronizar_dia(date.today())
+            # De madrugada, o dia operacional das lojas que viram às 5h ainda
+            # é o de ontem: sem isso, a venda das 2h só apareceria na
+            # reconferência da noite seguinte (25/09).
+            viradas = horas_virada_das_lojas().values()
+            maior_virada = max((int(h.split(":")[0]) for h in viradas), default=0)
+            if datetime.now().hour < maior_virada:
+                sincronizar_dia(date.today() - timedelta(days=1))
             marcar_execucao_rotina("sincronizacao_hoje", date.today().isoformat())
 
         _scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
-        _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=3, minute=0)
+        # 6h, não 3h: às 3h as lojas que viram às 5h ainda estão vendendo, e
+        # a reconferência fecharia o dia pela metade (25/09).
+        _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=6, minute=0)
         _scheduler.add_job(
             _rodar_sincronizacao_hoje, "interval", minutes=15, next_run_time=datetime.now()
         )
@@ -6192,10 +6204,33 @@ def _mascarar_token(token):
     return f"{'•' * 8}{token[-4:]}"
 
 
+@app.route('/api/config/lojas/<loja>/virada', methods=['PUT'])
+def api_definir_hora_virada(loja):
+    """A que horas o dia vira pra uma loja: {hora: "05:00"}. Antes dessa
+    hora, a venda pertence ao dia anterior — é o que põe a venda das 2h da
+    manhã no dia em que a loja abriu (25/09). 00:00 volta ao padrão.
+
+    Só muda dali pra frente: o que já está gravado tem só a data. A
+    reconferência das 6h refaz os últimos 7 dias sozinha; mais antigo que
+    isso precisa da carga de histórico."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    if loja not in LOJAS:
+        return jsonify({"erro": "Loja não encontrada."}), 404
+    dados = request.get_json(silent=True) or {}
+    try:
+        hora = definir_hora_virada(loja, dados.get('hora'), (_usuario_logado() or {}).get('nome'))
+    except ValueError as falha:
+        return jsonify({"erro": str(falha)}), 400
+    return jsonify({"ok": True, "horaVirada": hora})
+
+
 @app.route('/api/config/lojas', methods=['GET'])
 def api_config_lojas():
     ultimo_dia = buscar_ultima_sincronizacao()
     ehAdmin = (_usuario_logado() or {}).get('papel') == 'admin'
+    viradas = horas_virada_das_lojas()
     lojas = []
     # Gerente e operação viam "4 lojas conectadas" e o nome das outras nas
     # pílulas do topo de Configurações: a rota não olhava o perfil (QA 22/09).
@@ -6207,6 +6242,8 @@ def api_config_lojas():
             "nome": nome,
             "temPresencial": nome in UNIDADES_COM_PRESENCIAL,
             "ultimaSincronizacao": _formatar_data_br(ultimo_dia_loja) if ultimo_dia_loja else None,
+            # A que horas o dia vira pra essa loja (25/09).
+            "horaVirada": viradas.get(nome, VIRADA_PADRAO),
         }
         if ehAdmin:
             linha["tokenMascarado"] = _mascarar_token(cfg.get("cardapio_web_token"))
@@ -6329,7 +6366,7 @@ def api_pedidos_nao_finalizados():
         return jsonify({"erro": "Loja sem token da Cardápio Web."}), 400
 
     try:
-        pedidos = buscar_pedidos_do_dia(token, dia)
+        pedidos = buscar_pedidos_do_dia(token, dia, horas_virada_das_lojas().get(unidade, VIRADA_PADRAO))
     except Exception as falha:
         return jsonify({"erro": f"A Cardápio Web não respondeu: {falha}"}), 502
 

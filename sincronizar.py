@@ -22,6 +22,8 @@ from backend.armazenamento import (
     salvar_resumo_do_dia,
     salvar_pedidos_do_dia,
     salvar_itens_vendidos_do_dia,
+    horas_virada_das_lojas,
+    VIRADA_PADRAO,
 )
 
 # Segunda as lojas fecham — mas nem sempre: feriado aberto (07/09) e pedido
@@ -38,6 +40,9 @@ from backend.armazenamento import (
 
 def sincronizar_dia(dia: date):
     dia_iso = dia.isoformat()
+    # Cada loja tem a sua hora de virada: no Artesanos e nas Tradiças o dia
+    # vai até de madrugada, e essas vendas caíam no dia seguinte (25/09).
+    viradas = horas_virada_das_lojas()
     for nome_unidade, config_loja in LOJAS.items():
         token = config_loja.get("cardapio_web_token")
         if not token:
@@ -45,7 +50,7 @@ def sincronizar_dia(dia: date):
             continue
 
         try:
-            resumo = buscar_resumo_do_dia(token, dia)
+            resumo = buscar_resumo_do_dia(token, dia, viradas.get(nome_unidade, VIRADA_PADRAO))
             salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
             salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])

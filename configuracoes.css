@@ -520,3 +520,23 @@
   outline: 2px solid var(--danger);
   outline-offset: 2px;
 }
+
+/* Virada do dia por loja (25/09) */
+.virada-celula {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.virada-celula input[type="time"] {
+  padding: 5px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.virada-apoio { font-size: 0.7rem; }

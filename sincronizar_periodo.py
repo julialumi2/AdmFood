@@ -19,6 +19,7 @@ from config import LOJAS
 from backend import cardapio_web
 from backend.cardapio_web import buscar_resumo_do_dia
 from backend.armazenamento import (
+    hora_virada_da_loja,
     inicializar_banco,
     salvar_resumo_do_dia,
     salvar_pedidos_do_dia,
@@ -61,7 +62,7 @@ def sincronizar_periodo(unidade, dias, ate=0):
         # fechada" vira igual a "não sincronizou" (QA 22/09). Agora ela é
         # consultada como qualquer dia e grava zerada, marcada como fechada.
         try:
-            resumo = buscar_resumo_do_dia(token, dia)
+            resumo = buscar_resumo_do_dia(token, dia, hora_virada_da_loja(unidade))
             dia_iso = dia.isoformat()
             salvar_resumo_do_dia(unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(unidade, dia_iso, resumo["pedidos_detalhados"])

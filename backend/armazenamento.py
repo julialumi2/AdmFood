@@ -584,6 +584,12 @@ def inicializar_banco():
             """
         )
         colunas_venda_item = {c["name"] for c in conn.execute("PRAGMA table_info(venda_item)").fetchall()}
+        if "criado_em" not in colunas_venda_item:
+            # A hora exata da venda (25/09). `dia` é o dia operacional, que
+            # depende da hora de virada da loja; guardando a hora crua, mudar
+            # a virada vira recálculo local em vez de rebuscar na Cardápio
+            # Web. Nulo nas vendas gravadas antes desta coluna.
+            conn.execute("ALTER TABLE venda_item ADD COLUMN criado_em TEXT")
         if "multiplicador" not in colunas_venda_item:
             # "Quantos lanches" um nome_produto pendente representa quando
             # vinculado na mão (Etapa 0, seção 6.11 — ex: "Combo de sexta 99
@@ -762,6 +768,21 @@ def inicializar_banco():
             "INSERT OR IGNORE INTO baixa_automatica_loja (loja, inicio, alterado_em, alterado_por) "
             "VALUES ('Hamburgueria Artesanos', '2026-09-08', ?, 'Etapa 0 do motor de compra')",
             (datetime.now().isoformat(),),
+        )
+        # A que horas o dia vira pra cada loja (25/09). Artesanos e Tradiças
+        # ficam abertas até 2h ou 4h, e essas vendas caíam no dia seguinte:
+        # a sexta aparecia curta e o sábado inflado. Antes da hora de virada,
+        # a venda pertence ao dia anterior. Sem linha = 00:00, que é o
+        # comportamento de sempre — quem muda é ela, em Configurações.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS virada_do_dia_loja (
+                loja TEXT PRIMARY KEY,
+                hora TEXT NOT NULL,
+                alterado_em TEXT NOT NULL,
+                alterado_por TEXT
+            )
+            """
         )
 
         # Cadastro de fornecedor — semente do futuro módulo de Compras/
@@ -2674,8 +2695,8 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                     """
                     INSERT INTO venda_item
                         (unidade, pedido_id, linha, dia, canal, nome_produto, quantidade, item_cardapio_id,
-                         multiplicador, nome_normalizado, tipo_pedido)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         multiplicador, nome_normalizado, tipo_pedido, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         unidade,
@@ -2689,6 +2710,7 @@ def salvar_itens_vendidos_do_dia(unidade, dia_iso, pedidos_detalhados):
                         multiplicador,
                         _normalizar_nome_insumo(item["nome"]),
                         pedido.get("tipo"),
+                        pedido.get("criado_em"),
                     ),
                 )
 
@@ -2790,6 +2812,50 @@ SQL_INSUMOS_CONSUMIDOS = f"""
     ) r ON r.item_id = v.item_id AND r.loja = v.unidade
     WHERE r.quantidade IS NOT NULL AND (r.so_pra_viagem = 0 OR v.pra_viagem = 1)
 """
+
+
+VIRADA_PADRAO = "00:00"
+
+
+def horas_virada_das_lojas():
+    """{loja: "HH:MM"} de quem tem hora de virada diferente da padrão.
+
+    A hora de virada é onde o dia operacional começa: antes dela, a venda é
+    do dia anterior. Loja sem linha usa VIRADA_PADRAO, que é meia-noite —
+    o comportamento de sempre."""
+    with conexao() as conn:
+        return {
+            linha["loja"]: linha["hora"]
+            for linha in conn.execute("SELECT loja, hora FROM virada_do_dia_loja")
+        }
+
+
+def hora_virada_da_loja(loja):
+    """A hora de virada de uma loja, ou 00:00 se ela não tem uma."""
+    return horas_virada_das_lojas().get(loja, VIRADA_PADRAO)
+
+
+def definir_hora_virada(loja, hora, quem=None):
+    """Grava a hora de virada de uma loja. `hora` no formato HH:MM; 00:00
+    apaga a linha, porque é o padrão e não precisa ser guardado."""
+    hora = (hora or VIRADA_PADRAO).strip()
+    partes = hora.split(":")
+    if len(partes) != 2 or not all(p.isdigit() for p in partes):
+        raise ValueError("Hora inválida — use HH:MM.")
+    h, m = int(partes[0]), int(partes[1])
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        raise ValueError("Hora inválida — use HH:MM.")
+    hora = "%02d:%02d" % (h, m)
+    with conexao() as conn:
+        if hora == VIRADA_PADRAO:
+            conn.execute("DELETE FROM virada_do_dia_loja WHERE loja = ?", (loja,))
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO virada_do_dia_loja (loja, hora, alterado_em, alterado_por) "
+                "VALUES (?, ?, ?, ?)",
+                (loja, hora, datetime.now().isoformat(), quem),
+            )
+    return hora
 
 
 def inicio_baixa_automatica():

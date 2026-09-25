@@ -2636,6 +2636,55 @@ function _celulaBaixaAutomatica(loja) {
   return `<div class="baixa-celula">${estado}<div class="baixa-loja-controles">${controles}</div></div>`;
 }
 
+// A que horas o dia vira pra cada loja (25/09). Artesanos e Tradiças ficam
+// abertas até 2h ou 4h, e essas vendas caíam no dia seguinte: a sexta
+// aparecia curta e o sábado inflado. 00:00 é o comportamento de sempre.
+function _celulaViradaDoDia(loja) {
+  const hora = loja.horaVirada || '00:00';
+  const lojaAttr = escaparHtml(loja.nome);
+  const aviso = hora === '00:00'
+    ? '<span class="text-muted virada-apoio">meia-noite</span>'
+    : `<span class="badge-pill neu-orange virada-apoio">vai até ${hora} do dia seguinte</span>`;
+  return `
+    <div class="virada-celula">
+      <input type="time" value="${escaparHtml(hora)}" step="900" data-virada="${lojaAttr}"
+             aria-label="Hora em que o dia vira na ${lojaAttr}">
+      ${aviso}
+    </div>`;
+}
+
+function _ligarViradaDoDia(raiz) {
+  raiz.querySelectorAll('[data-virada]').forEach((campo) => {
+    const anterior = campo.value;
+    campo.addEventListener('change', async () => {
+      const loja = campo.dataset.virada;
+      const hora = campo.value || '00:00';
+      const texto = hora === '00:00'
+        ? `Voltar ${loja} pra meia-noite? O dia volta a ser de 00:00 às 23:59.`
+        : `O dia da ${loja} passa a ir das ${hora} até ${hora} do dia seguinte?`
+          + `${String.fromCharCode(10)}${String.fromCharCode(10)}`
+          + 'A venda da madrugada passa a contar no dia em que a loja abriu. Vale das próximas'
+          + ' sincronizações em diante; a reconferência das 6h refaz os últimos 7 dias sozinha.';
+      if (!confirm(texto)) { campo.value = anterior; return; }
+      campo.disabled = true;
+      try {
+        const resposta = await fetch(`/api/config/lojas/${encodeURIComponent(loja)}/virada`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hora }),
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a virada.');
+        await carregarConfigLojas();
+      } catch (erro) {
+        alert(erro.message);
+        campo.value = anterior;
+        campo.disabled = false;
+      }
+    });
+  });
+}
+
 function _ligarBotoesDaBaixa(raiz) {
   raiz.querySelectorAll('[data-baixa-ligar]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -12584,12 +12633,14 @@ function renderConfigLojasTabela() {
             </span>
           </td>
           <td>${_badgeSincronizacao(loja.ultimaSincronizacao)}</td>
+          <td>${_celulaViradaDoDia(loja)}</td>
           <td>${_celulaBaixaAutomatica(loja.nome)}</td>
         </tr>
       `).join('')
-    : `<tr><td colspan="5" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
+    : `<tr><td colspan="6" class="panel-subtitle">Nenhuma loja cadastrada.</td></tr>`;
 
   _ligarBotoesDaBaixa(tbody);
+  _ligarViradaDoDia(tbody);
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 

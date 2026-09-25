@@ -10,7 +10,7 @@ detalhes pra pegar o campo "total". Limites de requisição documentados:
 
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
@@ -46,9 +46,20 @@ ESPERA_MAXIMA_EM_429_SEGUNDOS = 120
 STATUS_CONCLUIDOS = {"closed", "delivered"}
 
 
-def _formatar_data_hora(dia, momento):
-    hora = "00:00:00" if momento == "inicio" else "23:59:59"
-    return f"{dia.strftime('%Y-%m-%d')}T{hora}-03:00"
+def _formatar_data_hora(dia, momento, hora_virada="00:00"):
+    """As duas pontas da janela do dia OPERACIONAL da loja (25/09).
+
+    `hora_virada` é a hora em que o dia vira pra essa loja: antes dela, a
+    venda ainda é do dia anterior. Artesanos e Tradiças ficam abertas até
+    2h ou 4h, e essas vendas caíam no dia seguinte.
+
+    Com "00:00" dá exatamente o que dava antes: 00:00:00 até 23:59:59.
+    Com "05:00", o dia começa às 05:00 e termina 04:59:59 do dia seguinte.
+    """
+    h, m = (int(p) for p in hora_virada.split(":"))
+    inicio = datetime(dia.year, dia.month, dia.day, h, m)
+    momento_exato = inicio if momento == "inicio" else inicio + timedelta(days=1) - timedelta(seconds=1)
+    return f"{momento_exato.strftime('%Y-%m-%dT%H:%M:%S')}-03:00"
 
 
 _ultimo_historico = 0.0
@@ -96,18 +107,19 @@ def _buscar(url, token, descricao, params=None):
     return resposta.json()
 
 
-def buscar_pedidos_do_dia(token, dia):
+def buscar_pedidos_do_dia(token, dia, hora_virada="00:00"):
     """Retorna lista de {"id": int, "sales_channel": str, "status": str} pra
     um dia, com TODOS os status (filtragem de cancelados fica por conta de
-    quem consome, em buscar_resumo_do_dia)."""
+    quem consome, em buscar_resumo_do_dia). `hora_virada`: ver
+    _formatar_data_hora."""
     pedidos = []
     pagina = 1
     total_paginas = 1
 
     while pagina <= total_paginas:
         params = {
-            "start_date": _formatar_data_hora(dia, "inicio"),
-            "end_date": _formatar_data_hora(dia, "fim"),
+            "start_date": _formatar_data_hora(dia, "inicio", hora_virada),
+            "end_date": _formatar_data_hora(dia, "fim", hora_virada),
             "page": pagina,
             "per_page": 100,
         }
@@ -334,7 +346,7 @@ def _duracao_minutos(criado_em, atualizado_em):
     return max((fim - inicio).total_seconds() / 60, 0.0)
 
 
-def buscar_resumo_do_dia(token, dia):
+def buscar_resumo_do_dia(token, dia, hora_virada="00:00"):
     """
     Retorna {"faturamento_dia": float, "quantidade_pedidos": int,
     "canais": [{"canal": str, "quantidade_pedidos": int, "faturamento": float}],
@@ -344,7 +356,7 @@ def buscar_resumo_do_dia(token, dia):
     "tipo" é o order_type da Cardápio Web (delivery, takeout, onsite,
     closed_table): a embalagem pra viagem só desconta em delivery e retirada.
     """
-    todos_pedidos = buscar_pedidos_do_dia(token, dia)
+    todos_pedidos = buscar_pedidos_do_dia(token, dia, hora_virada)
     pedidos = [p for p in todos_pedidos if p["status"] in STATUS_CONCLUIDOS]
 
     canais = {}
