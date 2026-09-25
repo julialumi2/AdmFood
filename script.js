@@ -5171,6 +5171,16 @@ function renderConvitesCotacao(convites) {
             <i data-lucide="copy"></i>
             Copiar link
           </button>
+          <!-- Mandou por fora (copiou o link, ou o fornecedor não tem
+               telefone): sem isso o convite ficava como não enviado pra
+               sempre e o painel contava vencido sem resposta (25/09). -->
+          ${!c.enviadoEm && !enviadosPeloWhatsapp.has(c.id) ? `
+            <button type="button" class="btn-secondary-sm" data-acao="marcar-convite-enviado" data-id="${c.id}"
+                    title="Já mandei esse link por fora do sistema — marcar como enviado">
+              <i data-lucide="check"></i>
+              Já enviei
+            </button>
+          ` : ''}
           ${c.status === 'respondida' ? `
             <button type="button" class="btn-secondary-sm" data-acao="reabrir-convite" data-id="${c.id}" title="Deixar o fornecedor corrigir o preço enviado">
               <i data-lucide="rotate-ccw"></i>
@@ -5194,6 +5204,16 @@ function renderConvitesCotacao(convites) {
     link.addEventListener('click', async () => {
       enviadosPeloWhatsapp.add(parseInt(link.dataset.convite, 10));
       await _registrarConviteEnviado(link.dataset.convite);
+      await carregarConvitesCotacao();
+    });
+  });
+
+  tbody.querySelectorAll('[data-acao="marcar-convite-enviado"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.id, 10);
+      btn.disabled = true;
+      enviadosPeloWhatsapp.add(id);
+      await _registrarConviteEnviado(id);
       await carregarConvitesCotacao();
     });
   });
