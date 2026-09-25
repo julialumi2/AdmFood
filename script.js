@@ -9218,22 +9218,6 @@ async function inicializarConfirmarPedido() {
         document.getElementById('pedido-publico-confirmado-texto').textContent = observacao
           ? 'A compradora já está vendo que você recebeu o pedido, e a sua ressalva foi junto.'
           : 'A compradora já está vendo que você recebeu o pedido e vai entregar.';
-        // Depois de confirmar não sobrava comprovante: nem número, nem data,
-        // nem valor, nem como guardar (QA 22/09).
-        const comprovante = document.getElementById('pedido-comprovante');
-        if (comprovante) {
-          const linhas = [
-            ['Pedido', (dados.pedidos || []).map((p) => `nº ${p.id}`).join(', ') || '—'],
-            ['Fornecedor', dados.fornecedorNome || '—'],
-            ['Aceito em', new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })],
-            ['Valor total', document.getElementById('pedido-publico-valor-total').textContent],
-          ];
-          if (observacao) linhas.push(['Sua ressalva', observacao]);
-          document.getElementById('pedido-comprovante-dados').innerHTML = linhas
-            .map(([rotulo, valor]) => `<div><dt>${escaparHtml(rotulo)}</dt><dd>${escaparHtml(valor)}</dd></div>`).join('');
-          comprovante.hidden = false;
-          document.getElementById('btn-comprovante-imprimir').onclick = () => window.print();
-        }
         elConfirmado.style.display = '';
       } catch (erro) {
         console.error('Falha ao confirmar pedido:', erro);

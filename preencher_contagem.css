@@ -706,31 +706,8 @@ body {
 }
 
 
-/* Comprovante do pedido aceito e "quem é quem" no link do fornecedor
-   (QA 22/09) — as duas telas públicas usam este CSS. */
-.pedido-comprovante {
-  margin-top: 20px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  text-align: left;
-}
-
-.pedido-comprovante h3 { margin: 0 0 10px; font-size: 0.9rem; }
-
-.pedido-comprovante dl { margin: 0; display: grid; gap: 6px; }
-
-.pedido-comprovante dt {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-
-.pedido-comprovante dd { margin: 0 0 6px; font-weight: 600; }
-
-.pedido-comprovante-acoes { margin-top: 12px; }
-
+/* "Quem é quem" no link do fornecedor (QA 22/09). O comprovante do pedido
+   aceito, que dividia este bloco, saiu em 25/09 a pedido dela. */
 .cotacao-publica-quem {
   margin: 8px 0 12px;
   padding: 10px 12px;
@@ -739,11 +716,6 @@ body {
   font-size: 0.8125rem;
   line-height: 1.5;
 }
-
-@media print {
-  .pedido-comprovante-acoes { display: none; }
-}
-
 
 /* --- "Mandei um preço errado" (25/09) ------------------------------------
    O card de agradecimento centraliza o ícone, o título e o texto, mas o
