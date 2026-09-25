@@ -8156,6 +8156,11 @@ async function _conferenciaAtualizadaAntesDeGerar(r, parte) {
 // com o preço combinado do cadastro. Depois o bloco mostra o "Enviar por
 // WhatsApp" de cada fornecedor, com o link de confirmação dele.
 document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('click', async (evento) => {
+  // `evento.currentTarget` vira null assim que o handler passa por um
+  // await, e a trava dos números logo abaixo tem um. Lido depois, o
+  // `botao.disabled` estourava fora do try e matava o clique em
+  // silêncio — sem pedido e sem aviso (achado no teste dela, 25/09).
+  const botao = evento.currentTarget;
   let r = requisicaoConferenciaAtual;
   if (!r) return;
   r = await _conferenciaAtualizadaAntesDeGerar(r, 'pedidos');
@@ -8165,7 +8170,6 @@ document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('clic
   const fornecedores = new Set(direto.map(({ l }) => l.homologado?.fornecedorId));
   const total = direto.reduce((t, { l }) => t + (l.comprar || 0) * (l.homologado?.preco || 0), 0);
   if (!confirm(`Gerar os pedidos de ${_qtdTexto(direto.length, 'item', 'itens')} pra ${_qtdTexto(fornecedores.size, 'fornecedor', 'fornecedores')} (${_reais(total)}) com o preço combinado?\n\nDepois é só mandar cada um pelo WhatsApp.`)) return;
-  const botao = evento.currentTarget;
   botao.disabled = true;
   try {
     const resposta = await fetch('/api/requisicoes/conferencia/gerar-pedidos', {
@@ -8196,6 +8200,11 @@ document.getElementById('btn-gerar-pedidos-homologados')?.addEventListener('clic
 
 // "Gerar cotação" / "Pôr na cotação": só o que está no bloco da cotação.
 document.getElementById('btn-gerar-cotacao-requisicao')?.addEventListener('click', async (evento) => {
+  // `evento.currentTarget` vira null assim que o handler passa por um
+  // await, e a trava dos números logo abaixo tem um. Lido depois, o
+  // `botao.disabled` estourava fora do try e matava o clique em
+  // silêncio — sem pedido e sem aviso (achado no teste dela, 25/09).
+  const botao = evento.currentTarget;
   let r = requisicaoConferenciaAtual;
   if (!r) return;
   r = await _conferenciaAtualizadaAntesDeGerar(r, 'cotacao');
@@ -8212,7 +8221,6 @@ document.getElementById('btn-gerar-cotacao-requisicao')?.addEventListener('click
     ? `Pôr ${_qtdTexto(insumos, 'insumo', 'insumos')} na cotação?`
     : `Gerar a cotação com ${_qtdTexto(insumos, 'insumo', 'insumos')}? Depois você convida os fornecedores pelo WhatsApp.`;
   if (!confirm(`${pergunta}${avisos.length ? `\n\n${avisos.join('\n\n')}` : ''}`)) return;
-  const botao = evento.currentTarget;
   botao.disabled = true;
   try {
     const resposta = await fetch('/api/requisicoes/conferencia/gerar-cotacao', {
