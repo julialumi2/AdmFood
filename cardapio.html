@@ -173,6 +173,36 @@
               <p class="panel-subtitle">Gerencie preços por canal, custos e fichas técnicas dos produtos por unidade.</p>
             </div>
             <div class="page-acoes-topo">
+              <!-- A loja escolhida manda em tudo o que a tela mostra, então
+                   fica no topo, à esquerda das ações (pedido dela, 25/09). -->
+              <div class="loja-select loja-select-realce" id="ficha-tecnica-loja-select">
+                <button type="button" class="loja-select-trigger" id="ficha-tecnica-loja-trigger">
+                  <span class="loja-select-icone-realce"><i data-lucide="store"></i></span>
+                  <span class="loja-select-texto-realce">
+                    <span class="loja-select-rotulo-realce">Loja selecionada</span>
+                    <span class="loja-select-label">Hamburgueria Artesanos</span>
+                  </span>
+                  <i data-lucide="chevron-down" class="loja-select-chevron"></i>
+                </button>
+                <div class="loja-select-menu" id="ficha-tecnica-loja-menu">
+                  <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
+                    <i data-lucide="store"></i>
+                    <span>Hamburgueria Artesanos</span>
+                  </button>
+                  <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
+                    <i data-lucide="store"></i>
+                    <span>Açaí Na Lata</span>
+                  </button>
+                  <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
+                    <i data-lucide="store"></i>
+                    <span>Tradiça ZN</span>
+                  </button>
+                  <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
+                    <i data-lucide="store"></i>
+                    <span>Tradiça Simus</span>
+                  </button>
+                </div>
+              </div>
               <!-- Só aparece pra admin, ver carregarUsuarioLogado() em script.js -->
               <div id="cardapio-importar-area" style="display:none;">
                 <input type="file" id="cardapio-importar-arquivo" accept=".xlsx" style="display:none;">
@@ -203,36 +233,8 @@
           <i data-lucide="search"></i>
           <input type="text" id="cardapio-busca" placeholder="Buscar produto pelo nome..." aria-label="Buscar produto pelo nome">
         </div>
-        <!-- Loja e categorias (setas só quando as pills não cabem) -->
+        <!-- Carrossel de categorias (setas só quando as pills não cabem) -->
         <div class="cardapio-navegacao">
-          <div class="loja-select loja-select-realce" id="ficha-tecnica-loja-select">
-            <button type="button" class="loja-select-trigger" id="ficha-tecnica-loja-trigger">
-              <span class="loja-select-icone-realce"><i data-lucide="store"></i></span>
-              <span class="loja-select-texto-realce">
-                <span class="loja-select-rotulo-realce">Loja selecionada</span>
-                <span class="loja-select-label">Hamburgueria Artesanos</span>
-              </span>
-              <i data-lucide="chevron-down" class="loja-select-chevron"></i>
-            </button>
-            <div class="loja-select-menu" id="ficha-tecnica-loja-menu">
-              <button type="button" class="loja-select-item active" data-loja="Hamburgueria Artesanos">
-                <i data-lucide="store"></i>
-                <span>Hamburgueria Artesanos</span>
-              </button>
-              <button type="button" class="loja-select-item" data-loja="Açaí Na Lata">
-                <i data-lucide="store"></i>
-                <span>Açaí Na Lata</span>
-              </button>
-              <button type="button" class="loja-select-item" data-loja="Tradiça ZN">
-                <i data-lucide="store"></i>
-                <span>Tradiça ZN</span>
-              </button>
-              <button type="button" class="loja-select-item" data-loja="Tradiça Simus">
-                <i data-lucide="store"></i>
-                <span>Tradiça Simus</span>
-              </button>
-            </div>
-          </div>
           <div class="cardapio-categorias-trilho">
             <button type="button" class="cardapio-seta" data-direcao="-1" aria-label="Ver categorias anteriores" hidden>
               <i data-lucide="chevron-left"></i>

@@ -992,8 +992,15 @@ body.dark-mode {
 
 .cardapio-pagina { gap: var(--space-4); }
 
-/* TOPO: título e apoio à esquerda, botões à direita */
+/* TOPO: título e apoio à esquerda, loja + botões à direita */
 .cardapio-topo { align-items: flex-end; }
+
+/* No topo o seletor divide a linha com os botões: some o rótulo de cima e
+   ele fica da mesma altura deles (25/09). */
+.cardapio-topo .loja-select-realce .loja-select-trigger { padding: 7px 12px 7px 7px; }
+.cardapio-topo .loja-select-icone-realce { width: 26px; height: 26px; border-radius: 8px; }
+.cardapio-topo .loja-select-rotulo-realce { display: none; }
+.cardapio-topo .loja-select-realce .loja-select-label { font-size: 0.85rem; }
 
 .cardapio-titulo { display: flex; flex-direction: column; gap: 4px; }
 
@@ -1024,7 +1031,7 @@ body.dark-mode {
   color: var(--text-muted);
 }
 
-/* Loja e o carrossel de categorias */
+/* Carrossel de categorias */
 .cardapio-navegacao {
   display: flex;
   flex-direction: column;
