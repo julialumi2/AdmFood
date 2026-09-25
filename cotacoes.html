@@ -542,9 +542,6 @@
           <h3 class="panel-title">Convidar fornecedores</h3>
           <button type="button" class="btn-close" id="btn-convidar-fornecedores-fechar" aria-label="Fechar">&times;</button>
         </div>
-        <p class="panel-subtitle" style="margin-bottom: var(--space-3);">
-          Gera o link de preenchimento dos fornecedores marcados abaixo. Cada um recebe só os insumos que ele cota — marcados em "Fornecedores que cotam esse insumo", na loja, em Insumos — e diz item por item se vende ou não. Item sem fornecedor marcado não vai em link nenhum. Na prévia dá pra desmarcar o que não vai pra cada um. Convites de antes que ainda aguardam resposta também aparecem na tabela.
-        </p>
         <!-- O texto dizia "nada é enviado sozinho", mas com a extensão
              instalada os botões mandam sozinhos, um fornecedor atrás do
              outro (QA 22/09). Agora a frase depende de ter extensão. -->
@@ -556,7 +553,16 @@
           </div>
           <!-- Já vem marcado quem fornece pras lojas dessa cotação (Fornecedores → "Lojas que compram dele") -->
           <div class="form-group">
-            <label>Fornecedores</label>
+            <div class="convidar-lista-topo">
+              <label>Fornecedores</label>
+              <div class="convidar-lista-acoes">
+                <!-- A contagem fica à vista: "Gerar convites" distraído já
+                     mandou link pra rede inteira uma vez (QA 22/09). -->
+                <span class="convidar-contagem" id="convidar-contagem"></span>
+                <button type="button" class="btn-secondary-sm" id="btn-convidar-marcar-todos">Marcar todos</button>
+                <button type="button" class="btn-secondary-sm" id="btn-convidar-desmarcar-topo">Desmarcar todos</button>
+              </div>
+            </div>
             <div class="convidar-fornecedores-lista" id="convidar-fornecedores-lista"></div>
           </div>
           <div class="form-group">

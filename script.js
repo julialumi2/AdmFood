@@ -4774,6 +4774,20 @@ let lojasCotacaoAtual = [];
 let selecaoItensConvite = new Map();
 let conviteFornecedoresAbertos = new Set();
 
+// Quantos links vão sair. Fica ao lado do "Marcar todos" porque é o
+// número que importa antes de clicar em "Gerar convites" — já aconteceu de
+// sair link pra rede inteira sem querer (QA 22/09).
+function _atualizarContagemConvite() {
+  const alvo = document.getElementById('convidar-contagem');
+  const lista = document.getElementById('convidar-fornecedores-lista');
+  if (!alvo || !lista) return;
+  const caixas = lista.querySelectorAll('input[type="checkbox"]');
+  const marcados = lista.querySelectorAll('input[type="checkbox"]:checked').length;
+  alvo.textContent = caixas.length ? `${marcados} de ${caixas.length} marcados` : '';
+  // Metade ou mais da lista marcada: o número fica em âmbar.
+  alvo.classList.toggle('muitos', caixas.length > 0 && marcados >= Math.max(5, caixas.length / 2));
+}
+
 async function renderListaConvidarFornecedores() {
   const lista = document.getElementById('convidar-fornecedores-lista');
   if (!lista) return;
@@ -4817,12 +4831,18 @@ async function renderListaConvidarFornecedores() {
       ? avisoMarcouTodos + ativos.map((f) => linha(f, true, dicaDeOutro(f))).join('')
       : sugeridos.map((f) => linha(f, true, `compramos pra ${escaparHtml(f.lojas.filter((l) => !lojasCotacaoAtual.length || lojasCotacaoAtual.includes(l)).join(', '))}`)).join('') + outros.map((f) => linha(f, false, dicaDeOutro(f))).join('');
     lista.querySelectorAll('input[type="checkbox"]').forEach((caixa) => {
-      caixa.addEventListener('change', renderPreviaConvite);
+      caixa.addEventListener('change', () => { _atualizarContagemConvite(); renderPreviaConvite(); });
     });
-    document.getElementById('btn-convidar-desmarcar-todos')?.addEventListener('click', () => {
-      lista.querySelectorAll('input[type="checkbox"]').forEach((caixa) => { caixa.checked = false; });
+    const marcarTodos = (marcado) => {
+      lista.querySelectorAll('input[type="checkbox"]').forEach((caixa) => { caixa.checked = marcado; });
+      _atualizarContagemConvite();
       renderPreviaConvite();
-    });
+    };
+    document.getElementById('btn-convidar-marcar-todos')?.addEventListener('click', () => marcarTodos(true));
+    document.getElementById('btn-convidar-desmarcar-topo')?.addEventListener('click', () => marcarTodos(false));
+    // O "Desmarcar todos" de dentro do aviso amarelo continua valendo.
+    document.getElementById('btn-convidar-desmarcar-todos')?.addEventListener('click', () => marcarTodos(false));
+    _atualizarContagemConvite();
     lista.dataset.marcouTodos = semSugestao ? '1' : '';
     await carregarPreviaConvite();
   } catch (erro) {
