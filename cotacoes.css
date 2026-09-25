@@ -782,14 +782,51 @@
   .cotacoes-tabela td:nth-child(7),
   .cotacoes-tabela .col-dinheiro { display: none; }
 
-  .cotacoes-tabela { width: 100%; }
+  /* Larguras fixas: o título tinha min-width: 190px e, somado ao status e
+     às duas ações, a tabela passava dos 375px — e, sem rolagem lateral, ela
+     vazava do cartão e a lixeira ficava fora da tela (print dela, 25/09). */
+  .cotacoes-tabela { width: 100%; table-layout: fixed; }
+
+  .cotacoes-tabela th:nth-child(1),
+  .cotacoes-tabela td:nth-child(1) { width: 34px; }
+
+  .cotacoes-tabela th:nth-child(6),
+  .cotacoes-tabela td:nth-child(6) { width: 74px; }
+
+  .cotacoes-tabela th:nth-child(10),
+  .cotacoes-tabela td:nth-child(10) { width: 68px; }
 
   .cotacoes-tabela th,
   .cotacoes-tabela td {
-    padding: 10px 6px;
+    padding: 10px 4px;
     font-size: 0.78rem;
     white-space: normal;
+    overflow-wrap: break-word;
   }
+
+  /* Só o título quebra linha: o número da cotação virava 1/4/0 empilhado e
+     o "Nº" do cabeçalho virava N/o. Precisa vir DEPOIS do white-space:
+     normal acima — mesma especificidade, ganha quem vem por último. */
+  .cotacoes-tabela th {
+    white-space: nowrap;
+    letter-spacing: 0;
+    font-size: 0.64rem;
+  }
+
+  .cotacoes-tabela .cotacao-numero { white-space: nowrap; }
+
+  .cotacoes-tabela .cotacao-titulo-cel { min-width: 0; }
+
+  .cotacoes-tabela .cotacao-titulo-link,
+  .cotacoes-tabela .cotacao-titulo { white-space: normal; text-align: left; }
+
+  .cotacoes-tabela .badge-pill { padding: 3px 6px; font-size: 0.68rem; }
+
+  .cotacoes-tabela .tag-origem { font-size: 0.64rem; }
+
+  .cotacoes-tabela .acoes-linha { gap: 2px; flex-wrap: nowrap; }
+
+  .cotacoes-tabela .btn-acao-icone { width: 28px; height: 28px; }
 }
 
 .btn-tirar-item-cotacao { display: block; margin-top: 2px; padding: 0; font-size: 0.7rem; }

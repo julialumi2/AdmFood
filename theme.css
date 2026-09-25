@@ -15,7 +15,8 @@
   /* Neutros grafite (modo claro); fundo creme (#F3EBDB, pedido da Julia
      em 2026-09-15: os brancos quebrados ainda pareciam brancos demais),
      com bordas e superfícies em bege, pra combinar com ele. */
-  --bg-main: #F3EBDB;
+  /* Fundo do sistema, claro (pedido dela, 25/09). Era o creme #F3EBDB. */
+  --bg-main: #FFFAFA;
   --card-bg: #FFFFFF;
   --header-bg: #FFFFFF;
   --header-vidro: rgba(255, 255, 255, 0.62);
