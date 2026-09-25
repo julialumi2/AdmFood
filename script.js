@@ -5785,7 +5785,14 @@ function _renderTabelaComparacaoCotacao() {
     container.querySelectorAll('[data-acao="tirar-item-cotacao"]').forEach((btn) => {
       btn.addEventListener('click', async (evento) => {
         evento.stopPropagation();
-        if (!confirm(`Tirar "${btn.dataset.nome}" dessa cotação? Ele some dos links dos fornecedores e não entra nos pedidos dela.`)) return;
+        // A quantidade ir a zero é o que separa esse botão do "Voltar pro
+        // pedido direto" da Requisição, que mantém — e a frase não dizia
+        // isso, então dava pra clicar no errado e ter que redigitar (25/09).
+        if (!confirm(`Tirar "${btn.dataset.nome}" dessa cotação?`
+          + String.fromCharCode(10) + String.fromCharCode(10)
+          + 'Ele some dos links dos fornecedores e a quantidade de compra dele vai a zero na requisição — é pra quando não se compra o item agora.'
+          + String.fromCharCode(10) + String.fromCharCode(10)
+          + 'Se for pra comprar pelo fornecedor homologado, use "Voltar pro pedido direto" na Requisição, que guarda a quantidade.')) return;
         try {
           const resposta = await fetch(`/api/cotacoes/${cotacaoAtualId}/itens/${btn.dataset.insumoId}`, { method: 'DELETE' });
           const dados = await resposta.json().catch(() => ({}));
