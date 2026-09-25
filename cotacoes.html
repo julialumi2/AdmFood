@@ -262,8 +262,16 @@
             </div>
           </div>
 
-          <!-- FILTROS NUMA LINHA SÓ, EM CIMA DA TABELA -->
+          <!-- Mesma cara da tabela de Fornecedores (pedido dela, 25/09):
+               título e subtítulo no cartão, filtros como barra logo abaixo. -->
           <div class="chart-card cotacoes-tabela-card">
+            <div class="table-header-row">
+              <div>
+                <h3 class="table-title">Cotações registradas</h3>
+                <p class="table-subtitle">Quem respondeu, o que virou pedido e quanto cada cotação economizou</p>
+              </div>
+              <span class="cotacoes-contagem" id="cotacoes-contagem" aria-live="polite"></span>
+            </div>
             <div class="cotacoes-filtros">
               <div class="filtro-inline">
                 <label for="cotacoes-filtro-mostrar">Mostrar</label>
@@ -309,7 +317,6 @@
                   <i data-lucide="chevron-down"></i>
                 </span>
               </div>
-              <span class="cotacoes-contagem" id="cotacoes-contagem" aria-live="polite"></span>
             </div>
 
             <div class="table-responsive">

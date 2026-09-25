@@ -531,15 +531,25 @@
 }
 
 /* LINHA 2: filtros numa linha só, colados no topo da tabela */
-.cotacoes-tabela-card { padding: 0; overflow: hidden; }
+/* Mesmo cartão da tabela de Fornecedores: respiro em volta, título e
+   subtítulo em cima (pedido dela, 25/09). Antes era padding: 0, com a barra
+   de filtros colada na borda e nada dizendo o que a tabela é. */
+.cotacoes-tabela-card { padding: var(--space-4) var(--space-5); }
+
+.cotacoes-tabela-card .table-header-row { margin-bottom: var(--space-3); }
+
+.cotacoes-tabela-card .table-subtitle { margin: 2px 0 0; }
 
 .cotacoes-filtros {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--surface-muted-border);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--surface-muted-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
 }
 
 .filtro-inline {
@@ -612,6 +622,14 @@
 
 .cotacoes-tabela th:first-child,
 .cotacoes-tabela td:first-child { padding-left: var(--space-4); }
+
+/* A contagem subiu pro cabeçalho do cartão, do lado do título. */
+.cotacoes-tabela-card .table-header-row .cotacoes-contagem {
+  margin-left: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 
 .cotacoes-tabela th:last-child,
 .cotacoes-tabela td:last-child { padding-right: var(--space-4); }
@@ -720,12 +738,14 @@
   /* FILTROS: em linha eles caíam um por linha, cada um com uma largura, e a
      contagem sobrava solta. No celular viram duas colunas: Mostrar e Tipo em
      cima, a busca inteira no meio, Dias e a contagem embaixo (25/09). */
+  .cotacoes-tabela-card { padding: var(--space-3); }
+
   .cotacoes-filtros {
     display: grid;
     grid-template-columns: 1fr 1fr;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-3);
+    padding: var(--space-2);
   }
 
   .cotacoes-filtros .filtro-inline { min-width: 0; }
