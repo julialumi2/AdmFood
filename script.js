@@ -7426,6 +7426,14 @@ function _travadaNaCompra(l) {
   return l.situacao?.tipo === 'pedido' || l.situacao?.tipo === 'cotacao';
 }
 
+// Só o pedido é definitivo. Estar numa cotação gerada dá pra desfazer — o
+// item sai de lá e vai pro pedido direto, mantendo a quantidade (25/09).
+// Antes as duas travas eram a mesma coisa e o botão sumia nas linhas que
+// mostravam "Na cotação".
+function _travadaEmPedido(l) {
+  return l.situacao?.tipo === 'pedido';
+}
+
 // O que ainda falta gerar, separado nos dois blocos (item × loja com
 // quantidade): itensHomologados saem em pedido direto, itensParaCotacao vão
 // pra cotação.
@@ -7572,7 +7580,7 @@ function _renderBlocoCotacao(r) {
           return `<td>${_celulaCompraHTML(item, l, _travadaNaCompra(l))}${voltar}</td>`;
         }).join('')}
         <td class="col-total-compra" data-total-insumo="${item.insumoId}">${_totalCompraHTML(item)}</td>
-        <td class="col-destino-compra">${_situacaoCotacaoHTML(item)}${!r.motivoPedidos && item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l))
+        <td class="col-destino-compra">${_situacaoCotacaoHTML(item)}${!r.motivoPedidos && item.lojas.some((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaEmPedido(l))
           ? `<button type="button" class="btn-limpar-filtro btn-mover-direto" data-acao="comprar-direto" data-insumo="${item.insumoId}" title="Tira este item da cotação e manda pro pedido direto, escolhendo fornecedor e preço">Mover pro pedido direto</button>`
           : ''}</td>
       </tr>`;
@@ -7597,7 +7605,7 @@ async function abrirModalComprarDireto(insumoId) {
   const r = requisicaoConferenciaAtual;
   const item = r?.itens.find((i) => i.insumoId === insumoId);
   if (!item) return;
-  const lojas = item.lojas.filter((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaNaCompra(l));
+  const lojas = item.lojas.filter((l) => _blocoDaLoja(l) === 'cotacao' && !_travadaEmPedido(l));
   if (!lojas.length) return;
   if (!fornecedoresCompraDireta) {
     try {
@@ -7709,7 +7717,10 @@ document.getElementById('form-comprar-direto')?.addEventListener('submit', async
         });
         const dados = await resposta.json().catch(() => ({}));
         if (!resposta.ok) throw new Error(dados.erro || `Não foi possível gravar o homologado em ${l.loja}.`);
-        if (l.forcarCotacao) {
+        // forcarCotacao é a marca de "empurrei pra cotação na mão"; a
+        // situação 'cotacao' é estar dentro de uma cotação já gerada. Nos
+        // dois casos o item precisa sair de lá antes de virar pedido direto.
+        if (l.forcarCotacao || l.situacao?.tipo === 'cotacao') {
           const volta = await fetch('/api/requisicoes/conferencia/destino', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -7723,7 +7734,10 @@ document.getElementById('form-comprar-direto')?.addEventListener('submit', async
       l.fornecedorHomologado = fornecedor?.nome || '';
     }
     fecharModalComprarDireto();
-    _renderCompraConferencia(requisicaoConferenciaAtual);
+    // O item saiu da cotação lá no servidor: a situação ("Na cotação") e o
+    // total dela mudaram, então redesenhar com o que estava em memória
+    // deixaria a tela mentindo.
+    await _recarregarConferenciaDaRequisicao();
   } catch (falha) {
     mostrarErro(falha.message);
   } finally {
@@ -8049,6 +8063,24 @@ document.getElementById('btn-requisicao-aprovar-todas')?.addEventListener('click
 // virou pedido. Antes de gerar, busca de novo; se os números mudaram,
 // redesenha a tela e pede pra conferir em vez de gerar o que ela não viu
 // (QA 22/09).
+// Busca a conferência de novo e redesenha. Usado depois de mexer no
+// destino de um item, que muda coisa no servidor (a cotação perde o item,
+// a situação deixa de ser "Na cotação").
+async function _recarregarConferenciaDaRequisicao() {
+  const r = requisicaoConferenciaAtual;
+  if (!r) return;
+  try {
+    const resposta = await fetch(`/api/requisicoes/conferencia?titulo=${encodeURIComponent(r.titulo)}&prazoValidade=${encodeURIComponent(r.prazoValidade)}`);
+    const novo = await resposta.json();
+    if (!resposta.ok) throw new Error(novo.erro || 'falha ao recarregar');
+    requisicaoConferenciaAtual = novo;
+    _renderCompraConferencia(novo);
+  } catch (erro) {
+    console.error('Falha ao recarregar a conferência:', erro);
+    _renderCompraConferencia(r);
+  }
+}
+
 async function _conferenciaAtualizadaAntesDeGerar(r, parte) {
   let novo;
   try {

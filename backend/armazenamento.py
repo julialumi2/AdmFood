@@ -8170,10 +8170,14 @@ def definir_fornecedor_avulso(contagem_id, insumo_id, fornecedor_id, preco):
         return cursor.rowcount > 0
 
 
-def item_travado_na_requisicao(titulo, prazo_validade, insumo_id, loja):
+def item_travado_na_requisicao(titulo, prazo_validade, insumo_id, loja, so_pedido=False):
     """Por que o item dessa loja não muda mais (já está num pedido ou na
     cotação da requisição), ou None se ainda dá pra mexer. Desde 2026-09-22
-    a trava é por item: pedido direto e cotação saem em botões separados."""
+    a trava é por item: pedido direto e cotação saem em botões separados.
+
+    `so_pedido=True` ignora a cotação: estar numa cotação é reversível (dá
+    pra soltar o item de lá, ver soltar_loja_do_item_na_cotacao), virar
+    pedido não é. Quem move pra pedido direto usa esse modo (25/09)."""
     with conexao() as conn:
         cotacao = conn.execute(
             "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND pedido_direto = 0 ORDER BY id LIMIT 1",
@@ -8192,12 +8196,74 @@ def item_travado_na_requisicao(titulo, prazo_validade, insumo_id, loja):
         ).fetchone()
         if pedido:
             return f"Esse item já está no pedido nº {pedido['id']}. Pra mudar, cancele o pedido em Pedidos."
-        if conn.execute(
+        if not so_pedido and conn.execute(
             "SELECT 1 FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ? AND loja = ?",
             (cotacao_id, insumo_id, loja),
         ).fetchone():
             return "Esse item já está na cotação. Pra tirar, use \"tirar da cotação\" lá."
     return None
+
+
+def soltar_loja_do_item_na_cotacao(titulo, prazo_validade, insumo_id, loja):
+    """Tira UMA loja de um item que já está na cotação da requisição, pra
+    ele poder ir pro pedido direto (25/09, pedido dela).
+
+    Diferente de `tirar_item_da_cotacao`, esta:
+      - solta só a loja pedida (o item continua cotado nas outras);
+      - NÃO zera `quantidade_compra` — ela quer comprar, só que direto;
+      - some do link de convite quando nenhuma loja daquele item sobrar.
+
+    Devolve o id da cotação de onde saiu, ou None se não estava em nenhuma.
+    """
+    with conexao() as conn:
+        travar_para_escrita(conn)
+        cotacao = conn.execute(
+            "SELECT id FROM cotacao WHERE requisicao_titulo = ? AND requisicao_prazo = ? AND pedido_direto = 0 ORDER BY id LIMIT 1",
+            (titulo, prazo_validade),
+        ).fetchone()
+        if not cotacao:
+            return None
+        cotacao_id = cotacao["id"]
+        if not conn.execute(
+            "SELECT 1 FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ? AND loja = ?",
+            (cotacao_id, insumo_id, loja),
+        ).fetchone():
+            return None
+        # Virou pedido nessa cotação? Aí não é mais reversível por aqui.
+        if conn.execute(
+            """
+            SELECT 1 FROM pedido_compra_item pi JOIN pedido_compra p ON p.id = pi.pedido_id
+            WHERE p.cotacao_id = ? AND pi.insumo_id = ?
+            """,
+            (cotacao_id, insumo_id),
+        ).fetchone():
+            raise ValueError("Esse item já virou pedido nessa cotação. Pra mudar, cancele o pedido antes, em Pedidos.")
+
+        conn.execute(
+            "DELETE FROM cotacao_item_loja WHERE cotacao_id = ? AND insumo_id = ? AND loja = ?",
+            (cotacao_id, insumo_id, loja),
+        )
+        sobrou = conn.execute(
+            "SELECT COALESCE(SUM(quantidade), 0) AS total, COUNT(*) AS linhas FROM cotacao_item_loja "
+            "WHERE cotacao_id = ? AND insumo_id = ?",
+            (cotacao_id, insumo_id),
+        ).fetchone()
+        if sobrou["linhas"]:
+            # Ainda tem loja cotando: só acerta o total pedido aos fornecedores.
+            conn.execute(
+                "UPDATE cotacao_item SET quantidade_total = ? WHERE cotacao_id = ? AND insumo_id = ?",
+                (sobrou["total"], cotacao_id, insumo_id),
+            )
+        else:
+            # Última loja: o item sai da cotação e dos links de convite. O
+            # preço que já mandaram fica guardado, só deixa de ser vencedor.
+            conn.execute("DELETE FROM cotacao_item WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
+            conn.execute("UPDATE cotacao_preco SET selecionado = 0 WHERE cotacao_id = ? AND insumo_id = ?", (cotacao_id, insumo_id))
+            conn.execute(
+                "DELETE FROM cotacao_convite_item WHERE insumo_id = ? AND convite_id IN (SELECT id FROM cotacao_convite WHERE cotacao_id = ?)",
+                (insumo_id, cotacao_id),
+            )
+        return cotacao_id
 
 
 def homologados_por_insumo_loja():

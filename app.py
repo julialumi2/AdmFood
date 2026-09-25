@@ -175,6 +175,7 @@ from backend.armazenamento import (
     motivo_para_nao_reaplicar,
     situacao_compra_requisicao,
     definir_forcar_cotacao,
+    soltar_loja_do_item_na_cotacao,
     definir_fornecedor_avulso,
     item_travado_na_requisicao,
     homologados_por_insumo_loja,
@@ -5480,10 +5481,23 @@ def api_destino_item_conferencia():
     contagem = buscar_contagem(contagem_id)
     if not contagem:
         return jsonify({"erro": "Contagem não encontrada."}), 404
-    travado = item_travado_na_requisicao(contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+    vai_pra_cotacao = bool(dados.get('cotacao'))
+    # Sair da cotação é reversível; virar pedido não. Quem está voltando pro
+    # pedido direto pode estar numa cotação gerada — solta de lá primeiro,
+    # mantendo a quantidade de compra (25/09).
+    travado = item_travado_na_requisicao(
+        contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'],
+        so_pedido=not vai_pra_cotacao,
+    )
     if travado:
         return jsonify({"erro": travado}), 409
-    if not definir_forcar_cotacao(contagem_id, insumo_id, bool(dados.get('cotacao'))):
+    if not vai_pra_cotacao:
+        try:
+            soltar_loja_do_item_na_cotacao(
+                contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+        except ValueError as falha:
+            return jsonify({"erro": str(falha)}), 409
+    if not definir_forcar_cotacao(contagem_id, insumo_id, vai_pra_cotacao):
         return jsonify({"erro": "Esse item não está nessa contagem."}), 404
     return jsonify({"ok": True})
 
@@ -5507,9 +5521,19 @@ def api_fornecedor_avulso_conferencia():
     contagem = buscar_contagem(contagem_id)
     if not contagem:
         return jsonify({"erro": "Contagem não encontrada."}), 404
-    travado = item_travado_na_requisicao(contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+    # Idem: dá pra tirar o item da cotação pra comprar direto (25/09).
+    travado = item_travado_na_requisicao(
+        contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'],
+        so_pedido=fornecedor_id is not None,
+    )
     if travado:
         return jsonify({"erro": travado}), 409
+    if fornecedor_id is not None:
+        try:
+            soltar_loja_do_item_na_cotacao(
+                contagem['descricao'], contagem['prazo_validade'], insumo_id, contagem['loja'])
+        except ValueError as falha:
+            return jsonify({"erro": str(falha)}), 409
     try:
         gravou = definir_fornecedor_avulso(contagem_id, insumo_id, fornecedor_id, preco)
     except ValueError as falha:
