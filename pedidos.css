@@ -1142,3 +1142,58 @@ body.dark-mode {
 }
 
 .pedido-ressalva-fornecedor[hidden] { display: none; }
+
+/* MOBILE (anotações dela, 25/09) */
+@media (max-width: 768px) {
+  /* "Lançar compra por fora" e "Novo pedido" lado a lado, em vez de um
+     embaixo do outro. */
+  .pedidos-topo .page-acoes-topo {
+    width: 100%;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .pedidos-topo .page-acoes-topo > button { flex: 1 1 0; min-width: 0; }
+
+  .pedidos-topo .page-acoes-topo .btn-secondary,
+  .pedidos-topo .page-acoes-topo .btn-primary {
+    width: 100%;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 8px;
+    font-size: 0.76rem;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .pedidos-topo .page-acoes-topo button > i,
+  .pedidos-topo .page-acoes-topo button > svg { display: none; }
+}
+
+/* O modal que abre ao clicar num pedido (Recebimentos, que usa este mesmo
+   arquivo) ocupava a tela quase toda, com muito respiro pra pouca
+   informação (anotação dela, 25/09). */
+@media (max-width: 768px) {
+  #modal-confirmar-recebimento .modal-content {
+    padding: 14px;
+    max-height: 86vh;
+  }
+
+  #modal-confirmar-recebimento .modal-header { margin-bottom: var(--space-2); }
+
+  #modal-confirmar-recebimento .panel-title { font-size: 1rem; }
+
+  #modal-confirmar-recebimento .panel-subtitle { font-size: 0.78rem; }
+
+  #modal-confirmar-recebimento .inventory-table tr {
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-2);
+  }
+
+  #modal-confirmar-recebimento .inventory-table td { padding: 2px 0; font-size: 0.8rem; }
+
+  #modal-confirmar-recebimento .form-group { margin-bottom: var(--space-2); }
+
+  #modal-confirmar-recebimento .modal-actions { margin-top: var(--space-3); }
+}

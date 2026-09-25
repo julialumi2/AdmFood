@@ -171,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.querySelector('.kanban-board')) {
     carregarTarefas();
     wireColumnDropEvents();
+    iniciarQuadroDeslizante();
   }
 
   // 4.095 TELA DE CARDÁPIO (Preços + Ficha Técnica numa tela só desde 2026-09-09)
@@ -14068,6 +14069,51 @@ let tarefaSelecionadaId = null;
 
 const PRIORIDADE_LABEL_TAREFA = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 const STATUS_LABEL_TAREFA = { todo: 'A Fazer', doing: 'Em Andamento', done: 'Feito' };
+
+// No celular o quadro vira um carrossel de uma coluna por vez (como no
+// Trello, escolha dela em 25/09) — o deslize é do CSS; aqui ficam só os
+// pontinhos que dizem em qual coluna você está, e levam pra ela.
+function iniciarQuadroDeslizante() {
+  const board = document.querySelector('.kanban-board');
+  const pontos = document.getElementById('kanban-pontos');
+  if (!board || !pontos) return;
+  const colunas = [...board.querySelectorAll('.kanban-column')];
+  if (!colunas.length) return;
+
+  pontos.innerHTML = colunas.map((coluna, i) => {
+    const nome = coluna.querySelector('.column-header h3')?.textContent.trim() || `Coluna ${i + 1}`;
+    return `<button type="button" class="kanban-ponto${i === 0 ? ' atual' : ''}" role="tab"
+      aria-selected="${i === 0 ? 'true' : 'false'}" data-coluna="${i}">${escaparHtml(nome)}</button>`;
+  }).join('');
+
+  const botoes = [...pontos.querySelectorAll('.kanban-ponto')];
+  botoes.forEach((botao, i) => {
+    botao.addEventListener('click', () => {
+      // scrollIntoView levaria a página junto; aqui só o quadro anda.
+      board.scrollTo({ left: colunas[i].offsetLeft - colunas[0].offsetLeft, behavior: 'smooth' });
+    });
+  });
+
+  // Qual está mais perto do começo da área visível.
+  let agendado = false;
+  board.addEventListener('scroll', () => {
+    if (agendado) return;
+    agendado = true;
+    requestAnimationFrame(() => {
+      agendado = false;
+      const meio = board.scrollLeft + board.clientWidth / 2;
+      let atual = 0;
+      colunas.forEach((coluna, i) => {
+        const inicio = coluna.offsetLeft - colunas[0].offsetLeft;
+        if (inicio < meio) atual = i;
+      });
+      botoes.forEach((botao, i) => {
+        botao.classList.toggle('atual', i === atual);
+        botao.setAttribute('aria-selected', i === atual ? 'true' : 'false');
+      });
+    });
+  });
+}
 
 async function carregarTarefas() {
   const board = document.querySelector('.kanban-board');

@@ -505,13 +505,78 @@ body.dark-mode .curva-chip-categoria[data-cor="5"] { color: #F9A8D4; }
 /* Tabela de 8 colunas rolando de lado no celular, sem nada indicando que
    existe rolagem (QA 22/09). */
 @media (max-width: 768px) {
-  .curva-tabela-wrap { position: relative; }
-  .curva-tabela-wrap::after {
-    content: "arraste pro lado pra ver o resto ›";
-    display: block;
-    padding: 6px var(--space-4) var(--space-3);
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    text-align: right;
+  /* Loja e período não cabiam lado a lado e empurravam a página inteira
+     pro lado (anotação dela, 25/09). */
+  /* flex-shrink: 0 no bloco dos controles: ele mantinha a largura do
+     desktop e empurrava a página inteira pro lado. */
+  .curva-cabecalho-controles { flex: 1 1 100%; min-width: 0; }
+
+  .curva-controles { width: 100%; }
+
+  .curva-controles .loja-select,
+  .curva-controles .loja-select-trigger { width: 100%; min-width: 0; }
+
+  /* O nome da loja é que esticava o botão: com nowrap ele empurrava a
+     página inteira pro lado. */
+  .curva-controles .loja-select-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+
+  .curva-controles .curva-periodo { width: 100%; justify-content: space-between; }
+
+  /* O alerta: o texto ficava numa faixa estreita do lado do "ver detalhes"
+     e o aviso de uma linha virava um bloco de doze. Agora o texto ocupa a
+     linha e o "ver detalhes" desce pra própria. */
+  .curva-alerta-resumo {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 4px;
+    padding: 10px var(--space-3);
+    font-size: 0.78rem;
+  }
+
+  .curva-alerta-resumo > i:first-child,
+  .curva-alerta-resumo > svg:first-child { margin-top: 2px; }
+
+  .curva-alerta-resumo > span:first-of-type { flex: 1 1 calc(100% - 23px); }
+
+  .curva-alerta-abrir { margin-left: auto; }
+
+  .curva-alerta-corpo { padding: 0 var(--space-3) var(--space-3); }
+
+  /* TABELAS sem rolagem lateral: no celular ficam só as colunas que se lê
+     de relance — o resto está no cartão do produto. */
+  .curva-tabela-wrap { overflow-x: visible; }
+
+  .curva-denso th,
+  .curva-denso td { padding: 8px 4px; font-size: 0.76rem; }
+
+  .curva-denso .col-check { padding-left: 0; padding-right: 0; }
+
+  /* Listas A / B / C: sai o CMV, ficam volume e margem. */
+  .curva-lista .curva-denso th:nth-child(3),
+  .curva-lista .curva-denso td:nth-child(3) { display: none; }
+
+  /* Todos os produtos: ficam produto, margem, curva e o "proteger". */
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso th:nth-child(2),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso td:nth-child(2),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso th:nth-child(3),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso td:nth-child(3),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso th:nth-child(4),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso td:nth-child(4),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso th:nth-child(5),
+  #curva-aba-cardapio .curva-painel-tabela .curva-denso td:nth-child(5) { display: none; }
+
+  /* Insumos: ficam insumo, valor e curva. */
+  #curva-aba-insumos .curva-denso th:nth-child(2),
+  #curva-aba-insumos .curva-denso td:nth-child(2),
+  #curva-aba-insumos .curva-denso th:nth-child(3),
+  #curva-aba-insumos .curva-denso td:nth-child(3),
+  #curva-aba-insumos .curva-denso th:nth-child(5),
+  #curva-aba-insumos .curva-denso td:nth-child(5),
+  #curva-aba-insumos .curva-denso th:nth-child(6),
+  #curva-aba-insumos .curva-denso td:nth-child(6) { display: none; }
 }

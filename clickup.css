@@ -325,9 +325,82 @@
   font-size: 0.85rem;
 }
 
+/* Os pontinhos só existem no celular (ver o @media abaixo). */
+.kanban-pontos { display: none; }
+
 @media (max-width: 768px) {
-  .kanban-board { grid-template-columns: 1fr; }
+  /* Uma coluna por vez, deslizando pro lado, como no Trello (escolha dela,
+     25/09): as três empilhadas viravam uma página longa demais pra achar
+     o card. O pedaço da coluna seguinte aparecendo é o que diz que dá pra
+     deslizar. */
+  .kanban-board {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .kanban-board::-webkit-scrollbar { display: none; }
+
+  .kanban-column {
+    flex: 0 0 88%;
+    scroll-snap-align: start;
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
   .task-info-grid { grid-template-columns: 1fr; }
+
+  /* Os dois filtros dividem a linha e o campo preenche a caixa — senão o
+     chevron fica lá no canto, longe do texto. */
+  .tarefas-barra { gap: var(--space-2); }
+
+  .tarefas-busca { flex: 1 0 100%; }
+
+  .tarefas-barra .select-wrapper { flex: 1 1 0; min-width: 0; }
+
+  .tarefas-barra .select-wrapper select { width: 100%; }
+
+  .tarefas-barra #tarefas-resumo { flex: 1 0 100%; }
+
+  .kanban-pontos {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  .kanban-ponto {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .kanban-ponto::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: currentColor;
+    opacity: 0.45;
+  }
+
+  .kanban-ponto.atual {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .kanban-ponto.atual::before { opacity: 1; }
 }
 
 /* Card particular (só a dona vê) — ex.: pendências da ficha técnica. */

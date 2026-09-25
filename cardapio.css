@@ -1413,3 +1413,38 @@ body.dark-mode {
   font-weight: 400;
   color: var(--text-muted);
 }
+
+/* MOBILE: a loja ocupa a linha inteira e "Importar planilha" e "Novo item"
+   dividem a de baixo, em vez dos três empilhados (anotação dela, 25/09). */
+@media (max-width: 768px) {
+  .cardapio-topo .page-acoes-topo {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .cardapio-topo .page-acoes-topo > #ficha-tecnica-loja-select { flex: 1 0 100%; }
+
+  .cardapio-topo .loja-select-realce .loja-select-trigger { width: 100%; }
+
+  .cardapio-topo .page-acoes-topo > #cardapio-importar-area,
+  .cardapio-topo .page-acoes-topo > .action-controls {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: var(--space-2);
+  }
+
+  .cardapio-topo .page-acoes-topo .btn-secondary,
+  .cardapio-topo .page-acoes-topo .btn-primary {
+    width: 100%;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 8px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .cardapio-topo .page-acoes-topo .action-controls > button { flex: 1 1 0; min-width: 0; }
+}

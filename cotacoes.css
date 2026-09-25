@@ -716,6 +716,60 @@
   .cotacoes-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cotacoes-busca { flex-basis: 100%; }
   .cotacoes-contagem { margin-left: 0; }
+
+  /* FILTROS: em linha eles caíam um por linha, cada um com uma largura, e a
+     contagem sobrava solta. No celular viram duas colunas: Mostrar e Tipo em
+     cima, a busca inteira no meio, Dias e a contagem embaixo (25/09). */
+  .cotacoes-filtros {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .cotacoes-filtros .filtro-inline { min-width: 0; }
+
+  .cotacoes-filtros .filtro-inline label {
+    flex: 0 0 auto;
+    font-size: 0.76rem;
+  }
+
+  .cotacoes-filtros .filtro-select { flex: 1 1 0; min-width: 0; }
+
+  .cotacoes-filtros .filtro-select select {
+    width: 100%;
+    padding-left: var(--space-2);
+    font-size: 0.8rem;
+  }
+
+  .cotacoes-busca { grid-column: 1 / -1; }
+
+  .cotacoes-contagem { text-align: right; font-size: 0.76rem; }
+
+  /* TABELA: continua tabela, só com o que se lê no celular — respostas,
+     produtos, empresas, data e os dois valores saem; a linha abre a
+     cotação inteira. */
+  .cotacoes-tabela-card .table-responsive { overflow-x: visible; }
+
+  .cotacoes-tabela th:nth-child(3),
+  .cotacoes-tabela td:nth-child(3),
+  .cotacoes-tabela th:nth-child(4),
+  .cotacoes-tabela td:nth-child(4),
+  .cotacoes-tabela th:nth-child(5),
+  .cotacoes-tabela td:nth-child(5),
+  .cotacoes-tabela th:nth-child(7),
+  .cotacoes-tabela td:nth-child(7),
+  .cotacoes-tabela .col-dinheiro { display: none; }
+
+  .cotacoes-tabela { width: 100%; }
+
+  .cotacoes-tabela th,
+  .cotacoes-tabela td {
+    padding: 10px 6px;
+    font-size: 0.78rem;
+    white-space: normal;
+  }
 }
 
 .btn-tirar-item-cotacao { display: block; margin-top: 2px; padding: 0; font-size: 0.7rem; }
