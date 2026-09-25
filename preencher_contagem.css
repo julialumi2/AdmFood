@@ -743,3 +743,21 @@ body {
 @media print {
   .pedido-comprovante-acoes { display: none; }
 }
+
+
+/* --- "Mandei um preço errado" (25/09) ------------------------------------
+   O card de agradecimento centraliza o ícone, o título e o texto, mas o
+   botão é inline-flex e ficava encostado na esquerda. */
+#cotacao-publica-obrigado {
+  text-align: center;
+}
+
+#btn-cotacao-corrigir {
+  display: inline-flex;
+  margin-top: var(--space-4);
+}
+
+#cotacao-corrigir-aviso {
+  margin-top: var(--space-2);
+}
+
