@@ -5435,8 +5435,25 @@ function _linkWhatsAppTexto(telefone, mensagem) {
 // hora e a célula mostra que está gravando.
 const _vencedoresEmVoo = new Set();
 
+// Quanto o preço do fornecedor pode passar da última compra antes de
+// acender o aviso — ela escolheu 50% em 25/09.
+const LIMITE_ALTA_SOBRE_ULTIMA_COMPRA = 0.5;
+
+// Quantos % o preço está acima da última compra, ou null quando está dentro
+// do limite (ou quando não há com o que comparar).
+function _altaSobreAUltimaCompra(preco, ultimaCompra) {
+  const referencia = ultimaCompra?.preco;
+  if (!(referencia > 0) || !(preco > 0)) return null;
+  const alta = preco / referencia - 1;
+  return alta > LIMITE_ALTA_SOBRE_ULTIMA_COMPRA ? Math.round(alta * 100) : null;
+}
+
 async function _escolherVencedorCotacao(td) {
   const precoId = Number(td.dataset.id);
+  // Escolher o vencedor é o passo que vira pedido: se esse preço é o que
+  // está fora da curva, pergunta antes (25/09).
+  if (td.dataset.alta && !td.classList.contains('selecionado')
+    && !confirm(`Esse preço está ${td.dataset.alta}.${String.fromCharCode(10)}${String.fromCharCode(10)}Marcar como vencedor mesmo assim?`)) return;
   if (_vencedoresEmVoo.has(precoId)) return;
   _vencedoresEmVoo.add(precoId);
   td.classList.add('salvando');
@@ -5638,9 +5655,11 @@ function _renderTabelaComparacaoCotacao() {
   `;
   }).join('');
 
+  let divergentes = 0;
   const linhas = linhasFiltradas.map(linha => {
     const item = itensPorInsumo[linha.insumoId];
     const precoPorFornecedor = new Map(linha.precos.map(p => [p.fornecedorId, p]));
+    const ultimaCompra = item?.ultimaCompra;
 
     const celulas = fornecedores.map(f => {
       const preco = precoPorFornecedor.get(f.id);
@@ -5658,11 +5677,23 @@ function _renderTabelaComparacaoCotacao() {
       }
       const classes = ['td-comparacao-preco'];
       if (preco.selecionado) classes.push('selecionado');
+      // Preço fora da curva (25/09): o do fornecedor entrava na comparação
+      // sem nada dizer que estava muito acima do que ela pagou da última
+      // vez, e dava pra escolher como vencedor sem notar.
+      const alta = _altaSobreAUltimaCompra(preco.preco, ultimaCompra);
+      if (alta !== null) {
+        divergentes += 1;
+        classes.push('divergente');
+      }
+      const avisoAlta = alta === null ? '' : `${alta}% acima da última compra`
+        + ` (${_formatarCustoPorUnidade(ultimaCompra.preco, item?.unidadeMedida)}`
+        + ` em ${new Date(ultimaCompra.dataIso).toLocaleDateString('pt-BR')}, ${ultimaCompra.fornecedorNome})`;
       return `
-        <td class="${classes.join(' ')}" ${isAdmin ? `data-acao="selecionar-preco" data-id="${preco.id}" title="Marcar como vencedor"` : ''}>
+        <td class="${classes.join(' ')}" ${alta === null ? '' : `data-alta="${escaparHtml(avisoAlta)}"`} ${isAdmin ? `data-acao="selecionar-preco" data-id="${preco.id}" title="${alta === null ? 'Marcar como vencedor' : escaparHtml(avisoAlta)}"` : (alta === null ? '' : `title="${escaparHtml(avisoAlta)}"`)}>
           <div class="comparacao-preco-conteudo">
             ${preco.selecionado ? '<i data-lucide="check-circle" class="icone-preco-selecionado"></i>' : ''}
             <span class="comparacao-preco-valor">${escaparHtml(_formatarCustoPorUnidade(preco.preco, item?.unidadeMedida))}</span>
+            ${alta === null ? '' : '<i data-lucide="triangle-alert" class="icone-preco-divergente"></i>'}
           </div>
           ${isAdmin ? `<button type="button" class="btn-acao-icone btn-excluir btn-remover-preco-comparacao" data-acao="excluir-preco" data-id="${preco.id}" data-fornecedor="${escaparHtml(f.nome)}" data-insumo="${escaparHtml(item?.nome || linha.nome || '')}" title="Remover preço"><i data-lucide="trash-2"></i></button>` : ''}
         </td>
@@ -5680,7 +5711,6 @@ function _renderTabelaComparacaoCotacao() {
       ? `<input type="number" step="0.01" min="0" class="input-quantidade-cotacao" data-insumo-id="${linha.insumoId}" value="${item && item.quantidadeTotal !== null ? item.quantidadeTotal : ''}" placeholder="0" ${isAdmin ? '' : 'disabled'}>`
       : (item ? `${_formatarQuantidade(item.quantidadeTotal, item.unidadeMedida)}${quebraHTML}` : '—');
 
-    const ultimaCompra = item?.ultimaCompra;
     const celulaUltimaCompra = ultimaCompra
       ? `<div class="ultima-compra-conteudo">
            <span>${escaparHtml(_formatarCustoPorUnidade(ultimaCompra.preco, item?.unidadeMedida))}</span>
@@ -5704,7 +5734,14 @@ function _renderTabelaComparacaoCotacao() {
     `;
   }).join('');
 
+  const avisoDivergencia = divergentes
+    ? `<p class="cotacao-divergencia-aviso"><i data-lucide="triangle-alert"></i>
+         ${divergentes === 1 ? '1 preço está' : `${divergentes} preços estão`} mais de ${Math.round(LIMITE_ALTA_SOBRE_ULTIMA_COMPRA * 100)}% acima da última compra.
+         ${divergentes === 1 ? 'Ele está marcado' : 'Eles estão marcados'} na tabela — confira a unidade antes de escolher o vencedor.</p>`
+    : '';
+
   container.innerHTML = `
+    ${avisoDivergencia}
     <table class="tabela-comparacao-cotacao">
       <thead>
         <tr>
