@@ -260,6 +260,8 @@ from backend.armazenamento import (
     marcar_bootstrap_aplicado,
     responder_convite_cotacao,
     listar_recusas_cotacao,
+    insumos_que_o_fornecedor_nao_vende,
+    voltar_a_pedir_preco,
     reabrir_convite_cotacao,
     marcar_convite_enviado,
     estender_prazo_convite,
@@ -4117,8 +4119,11 @@ def api_buscar_convite_por_token(token):
     resposta['cotacaoTitulo'] = convite['cotacao_titulo']
     # Reabrir pra corrigir começava do zero: o preço já mandado voltava na
     # resposta mas a tela não usava, e o "não vendo" nem vinha (QA 22/09).
+    # Qual das duas respostas negativas ele deu em cada item, pra tela
+    # reabrir com a marcação certa (25/09).
     recusados = {
-        r["insumoId"] for r in listar_recusas_cotacao(convite["cotacao_id"])
+        r["insumoId"]: r.get("tipo") or "nao_vende"
+        for r in listar_recusas_cotacao(convite["cotacao_id"])
         if r["fornecedorId"] == convite["fornecedor_id"]
     }
     resposta['itens'] = [
@@ -4130,7 +4135,8 @@ def api_buscar_convite_por_token(token):
             "marcaHomologada": item["marca_homologada"],
             "quantidade": item["quantidade_total"],
             "precoPreenchido": item["preco_preenchido"],
-            "naoVende": item["insumo_id"] in recusados,
+            "naoVende": recusados.get(item["insumo_id"]) == "nao_vende",
+            "emFalta": recusados.get(item["insumo_id"]) == "em_falta",
             # A embalagem que o link de contagem mostra ("1 caixa = 5 kg")
             # faltava aqui, e é o que evita preço de caixa no campo do kg.
             "fatorConversaoCompra": item["fator_conversao_compra"] if "fator_conversao_compra" in item.keys() else None,
@@ -4192,6 +4198,9 @@ def api_responder_convite_cotacao(token):
     # "Não vendo esse item" agora chega junto e fica gravado (QA 22/09).
     try:
         nao_vende = {int(i) for i in (dados.get('naoVende') or [])}
+        # "Em falta" (25/09): ele vende, só não tem agora — continua
+        # recebendo o item nas próximas cotações.
+        em_falta = {int(i) for i in (dados.get('emFalta') or [])}
     except (TypeError, ValueError):
         return jsonify({"erro": "Lista de itens inválida."}), 400
     precos = {}
@@ -4215,7 +4224,23 @@ def api_responder_convite_cotacao(token):
     no_convite = {item["insumo_id"] for item in convite["itens"]}
     precos = {insumo_id: preco for insumo_id, preco in precos.items() if insumo_id in no_convite}
     nao_vende = (nao_vende & no_convite) - set(precos)
-    responder_convite_cotacao(token, precos, nao_vende)
+    # Marcou os dois sem querer: "em falta" ganha, porque é o que não
+    # tranca o insumo pras próximas cotações.
+    em_falta = (em_falta & no_convite) - set(precos)
+    nao_vende -= em_falta
+    responder_convite_cotacao(token, precos, nao_vende, em_falta)
+    return jsonify({"ok": True})
+
+
+@app.route('/api/fornecedores/<int:fornecedor_id>/volta-a-cotar/<int:insumo_id>', methods=['POST'])
+def api_voltar_a_pedir_preco(fornecedor_id, insumo_id):
+    """Desfaz o "não vendo" permanente que o fornecedor marcou no link: o
+    insumo volta a aparecer nas próximas cotações dele. É o conserto de
+    quando ele clica sem querer (25/09)."""
+    erro_perfil = _exigir_gestao()
+    if erro_perfil:
+        return erro_perfil
+    voltar_a_pedir_preco(fornecedor_id, insumo_id)
     return jsonify({"ok": True})
 
 

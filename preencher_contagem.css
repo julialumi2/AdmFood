@@ -614,11 +614,43 @@ body {
 }
 
 .cotacao-nao-vende.marcado {
+  border-color: var(--danger);
+  background-color: var(--danger-soft);
+  color: var(--danger-texto);
+  font-weight: 700;
+}
+
+/* Duas respostas negativas (25/09): "em falta" é desta vez, "não vendo" é
+   pra sempre. Cores diferentes porque a consequência é diferente. */
+/* Empilhados sempre: lado a lado a coluna estoura a largura da tabela. */
+.cotacao-recusa-opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.cotacao-recusa-opcoes button { white-space: nowrap; }
+
+.cotacao-em-falta {
+  min-height: 40px;
+  padding: 8px var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cotacao-em-falta.marcado {
   border-color: var(--warning);
   background-color: var(--warning-soft);
   color: var(--warning-texto);
   font-weight: 700;
 }
+
 
 .cotacao-conversao {
   display: block;

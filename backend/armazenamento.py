@@ -1097,6 +1097,25 @@ def inicializar_banco():
             )
             """
         )
+        colunas_recusa = {c["name"] for c in conn.execute("PRAGMA table_info(cotacao_recusa)").fetchall()}
+        if "tipo" not in colunas_recusa:
+            # "não vendo" (nunca mais mande) x "em falta" (vendo, mas não tenho
+            # agora) — pedido dela em 25/09. O que existia antes era tudo
+            # "não vendo", mas só valia pra aquela cotação.
+            conn.execute("ALTER TABLE cotacao_recusa ADD COLUMN tipo TEXT NOT NULL DEFAULT 'nao_vende'")
+        # O "não vendo" que vale pras próximas cotações. Fica à parte da
+        # marcação "quem cota esse insumo" porque fornecedor sem nenhum insumo
+        # ligado recebe a cotação inteira: não haveria o que apagar.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fornecedor_nao_vende (
+                fornecedor_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                criado_em TEXT NOT NULL,
+                PRIMARY KEY (fornecedor_id, insumo_id)
+            )
+            """
+        )
         colunas_pedido = {c["name"] for c in conn.execute("PRAGMA table_info(pedido_compra)").fetchall()}
         if "observacao_fornecedor" not in colunas_pedido:
             # O que o fornecedor escreveu ao confirmar ("o bacon está em
@@ -5764,20 +5783,24 @@ def _quem_cota_o_que(cotacao_id, fornecedor_ids=None):
     if fornecedor_ids is not None:
         escolhidos = set(fornecedor_ids)
         fornecedores = [f for f in fornecedores if f["id"] in escolhidos]
-    return por_insumo, orfaos, fornecedores, _fornecedores_ligados_a_algum_insumo()
+    return (por_insumo, orfaos, fornecedores, _fornecedores_ligados_a_algum_insumo(),
+            insumos_que_o_fornecedor_nao_vende())
 
 
-def _itens_do_fornecedor(fornecedor_id, por_insumo, orfaos, ligados):
-    """Os insumos dele. Item que ninguém cota (órfão) não vai pra ninguém
+def _itens_do_fornecedor(fornecedor_id, por_insumo, orfaos, ligados, nao_vende=None):
+    """Os insumos dele, menos os que ele já disse que não vende (25/09).
+
+    Item que ninguém cota (órfão) não vai pra ninguém
     sozinho desde 2026-09-21 — pedido dela: o link do Guilherme Nunes levou
     adesivo, luva e sacolinha, e a lata ia pra PXT. A compradora vê o aviso
     "sem fornecedor" na cotação e decide (marca quem cota, lança o preço ou
     convida alguém novo). Fornecedor que ainda não é ligado a insumo nenhum
     (novo, ou de teste) continua recebendo a cotação inteira — pedido dela em
     2026-09-18; depois que ele responde, o histórico liga ele aos insumos."""
+    recusados = nao_vende.get(fornecedor_id, set()) if nao_vende else set()
     if fornecedor_id not in ligados:
-        return list(por_insumo)
-    return [i for i, forns in por_insumo.items() if fornecedor_id in forns]
+        return [i for i in por_insumo if i not in recusados]
+    return [i for i, forns in por_insumo.items() if fornecedor_id in forns and i not in recusados]
 
 
 def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
@@ -5785,7 +5808,7 @@ def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
     gerar nada. A tela mostra isso antes de mandar (pedido dela, 2026-09-17),
     porque link de cotação errado só se descobre depois que o fornecedor
     responde."""
-    por_insumo, orfaos, fornecedores, ligados = _quem_cota_o_que(cotacao_id, fornecedor_ids)
+    por_insumo, orfaos, fornecedores, ligados, nao_vende = _quem_cota_o_que(cotacao_id, fornecedor_ids)
     if not por_insumo:
         return {"fornecedores": [], "orfaos": [], "insumosDaCotacao": 0}
 
@@ -5806,7 +5829,7 @@ def previa_convites_cotacao(cotacao_id, fornecedor_ids=None):
 
     saida = []
     for fornecedor in fornecedores:
-        itens = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados)
+        itens = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados, nao_vende)
         saida.append({
             "fornecedorId": fornecedor["id"],
             "fornecedorNome": fornecedor["nome"],
@@ -5846,7 +5869,7 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None, iten
     acima, só pra esse convite (o cadastro não muda). Só vale item que está
     na cotação; lista vazia = esse fornecedor fica sem convite.
     """
-    por_insumo, orfaos, fornecedores, ligados = _quem_cota_o_que(cotacao_id, fornecedor_ids)
+    por_insumo, orfaos, fornecedores, ligados, nao_vende = _quem_cota_o_que(cotacao_id, fornecedor_ids)
     if not por_insumo:
         return {"convites": [], "insumosSemFornecedor": 0, "fornecedoresSemItens": []}
     agora = datetime.now().isoformat()
@@ -5869,7 +5892,7 @@ def criar_convites_cotacao(cotacao_id, prazo_validade, fornecedor_ids=None, iten
                     if i in por_insumo and not (i in vistos or vistos.add(i))
                 ]
             else:
-                insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados)
+                insumo_ids = _itens_do_fornecedor(fornecedor["id"], por_insumo, orfaos, ligados, nao_vende)
             if not insumo_ids:
                 sem_itens.append(fornecedor["nome"])
                 continue
@@ -5996,10 +6019,18 @@ def buscar_convite_por_token(token):
         return convite
 
 
-def responder_convite_cotacao(token, precos, nao_vende=()):
-    """`precos` = {insumo_id: preco} do que ele preencheu; `nao_vende` = os
-    itens que ele marcou como "não vendo esse item", que antes se perdiam no
-    caminho e ficavam iguais a item esquecido (QA 22/09). Uma vez
+def responder_convite_cotacao(token, precos, nao_vende=(), em_falta=()):
+    """`precos` = {insumo_id: preco} do que ele preencheu.
+
+    Duas respostas negativas, desde 25/09 (pedido dela):
+    - `nao_vende`: ele não trabalha com o item. Vale pra sempre — entra em
+      `fornecedor_nao_vende` e o insumo para de aparecer nos próximos links
+      dele.
+    - `em_falta`: ele vende, mas não tem agora. Vale só nesta cotação, e ele
+      continua recebendo o item nas próximas.
+
+    As duas ficam em `cotacao_recusa` (com `tipo`) pro comparativo mostrar o
+    motivo no lugar do traço de "não respondeu" (QA 22/09). Uma vez
     respondido, o convite fica travado (pergunta 18 do roteiro): não dá
     pra chamar de novo pelo mesmo token."""
     convite = buscar_convite_por_token(token)
@@ -6009,16 +6040,34 @@ def responder_convite_cotacao(token, precos, nao_vende=()):
         adicionar_preco_cotacao(convite["cotacao_id"], int(insumo_id), convite["fornecedor_id"], preco)
     agora_recusa = datetime.now().isoformat()
     with conexao() as conn:
+        for tipo, itens in (("nao_vende", nao_vende), ("em_falta", em_falta)):
+            for insumo_id in itens:
+                conn.execute(
+                    "INSERT OR REPLACE INTO cotacao_recusa (cotacao_id, fornecedor_id, insumo_id, criado_em, tipo) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (convite["cotacao_id"], convite["fornecedor_id"], int(insumo_id), agora_recusa, tipo),
+                )
+        # "Não vendo" vale pras próximas; "em falta" não.
         for insumo_id in nao_vende:
             conn.execute(
-                "INSERT OR REPLACE INTO cotacao_recusa (cotacao_id, fornecedor_id, insumo_id, criado_em) VALUES (?, ?, ?, ?)",
-                (convite["cotacao_id"], convite["fornecedor_id"], int(insumo_id), agora_recusa),
+                "INSERT OR REPLACE INTO fornecedor_nao_vende (fornecedor_id, insumo_id, criado_em) VALUES (?, ?, ?)",
+                (convite["fornecedor_id"], int(insumo_id), agora_recusa),
             )
-        # Corrigiu e agora mandou preço: a recusa de antes sai.
+        for insumo_id in em_falta:
+            conn.execute(
+                "DELETE FROM fornecedor_nao_vende WHERE fornecedor_id = ? AND insumo_id = ?",
+                (convite["fornecedor_id"], int(insumo_id)),
+            )
+        # Corrigiu e agora mandou preço: a recusa de antes sai, e ele volta a
+        # receber o item (mandar preço é dizer que vende).
         for insumo_id in precos:
             conn.execute(
                 "DELETE FROM cotacao_recusa WHERE cotacao_id = ? AND fornecedor_id = ? AND insumo_id = ?",
                 (convite["cotacao_id"], convite["fornecedor_id"], int(insumo_id)),
+            )
+            conn.execute(
+                "DELETE FROM fornecedor_nao_vende WHERE fornecedor_id = ? AND insumo_id = ?",
+                (convite["fornecedor_id"], int(insumo_id)),
             )
     with conexao() as conn:
         conn.execute(
@@ -6029,15 +6078,48 @@ def responder_convite_cotacao(token, precos, nao_vende=()):
 
 
 def listar_recusas_cotacao(cotacao_id):
-    """[{fornecedorId, insumoId}] de quem disse "não vendo esse item" — o
-    comparativo mostra isso no lugar do traço de "não respondeu"."""
+    """[{fornecedorId, insumoId, tipo}] de quem respondeu "não vendo" ou
+    "em falta" — o comparativo mostra o motivo no lugar do traço de "não
+    respondeu"."""
     with conexao() as conn:
         return [
-            {"fornecedorId": linha["fornecedor_id"], "insumoId": linha["insumo_id"]}
+            {
+                "fornecedorId": linha["fornecedor_id"],
+                "insumoId": linha["insumo_id"],
+                "tipo": linha["tipo"] if "tipo" in linha.keys() else "nao_vende",
+            }
             for linha in conn.execute(
-                "SELECT fornecedor_id, insumo_id FROM cotacao_recusa WHERE cotacao_id = ?", (cotacao_id,)
+                "SELECT fornecedor_id, insumo_id, tipo FROM cotacao_recusa WHERE cotacao_id = ?", (cotacao_id,)
             )
         ]
+
+
+def insumos_que_o_fornecedor_nao_vende(fornecedor_id=None):
+    """{fornecedor_id: {insumo_id}} do "não vendo" permanente. Sem argumento,
+    de todo mundo — é como a montagem do convite usa."""
+    mapa = {}
+    with conexao() as conn:
+        if fornecedor_id is None:
+            linhas = conn.execute("SELECT fornecedor_id, insumo_id FROM fornecedor_nao_vende")
+        else:
+            linhas = conn.execute(
+                "SELECT fornecedor_id, insumo_id FROM fornecedor_nao_vende WHERE fornecedor_id = ?",
+                (fornecedor_id,),
+            )
+        for linha in linhas:
+            mapa.setdefault(linha["fornecedor_id"], set()).add(linha["insumo_id"])
+    return mapa
+
+
+def voltar_a_pedir_preco(fornecedor_id, insumo_id):
+    """Desfaz o "não vendo" permanente: o insumo volta a aparecer nos links
+    desse fornecedor. Usado quando ele marcou sem querer."""
+    with conexao() as conn:
+        cursor = conn.execute(
+            "DELETE FROM fornecedor_nao_vende WHERE fornecedor_id = ? AND insumo_id = ?",
+            (fornecedor_id, insumo_id),
+        )
+        return cursor.rowcount > 0
 
 
 # Reabrir ou estender um convite dá esta folga de prazo, contada de agora —

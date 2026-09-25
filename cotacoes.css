@@ -792,3 +792,22 @@
 }
 
 .convidar-contagem.muitos { color: var(--warning-texto); }
+
+
+/* "Voltar a pedir" na célula de quem marcou que não vende (25/09). */
+.btn-voltar-a-cotar {
+  display: block;
+  margin: 4px auto 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  background-color: var(--card-bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.btn-voltar-a-cotar:hover { color: var(--text-dark); border-color: var(--border-strong); }
+.btn-voltar-a-cotar:disabled { opacity: 0.5; cursor: default; }
+

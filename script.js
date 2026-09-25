@@ -5647,9 +5647,13 @@ function _renderTabelaComparacaoCotacao() {
       if (!preco) {
         // "Não vendo esse item" (QA 22/09): item recusado tinha a mesma cara
         // de item esquecido, e ela ficava cobrando preço de quem não vende.
-        const recusou = (recusas || []).some((r) => r.fornecedorId === f.id && r.insumoId === linha.insumoId);
+        const recusa = (recusas || []).find((r) => r.fornecedorId === f.id && r.insumoId === linha.insumoId);
+        const recusou = !!recusa;
+        const emFalta = recusa && recusa.tipo === 'em_falta';
         return recusou
-          ? '<td class="td-comparacao-preco td-sem-preco" title="Ele respondeu que não vende esse item">não vende</td>'
+          ? (emFalta
+            ? '<td class="td-comparacao-preco td-sem-preco" title="Ele vende, mas está sem o item agora. Continua recebendo nas próximas cotações.">em falta</td>'
+            : `<td class="td-comparacao-preco td-sem-preco" title="Ele respondeu que não trabalha com esse item — não vai mais aparecer nas cotações dele">não vende<button type="button" class="btn-voltar-a-cotar" data-voltar-fornecedor="${f.id}" data-voltar-insumo="${linha.insumoId}" title="Voltar a pedir preço dele para este insumo">voltar a pedir</button></td>`)
           : '<td class="td-comparacao-preco td-sem-preco">—</td>';
       }
       const classes = ['td-comparacao-preco'];
@@ -5713,6 +5717,25 @@ function _renderTabelaComparacaoCotacao() {
       <tbody>${linhas}</tbody>
     </table>
   `;
+
+  // "Voltar a pedir": desfaz o "não vendo" permanente que o fornecedor
+  // marcou no link dele (25/09) — conserto de clique errado.
+  container.querySelectorAll('[data-voltar-fornecedor]').forEach((btn) => {
+    btn.addEventListener('click', async (evento) => {
+      evento.stopPropagation();
+      const { voltarFornecedor: forn, voltarInsumo: insumo } = btn.dataset;
+      if (!confirm('Voltar a pedir preço desse fornecedor para esse insumo nas próximas cotações?')) return;
+      btn.disabled = true;
+      try {
+        const resposta = await fetch(`/api/fornecedores/${forn}/volta-a-cotar/${insumo}`, { method: 'POST' });
+        if (!resposta.ok) throw new Error(await _erroDaResposta(resposta));
+        btn.textContent = 'volta a receber';
+      } catch (erro) {
+        alert(erro.message || 'Não foi possível desfazer agora.');
+        btn.disabled = false;
+      }
+    });
+  });
 
   if (isAdmin) {
     container.querySelectorAll('[data-acao="selecionar-preco"]').forEach(td => {
@@ -8974,13 +8997,23 @@ async function inicializarPreencherCotacao() {
         <td data-rotulo="Quantidade"><div class="contagem-item-somente-leitura">${quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${escaparHtml(rotulo)}</div></td>
         <td data-rotulo="Preço unitário"><div class="cotacao-campo-preco">
           <span>R$</span>
-          <input type="text" inputmode="decimal" placeholder="0,00" data-insumo-id="${item.insumoId}" value="${valorAnterior}" ${item.naoVende ? 'disabled' : ''}>
+          <input type="text" inputmode="decimal" placeholder="0,00" data-insumo-id="${item.insumoId}" value="${valorAnterior}" ${item.naoVende || item.emFalta ? 'disabled' : ''}>
           <span>/ ${escaparHtml(rotulo)}</span>
         </div></td>
         <td class="cotacao-td-recusa">
-          <button type="button" class="cotacao-nao-vende${item.naoVende ? ' marcado' : ''}" data-nao-vende-id="${item.insumoId}" aria-pressed="${item.naoVende ? 'true' : 'false'}">
-            ${item.naoVende ? 'Não vendo este' : 'Não vendo este item'}
-          </button>
+          <!-- Duas respostas diferentes (25/09): "em falta" é só desta vez e
+               ele continua recebendo o item; "não vendo" tira o item dos
+               próximos links dele. -->
+          <div class="cotacao-recusa-opcoes">
+            <button type="button" class="cotacao-em-falta${item.emFalta ? ' marcado' : ''}" data-em-falta-id="${item.insumoId}" aria-pressed="${item.emFalta ? 'true' : 'false'}"
+                    title="Você vende, mas está sem agora. Continua recebendo este item nas próximas cotações.">
+              Em falta agora
+            </button>
+            <button type="button" class="cotacao-nao-vende${item.naoVende ? ' marcado' : ''}" data-nao-vende-id="${item.insumoId}" aria-pressed="${item.naoVende ? 'true' : 'false'}"
+                    title="Você não trabalha com este item. Ele não aparece mais nas suas próximas cotações.">
+              Não vendo este item
+            </button>
+          </div>
         </td>
       </tr>
     `;
@@ -8988,6 +9021,26 @@ async function inicializarPreencherCotacao() {
 
     // Era um quadradinho no fim da linha — o pior alvo possível no celular —
     // e o efeito dele (apagar o preço digitado) só aparecia depois (QA 22/09).
+    // Os dois botões da linha se excluem: marcar um solta o outro.
+    container.querySelectorAll('[data-em-falta-id]').forEach((botao) => {
+      botao.addEventListener('click', () => {
+        const id = botao.dataset.emFaltaId;
+        const input = container.querySelector(`[data-insumo-id="${id}"]`);
+        const marcando = botao.getAttribute('aria-pressed') !== 'true';
+        if (marcando && input.value.trim() !== ''
+          && !confirm(`Marcar "${botao.closest('tr').querySelector('.cotacao-td-nome').textContent.trim()}" como "em falta" apaga o preço que você digitou. Confirma?`)) return;
+        botao.setAttribute('aria-pressed', marcando ? 'true' : 'false');
+        botao.classList.toggle('marcado', marcando);
+        const outro = botao.closest('tr').querySelector('[data-nao-vende-id]');
+        if (marcando && outro) {
+          outro.setAttribute('aria-pressed', 'false');
+          outro.classList.remove('marcado');
+        }
+        input.disabled = marcando;
+        if (marcando) input.value = '';
+      });
+    });
+
     container.querySelectorAll('[data-nao-vende-id]').forEach((botao) => {
       botao.addEventListener('click', () => {
         const input = container.querySelector(`[data-insumo-id="${botao.dataset.naoVendeId}"]`);
@@ -8996,7 +9049,11 @@ async function inicializarPreencherCotacao() {
           && !confirm(`Marcar "${botao.closest('tr').querySelector('.cotacao-td-nome').textContent.trim()}" como "não vendo" apaga o preço que você digitou. Confirma?`)) return;
         botao.setAttribute('aria-pressed', marcando ? 'true' : 'false');
         botao.classList.toggle('marcado', marcando);
-        botao.textContent = marcando ? 'Não vendo este' : 'Não vendo este item';
+        const outro = botao.closest('tr').querySelector('[data-em-falta-id]');
+        if (marcando && outro) {
+          outro.setAttribute('aria-pressed', 'false');
+          outro.classList.remove('marcado');
+        }
         input.disabled = marcando;
         if (marcando) input.value = '';
         atualizarProgressoCotacao();
@@ -9071,14 +9128,17 @@ async function inicializarPreencherCotacao() {
       const naoVende = [...container.querySelectorAll('[data-nao-vende-id]')]
         .filter((botao) => botao.getAttribute('aria-pressed') === 'true')
         .map((botao) => botao.dataset.naoVendeId);
+      const emFalta = [...container.querySelectorAll('[data-em-falta-id]')]
+        .filter((botao) => botao.getAttribute('aria-pressed') === 'true')
+        .map((botao) => botao.dataset.emFaltaId);
       const semResposta = [...container.querySelectorAll('[data-insumo-id]')]
         .filter((input) => !input.disabled && input.value === '').length;
-      if (!Object.keys(precos).length && !naoVende.length) {
-        alert('Preencha o preço de pelo menos um item, ou marque os que você não vende.');
+      if (!Object.keys(precos).length && !naoVende.length && !emFalta.length) {
+        alert('Preencha o preço de pelo menos um item, ou marque os que você não vende / está em falta.');
         return;
       }
-      if (semResposta && !confirm(`${semResposta === 1 ? 'Ficou 1 item' : `Ficaram ${semResposta} itens`} sem preço e sem marcar "não vendo esse item". Enviar assim mesmo?`)) return;
-      if (!Object.keys(precos).length && !confirm('Você marcou todos os itens como "não vendo esse item". Enviar assim?')) return;
+      if (semResposta && !confirm(`${semResposta === 1 ? 'Ficou 1 item' : `Ficaram ${semResposta} itens`} sem preço e sem marcar "em falta" ou "não vendo". Enviar assim mesmo?`)) return;
+      if (!Object.keys(precos).length && !confirm('Você não mandou preço de nenhum item. Enviar assim?')) return;
       if (!confirm('Após fechar, não vai dar pra alterar os preços. Tem certeza?')) return;
       // Sem "enviando…", e o erro de rede virava alerta com texto cru
       // (QA 22/09).
@@ -9092,7 +9152,7 @@ async function inicializarPreencherCotacao() {
         const resp = await fetch(`/api/cotacoes/convite/${encodeURIComponent(token)}/responder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ precos, naoVende }),
+          body: JSON.stringify({ precos, naoVende, emFalta }),
         });
         const respDados = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(respDados.erro || await _erroDaResposta(resp));
