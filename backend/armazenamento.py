@@ -769,6 +769,21 @@ def inicializar_banco():
             "VALUES ('Hamburgueria Artesanos', '2026-09-08', ?, 'Etapa 0 do motor de compra')",
             (datetime.now().isoformat(),),
         )
+        # Quantos dias cada insight da Home já apareceu (28/09). Eles são
+        # calculados em janelas de 30 dias, então o mesmo aviso grudava na
+        # tela por semanas; contando as aparições dá pra empurrar pra baixo
+        # o que ela já leu e deixar na frente o que é novo.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS insight_home_visto (
+                chave TEXT PRIMARY KEY,
+                primeiro_dia TEXT NOT NULL,
+                ultimo_dia TEXT NOT NULL,
+                dias INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
+
         # A que horas o dia vira pra cada loja (25/09). Artesanos e Tradiças
         # ficam abertas até 2h ou 4h, e essas vendas caíam no dia seguinte:
         # a sexta aparecia curta e o sábado inflado. Antes da hora de virada,
@@ -2812,6 +2827,37 @@ SQL_INSUMOS_CONSUMIDOS = f"""
     ) r ON r.item_id = v.item_id AND r.loja = v.unidade
     WHERE r.quantidade IS NOT NULL AND (r.so_pra_viagem = 0 OR v.pra_viagem = 1)
 """
+
+
+def insights_home_ja_vistos():
+    """{chave: dias} — em quantos dias diferentes cada insight já apareceu
+    na Home. Usado pra pôr na frente o que ela ainda não leu."""
+    with conexao() as conn:
+        return {
+            linha["chave"]: linha["dias"]
+            for linha in conn.execute("SELECT chave, dias FROM insight_home_visto")
+        }
+
+
+def registrar_insights_home(chaves, dia_iso):
+    """Marca que estes insights apareceram hoje. Conta DIAS, não chamadas: a
+    Home recarrega sozinha e é aberta por várias pessoas, então só o
+    primeiro registro do dia conta."""
+    if not chaves:
+        return
+    with conexao() as conn:
+        for chave in chaves:
+            atualizadas = conn.execute(
+                "UPDATE insight_home_visto SET dias = dias + 1, ultimo_dia = ? "
+                "WHERE chave = ? AND ultimo_dia <> ?",
+                (dia_iso, chave, dia_iso),
+            ).rowcount
+            if not atualizadas:
+                conn.execute(
+                    "INSERT OR IGNORE INTO insight_home_visto (chave, primeiro_dia, ultimo_dia, dias) "
+                    "VALUES (?, ?, ?, 1)",
+                    (chave, dia_iso, dia_iso),
+                )
 
 
 VIRADA_PADRAO = "00:00"

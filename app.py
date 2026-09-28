@@ -262,6 +262,8 @@ from backend.armazenamento import (
     listar_recusas_cotacao,
     horas_virada_das_lojas,
     definir_hora_virada,
+    insights_home_ja_vistos,
+    registrar_insights_home,
     VIRADA_PADRAO,
     insumos_que_o_fornecedor_nao_vende,
     voltar_a_pedir_preco,
@@ -1714,6 +1716,23 @@ def _sincronizacao_em_dia(ultimo_dia_iso, hoje):
     return ultimo_dia_iso >= minimo.isoformat()
 
 
+def _ordem_do_insight(par, vistos, hoje):
+    """Onde cada insight entra na fila da Home.
+
+    Eles são calculados em janelas de 30 dias, então o mesmo aviso grudava
+    na tela por semanas. Quem já foi lido em vários dias cede a vez pro que
+    é novo — menos o alerta perigoso (prioridade 0), que tem que insistir
+    até o preço ser reajustado."""
+    prioridade, insight = par
+    cedidos = 0 if prioridade == 0 else min(vistos.get(insight["chave"], 0), 3)
+    # Empate: gira com o dia, senão o primeiro da lista é sempre o mesmo.
+    # XOR, não soma: somar o dia desloca todas as chaves igual e a ordem
+    # entre elas não muda. Soma dos bytes em vez de hash(), que muda a cada
+    # processo e daria uma ordem diferente em cada worker no mesmo dia.
+    giro = (sum(insight["chave"].encode()) ^ (hoje.toordinal() % 64)) % 97
+    return (prioridade + cedidos, giro)
+
+
 def _analise_da_home(lojas):
     hoje = date.today()
     chave = (tuple(lojas), hoje.isoformat())
@@ -1781,6 +1800,7 @@ def _analise_da_home(lojas):
             continue
         insights.append((0 if alerta["perigoso"] else 3, {
             "tipo": "custo",
+            "chave": f"custo|{alerta['insumo']}|{alerta['produto']}|{alerta['loja']}",
             "texto": (
                 f"{alerta['insumo']} subiu {_num_br(alerta['variacaoPct'])}% e tirou "
                 f"{_num_br(alerta['pontosDeMargem'])} {_plural(alerta['pontosDeMargem'], 'ponto', 'pontos')} "
@@ -1800,6 +1820,7 @@ def _analise_da_home(lojas):
         for item in entraram[:2]:
             insights.append((1, {
                 "tipo": "curva",
+                "chave": f"curva-entrou|{item['nome']}|{loja}",
                 "texto": (
                     f"O item “{item['nome']}” subiu para a Curva A na {_curto(loja)}. "
                     "Avalie reajuste de preço para proteger sua margem."
@@ -1815,6 +1836,7 @@ def _analise_da_home(lojas):
                 continue
             insights.append((4, {
                 "tipo": "curva",
+                "chave": f"curva-saiu|{nome}|{loja}",
                 "texto": (
                     f"O item “{nome}” saiu da Curva A na {_curto(loja)}: vendeu {queda}% menos "
                     "que nos 30 dias anteriores."
@@ -1836,10 +1858,12 @@ def _analise_da_home(lojas):
             variacao = (valor_ontem - media) / media * 100 if media > 0 else 0
             if abs(variacao) >= VARIACAO_FATURAMENTO_INSIGHT_PCT:
                 maiores.append((abs(variacao), loja, variacao, len(anteriores)))
-        if maiores:
-            _, loja, variacao, semanas = max(maiores)
+        # Até duas lojas: é o único insight que muda sozinho todo dia, então
+        # é de onde vem a variedade quando o resto está parado (28/09).
+        for _, loja, variacao, semanas in sorted(maiores, reverse=True)[:2]:
             insights.append((2, {
                 "tipo": "vendas",
+                "chave": f"vendas|{loja}|{ontem.isoformat()}",
                 "texto": (
                     f"Ontem a loja {_curto(loja)} faturou {abs(round(variacao))}% "
                     f"{'abaixo' if variacao < 0 else 'acima'} da média das últimas {semanas} "
@@ -1847,19 +1871,27 @@ def _analise_da_home(lojas):
                 ),
                 "link": "insight.html",
             }))
-    insights.sort(key=lambda par: par[0])
+    # "Os que têm algo a dizer hoje" (escolha dela, 25/09). Os insights são
+    # calculados em janelas de 30 dias, então o mesmo aviso grudava na tela
+    # por semanas: quem já foi lido em vários dias cede a vez pro que é
+    # novo. O alerta perigoso (prioridade 0) não cede — ele tem que insistir
+    # até o preço ser reajustado.
+    hoje_iso = hoje.isoformat()
+    vistos = insights_home_ja_vistos()
+    insights.sort(key=lambda par: _ordem_do_insight(par, vistos, hoje))
+    escolhidos = [par[1] for par in insights[:4]]
+    registrar_insights_home([i["chave"] for i in escolhidos], hoje_iso)
 
     resultado = {
         "saudeFinanceira": saude,
         "curvaA": curva_a,
         "custosEmAlta": alertas[:3],
-        "insights": [par[1] for par in insights[:4]],
+        "insights": escolhidos,
     }
     # Guardava UMA entrada só: com admin (4 lojas) e gerente (1 loja) na Home
     # ao mesmo tempo, um expulsava o outro e a Curva ABC de 3 janelas × 4
     # lojas era refeita a cada chamada (QA 22/09). Agora cabem alguns
     # escopos, e o que é de outro dia (ou mais velho) sai primeiro.
-    hoje_iso = hoje.isoformat()
     for chave_velha in [c for c in _cache_analise_home if c[1] != hoje_iso]:
         _cache_analise_home.pop(chave_velha, None)
     while len(_cache_analise_home) >= MAXIMO_CACHE_ANALISE_HOME:
