@@ -261,6 +261,9 @@ from backend.armazenamento import (
     responder_convite_cotacao,
     listar_recusas_cotacao,
     ultima_contagem_aprovada_por_loja,
+    alertas_ja_lidos,
+    marcar_alertas_como_lidos,
+    esquecer_alertas_resolvidos,
     horas_virada_das_lojas,
     definir_hora_virada,
     insights_home_ja_vistos,
@@ -2012,6 +2015,7 @@ def api_alertas():
                 continue
             alertas.append({
                 "tipo": "preco",
+                "chave": f"preco|{alerta['insumo']}|{alerta['produto']}|{alerta['loja']}",
                 "titulo": alerta["insumo"],
                 "detalhe": f"em “{alerta['produto']}” · {_curto(alerta['loja'])}",
                 "destaque": f"+{_num_br(alerta['variacaoPct'])}%",
@@ -2033,6 +2037,7 @@ def api_alertas():
             continue
         alertas.append({
             "tipo": "estoque",
+            "chave": f"contagem|{loja}",
             "titulo": f"{_curto(loja)} sem contagem",
             "detalhe": (f"Última há {dias} dias — o saldo de estoque dela não vale até contar"
                         if dias is not None else
@@ -2066,6 +2071,7 @@ def api_alertas():
                        f"{_num_br(linha['estoque_minimo'])} {unidade} · {_curto(linha['loja'])}")
         alertas.append({
             "tipo": "estoque",
+            "chave": f"estoque|{linha['insumo_id']}|{linha['loja']}",
             "titulo": linha["nome"],
             "detalhe": detalhe,
             "destaque": None,
@@ -2073,12 +2079,41 @@ def api_alertas():
             "link": "estoque.html",
         })
 
-    total = len(alertas) + max(0, len(baixos) - MAXIMO_ALERTAS_LISTADOS)
+    # A marca de "lido" vale enquanto o alerta durar: o que saiu da lista
+    # perde a marca, pra o mesmo aviso poder acender de novo mais pra
+    # frente (28/09).
+    usuario_id = (_usuario_logado() or {}).get('id')
+    lidas = set()
+    if usuario_id:
+        esquecer_alertas_resolvidos(usuario_id, [a["chave"] for a in alertas])
+        lidas = alertas_ja_lidos(usuario_id)
+    for alerta in alertas:
+        alerta["lido"] = alerta["chave"] in lidas
+
+    nao_lidos = sum(1 for a in alertas if not a["lido"])
     return jsonify({
-        "total": total,
+        # O badge conta só o que ela ainda não leu; a lista mostra tudo,
+        # com o lido apagado.
+        "total": nao_lidos + max(0, len(baixos) - MAXIMO_ALERTAS_LISTADOS),
         "mostrando": len(alertas),
         "alertas": alertas,
     })
+
+
+@app.route('/api/alertas/lidos', methods=['POST'])
+def api_marcar_alertas_lidos():
+    """"Marcar como lido" do sininho: cala os alertas que estão na tela
+    agora. Por pessoa — ela usa celular e computador, e ler num tem que
+    calar o badge no outro."""
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+    usuario_id = (_usuario_logado() or {}).get('id')
+    if not usuario_id:
+        return jsonify({"erro": "Não autenticado."}), 401
+    dados = request.get_json(silent=True) or {}
+    chaves = [str(c) for c in (dados.get('chaves') or []) if c]
+    return jsonify({"ok": True, "lidos": marcar_alertas_como_lidos(usuario_id, chaves)})
 
 
 @app.route('/api/home/gestao', methods=['GET'])

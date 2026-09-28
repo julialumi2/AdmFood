@@ -1046,6 +1046,8 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
 // /api/alertas — que não calcula nada novo, só junta o que a Home e os
 // cartões de Insumos já calculam.
 const ICONE_ALERTA = { preco: 'triangle-alert', estoque: 'package' };
+// O que está no popover agora — o "Marcar como lido" cala exatamente isso.
+let alertasNaTela = [];
 
 function montarSininhoDeAlertas() {
   const direita = document.querySelector('.header-right');
@@ -1065,6 +1067,7 @@ function montarSininhoDeAlertas() {
         <div class="alertas-cabecalho">
           <span class="alertas-titulo">Alertas</span>
           <span class="alertas-contagem" id="alertas-contagem"></span>
+          <button type="button" class="alertas-marcar" id="btn-alertas-lidos" hidden>Marcar como lido</button>
         </div>
         <div class="alertas-lista" id="alertas-lista">
           <p class="alertas-vazio">Carregando…</p>
@@ -1098,6 +1101,33 @@ function montarSininhoDeAlertas() {
     if (evento.key === 'Escape') fechar();
   });
 
+  // "Marcar como lido" (pedido dela, 28/09): cala o que está na tela agora.
+  // Por pessoa, não por aparelho — ler no celular cala o computador também.
+  // E a marca dura enquanto o alerta durar: insumo reposto perde a marca e
+  // volta a avisar se cair de novo.
+  document.getElementById('btn-alertas-lidos').addEventListener('click', async (evento) => {
+    const botao = evento.currentTarget;
+    const chaves = alertasNaTela.map((a) => a.chave).filter(Boolean);
+    if (!chaves.length) return;
+    botao.disabled = true;
+    try {
+      const resposta = await fetch('/api/alertas/lidos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chaves }),
+      });
+      if (!resposta.ok) {
+        const erro = await resposta.json().catch(() => ({}));
+        throw new Error(erro.erro || 'Não foi possível marcar como lido.');
+      }
+      await carregarAlertas();
+    } catch (erro) {
+      alert(erro.message);
+    } finally {
+      botao.disabled = false;
+    }
+  });
+
   carregarAlertas();
 }
 
@@ -1120,12 +1150,15 @@ async function carregarAlertas() {
     return;
   }
 
+  alertasNaTela = dados.alertas || [];
   const total = dados.total || 0;
   badge.textContent = total > 99 ? '99+' : total;
   badge.hidden = total === 0;
   contagem.textContent = total
     ? `${total} ${total === 1 ? 'ativo' : 'ativos'}`
-    : '';
+    : (alertasNaTela.length ? 'tudo lido' : '');
+  // Só faz sentido oferecer quando tem algo não lido pra calar.
+  document.getElementById('btn-alertas-lidos').hidden = total === 0;
 
   if (!dados.alertas.length) {
     lista.innerHTML = '<p class="alertas-vazio">Nada pedindo atenção agora. 🎉</p>';
@@ -1134,7 +1167,7 @@ async function carregarAlertas() {
 
   const escondidos = total - (dados.mostrando || dados.alertas.length);
   lista.innerHTML = dados.alertas.map((a) => `
-    <a class="alerta-item${a.grave ? ' grave' : ''}" href="${escaparHtml(a.link)}">
+    <a class="alerta-item${a.grave ? ' grave' : ''}${a.lido ? ' lido' : ''}" href="${escaparHtml(a.link)}">
       <span class="alerta-icone alerta-icone-${escaparHtml(a.tipo)}">
         <i data-lucide="${ICONE_ALERTA[a.tipo] || 'circle-alert'}"></i>
       </span>

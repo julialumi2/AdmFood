@@ -769,6 +769,20 @@ def inicializar_banco():
             "VALUES ('Hamburgueria Artesanos', '2026-09-08', ?, 'Etapa 0 do motor de compra')",
             (datetime.now().isoformat(),),
         )
+        # Alerta do sininho que a pessoa já marcou como lido (28/09). Por
+        # pessoa, não por aparelho: ela usa celular e computador, e ler num
+        # tem que calar o badge no outro.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS alerta_lido (
+                usuario_id INTEGER NOT NULL,
+                chave TEXT NOT NULL,
+                quando TEXT NOT NULL,
+                PRIMARY KEY (usuario_id, chave)
+            )
+            """
+        )
+
         # Quantos dias cada insight da Home já apareceu (28/09). Eles são
         # calculados em janelas de 30 dias, então o mesmo aviso grudava na
         # tela por semanas; contando as aparições dá pra empurrar pra baixo
@@ -2839,6 +2853,45 @@ SQL_INSUMOS_CONSUMIDOS = f"""
     ) r ON r.item_id = v.item_id AND r.loja = v.unidade
     WHERE r.quantidade IS NOT NULL AND (r.so_pra_viagem = 0 OR v.pra_viagem = 1)
 """
+
+
+def alertas_ja_lidos(usuario_id):
+    """As chaves de alerta que essa pessoa já marcou como lidas."""
+    with conexao() as conn:
+        return {
+            linha["chave"]
+            for linha in conn.execute("SELECT chave FROM alerta_lido WHERE usuario_id = ?", (usuario_id,))
+        }
+
+
+def marcar_alertas_como_lidos(usuario_id, chaves):
+    """Cala esses alertas pra essa pessoa. Chamar de novo com uma chave que
+    já está lá não muda nada."""
+    if not chaves:
+        return 0
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO alerta_lido (usuario_id, chave, quando) VALUES (?, ?, ?)",
+            [(usuario_id, chave, agora) for chave in chaves],
+        )
+    return len(chaves)
+
+
+def esquecer_alertas_resolvidos(usuario_id, chaves_ativas):
+    """Apaga a marca de lido dos alertas que não existem mais.
+
+    Sem isso, marcar "Queijo abaixo do mínimo" como lido calaria esse aviso
+    pra sempre: o insumo é reposto, cai de novo semanas depois, e a chave
+    continua na lista de lidos. A marca vale enquanto o problema durar."""
+    with conexao() as conn:
+        if not chaves_ativas:
+            return conn.execute("DELETE FROM alerta_lido WHERE usuario_id = ?", (usuario_id,)).rowcount
+        marcadores = ",".join("?" * len(chaves_ativas))
+        return conn.execute(
+            f"DELETE FROM alerta_lido WHERE usuario_id = ? AND chave NOT IN ({marcadores})",
+            (usuario_id, *chaves_ativas),
+        ).rowcount
 
 
 def insights_home_ja_vistos():
