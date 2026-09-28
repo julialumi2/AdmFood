@@ -7999,6 +7999,21 @@ def criar_contagem(loja, descricao, prazo_validade, categorias=None):
         return {"id": contagem_id, "token": token}
 
 
+def ultima_contagem_aprovada_por_loja():
+    """{loja: dia da última contagem aprovada} — o que diz se dá pra confiar
+    no saldo de estoque daquela loja. Com a baixa automática ligada, o
+    número só desce entre uma contagem e outra; sem nenhuma, ele não está
+    ancorado em nada (28/09)."""
+    with conexao() as conn:
+        return {
+            linha["loja"]: linha["quando"]
+            for linha in conn.execute(
+                "SELECT loja, MAX(COALESCE(aprovada_em, criado_em)) AS quando "
+                "FROM contagem WHERE status = 'aprovada' GROUP BY loja"
+            )
+        }
+
+
 def listar_contagens():
     with conexao() as conn:
         linhas = conn.execute(

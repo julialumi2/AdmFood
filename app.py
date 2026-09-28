@@ -260,6 +260,7 @@ from backend.armazenamento import (
     marcar_bootstrap_aplicado,
     responder_convite_cotacao,
     listar_recusas_cotacao,
+    ultima_contagem_aprovada_por_loja,
     horas_virada_das_lojas,
     definir_hora_virada,
     insights_home_ja_vistos,
@@ -1982,6 +1983,12 @@ def _atividades_do_dia(lojas, usuario):
 # cadastro de hoje, "abaixo do mínimo" sozinho passa de 200.
 MAXIMO_ALERTAS_LISTADOS = 10
 
+# Depois de quantos dias sem contagem o saldo de estoque da loja deixa de
+# valer como alerta. Com a baixa automática ligada o número só desce entre
+# uma contagem e outra; passado esse prazo, o alerta certo é "essa loja
+# precisa contar", não 41 insumos abaixo do mínimo (28/09).
+DIAS_SEM_CONTAGEM_PRA_AVISAR = 21
+
 
 @app.route('/api/alertas', methods=['GET'])
 def api_alertas():
@@ -2012,11 +2019,38 @@ def api_alertas():
                 "link": "precos.html",
             })
 
-    # Mesma regra dos cartões de Insumos: zerado, ou abaixo do mínimo quando
-    # a loja cadastrou um mínimo. Mistura não conta (ela nasce de receita).
+    # Loja sem contagem recente: o saldo dela não está ancorado em nada, e
+    # listar insumo por insumo seria repetir 41 vezes o mesmo problema. Vira
+    # um alerta só, que é o que realmente precisa ser feito.
+    hoje = date.today()
+    ultimas = ultima_contagem_aprovada_por_loja()
+    confiaveis = set()
+    for loja in lojas:
+        quando = (ultimas.get(loja) or "")[:10]
+        dias = (hoje - date.fromisoformat(quando)).days if quando else None
+        if dias is not None and dias <= DIAS_SEM_CONTAGEM_PRA_AVISAR:
+            confiaveis.add(loja)
+            continue
+        alertas.append({
+            "tipo": "estoque",
+            "titulo": f"{_curto(loja)} sem contagem",
+            "detalhe": (f"Última há {dias} dias — o saldo de estoque dela não vale até contar"
+                        if dias is not None else
+                        "Nunca teve contagem aprovada — o saldo de estoque dela não vale"),
+            "destaque": None,
+            "grave": True,
+            "link": "contagens.html",
+        })
+
+    # Mesma regra dos cartões de Insumos, com duas travas a mais (28/09): só
+    # loja com contagem recente, e só insumo com mínimo cadastrado — sem
+    # mínimo, "abaixo do mínimo" não quer dizer nada. Mistura não conta
+    # (ela nasce de receita).
     baixos = []
     for linha in listar_insumos():
-        if linha["loja"] not in lojas or linha["eh_mistura"] or not linha["aplica"]:
+        if linha["loja"] not in confiaveis or linha["eh_mistura"] or not linha["aplica"]:
+            continue
+        if not linha["estoque_minimo"] or linha["estoque_minimo"] <= 0:
             continue
         if _status_estoque(linha["quantidade_atual"], linha["estoque_minimo"]) != "critico":
             continue
