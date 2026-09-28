@@ -2314,6 +2314,11 @@ def buscar_preco_cardapio_por_id(item_id):
         return dict(linha) if linha else None
 
 
+# As colunas de preco_cardapio que são preço de canal — o resto (a foto)
+# não entra no histórico de preço.
+CANAIS_PRECO_CARDAPIO = ("ifood", "food99", "beefood", "cardapio_web")
+
+
 def atualizar_preco_cardapio(item_id, campos, quem=None):
     """Grava os preços e guarda o que estava lá antes. Sem o histórico, um
     preço apagado ou digitado errado não tinha como ser conferido depois
@@ -2326,11 +2331,18 @@ def atualizar_preco_cardapio(item_id, campos, quem=None):
     with conexao() as conn:
         travar_para_escrita(conn)
         anterior = conn.execute(
-            "SELECT ifood, food99, beefood, cardapio_web FROM preco_cardapio WHERE id = ?",
-            (item_id,),
+            "SELECT * FROM preco_cardapio WHERE id = ?", (item_id,)
         ).fetchone()
         conn.execute(f"UPDATE preco_cardapio SET {colunas} WHERE id = ?", valores)
         for coluna, novo in campos.items():
+            # Histórico é de PREÇO. A foto passa por aqui (a rota de upload
+            # grava foto_arquivo com esta mesma função) e estourava:
+            # a consulta de antes só trazia os quatro canais, e ler
+            # anterior["foto_arquivo"] dava IndexError — subir foto morria
+            # com 500 desde 23/09, com "Não foi possível subir a foto" na
+            # tela e nada dizendo o porquê.
+            if coluna not in CANAIS_PRECO_CARDAPIO:
+                continue
             velho = anterior[coluna] if anterior is not None else None
             if velho == novo:
                 continue

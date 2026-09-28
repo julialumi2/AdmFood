@@ -15176,8 +15176,14 @@ function _wireReceitaCardsEventos(conteudoEl) {
         const formData = new FormData();
         formData.append('foto', arquivo);
         const resposta = await fetch(`/api/precos-cardapio/${precoCardapioId}/foto`, { method: 'POST', body: formData });
+        // O motivo vinha do servidor ("Formato inválido...", "passou de 25
+        // MB") e era jogado fora: qualquer falha virava o mesmo "tenta de
+        // novo", e não dava pra saber o que estava errado (28/09).
+        if (!resposta.ok) {
+          const erroDoServidor = await resposta.json().catch(() => ({}));
+          throw new Error(erroDoServidor.erro || `O servidor recusou a foto (erro ${resposta.status}).`);
+        }
         const dados = await resposta.json();
-        if (!resposta.ok) throw new Error(dados.erro || 'falha ao subir foto');
 
         const fotoContainer = card.querySelector('.cardapio-card-foto');
         fotoContainer.querySelector('img, .cardapio-foto-vazia')?.remove();
@@ -15187,7 +15193,7 @@ function _wireReceitaCardsEventos(conteudoEl) {
         if (produto) produto.fotoUrl = dados.fotoUrl;
       } catch (erro) {
         console.error('Falha ao subir foto do cardápio:', erro);
-        alert('Não foi possível subir a foto. Tenta de novo.');
+        alert(erro.message || 'Não foi possível subir a foto. Tenta de novo.');
       }
     }
   });
