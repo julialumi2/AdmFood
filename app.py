@@ -6313,11 +6313,11 @@ _SINCRONIZACAO_MANUAL = {"rodando": False, "desde": None, "dia": None, "ultima":
 _TRAVA_SINCRONIZACAO_MANUAL = threading.Lock()
 
 
-def _sincronizar_lojas_em_segundo_plano(dia_alvo):
+def _sincronizar_lojas_em_segundo_plano(dia_alvo, unidades=None):
     erro = None
     try:
         # Mesmo caminho da sincronização automática.
-        sincronizar_dia(dia_alvo)
+        sincronizar_dia(dia_alvo, unidades)
     except Exception as falha:  # noqa: BLE001 — o resultado precisa chegar na tela
         erro = str(falha)
         import traceback
@@ -6459,6 +6459,16 @@ def api_sincronizar_agora():
     # sincronizar.py): o `forcar=1` de antes, pra feriado aberto, não é mais
     # preciso.
 
+    # Sem ?unidade=, as quatro lojas (o botão da tela). Com, só ela — pra
+    # consertar o histórico de uma loja sem recalcular o das outras, que
+    # com a virada de dia ligada mudaria número de dia antigo (28/09).
+    unidade = request.args.get('unidade')
+    if unidade:
+        unidade = _loja_no_escopo(unidade.strip())
+        if unidade not in LOJAS:
+            return jsonify({"erro": "Loja inválida."}), 400
+    unidades = [unidade] if unidade else None
+
     # Roda em segundo plano e responde na hora — sincronizar as 4 lojas pedido
     # por pedido pode passar do tempo que o proxy/gateway de produção espera
     # por uma resposta, derrubando a conexão no meio do processo (e deixando
@@ -6474,12 +6484,15 @@ def api_sincronizar_agora():
             }), 409
         _SINCRONIZACAO_MANUAL.update(rodando=True, desde=datetime.now().isoformat(), dia=dia_alvo.isoformat())
 
-    threading.Thread(target=_sincronizar_lojas_em_segundo_plano, args=(dia_alvo,), daemon=True).start()
+    threading.Thread(
+        target=_sincronizar_lojas_em_segundo_plano, args=(dia_alvo, unidades), daemon=True
+    ).start()
 
     return jsonify({
         "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
         "fechado": False,
         "iniciado": True,
+        "unidades": unidades,
     })
 
 

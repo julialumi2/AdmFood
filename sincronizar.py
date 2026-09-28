@@ -38,12 +38,16 @@ from backend.armazenamento import (
 # venda nenhuma fica marcado como fechado.
 
 
-def sincronizar_dia(dia: date):
+def sincronizar_dia(dia: date, unidades=None):
+    """`unidades`: só essas lojas, em vez das quatro — pra consertar o
+    histórico de uma sem recalcular o das outras (28/09)."""
     dia_iso = dia.isoformat()
     # Cada loja tem a sua hora de virada: no Artesanos e nas Tradiças o dia
     # vai até de madrugada, e essas vendas caíam no dia seguinte (25/09).
     viradas = horas_virada_das_lojas()
     for nome_unidade, config_loja in LOJAS.items():
+        if unidades and nome_unidade not in unidades:
+            continue
         token = config_loja.get("cardapio_web_token")
         if not token:
             print(f"⚠️  {nome_unidade}: token não configurado, pulando.")
