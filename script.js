@@ -15004,6 +15004,64 @@ function _receitaInsumoLinhaHTML(ins) {
   `;
 }
 
+// --- VARIAÇÕES DE TAMANHO (briefing dela, 28/09) ---------------------------
+// O Açaí cadastra cada sabor duas vezes, uma por tamanho ("NaLata Paçoca
+// 330ml" e "NaLata Paçoca 500ml"), e a lista mostrava as duas — 14 sabores
+// viravam 28 linhas. Aqui elas viram uma linha só, com os tamanhos como
+// etiqueta; o detalhe é que troca de tamanho.
+const _TAMANHO_NO_PRODUTO = /\b(\d+\s*ml)\b/i;
+
+// O nome sem o tamanho é a chave do grupo: "NaLata Paçoca 330ml" e
+// "NaLata Paçoca 500ml" caem os dois em "nalata paçoca". Produto sem
+// tamanho no nome é grupo de um só e continua exatamente como era.
+function _saborDoProduto(nome) {
+  return (nome || '').replace(_TAMANHO_NO_PRODUTO, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function _tamanhoDoProduto(nome) {
+  const achou = (nome || '').match(_TAMANHO_NO_PRODUTO);
+  return achou ? achou[1].replace(/\s+/g, '').toLowerCase() : null;
+}
+
+// Menor preço do produto entre os canais em que ele é vendido. Preço 0 é
+// "não vendo nesse canal" (ver _formatarPrecoCardapio), então fica de fora.
+function _menorPrecoProduto(p, canais) {
+  const valores = canais.map((c) => p[c.chave]).filter((v) => typeof v === 'number' && v > 0);
+  return valores.length ? Math.min(...valores) : null;
+}
+
+// [{sabor, produtos: [...], tamanhos: [...]}] na ordem em que os produtos
+// vieram — quem não tem variação fica com um produto só na lista.
+function _agruparPorSabor(produtos) {
+  const grupos = new Map();
+  for (const p of produtos) {
+    const sabor = _saborDoProduto(p.nome);
+    const chave = _normalizarNomeInsumo(sabor);
+    if (!grupos.has(chave)) grupos.set(chave, { sabor, produtos: [] });
+    grupos.get(chave).produtos.push(p);
+  }
+  return [...grupos.values()].map((g) => ({
+    ...g,
+    // Do menor copo pro maior, não na ordem do cadastro.
+    produtos: g.produtos.length > 1
+      ? [...g.produtos].sort((a, b) => (parseInt(_tamanhoDoProduto(a.nome), 10) || 0) - (parseInt(_tamanhoDoProduto(b.nome), 10) || 0))
+      : g.produtos,
+  })).map((g) => ({
+    ...g,
+    tamanhos: g.produtos.map((p) => _tamanhoDoProduto(p.nome)).filter(Boolean),
+  }));
+}
+
+// Os outros tamanhos do mesmo sabor, pras abas do painel de detalhe.
+function _tamanhosDoMesmoSabor(produto) {
+  const sabor = _normalizarNomeInsumo(_saborDoProduto(produto.nome));
+  const irmaos = fichaTecnicaProdutos.filter(
+    (p) => _normalizarNomeInsumo(_saborDoProduto(p.nome)) === sabor && _tamanhoDoProduto(p.nome),
+  );
+  if (irmaos.length < 2) return [];
+  return irmaos.sort((a, b) => (parseInt(_tamanhoDoProduto(a.nome), 10) || 0) - (parseInt(_tamanhoDoProduto(b.nome), 10) || 0));
+}
+
 // Cartão de produto no visual de Preços — foto + nome + preço por canal,
 // só leitura, sem lápis/lixeira à vista. O cartão inteiro é clicável: abre
 // o modal de detalhe (abrirModalDetalheProduto) com preço por canal, custo
@@ -15039,6 +15097,43 @@ function _receitaCardHTML(p, isAdmin, canais) {
         ` : ''}
       </div>
       <div class="cardapio-card-corpo">${corpo}</div>
+    </div>
+  `;
+}
+
+// Sabor com mais de um tamanho: um cartão só, com os tamanhos como
+// etiqueta e o menor preço. O preço por canal de cada tamanho fica no
+// painel de detalhe, que é onde dá pra comparar sem poluir a lista.
+function _receitaCardAgrupadoHTML(grupo, isAdmin, canais) {
+  const primeiro = grupo.produtos[0];
+  const foto = primeiro.fotoUrl
+    ? `<img src="${primeiro.fotoUrl}" alt="${escaparHtml(grupo.sabor)}">`
+    : `<div class="cardapio-foto-vazia"><i data-lucide="image"></i></div>`;
+  const menores = grupo.produtos.map((p) => _menorPrecoProduto(p, canais)).filter((v) => v != null);
+  const aPartirDe = menores.length
+    ? `<span class="cardapio-a-partir-de">A partir de <strong>${_formatarPrecoCardapio(Math.min(...menores))}</strong></span>`
+    : '<span class="cardapio-preco-vazio">sem preço</span>';
+  const semCusto = grupo.produtos.filter((p) => _custoEmUsoProduto(p) == null).length;
+
+  return `
+    <div class="cardapio-card-linha-principal" data-acao="detalhe-produto" data-preco-cardapio-id="${primeiro.precoCardapioId}">
+      <div class="cardapio-card-foto">
+        ${foto}
+        ${isAdmin ? `
+          <button type="button" class="cardapio-btn-foto" data-acao="foto" title="Trocar foto">
+            <i data-lucide="camera"></i>
+          </button>
+          <input type="file" accept="image/*" class="cardapio-input-foto" data-acao="foto" style="display:none;">
+        ` : ''}
+      </div>
+      <div class="cardapio-card-corpo">
+        <div class="cardapio-card-topo"><div class="cardapio-card-nome">${escaparHtml(grupo.sabor)}</div></div>
+        <div class="cardapio-tamanhos">
+          ${grupo.tamanhos.map((t) => `<span class="cardapio-tamanho-tag">${escaparHtml(t)}</span>`).join('')}
+        </div>
+        ${aPartirDe}
+        ${semCusto ? `<span class="cardapio-tag-sem-custo" title="Tamanho sem ficha técnica, ou com insumo sem preço">${semCusto === grupo.produtos.length ? 'sem custo' : `${semCusto} de ${grupo.produtos.length} sem custo`}</span>` : ''}
+      </div>
     </div>
   `;
 }
@@ -15272,11 +15367,14 @@ function renderFichaTecnicaConteudo() {
 // aberto (clique no cartão), não antecipado pra todo mundo — ver
 // abrirModalDetalheProduto.
 function _renderProdutosConteudo(conteudoEl, isAdmin, produtosDaCategoria, canais) {
+  // Sabor com dois tamanhos vira um cartão só (28/09); o resto segue igual.
   conteudoEl.innerHTML = `
     <div class="cardapio-lista">
-      ${produtosDaCategoria.map(p => `
-        <div class="cardapio-card" data-id="${p.precoCardapioId}">
-          ${_receitaCardHTML(p, isAdmin, canais)}
+      ${_agruparPorSabor(produtosDaCategoria).map(g => `
+        <div class="cardapio-card" data-id="${g.produtos[0].precoCardapioId}">
+          ${g.produtos.length > 1
+            ? _receitaCardAgrupadoHTML(g, isAdmin, canais)
+            : _receitaCardHTML(g.produtos[0], isAdmin, canais)}
         </div>
       `).join('')}
     </div>
@@ -15596,6 +15694,26 @@ async function abrirModalDetalheProduto(precoCardapioId) {
   const modal = document.getElementById('modal-detalhe-produto');
   const corpo = document.getElementById('detalhe-produto-corpo');
   document.getElementById('detalhe-produto-titulo').textContent = produto.nome;
+
+  // Abas de tamanho (28/09): trocar de aba é reabrir o painel no irmão, que
+  // recarrega preço, ficha e CMV daquele tamanho — sem duplicar nada aqui.
+  const abas = document.getElementById('detalhe-produto-tamanhos');
+  const irmaos = _tamanhosDoMesmoSabor(produto);
+  abas.hidden = !irmaos.length;
+  if (irmaos.length) {
+    abas.innerHTML = irmaos.map((irmao) => {
+      const atual = irmao.precoCardapioId === produto.precoCardapioId;
+      return `<button type="button" class="detalhe-tamanho-aba${atual ? ' atual' : ''}" role="tab"
+        aria-selected="${atual ? 'true' : 'false'}" data-tamanho-id="${irmao.precoCardapioId}"
+        >${escaparHtml(_tamanhoDoProduto(irmao.nome))}</button>`;
+    }).join('');
+    abas.querySelectorAll('[data-tamanho-id]').forEach((botao) => {
+      botao.addEventListener('click', () => {
+        if (botao.classList.contains('atual')) return;
+        abrirModalDetalheProduto(botao.dataset.tamanhoId);
+      });
+    });
+  }
   corpo.innerHTML = `<p class="panel-subtitle" style="padding: var(--space-4);">Carregando...</p>`;
   modal.style.display = 'flex';
 

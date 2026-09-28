@@ -1485,3 +1485,61 @@ body.dark-mode {
 
   .detalhe-produto-btn-tirar { flex: 1 0 100%; justify-content: center; }
 }
+
+/* Abas de tamanho no topo do modal do produto (briefing dela, 28/09):
+   dá pra ir e voltar entre 330 e 500 comparando preço e ficha sem
+   fechar nada. */
+.detalhe-tamanhos {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+}
+
+.detalhe-tamanhos[hidden] { display: none; }
+
+.detalhe-tamanho-aba {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detalhe-tamanho-aba:hover { color: var(--text-dark); }
+
+.detalhe-tamanho-aba.atual {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: #fff;
+}
+
+/* Etiquetas de tamanho e "a partir de" no cartão da lista */
+.cardapio-tamanhos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 2px;
+}
+
+.cardapio-tamanho-tag {
+  padding: 1px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.cardapio-a-partir-de {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.cardapio-a-partir-de strong { color: var(--text-dark); font-size: 0.95rem; }
