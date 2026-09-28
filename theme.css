@@ -8,55 +8,42 @@
    --------------------------------------------------------------------- */
 :root {
   /* Cor de marca */
-  --primary: #DC2626;
-  --primary-hover: #B91C1C;
-  --primary-soft: rgba(220, 38, 38, 0.08);
+  --primary: #D93829;
+  --primary-hover: #B92E21;
+  --primary-soft: rgba(217, 56, 41, 0.08);
 
-  /* Neutros da família slate (28/09). Antes era zinc (#18181B, #52525B,
-     #71717A) sobre creme. Zinc puxa pro verde e slate pro azul: com os
-     dois na mesma tela o cinza fica sujo, então a família mudou inteira.
-
-     A página é o off-white #FAFAFA e a superfície é o branco puro — é a
-     diferença entre os dois que faz painel e tabela "subirem" sem
-     precisar de sombra pesada. */
-  --bg-main: #FAFAFA;
+  /* Neutros zinc com fundo quase branco (a paleta de 28/09, em slate com
+     off-white, foi desfeita a pedido dela no mesmo dia). */
+  /* Fundo do sistema, claro (pedido dela, 25/09). Era o creme #F3EBDB. */
+  --bg-main: #FFFAFA;
   --card-bg: #FFFFFF;
   --header-bg: #FFFFFF;
   --header-vidro: rgba(255, 255, 255, 0.62);
-  --header-vidro-borda: rgba(15, 23, 42, 0.08);
+  --header-vidro-borda: rgba(24, 24, 27, 0.08);
   --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --sidebar-bg: #0F172A;
-  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-bg: #18181B;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
   --sidebar-active-text: #FFFFFF;
-  --sidebar-text: #CBD5E1;
-  --sidebar-text-muted: #94A3B8;
+  --sidebar-text: #D4D4D8;
+  --sidebar-text-muted: #A1A1AA;
 
-  /* Grafite pro que se lê (título, valor, quantidade); o degrau do meio
-     pro texto de apoio; o slate neutro só pro rótulo pequeno em caixa
-     alta, que é onde 2,8:1 de contraste ainda passa por ser tipografia
-     de etiqueta, não de leitura. */
-  --text-dark: #0F172A;
-  --text-muted: #64748B;
-  --text-faint: #94A3B8;
+  --text-dark: #18181B;
+  --text-muted: #52525B;
+  --text-faint: #71717A;
 
-  /* Superfícies limpas (28/09): o fio de bege #E6DDCC pesava demais em
-     cima do branco. Agora é um cinza-ardósia translúcido — some quando
-     não precisa dele e ainda separa quando precisa. */
-  --border-color: rgba(226, 232, 240, 0.8);
-  --border-strong: #CBD5E1;
-  --surface-muted: #F8FAFC;
-  --surface-muted-border: rgba(226, 232, 240, 0.8);
+  --border-color: #E6DDCC;
+  --border-strong: #D5C9B3;
+  --surface-muted: #F7F2E8;
+  --surface-muted-border: #E6DDCC;
   --input-bg: #FFFFFF;
-  --input-border: #CBD5E1;
+  --input-border: #D5C9B3;
 
-  /* O fio entre células da faixa de indicadores. É separado de
-     --border-color porque divide por dentro, e por dentro tem que pesar
-     menos que a borda que fecha a peça. */
-  --divisoria: rgba(226, 232, 240, 0.8);
-
-  /* Cor única de ícone. Ícone é sinalização, não conteúdo: fica no cinza
-     neutro e só vira cor quando diz status (--success/--warning/--danger). */
-  --icone-neutro: #94A3B8;
+  /* O fio entre células da faixa de indicadores e a cor de ícone. Valor
+     literal, não var(--border-color): custom property com var() dentro
+     resolve no :root, então o body.dark-mode trocaria --border-color
+     depois e a faixa ficaria com o fio bege no escuro. */
+  --divisoria: #E6DDCC;
+  --icone-neutro: #71717A;
 
   /* Semânticas. A cor pura (--success...) é pra preenchimento com texto
      branco em cima; a -texto é pra escrever na cor, e clareia no modo
@@ -99,8 +86,8 @@
   --radius-pill: 999px;
 
   /* Sombras quase imperceptíveis; a forte fica pra janela e menu flutuante */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.14);
 
   --sidebar-width: 260px;
@@ -110,29 +97,27 @@
 }
 
 body.dark-mode {
-  /* Mesma família do lado escuro: o grafite #0F172A vira a superfície e a
-     página fica um degrau abaixo, senão painel e fundo encostam. */
-  --bg-main: #0B1120;
-  --card-bg: #0F172A;
-  --header-bg: #0F172A;
-  --header-vidro: rgba(15, 23, 42, 0.55);
+  --bg-main: #09090B;
+  --card-bg: #18181B;
+  --header-bg: #18181B;
+  --header-vidro: rgba(24, 24, 27, 0.55);
   --header-vidro-borda: rgba(255, 255, 255, 0.08);
   --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.45);
 
-  --text-dark: #F1F5F9;
-  --text-muted: #94A3B8;
-  --text-faint: #64748B;
+  --text-dark: #FAFAFA;
+  --text-muted: #A1A1AA;
+  --text-faint: #71717A;
 
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --surface-muted: #1E293B;
-  --surface-muted-border: rgba(255, 255, 255, 0.08);
-  --input-bg: #0F172A;
-  --input-border: rgba(255, 255, 255, 0.14);
-  --divisoria: rgba(255, 255, 255, 0.07);
-  --icone-neutro: #94A3B8;
+  --border-color: #27272A;
+  --border-strong: #3F3F46;
+  --surface-muted: #27272A;
+  --surface-muted-border: #27272A;
+  --input-bg: #18181B;
+  --input-border: #3F3F46;
+  --divisoria: #27272A;
+  --icone-neutro: #71717A;
 
-  --primary-soft: rgba(220, 38, 38, 0.16);
+  --primary-soft: rgba(217, 56, 41, 0.16);
   --success-texto: #34D399;
   --success-soft: rgba(52, 211, 153, 0.12);
   --warning-texto: #FBBF24;
@@ -141,8 +126,8 @@ body.dark-mode {
   --danger-soft: rgba(249, 112, 102, 0.12);
   --info-soft: rgba(37, 99, 235, 0.16);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
@@ -2192,7 +2177,7 @@ tr:hover { background-color: var(--surface-muted); }
   padding: 0 4px;
   border-radius: 999px;
   border: 2px solid var(--header-bg);
-  background-color: var(--text-dark);
+  background-color: #18181B;
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
