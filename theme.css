@@ -2028,3 +2028,146 @@ tr:hover { background-color: var(--surface-muted); }
     font-size: 16px;
   }
 }
+
+/* === SININHO DE ALERTAS NO CABEÇALHO (pedido dela, 28/09) ================
+   Fica no .header-right, à esquerda do modo noturno. Montado por JS (ver
+   montarSininhoDeAlertas), porque o cabeçalho é repetido nas 19 páginas. */
+.alertas-sino { position: relative; }
+
+.btn-sino {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background-color: var(--card-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-sino:hover { color: var(--text-dark); border-color: var(--text-faint); }
+.btn-sino i, .btn-sino svg { width: 17px; height: 17px; }
+
+/* Preto, como ela pediu — destaca sem competir com o vermelho da marca. */
+.sino-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 2px solid var(--header-bg);
+  background-color: #18181B;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sino-badge[hidden] { display: none; }
+
+.alertas-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 60;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.alertas-popover[hidden] { display: none; }
+
+.alertas-cabecalho {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--surface-muted-border);
+}
+
+.alertas-titulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.alertas-contagem { font-size: 0.75rem; color: var(--text-faint); }
+
+.alerta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
+  border-bottom: 1px solid var(--surface-muted-border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.alerta-item:last-child { border-bottom: 0; }
+.alerta-item:hover { background-color: var(--surface-muted); }
+
+.alerta-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.alerta-icone i, .alerta-icone svg { width: 14px; height: 14px; }
+
+.alerta-icone-preco { background-color: var(--danger-soft); color: var(--danger); }
+.alerta-icone-estoque { background-color: var(--warning-soft); color: var(--warning-texto); }
+
+.alerta-texto { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+
+.alerta-titulo {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  overflow-wrap: anywhere;
+}
+
+.alerta-detalhe { font-size: 0.72rem; color: var(--text-muted); overflow-wrap: anywhere; }
+
+.alerta-destaque {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+}
+
+.alerta-item.grave .alerta-titulo { color: var(--danger); }
+
+.alertas-vazio {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  /* Ancorado na tela, não no botão: 340px não cabem a partir da direita
+     de um botão que já está quase na borda. */
+  .alertas-popover { width: calc(100vw - 24px); right: -8px; }
+}

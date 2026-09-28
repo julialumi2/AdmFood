@@ -40,6 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // atalhos da Home que abrem um formulário já preenchido).
   window.usuarioPronto = carregarUsuarioLogado();
 
+  // 2.0 SININHO DE ALERTAS (pedido dela, 28/09) — fica no cabeçalho, do
+  // lado do modo noturno. Montado por JS no .header-right que já existe:
+  // o cabeçalho é repetido nas 19 páginas, e uma cópia em 19 lugares
+  // envelhece mal.
+  montarSininhoDeAlertas();
+
   // 2. TOGGLE MODO NOTURNO (a tela de Configurações tem 2 interruptores na
   // mesma página — cabeçalho + painel de Aparência — mantidos sincronizados)
   // No celular a barra do navegador tem cor própria: sem isso ela fica
@@ -1033,6 +1039,113 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
       },
     });
   }
+}
+
+// --- SININHO DE ALERTAS NO CABEÇALHO (28/09) -------------------------------
+// Insumo que subiu de preço e insumo abaixo do mínimo, vindos de
+// /api/alertas — que não calcula nada novo, só junta o que a Home e os
+// cartões de Insumos já calculam.
+const ICONE_ALERTA = { preco: 'triangle-alert', estoque: 'package' };
+
+function montarSininhoDeAlertas() {
+  const direita = document.querySelector('.header-right');
+  // Telas públicas (link de contagem, de cotação) não têm cabeçalho.
+  if (!direita || document.getElementById('alertas-sino')) return;
+
+  direita.insertAdjacentHTML('afterbegin', `
+    <div class="alertas-sino" id="alertas-sino">
+      <button type="button" class="btn-sino" id="btn-alertas" title="Alertas"
+              aria-haspopup="dialog" aria-expanded="false" aria-label="Alertas">
+        <i data-lucide="bell"></i>
+        <span class="sino-badge" id="alertas-badge" hidden></span>
+      </button>
+      <div class="alertas-popover" id="alertas-popover" role="dialog" aria-label="Alertas" hidden>
+        <div class="alertas-cabecalho">
+          <span class="alertas-titulo">Alertas</span>
+          <span class="alertas-contagem" id="alertas-contagem"></span>
+        </div>
+        <div class="alertas-lista" id="alertas-lista">
+          <p class="alertas-vazio">Carregando…</p>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const botao = document.getElementById('btn-alertas');
+  const popover = document.getElementById('alertas-popover');
+
+  const fechar = () => {
+    popover.hidden = true;
+    botao.setAttribute('aria-expanded', 'false');
+  };
+
+  botao.addEventListener('click', (evento) => {
+    evento.stopPropagation();
+    const abrindo = popover.hidden;
+    popover.hidden = !abrindo;
+    botao.setAttribute('aria-expanded', abrindo ? 'true' : 'false');
+  });
+
+  // Clique em qualquer outro lugar fecha; clique dentro do popover não.
+  document.addEventListener('click', (evento) => {
+    if (popover.hidden) return;
+    if (evento.target.closest('#alertas-sino')) return;
+    fechar();
+  });
+  document.addEventListener('keydown', (evento) => {
+    if (evento.key === 'Escape') fechar();
+  });
+
+  carregarAlertas();
+}
+
+async function carregarAlertas() {
+  const badge = document.getElementById('alertas-badge');
+  const lista = document.getElementById('alertas-lista');
+  const contagem = document.getElementById('alertas-contagem');
+  if (!badge || !lista) return;
+
+  let dados;
+  try {
+    const resposta = await fetch('/api/alertas', { cache: 'no-store' });
+    if (!resposta.ok) throw new Error('falha ao buscar alertas');
+    dados = await resposta.json();
+  } catch (erro) {
+    console.error('Falha ao carregar alertas:', erro);
+    // Sem alertas na tela é melhor que um sininho mentindo zero.
+    lista.innerHTML = '<p class="alertas-vazio">Não deu pra carregar os alertas agora.</p>';
+    badge.hidden = true;
+    return;
+  }
+
+  const total = dados.total || 0;
+  badge.textContent = total > 99 ? '99+' : total;
+  badge.hidden = total === 0;
+  contagem.textContent = total
+    ? `${total} ${total === 1 ? 'ativo' : 'ativos'}`
+    : '';
+
+  if (!dados.alertas.length) {
+    lista.innerHTML = '<p class="alertas-vazio">Nada pedindo atenção agora. 🎉</p>';
+    return;
+  }
+
+  const escondidos = total - (dados.mostrando || dados.alertas.length);
+  lista.innerHTML = dados.alertas.map((a) => `
+    <a class="alerta-item${a.grave ? ' grave' : ''}" href="${escaparHtml(a.link)}">
+      <span class="alerta-icone alerta-icone-${escaparHtml(a.tipo)}">
+        <i data-lucide="${ICONE_ALERTA[a.tipo] || 'circle-alert'}"></i>
+      </span>
+      <span class="alerta-texto">
+        <span class="alerta-titulo">${escaparHtml(a.titulo)}</span>
+        <span class="alerta-detalhe">${escaparHtml(a.detalhe)}</span>
+      </span>
+      ${a.destaque ? `<span class="alerta-destaque">${escaparHtml(a.destaque)}</span>` : ''}
+    </a>
+  `).join('') + (escondidos > 0
+    ? `<p class="alertas-vazio">e mais ${escondidos} — veja em Insumos.</p>`
+    : '');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // --- AJUSTE MANUAL DE CANAL (quando o painel da Cardápio Web diverge da API) ---

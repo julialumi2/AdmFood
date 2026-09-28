@@ -1977,6 +1977,76 @@ def _atividades_do_dia(lojas, usuario):
     return pendentes + feitas
 
 
+# Quantos alertas o sininho lista de uma vez. O badge mostra o total de
+# verdade; a lista corta aqui e diz quantos ficaram de fora — com o
+# cadastro de hoje, "abaixo do mínimo" sozinho passa de 200.
+MAXIMO_ALERTAS_LISTADOS = 10
+
+
+@app.route('/api/alertas', methods=['GET'])
+def api_alertas():
+    """O que o sininho do cabeçalho mostra: insumo que subiu de preço e
+    insumo abaixo do mínimo, nas lojas que a pessoa enxerga.
+
+    Não calcula nada novo — usa alertas_de_custo_na_margem (o mesmo da
+    Home) e a regra de estoque crítico dos cartões de Insumos. Alta de
+    preço é de gestão; estoque a operação também vê, que é o que ela usa
+    no dia a dia."""
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+    lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
+    eh_gestao = (_usuario_logado() or {}).get('papel') in ('admin', 'gerente')
+    alertas = []
+
+    if eh_gestao:
+        for alerta in alertas_de_custo_na_margem(lojas, DIAS_DA_HOME, limite=MAXIMO_ALERTAS_LISTADOS):
+            if alerta["variacaoPct"] <= 0:
+                continue
+            alertas.append({
+                "tipo": "preco",
+                "titulo": alerta["insumo"],
+                "detalhe": f"em “{alerta['produto']}” · {_curto(alerta['loja'])}",
+                "destaque": f"+{_num_br(alerta['variacaoPct'])}%",
+                "grave": alerta["pontosDeMargem"] >= PONTOS_DE_MARGEM_PERIGOSOS,
+                "link": "precos.html",
+            })
+
+    # Mesma regra dos cartões de Insumos: zerado, ou abaixo do mínimo quando
+    # a loja cadastrou um mínimo. Mistura não conta (ela nasce de receita).
+    baixos = []
+    for linha in listar_insumos():
+        if linha["loja"] not in lojas or linha["eh_mistura"] or not linha["aplica"]:
+            continue
+        if _status_estoque(linha["quantidade_atual"], linha["estoque_minimo"]) != "critico":
+            continue
+        baixos.append(linha)
+    # Zerado primeiro, depois quem está mais longe do mínimo.
+    baixos.sort(key=lambda l: (l["quantidade_atual"] > 0, l["quantidade_atual"] - l["estoque_minimo"]))
+    for linha in baixos[:MAXIMO_ALERTAS_LISTADOS]:
+        unidade = linha["unidade_medida"]
+        if linha["quantidade_atual"] <= 0:
+            detalhe = f"Zerado · {_curto(linha['loja'])}"
+        else:
+            detalhe = (f"Estoque {_num_br(linha['quantidade_atual'])} abaixo do mínimo "
+                       f"{_num_br(linha['estoque_minimo'])} {unidade} · {_curto(linha['loja'])}")
+        alertas.append({
+            "tipo": "estoque",
+            "titulo": linha["nome"],
+            "detalhe": detalhe,
+            "destaque": None,
+            "grave": linha["quantidade_atual"] <= 0,
+            "link": "estoque.html",
+        })
+
+    total = len(alertas) + max(0, len(baixos) - MAXIMO_ALERTAS_LISTADOS)
+    return jsonify({
+        "total": total,
+        "mostrando": len(alertas),
+        "alertas": alertas,
+    })
+
+
 @app.route('/api/home/gestao', methods=['GET'])
 def api_home_gestao():
     erro_acesso = _exigir_equipe()
