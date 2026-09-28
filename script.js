@@ -1052,7 +1052,9 @@ function montarSininhoDeAlertas() {
   // Telas públicas (link de contagem, de cotação) não têm cabeçalho.
   if (!direita || document.getElementById('alertas-sino')) return;
 
-  direita.insertAdjacentHTML('afterbegin', `
+  // Depois do modo noturno, não antes: o interruptor fica à esquerda do
+  // sininho (pedido dela, 28/09).
+  direita.insertAdjacentHTML('beforeend', `
     <div class="alertas-sino" id="alertas-sino">
       <button type="button" class="btn-sino" id="btn-alertas" title="Alertas"
               aria-haspopup="dialog" aria-expanded="false" aria-label="Alertas">
