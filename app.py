@@ -6417,11 +6417,27 @@ _SINCRONIZACAO_MANUAL = {"rodando": False, "desde": None, "dia": None, "ultima":
 _TRAVA_SINCRONIZACAO_MANUAL = threading.Lock()
 
 
-def _sincronizar_lojas_em_segundo_plano(dia_alvo, unidades=None):
+def _sincronizar_lojas_em_segundo_plano(dia_alvo, unidades=None, ate=None):
+    """Sincroniza um dia, ou o intervalo de `dia_alvo` até `ate`.
+
+    O intervalo roda AQUI, sequencial, num processo só (28/09). Fazer isso
+    de fora, um pedido por dia, não funciona em produção: o estado de "já
+    terminou?" e a trava de "uma por vez" são por processo, e a resposta
+    pode vir de um worker que não é o que está sincronizando — quem
+    perguntava recebia "parado" e disparava o dia seguinte por cima."""
     erro = None
+    dias = []
+    dia = dia_alvo
+    fim = ate or dia_alvo
+    while dia <= fim:
+        dias.append(dia)
+        dia += timedelta(days=1)
     try:
-        # Mesmo caminho da sincronização automática.
-        sincronizar_dia(dia_alvo, unidades)
+        for dia in dias:
+            # Mesmo caminho da sincronização automática.
+            sincronizar_dia(dia, unidades)
+            with _TRAVA_SINCRONIZACAO_MANUAL:
+                _SINCRONIZACAO_MANUAL["dia"] = dia.isoformat()
     except Exception as falha:  # noqa: BLE001 — o resultado precisa chegar na tela
         erro = str(falha)
         import traceback
@@ -6430,7 +6446,8 @@ def _sincronizar_lojas_em_segundo_plano(dia_alvo, unidades=None):
         with _TRAVA_SINCRONIZACAO_MANUAL:
             _SINCRONIZACAO_MANUAL["rodando"] = False
             _SINCRONIZACAO_MANUAL["ultima"] = {
-                "dia": dia_alvo.isoformat(),
+                "dia": dias[-1].isoformat() if dias else dia_alvo.isoformat(),
+                "dias": len(dias),
                 "terminouEm": datetime.now().isoformat(),
                 "erro": erro,
             }
@@ -6443,6 +6460,11 @@ def _sincronizar_lojas_em_segundo_plano(dia_alvo, unidades=None):
 # loja e um dia por vez: o histórico da Cardápio Web aceita 5 chamadas por
 # minuto e o detalhe de cada pedido é mais uma chamada.
 MAXIMO_DETALHES_PEDIDOS_ABERTOS = 40
+
+# Teto de dias num pedido só de sincronização. Cada dia é uma chamada de
+# histórico mais uma por pedido, e o histórico da Cardápio Web aceita 5 por
+# minuto: um intervalo grande demais seguraria a thread por horas.
+DIAS_MAXIMOS_POR_SINCRONIZACAO = 40
 
 
 # Extensão do WhatsApp instalada à mão (2026-09-18: sem a Chrome Web Store por
@@ -6563,6 +6585,22 @@ def api_sincronizar_agora():
     # sincronizar.py): o `forcar=1` de antes, pra feriado aberto, não é mais
     # preciso.
 
+    # Sem ?ate=, um dia só (o botão da tela). Com, o intervalo inteiro num
+    # pedido só — ver _sincronizar_lojas_em_segundo_plano (28/09).
+    ate_str = request.args.get('ate')
+    ate = None
+    if ate_str:
+        try:
+            ate = date.fromisoformat(ate_str)
+        except ValueError:
+            return jsonify({"erro": "Data final inválida."}), 400
+        if ate < dia_alvo:
+            return jsonify({"erro": "A data final é antes da inicial."}), 400
+        if (ate - dia_alvo).days + 1 > DIAS_MAXIMOS_POR_SINCRONIZACAO:
+            return jsonify({
+                "erro": f"No máximo {DIAS_MAXIMOS_POR_SINCRONIZACAO} dias por vez.",
+            }), 400
+
     # Sem ?unidade=, as quatro lojas (o botão da tela). Com, só ela — pra
     # consertar o histórico de uma loja sem recalcular o das outras, que
     # com a virada de dia ligada mudaria número de dia antigo (28/09).
@@ -6589,11 +6627,12 @@ def api_sincronizar_agora():
         _SINCRONIZACAO_MANUAL.update(rodando=True, desde=datetime.now().isoformat(), dia=dia_alvo.isoformat())
 
     threading.Thread(
-        target=_sincronizar_lojas_em_segundo_plano, args=(dia_alvo, unidades), daemon=True
+        target=_sincronizar_lojas_em_segundo_plano, args=(dia_alvo, unidades, ate), daemon=True
     ).start()
 
     return jsonify({
         "diaLabel": _formatar_data_br(dia_alvo.isoformat()),
+        "ateLabel": _formatar_data_br(ate.isoformat()) if ate else None,
         "fechado": False,
         "iniciado": True,
         "unidades": unidades,
