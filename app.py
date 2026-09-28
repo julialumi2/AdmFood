@@ -2036,7 +2036,9 @@ def api_alertas():
             confiaveis.add(loja)
             continue
         alertas.append({
-            "tipo": "estoque",
+            # Tipo próprio: "a loja não foi contada" não é "o insumo está
+            # acabando", e misturar os dois na mesma lista confunde (28/09).
+            "tipo": "contagem",
             "chave": f"contagem|{loja}",
             "titulo": f"{_curto(loja)} sem contagem",
             "detalhe": (f"Última há {dias} dias — o saldo de estoque dela não vale até contar"

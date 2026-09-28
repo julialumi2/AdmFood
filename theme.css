@@ -2130,6 +2130,45 @@ tr:hover { background-color: var(--surface-muted); }
 .alerta-item.lido { opacity: 0.5; }
 .alerta-item.lido .alerta-titulo { color: var(--text-muted); font-weight: 500; }
 
+/* Um bloco por tipo, com a explicação em cima (28/09): soltos na lista, os
+   alertas não diziam o que eram nem o que fazer com eles. */
+.alertas-grupo { border-bottom: 1px solid var(--border-color); }
+.alertas-grupo:last-child { border-bottom: 0; }
+
+.alertas-grupo-topo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.alertas-grupo-titulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dark);
+}
+
+.alertas-grupo-contagem {
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.alertas-grupo-explica {
+  margin: 3px 0 var(--space-2);
+  padding: 0 var(--space-4);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.alerta-icone-contagem { background-color: var(--info-soft); color: var(--info); }
+
 .alerta-item {
   display: flex;
   align-items: flex-start;
@@ -2140,7 +2179,7 @@ tr:hover { background-color: var(--surface-muted); }
   color: inherit;
 }
 
-.alerta-item:last-child { border-bottom: 0; }
+.alertas-grupo .alerta-item:last-child { border-bottom: 0; }
 .alerta-item:hover { background-color: var(--surface-muted); }
 
 .alerta-icone {

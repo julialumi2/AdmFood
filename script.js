@@ -1045,7 +1045,28 @@ function renderCanalAnalysis(canaisBrutos, unidadeParaLabels, contextoEdicao) {
 // Insumo que subiu de preço e insumo abaixo do mínimo, vindos de
 // /api/alertas — que não calcula nada novo, só junta o que a Home e os
 // cartões de Insumos já calculam.
-const ICONE_ALERTA = { preco: 'triangle-alert', estoque: 'package' };
+const ICONE_ALERTA = { preco: 'triangle-alert', estoque: 'package', contagem: 'clipboard-list' };
+
+// Um título e uma linha explicando cada tipo: soltos na lista, os alertas
+// não diziam o que eram nem o que fazer com eles (pedido dela, 28/09). A
+// ordem aqui é a ordem em que aparecem no popover.
+const GRUPOS_ALERTA = [
+  {
+    tipo: 'contagem',
+    titulo: 'Contagem atrasada',
+    explica: 'A loja desconta as vendas do estoque, mas ninguém confere o físico faz tempo. Enquanto não contar, o saldo dela não vale — e a sugestão de compra sai errada.',
+  },
+  {
+    tipo: 'preco',
+    titulo: 'Preço de insumo subiu',
+    explica: 'O insumo encareceu e está comendo a margem de um produto. Vale conferir se o preço de venda ainda fecha.',
+  },
+  {
+    tipo: 'estoque',
+    titulo: 'Estoque baixo',
+    explica: 'Insumo abaixo do mínimo cadastrado, ou zerado. Pode faltar antes da próxima compra chegar.',
+  },
+];
 // O que está no popover agora — o "Marcar como lido" cala exatamente isso.
 let alertasNaTela = [];
 
@@ -1166,7 +1187,7 @@ async function carregarAlertas() {
   }
 
   const escondidos = total - (dados.mostrando || dados.alertas.length);
-  lista.innerHTML = dados.alertas.map((a) => `
+  const item = (a) => `
     <a class="alerta-item${a.grave ? ' grave' : ''}${a.lido ? ' lido' : ''}" href="${escaparHtml(a.link)}">
       <span class="alerta-icone alerta-icone-${escaparHtml(a.tipo)}">
         <i data-lucide="${ICONE_ALERTA[a.tipo] || 'circle-alert'}"></i>
@@ -1176,8 +1197,23 @@ async function carregarAlertas() {
         <span class="alerta-detalhe">${escaparHtml(a.detalhe)}</span>
       </span>
       ${a.destaque ? `<span class="alerta-destaque">${escaparHtml(a.destaque)}</span>` : ''}
-    </a>
-  `).join('') + (escondidos > 0
+    </a>`;
+
+  // Um bloco por tipo, com a explicação em cima. Tipo sem alerta nenhum
+  // não aparece.
+  lista.innerHTML = GRUPOS_ALERTA.map((grupo) => {
+    const doGrupo = dados.alertas.filter((a) => a.tipo === grupo.tipo);
+    if (!doGrupo.length) return '';
+    return `
+      <div class="alertas-grupo">
+        <div class="alertas-grupo-topo">
+          <span class="alertas-grupo-titulo">${escaparHtml(grupo.titulo)}</span>
+          <span class="alertas-grupo-contagem">${doGrupo.length}</span>
+        </div>
+        <p class="alertas-grupo-explica">${escaparHtml(grupo.explica)}</p>
+        ${doGrupo.map(item).join('')}
+      </div>`;
+  }).join('') + (escondidos > 0
     ? `<p class="alertas-vazio">e mais ${escondidos} — veja em Insumos.</p>`
     : '');
   if (typeof lucide !== 'undefined') lucide.createIcons();
