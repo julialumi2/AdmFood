@@ -1993,20 +1993,15 @@ MAXIMO_ALERTAS_LISTADOS = 10
 DIAS_SEM_CONTAGEM_PRA_AVISAR = 21
 
 
-@app.route('/api/alertas', methods=['GET'])
-def api_alertas():
-    """O que o sininho do cabeçalho mostra: insumo que subiu de preço e
-    insumo abaixo do mínimo, nas lojas que a pessoa enxerga.
+def _alertas_ativos(lojas, eh_gestao):
+    """TODOS os alertas ativos, sem corte — quem corta é a exibição.
+
+    Sem corte aqui porque o "marcar como lido" precisa calar tudo, não só
+    o que coube na tela: com 25 insumos abaixo do mínimo, calar os 10
+    visíveis deixava o badge preso em 15 pra sempre (28/09).
 
     Não calcula nada novo — usa alertas_de_custo_na_margem (o mesmo da
-    Home) e a regra de estoque crítico dos cartões de Insumos. Alta de
-    preço é de gestão; estoque a operação também vê, que é o que ela usa
-    no dia a dia."""
-    erro_acesso = _exigir_equipe()
-    if erro_acesso:
-        return erro_acesso
-    lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
-    eh_gestao = (_usuario_logado() or {}).get('papel') in ('admin', 'gerente')
+    Home) e a regra de estoque crítico dos cartões de Insumos."""
     alertas = []
 
     if eh_gestao:
@@ -2064,7 +2059,7 @@ def api_alertas():
         baixos.append(linha)
     # Zerado primeiro, depois quem está mais longe do mínimo.
     baixos.sort(key=lambda l: (l["quantidade_atual"] > 0, l["quantidade_atual"] - l["estoque_minimo"]))
-    for linha in baixos[:MAXIMO_ALERTAS_LISTADOS]:
+    for linha in baixos:
         unidade = linha["unidade_medida"]
         if linha["quantidade_atual"] <= 0:
             detalhe = f"Zerado · {_curto(linha['loja'])}"
@@ -2081,6 +2076,24 @@ def api_alertas():
             "link": "estoque.html",
         })
 
+    return alertas
+
+
+def _lojas_e_perfil_pros_alertas():
+    lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
+    eh_gestao = (_usuario_logado() or {}).get('papel') in ('admin', 'gerente')
+    return lojas, eh_gestao
+
+
+@app.route('/api/alertas', methods=['GET'])
+def api_alertas():
+    """O que o sininho do cabeçalho mostra. Alta de preço é de gestão;
+    estoque a operação também vê, que é o que ela usa no dia a dia."""
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+    alertas = _alertas_ativos(*_lojas_e_perfil_pros_alertas())
+
     # A marca de "lido" vale enquanto o alerta durar: o que saiu da lista
     # perde a marca, pra o mesmo aviso poder acender de novo mais pra
     # frente (28/09).
@@ -2092,29 +2105,34 @@ def api_alertas():
     for alerta in alertas:
         alerta["lido"] = alerta["chave"] in lidas
 
-    nao_lidos = sum(1 for a in alertas if not a["lido"])
+    # Não lido primeiro: o corte da lista não pode esconder um aviso novo
+    # atrás de dez que ela já leu.
+    alertas.sort(key=lambda a: a["lido"])
     return jsonify({
-        # O badge conta só o que ela ainda não leu; a lista mostra tudo,
-        # com o lido apagado.
-        "total": nao_lidos + max(0, len(baixos) - MAXIMO_ALERTAS_LISTADOS),
-        "mostrando": len(alertas),
-        "alertas": alertas,
+        # O badge conta o não lido de TUDO, não só do que coube na tela.
+        "total": sum(1 for a in alertas if not a["lido"]),
+        "mostrando": min(len(alertas), MAXIMO_ALERTAS_LISTADOS),
+        "escondidos": max(0, len(alertas) - MAXIMO_ALERTAS_LISTADOS),
+        "alertas": alertas[:MAXIMO_ALERTAS_LISTADOS],
     })
 
 
 @app.route('/api/alertas/lidos', methods=['POST'])
 def api_marcar_alertas_lidos():
-    """"Marcar como lido" do sininho: cala os alertas que estão na tela
-    agora. Por pessoa — ela usa celular e computador, e ler num tem que
-    calar o badge no outro."""
+    """"Marcar como lido" do sininho: cala TODOS os alertas ativos agora,
+    não só os que couberam na tela — senão o badge nunca zeraria quando há
+    mais de dez (28/09). Por pessoa: ela usa celular e computador, e ler
+    num tem que calar o badge no outro.
+
+    O servidor recalcula a lista; o cliente não manda chave nenhuma, que é
+    o que garante que nada fica de fora."""
     erro_acesso = _exigir_equipe()
     if erro_acesso:
         return erro_acesso
     usuario_id = (_usuario_logado() or {}).get('id')
     if not usuario_id:
         return jsonify({"erro": "Não autenticado."}), 401
-    dados = request.get_json(silent=True) or {}
-    chaves = [str(c) for c in (dados.get('chaves') or []) if c]
+    chaves = [a["chave"] for a in _alertas_ativos(*_lojas_e_perfil_pros_alertas())]
     return jsonify({"ok": True, "lidos": marcar_alertas_como_lidos(usuario_id, chaves)})
 
 

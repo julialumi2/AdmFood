@@ -1067,8 +1067,6 @@ const GRUPOS_ALERTA = [
     explica: 'Insumo abaixo do mínimo cadastrado, ou zerado. Pode faltar antes da próxima compra chegar.',
   },
 ];
-// O que está no popover agora — o "Marcar como lido" cala exatamente isso.
-let alertasNaTela = [];
 
 function montarSininhoDeAlertas() {
   const direita = document.querySelector('.header-right');
@@ -1128,15 +1126,12 @@ function montarSininhoDeAlertas() {
   // volta a avisar se cair de novo.
   document.getElementById('btn-alertas-lidos').addEventListener('click', async (evento) => {
     const botao = evento.currentTarget;
-    const chaves = alertasNaTela.map((a) => a.chave).filter(Boolean);
-    if (!chaves.length) return;
     botao.disabled = true;
     try {
-      const resposta = await fetch('/api/alertas/lidos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chaves }),
-      });
+      // Sem mandar chave: quem monta a lista é o servidor, e ele cala
+      // TODOS os ativos. A tela mostra no máximo 10, e mandar só esses
+      // deixaria o badge preso em cima do resto (28/09).
+      const resposta = await fetch('/api/alertas/lidos', { method: 'POST' });
       if (!resposta.ok) {
         const erro = await resposta.json().catch(() => ({}));
         throw new Error(erro.erro || 'Não foi possível marcar como lido.');
@@ -1171,13 +1166,12 @@ async function carregarAlertas() {
     return;
   }
 
-  alertasNaTela = dados.alertas || [];
   const total = dados.total || 0;
   badge.textContent = total > 99 ? '99+' : total;
   badge.hidden = total === 0;
   contagem.textContent = total
     ? `${total} ${total === 1 ? 'ativo' : 'ativos'}`
-    : (alertasNaTela.length ? 'tudo lido' : '');
+    : (dados.alertas.length ? 'tudo lido' : '');
   // Só faz sentido oferecer quando tem algo não lido pra calar.
   document.getElementById('btn-alertas-lidos').hidden = total === 0;
 
@@ -1186,7 +1180,7 @@ async function carregarAlertas() {
     return;
   }
 
-  const escondidos = total - (dados.mostrando || dados.alertas.length);
+  const escondidos = dados.escondidos || 0;
   const item = (a) => `
     <a class="alerta-item${a.grave ? ' grave' : ''}${a.lido ? ' lido' : ''}" href="${escaparHtml(a.link)}">
       <span class="alerta-icone alerta-icone-${escaparHtml(a.tipo)}">
@@ -1214,7 +1208,7 @@ async function carregarAlertas() {
         ${doGrupo.map(item).join('')}
       </div>`;
   }).join('') + (escondidos > 0
-    ? `<p class="alertas-vazio">e mais ${escondidos} — veja em Insumos.</p>`
+    ? `<p class="alertas-vazio">e mais ${escondidos} — veja a lista inteira em Insumos.</p>`
     : '');
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
