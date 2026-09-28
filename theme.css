@@ -8,36 +8,55 @@
    --------------------------------------------------------------------- */
 :root {
   /* Cor de marca */
-  --primary: #D93829;
-  --primary-hover: #B92E21;
-  --primary-soft: rgba(217, 56, 41, 0.08);
+  --primary: #DC2626;
+  --primary-hover: #B91C1C;
+  --primary-soft: rgba(220, 38, 38, 0.08);
 
-  /* Neutros grafite (modo claro); fundo creme (#F3EBDB, pedido da Julia
-     em 2026-09-15: os brancos quebrados ainda pareciam brancos demais),
-     com bordas e superfícies em bege, pra combinar com ele. */
-  /* Fundo do sistema, claro (pedido dela, 25/09). Era o creme #F3EBDB. */
-  --bg-main: #FFFAFA;
+  /* Neutros da família slate (28/09). Antes era zinc (#18181B, #52525B,
+     #71717A) sobre creme. Zinc puxa pro verde e slate pro azul: com os
+     dois na mesma tela o cinza fica sujo, então a família mudou inteira.
+
+     A página é o off-white #FAFAFA e a superfície é o branco puro — é a
+     diferença entre os dois que faz painel e tabela "subirem" sem
+     precisar de sombra pesada. */
+  --bg-main: #FAFAFA;
   --card-bg: #FFFFFF;
   --header-bg: #FFFFFF;
   --header-vidro: rgba(255, 255, 255, 0.62);
-  --header-vidro-borda: rgba(24, 24, 27, 0.08);
+  --header-vidro-borda: rgba(15, 23, 42, 0.08);
   --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --sidebar-bg: #18181B;
-  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-bg: #0F172A;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
   --sidebar-active-text: #FFFFFF;
-  --sidebar-text: #D4D4D8;
-  --sidebar-text-muted: #A1A1AA;
+  --sidebar-text: #CBD5E1;
+  --sidebar-text-muted: #94A3B8;
 
-  --text-dark: #18181B;
-  --text-muted: #52525B;
-  --text-faint: #71717A;
+  /* Grafite pro que se lê (título, valor, quantidade); o degrau do meio
+     pro texto de apoio; o slate neutro só pro rótulo pequeno em caixa
+     alta, que é onde 2,8:1 de contraste ainda passa por ser tipografia
+     de etiqueta, não de leitura. */
+  --text-dark: #0F172A;
+  --text-muted: #64748B;
+  --text-faint: #94A3B8;
 
-  --border-color: #E6DDCC;
-  --border-strong: #D5C9B3;
-  --surface-muted: #F7F2E8;
-  --surface-muted-border: #E6DDCC;
+  /* Superfícies limpas (28/09): o fio de bege #E6DDCC pesava demais em
+     cima do branco. Agora é um cinza-ardósia translúcido — some quando
+     não precisa dele e ainda separa quando precisa. */
+  --border-color: rgba(226, 232, 240, 0.8);
+  --border-strong: #CBD5E1;
+  --surface-muted: #F8FAFC;
+  --surface-muted-border: rgba(226, 232, 240, 0.8);
   --input-bg: #FFFFFF;
-  --input-border: #D5C9B3;
+  --input-border: #CBD5E1;
+
+  /* O fio entre células da faixa de indicadores. É separado de
+     --border-color porque divide por dentro, e por dentro tem que pesar
+     menos que a borda que fecha a peça. */
+  --divisoria: rgba(226, 232, 240, 0.8);
+
+  /* Cor única de ícone. Ícone é sinalização, não conteúdo: fica no cinza
+     neutro e só vira cor quando diz status (--success/--warning/--danger). */
+  --icone-neutro: #94A3B8;
 
   /* Semânticas. A cor pura (--success...) é pra preenchimento com texto
      branco em cima; a -texto é pra escrever na cor, e clareia no modo
@@ -80,8 +99,8 @@
   --radius-pill: 999px;
 
   /* Sombras quase imperceptíveis; a forte fica pra janela e menu flutuante */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(15, 23, 42, 0.05);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.14);
 
   --sidebar-width: 260px;
@@ -91,25 +110,29 @@
 }
 
 body.dark-mode {
-  --bg-main: #09090B;
-  --card-bg: #18181B;
-  --header-bg: #18181B;
-  --header-vidro: rgba(24, 24, 27, 0.55);
+  /* Mesma família do lado escuro: o grafite #0F172A vira a superfície e a
+     página fica um degrau abaixo, senão painel e fundo encostam. */
+  --bg-main: #0B1120;
+  --card-bg: #0F172A;
+  --header-bg: #0F172A;
+  --header-vidro: rgba(15, 23, 42, 0.55);
   --header-vidro-borda: rgba(255, 255, 255, 0.08);
   --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.45);
 
-  --text-dark: #FAFAFA;
-  --text-muted: #A1A1AA;
-  --text-faint: #71717A;
+  --text-dark: #F1F5F9;
+  --text-muted: #94A3B8;
+  --text-faint: #64748B;
 
-  --border-color: #27272A;
-  --border-strong: #3F3F46;
-  --surface-muted: #27272A;
-  --surface-muted-border: #27272A;
-  --input-bg: #18181B;
-  --input-border: #3F3F46;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --surface-muted: #1E293B;
+  --surface-muted-border: rgba(255, 255, 255, 0.08);
+  --input-bg: #0F172A;
+  --input-border: rgba(255, 255, 255, 0.14);
+  --divisoria: rgba(255, 255, 255, 0.07);
+  --icone-neutro: #94A3B8;
 
-  --primary-soft: rgba(217, 56, 41, 0.16);
+  --primary-soft: rgba(220, 38, 38, 0.16);
   --success-texto: #34D399;
   --success-soft: rgba(52, 211, 153, 0.12);
   --warning-texto: #FBBF24;
@@ -118,8 +141,8 @@ body.dark-mode {
   --danger-soft: rgba(249, 112, 102, 0.12);
   --info-soft: rgba(37, 99, 235, 0.16);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
@@ -165,6 +188,18 @@ body {
      da sidebar (ela some ao rolar em vez de ficar fixa no topo). */
   transition: background-color 0.2s ease, color 0.2s ease;
   -webkit-font-smoothing: antialiased;
+  /* Número de largura fixa no sistema todo (28/09): é o que faz coluna de
+     dinheiro, data e quantidade alinharem sozinhas em qualquer tabela,
+     sem precisar lembrar de marcar cada célula. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Ícone fino: o Lucide desenha com stroke-width=2 direto no SVG, e esta
+   regra ganha dele (CSS vence atributo de apresentação). Uma linha afina
+   todos os ícones do sistema. */
+.lucide {
+  stroke-width: 1.5px;
 }
 
 :focus-visible {
@@ -1005,15 +1040,102 @@ body.dark-mode .tag-categoria[data-cor="9"] { background-color: rgba(239, 68, 68
 /* ---------------------------------------------------------------------
    7. CARDS DE MÉTRICA (usados em Resumo, Estoque e Insights)
    --------------------------------------------------------------------- */
+/* FAIXA DE INDICADORES (28/09)
+
+   Antes: cada indicador numa caixa própria, com borda, sombra e 16px de
+   ar entre elas. Cinco caixas iguais lado a lado no topo de cada tela —
+   muito contorno pra pouca informação, e o olho tinha que entrar e sair
+   de cada uma.
+
+   Agora: uma peça só, dividida por fio. O agrupamento é o espaçamento e a
+   divisória, não a moldura.
+
+   O fio não é borda nem sombra: o contêiner fica da cor do fio e abre um
+   vão de 1px entre as células, que pintam o próprio fundo por cima. O que
+   aparece no vão é o fio. Resolve sozinho qualquer número de colunas e a
+   quebra de linha, sem :nth-child contando posição — e não gasta o
+   box-shadow das células, que já tem dono em algumas telas. */
 .cards-grid,
-.metrics-grid {
+.metrics-grid,
+.pedidos-kpis,
+.cotacoes-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  background-color: var(--divisoria);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.cards-grid > .store-card,
+.cards-grid > .metric-card,
+.metrics-grid > .store-card,
+.metrics-grid > .metric-card,
+.pedidos-kpis > .store-card,
+.cotacoes-kpis > .store-card {
+  background-color: var(--card-bg);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: var(--space-4) var(--space-5);
+  gap: 2px;
+  min-width: 0;
+  transform: none;
+  transition: background-color 0.15s ease;
+}
+
+/* Célula que não faz nada não reage ao mouse: o realce fica reservado pra
+   quem é clicável, senão o hover vira ruído e ninguém sabe o que clica. */
+@media (hover: hover) {
+  .cards-grid > .store-card:hover,
+  .cards-grid > .metric-card:hover,
+  .metrics-grid > .store-card:hover,
+  .metrics-grid > .metric-card:hover,
+  .pedidos-kpis > .store-card:hover,
+  .cotacoes-kpis > .store-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .cards-grid > a.store-card:hover,
+  .cards-grid > .store-card[role="button"]:hover,
+  .cards-grid > .store-card[data-filtro-status]:hover,
+  .cards-grid > .kpi-clicavel:hover,
+  .metrics-grid > .kpi-clicavel:hover,
+  .pedidos-kpis > .kpi-clicavel:hover,
+  .cotacoes-kpis > .kpi-clicavel:hover {
+    background-color: var(--surface-muted);
+  }
+}
+
+/* O foco de teclado precisa ficar DENTRO da célula: o overflow:hidden da
+   faixa corta qualquer anel desenhado pra fora. */
+.cards-grid > .store-card:focus-visible,
+.cards-grid > .metric-card:focus-visible,
+.metrics-grid > .store-card:focus-visible,
+.metrics-grid > .metric-card:focus-visible,
+.pedidos-kpis > .store-card:focus-visible,
+.cotacoes-kpis > .store-card:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: -3px;
+}
+
+/* "Este indicador está filtrando a tabela" — o sinal da faixa.
+
+   Fora da faixa isso era a borda do cartão mudando de cor. Aqui não há
+   borda por célula, então é um traço de 3px na base, na cor do nível, com
+   um fundo de 7% da mesma cor. Cada tela só precisa dizer qual é a cor,
+   em --nivel. */
+.faixa-ligado {
+  box-shadow: inset 0 -3px 0 var(--nivel, var(--text-dark));
+  background-color: color-mix(in srgb, var(--nivel, var(--text-dark)) 7%, var(--card-bg));
 }
 
 /* Cartões planos: borda fina, raio de 8px e sombra quase imperceptível
-   (a borda tracejada e o furo de comanda saíram em 2026-09-15). */
+   (a borda tracejada e o furo de comanda saíram em 2026-09-15). Vale pro
+   .store-card solto; dentro da faixa as regras acima tiram a moldura. */
 .store-card,
 .metric-card {
   background-color: var(--card-bg);
@@ -1061,17 +1183,25 @@ body.dark-mode .tag-categoria[data-cor="9"] { background-color: rgba(239, 68, 68
   letter-spacing: 0.04em;
 }
 
-.card-icon {
-  padding: 8px;
-  background-color: var(--surface-muted);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
+/* Sem caixa colorida atrás do ícone (28/09): o quadrado preenchido dava
+   ao ícone o peso de um botão, e ele não é clicável. Fica o traço fino no
+   cinza neutro, e cor só quando o ícone diz status.
+
+   Declarado ANTES de .icon-red/.icon-green de propósito: as duas regras
+   têm a mesma especificidade, então quem vem depois ganha — e quem tem
+   que ganhar é a semântica. */
+.card-icon,
+.metric-icon {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  color: var(--icone-neutro);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.card-icon-amber { background-color: var(--warning-soft); color: var(--warning-texto); }
+.card-icon-amber { background: none; color: var(--warning-texto); }
 .icon-red { color: var(--danger-texto); }
 .icon-green { color: var(--success-texto); }
 .icon-dark { color: var(--warning-texto); }
@@ -2062,7 +2192,7 @@ tr:hover { background-color: var(--surface-muted); }
   padding: 0 4px;
   border-radius: 999px;
   border: 2px solid var(--header-bg);
-  background-color: #18181B;
+  background-color: var(--text-dark);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;

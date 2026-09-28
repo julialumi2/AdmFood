@@ -74,7 +74,8 @@ body.dark-mode {
 .mv-indicadores {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  background-color: var(--card-bg);
+  gap: 1px;
+  background-color: var(--divisoria);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
@@ -86,11 +87,12 @@ body.dark-mode {
   flex-direction: column;
   gap: 3px;
   padding: var(--space-4);
-  border-right: 1px solid var(--border-color);
   min-width: 0;
+  /* O fio é o vão de 1px do contêiner aparecendo por trás. Com
+     border-right + :last-child sobrava fio na borda da segunda célula
+     quando a faixa caía pra 2 colunas no tablet. */
+  background-color: var(--card-bg);
 }
-
-.mv-indicador:last-child { border-right: none; }
 
 .mv-indicador-rotulo {
   font-size: 0.66rem;

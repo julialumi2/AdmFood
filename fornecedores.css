@@ -33,11 +33,10 @@
 /* INDICADORES */
 .fornecedores-kpis {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-3);
 }
 
 .fornecedores-kpis .store-card {
-  padding: 12px 14px;
+  padding: 14px 16px;
   gap: 2px;
   min-width: 0;
   text-decoration: none;
@@ -58,7 +57,7 @@
 .fornecedores-kpis .metric-icon {
   width: 16px;
   height: 16px;
-  color: var(--text-faint);
+  color: var(--icone-neutro);
 }
 
 .fornecedores-kpis .metric-icon.icon-green { color: var(--success-texto); }

@@ -305,13 +305,26 @@
 
   /* Cartões em carrossel: um por vez, deslizando, com o pedaço do próximo
      aparecendo pra dizer que tem mais (pedido dela, 25/09). */
+  /* Carrossel: aqui a faixa se desfaz — os cartões rolam soltos, um por
+     vez, então cada um volta a ter moldura própria e o contêiner larga a
+     cor do fio (senão o vão de 8px vira uma tarja cinza). */
   .metrics-grid {
     display: flex;
     gap: var(--space-2);
+    background-color: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .metrics-grid > .metric-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
   }
 
   .metrics-grid::-webkit-scrollbar { display: none; }

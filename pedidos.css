@@ -257,13 +257,11 @@ body.dark-mode {
 
 /* LINHA 1: indicadores de entrega. Os de contagem filtram a tabela. */
 .pedidos-kpis {
-  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
 }
 
 .pedidos-kpis .store-card {
-  padding: 12px 14px;
+  padding: 14px 16px;
   gap: 2px;
   min-width: 0;
 }
@@ -278,15 +276,7 @@ body.dark-mode {
 
 .pedidos-kpis .kpi-clicavel:focus-visible {
   outline: 2px solid var(--info);
-  outline-offset: 2px;
-}
-
-@media (hover: hover) {
-  .pedidos-kpis .store-card:not(.kpi-clicavel):hover {
-    transform: none;
-    box-shadow: var(--shadow-sm);
-    border-color: var(--border-color);
-  }
+  outline-offset: -3px;
 }
 
 .pedidos-kpis .kpi-topo {
@@ -301,7 +291,7 @@ body.dark-mode {
 .pedidos-kpis .metric-icon {
   width: 16px;
   height: 16px;
-  color: var(--text-faint);
+  color: var(--icone-neutro);
   flex-shrink: 0;
 }
 
@@ -335,19 +325,13 @@ body.dark-mode {
 .pedidos-kpis .tem-atraso .kpi-sub { color: var(--entrega-atrasado); }
 
 /* Card clicado = filtro ligado na tabela */
+/* Mesmo traço de base das outras faixas; cada situação só troca a cor. */
+.pedidos-kpis .tem-pendente { --nivel: var(--entrega-pendente); }
+.pedidos-kpis .tem-atraso { --nivel: var(--entrega-atrasado); }
+
 .pedidos-kpis .kpi-clicavel[aria-pressed="true"] {
-  border-color: var(--text-dark);
-  box-shadow: inset 0 0 0 1px var(--text-dark);
-}
-
-.pedidos-kpis .tem-pendente[aria-pressed="true"] {
-  border-color: var(--entrega-pendente);
-  box-shadow: inset 0 0 0 1px var(--entrega-pendente);
-}
-
-.pedidos-kpis .tem-atraso[aria-pressed="true"] {
-  border-color: var(--entrega-atrasado);
-  box-shadow: inset 0 0 0 1px var(--entrega-atrasado);
+  box-shadow: inset 0 -3px 0 var(--nivel, var(--text-dark));
+  background-color: color-mix(in srgb, var(--nivel, var(--text-dark)) 7%, var(--card-bg));
 }
 
 /* LINHA 2: filtros numa linha só, colados no topo da tabela */

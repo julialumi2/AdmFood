@@ -510,7 +510,7 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.detalhe-produto-btn-foto:hover { background-color: #18181B; }
+.detalhe-produto-btn-foto:hover { background-color: #0F172A; }
 .detalhe-produto-btn-foto i, .detalhe-produto-btn-foto svg { width: 15px; height: 15px; }
 
 .detalhe-produto-campos {

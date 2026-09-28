@@ -17,7 +17,7 @@
   --card-border: #eae6df;
   --border-color: #e2ddd3;
   --footer-bg: #ede9e1;
-  --primary-color: #d93829; /* Vermelho AdmFood */
+  --primary-color: #DC2626; /* Vermelho AdmFood */
   --brand-dark-color: #333333;
 }
 
@@ -31,7 +31,7 @@ body.dark-theme {
   --card-bg: #202024;
   --card-border: #2e2e32;
   --border-color: #2e2e32;
-  --footer-bg: #18181b;
+  --footer-bg: #0F172A;
   --brand-dark-color: #ffffff;
 }
 

@@ -436,10 +436,15 @@
 }
 
 .periodo-segmentado button:focus-visible,
-.cotacoes-kpis .kpi-clicavel:focus-visible,
 .cotacao-titulo-link:focus-visible {
   outline: 2px solid var(--info);
   outline-offset: 2px;
+}
+
+/* Dentro da faixa o anel vai pra dentro, senão o overflow:hidden corta. */
+.cotacoes-kpis .kpi-clicavel:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: -3px;
 }
 
 .economia-grafico {
@@ -462,14 +467,12 @@
 }
 
 .cotacoes-kpis {
-  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 1fr;
-  gap: var(--space-3);
 }
 
 .cotacoes-kpis .store-card {
-  padding: 12px 14px;
+  padding: 14px 16px;
   gap: 2px;
   min-width: 0;
   justify-content: center;
@@ -485,14 +488,6 @@
   cursor: pointer;
 }
 
-@media (hover: hover) {
-  .cotacoes-kpis .store-card:not(.kpi-clicavel):hover {
-    transform: none;
-    box-shadow: var(--shadow-sm);
-    border-color: var(--border-color);
-  }
-}
-
 .cotacoes-kpis .kpi-topo {
   display: flex;
   align-items: center;
@@ -505,7 +500,7 @@
 .cotacoes-kpis .metric-icon {
   width: 16px;
   height: 16px;
-  color: var(--text-faint);
+  color: var(--icone-neutro);
   flex-shrink: 0;
 }
 

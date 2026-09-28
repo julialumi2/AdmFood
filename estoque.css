@@ -272,7 +272,7 @@
 }
 
 /* O card de itens cadastrados é contagem, não status: ícone neutro. */
-.store-card--total .metric-icon { color: var(--text-faint); }
+.store-card--total .metric-icon { color: var(--icone-neutro); }
 
 /* Cartões de nível filtram a tabela (2026-09-17): o que está filtrando fica
    com a borda na cor do nível; Itens cadastrados só limpa o filtro. */
@@ -307,14 +307,21 @@
   #estoque-filtro-fornecedor { width: 100%; }
 }
 
+/* Pra dentro: o overflow:hidden da faixa cortaria um anel desenhado fora. */
 #estoque-cards [data-filtro-status]:focus-visible {
   outline: 2px solid var(--info);
-  outline-offset: 2px;
+  outline-offset: -3px;
 }
 
-#estoque-cards .store-card--ideal.filtro-ativo { border-color: var(--success); box-shadow: inset 0 0 0 1px var(--success), var(--shadow-md); }
-#estoque-cards .store-card--baixo.filtro-ativo { border-color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning), var(--shadow-md); }
-#estoque-cards .store-card--critico.filtro-ativo { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger), var(--shadow-md); }
+/* Cada nível diz só a sua cor; o traço de "ligado" é o mesmo pra todos. */
+#estoque-cards .store-card--ideal { --nivel: var(--success); }
+#estoque-cards .store-card--baixo { --nivel: var(--warning); }
+#estoque-cards .store-card--critico { --nivel: var(--danger); }
+
+#estoque-cards .store-card.filtro-ativo {
+  box-shadow: inset 0 -3px 0 var(--nivel, var(--text-dark));
+  background-color: color-mix(in srgb, var(--nivel, var(--text-dark)) 7%, var(--card-bg));
+}
 
 
 
@@ -614,11 +621,11 @@
   white-space: nowrap;
 }
 
-#estoque-cards { gap: var(--space-3); }
+#estoque-cards { gap: 1px; }
 
 #estoque-cards .store-card {
   min-width: 0;
-  padding: 12px 14px;
+  padding: 14px 16px;
   gap: 2px;
 }
 
@@ -640,6 +647,7 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+  color: var(--icone-neutro);
 }
 
 #estoque-cards .store-value {
@@ -662,7 +670,6 @@
 
 /* Crítico com insumo dentro: o cartão ganha um tom de alerta. */
 #estoque-cards .store-card--critico.tem-alerta {
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border-color));
   background-color: color-mix(in srgb, var(--danger-soft) 65%, var(--card-bg));
 }
 
