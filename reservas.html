@@ -6,17 +6,15 @@
     <!-- A barra do navegador no celular acompanha o fundo do sistema; o
          script troca pro escuro quando o modo noturno está ligado. -->
     <meta name="theme-color" content="#FFFAFA">
-  <title>AdmFood - Evolução do preço</title>
+  <title>AdmFood - Reservas</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="theme.css">
-  <link rel="stylesheet" href="curva-abc.css">
-  <link rel="stylesheet" href="precos.css">
+  <link rel="stylesheet" href="reservas.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://unpkg.com/lucide@1.48.0/dist/umd/lucide.min.js" integrity="sha384-Hh7C333mXel+qppGoFs4qAOXp7h67eur4XsQVF2bvHAM3MQ4DX4cQI7oRCzb98J4" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="script.js" defer></script>
 </head>
@@ -49,14 +47,14 @@
           <i data-lucide="box"></i>
           <span>Insumos</span>
         </a>
-        <div class="menu-group">
+        <div class="menu-group expandido">
           <button type="button" class="menu-item menu-group-toggle">
             <i data-lucide="shopping-cart"></i>
             <span>Compras</span>
             <i data-lucide="chevron-down" class="menu-group-chevron"></i>
           </button>
           <div class="menu-subgroup">
-            <a href="fornecedores.html" class="menu-subitem">
+            <a href="fornecedores.html" class="menu-subitem active">
               <i data-lucide="truck"></i>
               <span>Fornecedores</span>
             </a>
@@ -82,7 +80,7 @@
             </a>
           </div>
         </div>
-        <a href="reservas.html" class="menu-item">
+        <a href="reservas.html" class="menu-item active">
           <i data-lucide="calendar-check"></i>
           <span>Reservas</span>
         </a>
@@ -94,7 +92,7 @@
           <i data-lucide="check-square"></i>
           <span>ClickUp</span>
         </a>
-        <div class="menu-group expandido">
+        <div class="menu-group">
           <button type="button" class="menu-item menu-group-toggle">
             <i data-lucide="lightbulb"></i>
             <span>Insights</span>
@@ -117,7 +115,7 @@
               <i data-lucide="calendar-range"></i>
               <span>Vendas Semanais</span>
             </a>
-            <a href="precos.html" class="menu-subitem active">
+            <a href="precos.html" class="menu-subitem">
               <i data-lucide="trending-up"></i>
               <span>Evolução do preço</span>
             </a>
@@ -151,7 +149,7 @@
           <button id="toggleMenuBtn" class="btn-toggle-menu" title="Recolher Menu">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <span class="header-page-title">EVOLUÇÃO DO PREÇO</span>
+          <span class="header-page-title">RESERVAS</span>
         </div>
 
         <div class="header-right">
@@ -170,109 +168,158 @@
         </div>
       </header>
 
-      <!-- PÁGINA DE CURVA ABC -->
+      <!-- PÁGINA DE RESERVAS -->
       <div class="page-content">
 
-        <!-- CABEÇALHO: título e apoio à esquerda, período à direita -->
-        <div class="precos-cabecalho">
-          <div class="precos-titulo">
-            <div class="title-top">
-              <i data-lucide="trending-up" class="icon-pin"></i>
-              <span>HISTÓRICO DE COMPRAS</span>
-            </div>
-            <h1>Evolução do preço</h1>
-            <p class="precos-apoio">
-              Quanto se pagou por cada insumo em cada compra recebida, desde dezembro de 2024.
-              A comparação usa o último preço pago antes do período contra o último pago dentro dele.
-            </p>
+        <div class="dashboard-title-area">
+          <div class="title-top">
+            <i data-lucide="calendar-check" class="icon-pin"></i>
+            <span>RESERVAS DE MESA</span>
           </div>
-
-          <div class="precos-filtros">
-            <div class="curva-periodo" id="precos-periodo">
-              <button type="button" class="curva-periodo-btn" data-dias="30">30 dias</button>
-              <button type="button" class="curva-periodo-btn active" data-dias="90">90 dias</button>
-              <button type="button" class="curva-periodo-btn" data-dias="180">6 meses</button>
-              <button type="button" class="curva-periodo-btn" data-dias="365">1 ano</button>
+          <div class="title-row reservas-topo">
+            <div class="reservas-titulo">
+              <h1 id="reservas-h1">Reservas</h1>
+              <p class="panel-subtitle" id="reservas-legenda">Carregando...</p>
+            </div>
+            <div class="reservas-acoes">
+              <div class="select-wrapper">
+                <select id="reservas-filtro-loja" aria-label="Filtrar por loja">
+                  <option value="">Todas as lojas</option>
+                </select>
+                <i data-lucide="chevron-down" class="select-icon"></i>
+              </div>
+              <button type="button" class="btn-registrar-entrada" id="btn-nova-reserva">
+                <i data-lucide="plus"></i>
+                Nova reserva
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="precos-listas">
-          <div class="chart-card">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Mais subiram</h3>
-                <p class="table-subtitle" id="precos-altas-sub">—</p>
-              </div>
+        <!-- QUANDO: hoje, amanhã ou a semana. O "hoje" aqui é o TURNO,
+             não o calendário — às 2h da manhã ainda é a noite de ontem. -->
+        <div class="reservas-periodo" role="tablist" aria-label="Período">
+          <button type="button" role="tab" data-periodo="hoje" class="active">Hoje</button>
+          <button type="button" role="tab" data-periodo="amanha">Amanhã</button>
+          <button type="button" role="tab" data-periodo="semana">Próximos 7 dias</button>
+        </div>
+
+        <div class="cards-grid reservas-kpis">
+          <div class="store-card">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Reservas</span>
+              <i data-lucide="calendar-check" class="metric-icon"></i>
             </div>
-            <ul class="precos-ranking" id="precos-altas"></ul>
+            <span class="store-value" id="reservas-val-total">0</span>
+            <span class="kpi-sub" id="reservas-val-total-sub">no período</span>
           </div>
-          <div class="chart-card">
-            <div class="table-header-row">
-              <div>
-                <h3 class="table-title">Mais caíram</h3>
-                <p class="table-subtitle" id="precos-quedas-sub">—</p>
-              </div>
+          <div class="store-card">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Pessoas esperadas</span>
+              <i data-lucide="users" class="metric-icon"></i>
             </div>
-            <ul class="precos-ranking" id="precos-quedas"></ul>
+            <span class="store-value" id="reservas-val-pessoas">0</span>
+            <span class="kpi-sub">somando todas as mesas</span>
+          </div>
+          <div class="store-card">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Ainda por confirmar</span>
+              <i data-lucide="clock" class="metric-icon"></i>
+            </div>
+            <span class="store-value" id="reservas-val-pendentes">0</span>
+            <span class="kpi-sub">esperando retorno</span>
+          </div>
+          <div class="store-card">
+            <div class="kpi-topo">
+              <span class="card-subtitle">Maior mesa</span>
+              <i data-lucide="trending-up" class="metric-icon"></i>
+            </div>
+            <span class="store-value" id="reservas-val-maior">—</span>
+            <span class="kpi-sub" id="reservas-val-maior-sub">no período</span>
           </div>
         </div>
 
-        <!-- Quem ficou de fora das duas listas por não ter os dois lados da
-             comparação: item novo e troca de fornecedor sumiam (QA 22/09) -->
-        <p class="precos-sem-comparacao" id="precos-sem-comparacao" hidden></p>
-
-        <div class="chart-card">
-          <div class="table-header-row">
+        <div class="chart-card reservas-lista-card">
+          <div class="chart-header">
             <div>
-              <h3 class="table-title" id="precos-insumo-titulo">Um insumo no tempo</h3>
-              <p class="table-subtitle" id="precos-insumo-sub">Escolha um insumo, ou clique num da lista acima.</p>
+              <h2 class="panel-title">Agenda</h2>
+              <p class="panel-subtitle" id="reservas-subtitulo-lista">Por horário.</p>
             </div>
-            <div class="search-box precos-busca">
-              <i data-lucide="search"></i>
-              <input type="text" id="precos-busca-insumo" list="precos-lista-insumos" placeholder="Buscar insumo...">
-              <datalist id="precos-lista-insumos"></datalist>
-            </div>
-            <!-- A busca só reagia a nome exato e não dizia "não encontrei" (QA 22/09) -->
-            <p class="panel-subtitle precos-busca-aviso" id="precos-busca-aviso" hidden></p>
           </div>
-          <!-- A linha misturava loja, fornecedor e tamanho de embalagem:
-               compra de outra loja em caixa virava pico de preço (QA 22/09) -->
-          <div class="precos-recortes" id="precos-recortes" hidden>
-            <label>Loja
-              <select id="precos-recorte-loja"><option value="">Todas</option></select>
-            </label>
-            <label>Fornecedor
-              <select id="precos-recorte-fornecedor"><option value="">Todos</option></select>
-            </label>
-            <span class="precos-recorte-aviso" id="precos-recorte-aviso"></span>
-          </div>
-          <!-- Qual preço vale hoje e até quando vale o homologado: era a
-               pergunta de quem compra e a tela não respondia (QA 22/09) -->
-          <div class="precos-em-uso" id="precos-em-uso" hidden></div>
-          <div class="precos-resumo" id="precos-resumo" style="display:none;"></div>
-          <div class="precos-grafico-area" id="precos-grafico-area" style="display:none;">
-            <canvas id="precos-grafico"></canvas>
-          </div>
-          <div class="table-responsive" id="precos-tabela-area" style="display:none;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Recebido em</th>
-                  <th>Fornecedor</th>
-                  <th>Loja</th>
-                  <th>Quantidade</th>
-                  <th>Preço pago</th>
-                </tr>
-              </thead>
-              <tbody id="precos-tabela-body"></tbody>
-            </table>
-          </div>
+          <div id="reservas-lista"></div>
         </div>
 
-      </div> <!-- /page-content -->
+      </div>
     </main> <!-- /main-wrapper -->
-  </div> <!-- /dashboard-wrapper -->
 
-</body>
-</html>
+    <!-- NOVA RESERVA / EDITAR -->
+    <div class="modal-overlay" id="modal-reserva" style="display:none;">
+      <div class="modal-conteudo modal-reserva">
+        <div class="modal-topo">
+          <h3 class="panel-title" id="modal-reserva-titulo">Nova reserva</h3>
+          <button type="button" class="btn-fechar-modal" id="btn-fechar-reserva" aria-label="Fechar">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <form id="form-reserva" class="form-reserva">
+          <input type="hidden" id="reserva-id">
+
+          <label class="campo-reserva campo-largo">
+            <span>Nome de quem reservou</span>
+            <input type="text" id="reserva-nome" required maxlength="120" autocomplete="off">
+          </label>
+
+          <label class="campo-reserva">
+            <span>Pessoas</span>
+            <input type="number" id="reserva-pessoas" min="1" max="200" value="2" required>
+          </label>
+
+          <label class="campo-reserva">
+            <span>Telefone <small>(opcional)</small></span>
+            <input type="tel" id="reserva-telefone" maxlength="20" autocomplete="off">
+          </label>
+
+          <label class="campo-reserva">
+            <span>Dia e hora</span>
+            <input type="datetime-local" id="reserva-quando" required>
+          </label>
+
+          <label class="campo-reserva" id="campo-reserva-loja">
+            <span>Loja</span>
+            <div class="select-wrapper">
+              <select id="reserva-loja" required></select>
+              <i data-lucide="chevron-down" class="select-icon"></i>
+            </div>
+          </label>
+
+          <label class="campo-reserva">
+            <span>Como chegou</span>
+            <div class="select-wrapper">
+              <select id="reserva-origem">
+                <option value="telefone">Telefone</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="presencial">Presencial</option>
+                <option value="instagram">Instagram</option>
+                <option value="sistema">Outro</option>
+              </select>
+              <i data-lucide="chevron-down" class="select-icon"></i>
+            </div>
+          </label>
+
+          <label class="campo-reserva campo-largo">
+            <span>Observação <small>(aniversário, cadeira de bebê, alergia...)</small></span>
+            <input type="text" id="reserva-observacao" maxlength="200" autocomplete="off">
+          </label>
+
+          <!-- O turno aparece antes de salvar porque é o que surpreende:
+               reserva de 1h da manhã cai no turno da noite anterior. -->
+          <p class="reserva-aviso-turno" id="reserva-aviso-turno" hidden></p>
+          <p class="pendencia-erro" id="reserva-erro" hidden></p>
+
+          <div class="modal-acoes">
+            <button type="button" class="btn-limpar-filtro" id="btn-cancelar-reserva">Fechar</button>
+            <button type="submit" class="btn-registrar-entrada" id="btn-salvar-reserva">Salvar reserva</button>
+          </div>
+        </form>
+      </div>
+    </div>

@@ -520,8 +520,8 @@ PAGINAS_POR_PAPEL = {
     'gerente': {
         'index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html',
         'contagens.html', 'pedidos.html', 'recebimentos.html', 'guia-compras.html',
-        'cardapio.html', 'preparo.html', 'precos.html', 'configuracoes.html',
-        'instalar-extensao.html',
+        'cardapio.html', 'preparo.html', 'precos.html', 'reservas.html',
+        'configuracoes.html', 'instalar-extensao.html',
     },
     'operacao': {
         # A Home entrou em 23/09 (pedido dela): os alertas de entrega,
@@ -529,7 +529,9 @@ PAGINAS_POR_PAPEL = {
         # os blocos de dinheiro já ficam escondidos de quem não é admin.
         'index.html',
         'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
-        'cardapio.html', 'guia-compras.html', 'configuracoes.html',
+        # Reserva é operação pura: quem atende o telefone e anota é o time
+        # da loja (29/09).
+        'cardapio.html', 'guia-compras.html', 'reservas.html', 'configuracoes.html',
     },
 }
 # Pra onde cai quem tenta abrir uma tela que o perfil não alcança. A operação

@@ -1,0 +1,283 @@
+/* Tela de Reservas (29/09). A base compartilhada — menu, cabeçalho,
+   faixa de indicadores, cartões — está em theme.css; aqui fica só o que
+   é próprio da agenda. */
+
+.reservas-topo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.reservas-acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* PERÍODO: hoje / amanhã / semana */
+.reservas-periodo {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: var(--space-4);
+  background-color: var(--surface-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+}
+
+.reservas-periodo button {
+  border: 0;
+  background: none;
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reservas-periodo button.active {
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.reservas-kpis { margin-bottom: var(--space-4); }
+.reservas-kpis .store-card { padding: 14px 16px; gap: 2px; min-width: 0; }
+.reservas-kpis .card-subtitle { font-size: 0.66rem; }
+.reservas-kpis .metric-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.reservas-kpis .store-value { font-size: 1.35rem; line-height: 1.2; }
+.reservas-kpis .kpi-sub { font-size: 0.72rem; color: var(--text-muted); }
+
+/* A LISTA. Sem borda em cada linha: o que separa é o fio, igual à faixa
+   de indicadores — muito contorno numa lista longa cansa. */
+.reservas-lista-card { padding: 0; overflow: hidden; }
+.reservas-lista-card .chart-header { padding: var(--space-5) var(--space-6) var(--space-3); }
+
+.reservas-dia {
+  padding: 10px var(--space-6);
+  background-color: var(--surface-muted);
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.reserva-linha {
+  display: grid;
+  /* hora | quem | pessoas | etiquetas | ações */
+  grid-template-columns: 62px minmax(0, 1fr) 76px auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px var(--space-6);
+  border-bottom: 1px solid var(--divisoria);
+}
+
+.reserva-linha:last-child { border-bottom: 0; }
+
+.reserva-hora {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  letter-spacing: -0.02em;
+}
+
+/* Quem reservou pra 1h da manhã aparece no turno da noite anterior — a
+   hora sozinha ficaria confusa, então a data vem junto só nesse caso. */
+.reserva-hora small {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  letter-spacing: 0;
+}
+
+.reserva-quem { min-width: 0; }
+
+.reserva-quem strong {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reserva-quem span {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reserva-pessoas {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.reserva-pessoas svg { width: 14px; height: 14px; color: var(--icone-neutro); }
+
+.reserva-etiquetas {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.reserva-status {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.reserva-status--pendente { background-color: var(--warning-soft); color: var(--warning-texto); }
+.reserva-status--confirmada { background-color: var(--success-soft); color: var(--success-texto); }
+.reserva-status--compareceu { background-color: var(--surface-muted); color: var(--text-muted); }
+.reserva-status--nao_compareceu { background-color: var(--danger-soft); color: var(--danger-texto); }
+.reserva-status--cancelada { background-color: var(--surface-muted); color: var(--text-faint); }
+
+.reserva-origem {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.reserva-loja {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.reserva-acoes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.reserva-acoes button {
+  border: 1px solid var(--border-color);
+  background-color: var(--card-bg);
+  border-radius: var(--radius-sm);
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--icone-neutro);
+}
+
+@media (hover: hover) {
+  .reserva-acoes button:hover { border-color: var(--border-strong); color: var(--text-dark); }
+  .reserva-acoes button.acao-perigo:hover { border-color: var(--danger); color: var(--danger-texto); }
+}
+
+.reserva-acoes button svg { width: 15px; height: 15px; }
+
+.reservas-vazio {
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+/* O FORMULÁRIO */
+.modal-reserva { max-width: 560px; width: 100%; }
+
+.form-reserva {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.campo-reserva { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.campo-reserva.campo-largo { grid-column: 1 / -1; }
+
+.campo-reserva > span {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.campo-reserva > span small { font-weight: 400; color: var(--text-faint); }
+
+.campo-reserva input,
+.campo-reserva select {
+  width: 100%;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--text-dark);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+}
+
+/* Avisa antes de salvar que a reserva cai no turno da noite anterior.
+   É a única coisa da tela que surpreende quem nunca viu. */
+.reserva-aviso-turno {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background-color: var(--info-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-dark);
+}
+
+#reserva-erro { grid-column: 1 / -1; margin: 0; }
+
+.modal-acoes {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* CELULAR: a grade de 5 colunas não cabe. Vira duas linhas, com as
+   ações embaixo — e as etiquetas voltam pra esquerda, senão ficam
+   penduradas no vazio. */
+@media (max-width: 768px) {
+  .reserva-linha {
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    row-gap: 8px;
+    padding: 12px var(--space-4);
+  }
+
+  .reserva-etiquetas {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .reserva-acoes { grid-column: 3; }
+  .reservas-dia { padding: 9px var(--space-4); }
+  .reservas-lista-card .chart-header { padding: var(--space-4) var(--space-4) var(--space-2); }
+
+  .form-reserva { grid-template-columns: 1fr; padding: var(--space-4); }
+  .reservas-periodo { width: 100%; }
+  .reservas-periodo button { flex: 1; padding: 8px 6px; }
+  .reservas-acoes { width: 100%; }
+  .reservas-acoes .select-wrapper { flex: 1; }
+}

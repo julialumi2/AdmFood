@@ -399,6 +399,11 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarFornecedores();
   }
 
+  // 4.0985 TELA DE RESERVAS
+  if (document.getElementById('reservas-lista')) {
+    iniciarTelaDeReservas();
+  }
+
   // 4.099 TELA DE COTAÇÕES
   if (document.getElementById('cotacoes-tabela-body')) {
     const abrirId = new URLSearchParams(location.search).get('abrir');
@@ -14006,16 +14011,347 @@ function _possoGerir() {
   return papel === 'admin' || papel === 'gerente';
 }
 
+// =====================================================================
+// RESERVAS (29/09)
+//
+// A sutileza da tela toda é o TURNO: reserva de 1h da manhã pertence à
+// noite anterior numa loja que fecha às 4h30. O backend já devolve o
+// `dia_operacional` calculado; aqui a tela só precisa agrupar por ele e
+// avisar quem está digitando, antes de salvar, quando o dia que ela vê
+// no calendário não é o turno em que a reserva vai cair.
+// =====================================================================
+
+let reservasPeriodo = 'hoje';
+let reservasCarregadas = [];
+let reservasViradaPorLoja = {};   // { loja: "HH:MM" }
+
+const RESERVA_ROTULO_STATUS = {
+  pendente: 'A confirmar',
+  confirmada: 'Confirmada',
+  compareceu: 'Compareceu',
+  nao_compareceu: 'Não veio',
+  cancelada: 'Cancelada',
+};
+
+const RESERVA_ROTULO_ORIGEM = {
+  sistema: '', telefone: 'por telefone', whatsapp: 'pelo WhatsApp',
+  instagram: 'pelo Instagram', presencial: 'no balcão',
+};
+
+function _reservaDiaOperacional(quandoIso, horaVirada) {
+  // Mesma conta do backend (dia_operacional_de). Aqui só pra avisar
+  // antes de salvar — quem decide é o servidor.
+  const quando = new Date(quandoIso);
+  if (Number.isNaN(quando.getTime())) return null;
+  const [h, m] = (horaVirada || '00:00').split(':').map(Number);
+  if (quando.getHours() < h || (quando.getHours() === h && quando.getMinutes() < m)) {
+    quando.setDate(quando.getDate() - 1);
+  }
+  return quando.toISOString().slice(0, 10);
+}
+
+function _reservaDiaLegivel(diaIso) {
+  const [a, m, d] = diaIso.split('-').map(Number);
+  const data = new Date(a, m - 1, d);
+  const semana = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
+    'quinta-feira', 'sexta-feira', 'sábado'][data.getDay()];
+  return `${semana}, ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+}
+
+function _reservaPeriodoEmDatas() {
+  // "Hoje" é o turno de hoje, não o calendário. Como cada loja pode ter
+  // virada própria, a tela usa a menor delas — o backend recorta certo
+  // por loja depois.
+  const viradas = Object.values(reservasViradaPorLoja);
+  const menor = viradas.length ? viradas.sort()[0] : '00:00';
+  const hoje = _reservaDiaOperacional(new Date().toISOString(), menor)
+    || new Date().toISOString().slice(0, 10);
+  const mais = (dias) => {
+    const [a, m, d] = hoje.split('-').map(Number);
+    const data = new Date(a, m - 1, d + dias);
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+  };
+  if (reservasPeriodo === 'amanha') return { de: mais(1), ate: mais(1) };
+  if (reservasPeriodo === 'semana') return { de: hoje, ate: mais(6) };
+  return { de: hoje, ate: hoje };
+}
+
+async function iniciarTelaDeReservas() {
+  // A hora de virada de cada loja vem antes de tudo: sem ela, "hoje" na
+  // tela pode ser o dia errado de madrugada.
+  try {
+    const config = await (await fetch('/api/config/lojas', { credentials: 'same-origin' })).json();
+    (config.lojas || []).forEach((l) => { reservasViradaPorLoja[l.nome || l.loja] = l.horaVirada || '00:00'; });
+  } catch (erro) {
+    console.warn('Não consegui ler a hora de virada; usando meia-noite.', erro);
+  }
+
+  const seletores = [document.getElementById('reservas-filtro-loja'),
+                     document.getElementById('reserva-loja')];
+  const lojas = Object.keys(reservasViradaPorLoja);
+  seletores.forEach((sel, i) => {
+    if (!sel) return;
+    const opcoes = lojas.map((l) => `<option value="${escaparHtml(l)}">${escaparHtml(l)}</option>`).join('');
+    sel.innerHTML = (i === 0 ? '<option value="">Todas as lojas</option>' : '') + opcoes;
+  });
+  // Quem só enxerga uma loja não precisa escolher.
+  if (lojas.length === 1) {
+    document.getElementById('campo-reserva-loja')?.setAttribute('hidden', '');
+    document.getElementById('reservas-filtro-loja')?.parentElement?.setAttribute('hidden', '');
+  }
+
+  document.querySelectorAll('.reservas-periodo button').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      document.querySelectorAll('.reservas-periodo button').forEach((b) => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      botao.classList.add('active');
+      botao.setAttribute('aria-selected', 'true');
+      reservasPeriodo = botao.dataset.periodo;
+      carregarReservas();
+    });
+  });
+
+  document.getElementById('reservas-filtro-loja')?.addEventListener('change', carregarReservas);
+  document.getElementById('btn-nova-reserva')?.addEventListener('click', () => abrirModalReserva());
+  document.getElementById('btn-fechar-reserva')?.addEventListener('click', fecharModalReserva);
+  document.getElementById('btn-cancelar-reserva')?.addEventListener('click', fecharModalReserva);
+  document.getElementById('form-reserva')?.addEventListener('submit', salvarReserva);
+  ['reserva-quando', 'reserva-loja'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', avisarSobreOTurno);
+  });
+  document.getElementById('reservas-lista')?.addEventListener('click', aoClicarNaReserva);
+
+  carregarReservas();
+}
+
+async function carregarReservas() {
+  const lista = document.getElementById('reservas-lista');
+  if (!lista) return;
+  lista.innerHTML = '<p class="reservas-vazio">Carregando...</p>';
+
+  const { de, ate } = _reservaPeriodoEmDatas();
+  const loja = document.getElementById('reservas-filtro-loja')?.value || '';
+  const url = `/api/reservas?de=${de}&ate=${ate}${loja ? `&loja=${encodeURIComponent(loja)}` : ''}`;
+  try {
+    const dados = await (await fetch(url, { credentials: 'same-origin' })).json();
+    reservasCarregadas = dados.reservas || [];
+    renderReservas(dados);
+  } catch (erro) {
+    console.error(erro);
+    lista.innerHTML = '<p class="reservas-vazio">Não consegui carregar as reservas. Recarregue a página.</p>';
+  }
+}
+
+function renderReservas(dados) {
+  const lista = document.getElementById('reservas-lista');
+  const reservas = reservasCarregadas;
+
+  const pendentes = reservas.filter((r) => r.status === 'pendente').length;
+  const maior = reservas.reduce((maiorAte, r) => (r.pessoas > (maiorAte?.pessoas || 0) ? r : maiorAte), null);
+  document.getElementById('reservas-val-total').textContent = reservas.length;
+  document.getElementById('reservas-val-pessoas').textContent = dados.pessoas || 0;
+  document.getElementById('reservas-val-pendentes').textContent = pendentes;
+  document.getElementById('reservas-val-maior').textContent = maior ? `${maior.pessoas}` : '—';
+  document.getElementById('reservas-val-maior-sub').textContent = maior ? `pessoas · ${maior.nome}` : 'no período';
+  document.getElementById('reservas-val-total-sub').textContent =
+    reservasPeriodo === 'semana' ? 'nos próximos 7 dias' : 'no turno';
+
+  const legenda = document.getElementById('reservas-legenda');
+  if (legenda) {
+    legenda.textContent = reservasPeriodo === 'semana'
+      ? `De ${_reservaDiaLegivel(dados.de)} a ${_reservaDiaLegivel(dados.ate)}.`
+      : `Turno de ${_reservaDiaLegivel(dados.de)}. A madrugada conta como a noite que começou antes.`;
+  }
+
+  if (!reservas.length) {
+    lista.innerHTML = '<p class="reservas-vazio">Nenhuma reserva nesse período.</p>';
+    return;
+  }
+
+  const porDia = new Map();
+  reservas.forEach((r) => {
+    if (!porDia.has(r.dia_operacional)) porDia.set(r.dia_operacional, []);
+    porDia.get(r.dia_operacional).push(r);
+  });
+
+  const mostrarLoja = !document.getElementById('reservas-filtro-loja')?.value;
+  lista.innerHTML = [...porDia.entries()].map(([dia, doDia]) => `
+    <p class="reservas-dia">${escaparHtml(_reservaDiaLegivel(dia))} · ${_qtdTexto(doDia.length, 'reserva', 'reservas')}</p>
+    ${doDia.map((r) => _linhaDeReservaHTML(r, dia, mostrarLoja)).join('')}
+  `).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _linhaDeReservaHTML(reserva, dia, mostrarLoja) {
+  const quando = new Date(reserva.quando);
+  const hora = `${String(quando.getHours()).padStart(2, '0')}:${String(quando.getMinutes()).padStart(2, '0')}`;
+  // Só mostra a data ao lado da hora quando ela é diferente do turno —
+  // é o caso da madrugada, e é aí que a hora sozinha confundiria.
+  const dataDaVez = reserva.quando.slice(0, 10);
+  const viradaDeNoite = dataDaVez !== dia
+    ? `<small>${dataDaVez.slice(8, 10)}/${dataDaVez.slice(5, 7)}</small>` : '';
+
+  const apoio = [
+    reserva.telefone,
+    reserva.observacao,
+  ].filter(Boolean).join(' · ');
+
+  const origem = RESERVA_ROTULO_ORIGEM[reserva.origem] || '';
+  const encerrada = ['compareceu', 'nao_compareceu', 'cancelada'].includes(reserva.status);
+
+  return `
+    <div class="reserva-linha" data-reserva="${reserva.id}">
+      <div class="reserva-hora">${hora}${viradaDeNoite}</div>
+      <div class="reserva-quem">
+        <strong title="${escaparHtml(reserva.nome)}">${escaparHtml(reserva.nome)}</strong>
+        ${apoio ? `<span title="${escaparHtml(apoio)}">${escaparHtml(apoio)}</span>` : ''}
+      </div>
+      <div class="reserva-pessoas"><i data-lucide="users"></i>${reserva.pessoas}</div>
+      <div class="reserva-etiquetas">
+        ${mostrarLoja ? `<span class="reserva-loja">${escaparHtml(reserva.loja)}</span>` : ''}
+        ${origem ? `<span class="reserva-origem">${escaparHtml(origem)}</span>` : ''}
+        <span class="reserva-status reserva-status--${reserva.status}">${RESERVA_ROTULO_STATUS[reserva.status] || reserva.status}</span>
+      </div>
+      <div class="reserva-acoes">
+        ${encerrada ? '' : `
+          <button type="button" data-acao="compareceu" title="Marcar que chegou"><i data-lucide="check"></i></button>
+          <button type="button" data-acao="editar" title="Editar"><i data-lucide="pencil"></i></button>
+          <button type="button" data-acao="cancelar" class="acao-perigo" title="Cancelar reserva"><i data-lucide="x"></i></button>
+        `}
+      </div>
+    </div>`;
+}
+
+async function aoClicarNaReserva(evento) {
+  const botao = evento.target.closest('[data-acao]');
+  if (!botao) return;
+  const linha = botao.closest('.reserva-linha');
+  const reserva = reservasCarregadas.find((r) => r.id === parseInt(linha.dataset.reserva, 10));
+  if (!reserva) return;
+
+  if (botao.dataset.acao === 'editar') return abrirModalReserva(reserva);
+
+  if (botao.dataset.acao === 'cancelar'
+      && !confirm(`Cancelar a reserva de ${reserva.nome}, ${reserva.pessoas} pessoas?\n\nEla sai da agenda do dia mas fica guardada, pra liderança saber que alguém desmarcou.`)) {
+    return;
+  }
+
+  botao.disabled = true;
+  const status = botao.dataset.acao === 'cancelar' ? 'cancelada' : 'compareceu';
+  try {
+    const r = await fetch(`/api/reservas/${reserva.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ status }),
+    });
+    if (!r.ok) throw new Error((await r.json()).erro || 'Não deu pra salvar.');
+    carregarReservas();
+  } catch (erro) {
+    botao.disabled = false;
+    alert(erro.message);
+  }
+}
+
+function abrirModalReserva(reserva) {
+  document.getElementById('modal-reserva-titulo').textContent = reserva ? 'Editar reserva' : 'Nova reserva';
+  document.getElementById('reserva-id').value = reserva ? reserva.id : '';
+  document.getElementById('reserva-nome').value = reserva ? reserva.nome : '';
+  document.getElementById('reserva-pessoas').value = reserva ? reserva.pessoas : 2;
+  document.getElementById('reserva-telefone').value = reserva ? reserva.telefone : '';
+  document.getElementById('reserva-observacao').value = reserva ? reserva.observacao : '';
+  document.getElementById('reserva-origem').value = reserva ? reserva.origem : 'telefone';
+  if (reserva) document.getElementById('reserva-loja').value = reserva.loja;
+  document.getElementById('reserva-quando').value = reserva
+    ? reserva.quando.slice(0, 16)
+    : _proximoHorarioRedondo();
+  document.getElementById('reserva-erro').hidden = true;
+  avisarSobreOTurno();
+  document.getElementById('modal-reserva').style.display = 'flex';
+  document.getElementById('reserva-nome').focus();
+}
+
+function _proximoHorarioRedondo() {
+  // Abre já com um horário plausível: a próxima hora cheia, hoje.
+  const agora = new Date();
+  agora.setMinutes(0, 0, 0);
+  agora.setHours(agora.getHours() + 1);
+  const p = (x) => String(x).padStart(2, '0');
+  return `${agora.getFullYear()}-${p(agora.getMonth() + 1)}-${p(agora.getDate())}T${p(agora.getHours())}:${p(agora.getMinutes())}`;
+}
+
+function fecharModalReserva() {
+  document.getElementById('modal-reserva').style.display = 'none';
+}
+
+function avisarSobreOTurno() {
+  const aviso = document.getElementById('reserva-aviso-turno');
+  const quando = document.getElementById('reserva-quando')?.value;
+  const loja = document.getElementById('reserva-loja')?.value
+    || Object.keys(reservasViradaPorLoja)[0];
+  if (!aviso || !quando || !loja) return;
+
+  const turno = _reservaDiaOperacional(quando, reservasViradaPorLoja[loja] || '00:00');
+  if (!turno || turno === quando.slice(0, 10)) {
+    aviso.hidden = true;
+    return;
+  }
+  // O caso que surpreende: marcou 1h da manhã de sábado, mas quem
+  // atende é o time de sexta à noite.
+  aviso.hidden = false;
+  aviso.textContent = `Essa reserva entra no turno de ${_reservaDiaLegivel(turno)} — `
+    + `é a equipe dessa noite que atende, e é nessa data que ela aparece na agenda.`;
+}
+
+async function salvarReserva(evento) {
+  evento.preventDefault();
+  const erro = document.getElementById('reserva-erro');
+  const botao = document.getElementById('btn-salvar-reserva');
+  erro.hidden = true;
+  botao.disabled = true;
+
+  const id = document.getElementById('reserva-id').value;
+  const corpo = {
+    loja: document.getElementById('reserva-loja').value || Object.keys(reservasViradaPorLoja)[0],
+    nome: document.getElementById('reserva-nome').value,
+    pessoas: document.getElementById('reserva-pessoas').value,
+    quando: document.getElementById('reserva-quando').value,
+    telefone: document.getElementById('reserva-telefone').value,
+    observacao: document.getElementById('reserva-observacao').value,
+    origem: document.getElementById('reserva-origem').value,
+  };
+
+  try {
+    const r = await fetch(id ? `/api/reservas/${id}` : '/api/reservas', {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(corpo),
+    });
+    const resposta = await r.json();
+    if (!r.ok) throw new Error(resposta.erro || 'Não deu pra salvar.');
+    fecharModalReserva();
+    carregarReservas();
+  } catch (e) {
+    erro.textContent = e.message;
+    erro.hidden = false;
+  } finally {
+    botao.disabled = false;
+  }
+}
+
 // Telas de cada perfil — o mesmo mapa do backend (PAGINAS_POR_PAPEL em app.py).
 const PAGINAS_POR_PAPEL = {
   gerente: ['index.html', 'estoque.html', 'fornecedores.html', 'cotacoes.html', 'contagens.html',
     'pedidos.html', 'recebimentos.html', 'guia-compras.html', 'cardapio.html', 'preparo.html',
     'curva-abc.html', 'insight.html', 'mais-vendidos.html', 'vendas-semanais.html', 'precos.html',
-    'configuracoes.html', 'instalar-extensao.html'],
+    'reservas.html', 'configuracoes.html', 'instalar-extensao.html'],
   // A Home entrou pra operação em 23/09: os alertas de entrega, contagem e
   // estoque crítico são de quem está na loja (ver PAGINAS_POR_PAPEL no app.py).
   operacao: ['index.html', 'estoque.html', 'contagens.html', 'recebimentos.html', 'preparo.html',
-    'cardapio.html', 'guia-compras.html', 'configuracoes.html'],
+    'cardapio.html', 'guia-compras.html', 'reservas.html', 'configuracoes.html'],
 };
 
 function _ajustarMenuAoPerfil() {
