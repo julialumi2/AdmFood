@@ -6,6 +6,7 @@ veja .env.example pro modelo). Em produção (Dokploy), as variáveis são
 definidas direto no painel, sem precisar de nenhum arquivo.
 """
 
+import json
 import os
 
 from dotenv import load_dotenv
@@ -36,45 +37,63 @@ ADMIN_INICIAL_SENHA = os.environ.get("ADMIN_INICIAL_SENHA", "").strip()
 # exemplo em .env.example.
 EQUIPE_INICIAL_JSON = os.environ.get("EQUIPE_INICIAL", "").strip()
 
+# Dados fiscais das lojas (nome fantasia, razão social, CNPJ). Alimentam o
+# bloco por loja da mensagem de WhatsApp de "Gerar pedidos" (estilo VMarket,
+# pedido da Julia em 2026-09-03).
+#
+# Saíram deste arquivo em 2026-09-29: o repositório é público, e razão
+# social — que numa das lojas é o nome completo de uma pessoa física — não
+# pode ficar em arquivo versionado.
+#
+# Vêm numa variável só, em JSON, no mesmo formato de EQUIPE_INICIAL. Um
+# campo só pra colar no painel do Dokploy em vez de doze:
+#
+#   DADOS_FISCAIS_LOJAS={"Hamburgueria Artesanos": {"nomeFantasia": "...",
+#     "razaoSocial": "...", "cnpj": "..."}, ...}
+#
+# Sem a variável, os três campos ficam em branco e a mensagem cai pra
+# "Não informado" (app.py) — o pedido continua saindo normalmente.
+try:
+    _DADOS_FISCAIS = json.loads(os.environ.get("DADOS_FISCAIS_LOJAS", "") or "{}")
+except ValueError:
+    # JSON malformado não pode derrubar a subida do app: isso aqui é texto
+    # de uma mensagem, não regra de negócio. Fica em branco e segue.
+    _DADOS_FISCAIS = {}
+
+
+def _fiscal(loja):
+    dados = _DADOS_FISCAIS.get(loja) or {}
+    return {
+        "nome_fantasia": dados.get("nomeFantasia", ""),
+        "razao_social": dados.get("razaoSocial", ""),
+        "cnpj": dados.get("cnpj", ""),
+    }
+
+
 # Dicionário com as configurações individuais de cada unidade/loja.
-# nome_fantasia/razao_social/cnpj alimentam o bloco por loja da mensagem de
-# WhatsApp de "Gerar pedidos" (estilo VMarket, pedido da Julia 2026-09-03) —
-# Artesanos/Tradiça ZN/Tradiça Simus vieram literal do print de um pedido
-# real que ela mandou; Açaí Na Lata ainda não tinha aparecido num pedido
-# dela até agora, fica vazio até ela passar o dado (o texto da mensagem cai
-# pra "Não informado" quando um desses campos está em branco).
 LOJAS = {
     "Hamburgueria Artesanos": {
         "nome_aba": "DIARIO ART",  # Nome exato da aba no Google Sheets
         "cardapio_web_token": os.environ.get("TOKEN_ARTESANOS", ""),
         "grupo_whatsapp_id": os.environ.get("GRUPO_WHATSAPP_ARTESANOS", ""),
-        "nome_fantasia": "Artesanos Burger",
-        "razao_social": "Artesanos Burger LTDA",
-        "cnpj": "33.561.488/0001-85",
+        **_fiscal("Hamburgueria Artesanos"),
     },
     "Açaí Na Lata": {
         "nome_aba": "DIÁRIO AÇAÍ ",  # Nome exato da aba no Google Sheets
         "cardapio_web_token": os.environ.get("TOKEN_ACAI", ""),
         "grupo_whatsapp_id": os.environ.get("GRUPO_WHATSAPP_ACAI", ""),
-        # Passados pela Julia em 2026-09-11.
-        "nome_fantasia": "Açaí NaLata",
-        "razao_social": "Açaí naLata SP 01",
-        "cnpj": "68.073.248/0001-16",
+        **_fiscal("Açaí Na Lata"),
     },
     "Tradiça ZN": {
         "nome_aba": "DIARIO ZN",  # Nome exato da aba no Google Sheets
         "cardapio_web_token": os.environ.get("TOKEN_ZN", ""),
         "grupo_whatsapp_id": os.environ.get("GRUPO_WHATSAPP_ZN", ""),
-        "nome_fantasia": "Tradiça Dog",
-        "razao_social": "50.760.217 ANA BEATRIZ TOBARU",
-        "cnpj": "50.760.217/0001-78",
+        **_fiscal("Tradiça ZN"),
     },
     "Tradiça Simus": {
         "nome_aba": "DIARIO SIMUS",  # Nome exato da aba no Google Sheets
         "cardapio_web_token": os.environ.get("TOKEN_SIMUS", ""),
         "grupo_whatsapp_id": os.environ.get("GRUPO_WHATSAPP_SIMUS", ""),
-        "nome_fantasia": "Tradiça Simus",
-        "razao_social": "TRADICA DOG SIMUS LTDA",
-        "cnpj": "65.014.833/0001-57",
+        **_fiscal("Tradiça Simus"),
     },
 }
