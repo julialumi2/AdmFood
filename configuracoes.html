@@ -239,6 +239,13 @@
                 <small>Quem mexeu em quê</small>
               </span>
             </button>
+            <button type="button" class="config-menu-item" data-secao="agente">
+              <i data-lucide="message-circle"></i>
+              <span>
+                <strong>Agente do WhatsApp</strong>
+                <small>Teste as perguntas antes do chip chegar</small>
+              </span>
+            </button>
             <button type="button" class="config-menu-item" data-secao="backup">
               <i data-lucide="hard-drive-download"></i>
               <span>
@@ -443,6 +450,41 @@
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </section>
+
+            <!-- ============ AGENTE DO WHATSAPP ============ -->
+            <section class="config-secao" data-secao="agente">
+              <div class="panel" id="painel-agente" style="display:none;">
+                <div class="panel-header">
+                  <div>
+                    <h3 class="panel-title">Agente do WhatsApp</h3>
+                    <span class="panel-subtitle">Pergunte aqui o mesmo que perguntaria pra ele no WhatsApp</span>
+                  </div>
+                  <span class="agente-estado" id="agente-estado"></span>
+                </div>
+
+                <p class="panel-subtitle agente-explica">
+                  Isto é o robô de verdade respondendo — a mesma função que vai atender no
+                  WhatsApp. A única coisa que falta é o chip: sem ele não há por onde a
+                  mensagem chegar, mas a resposta já é a definitiva.
+                </p>
+
+                <div class="agente-atalhos" id="agente-atalhos">
+                  <button type="button" data-pergunta="quanto vendeu ontem?">quanto vendeu ontem?</button>
+                  <button type="button" data-pergunta="o que falta comprar?">o que falta comprar?</button>
+                  <button type="button" data-pergunta="reservas de hoje">reservas de hoje</button>
+                  <button type="button" data-pergunta="quanto tem de bacon?">quanto tem de bacon?</button>
+                </div>
+
+                <form class="agente-form" id="agente-form">
+                  <input type="text" id="agente-pergunta" autocomplete="off"
+                         placeholder="Escreva como você escreveria no WhatsApp..."
+                         aria-label="Pergunta pro agente">
+                  <button type="submit" class="btn-secondary" id="agente-enviar">Perguntar</button>
+                </form>
+
+                <div class="agente-conversa" id="agente-conversa"></div>
               </div>
             </section>
 

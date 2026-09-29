@@ -13711,6 +13711,11 @@ async function carregarUsuarioLogado() {
       const painel = document.getElementById(id);
       if (painel && usuario.papel === 'admin') painel.style.display = '';
     });
+    const painelAgente = document.getElementById('painel-agente');
+    if (painelAgente && usuario.papel === 'admin') {
+      painelAgente.style.display = '';
+      iniciarPainelDoAgente();
+    }
     const painelBackup = document.getElementById('painel-backup');
     if (painelBackup && usuario.papel === 'admin') {
       painelBackup.style.display = '';
@@ -14337,6 +14342,75 @@ async function salvarReserva(evento) {
   } catch (e) {
     erro.textContent = e.message;
     erro.hidden = false;
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+
+// =====================================================================
+// PAINEL DE TESTE DO AGENTE (29/09)
+//
+// O robô de verdade respondendo, sem WhatsApp no meio. É a mesma função
+// que vai atender lá — a resposta aqui é a definitiva. Serve pra ela
+// conferir antes do chip chegar, e pra mostrar pro chefe.
+// =====================================================================
+
+function iniciarPainelDoAgente() {
+  const form = document.getElementById('agente-form');
+  if (!form || form.dataset.pronto) return;
+  form.dataset.pronto = '1';
+
+  form.addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    const campo = document.getElementById('agente-pergunta');
+    const pergunta = campo.value.trim();
+    if (!pergunta) return;
+    campo.value = '';
+    perguntarAoAgente(pergunta);
+  });
+
+  document.getElementById('agente-atalhos')?.addEventListener('click', (evento) => {
+    const botao = evento.target.closest('[data-pergunta]');
+    if (botao) perguntarAoAgente(botao.dataset.pergunta);
+  });
+}
+
+async function perguntarAoAgente(pergunta) {
+  const conversa = document.getElementById('agente-conversa');
+  const botao = document.getElementById('agente-enviar');
+  botao.disabled = true;
+
+  // A pergunta aparece na hora; a resposta entra embaixo quando chegar.
+  conversa.insertAdjacentHTML('afterbegin', `
+    <div class="agente-troca">
+      <p class="agente-pergunta">${escaparHtml(pergunta)}</p>
+      <pre class="agente-resposta agente-pensando">respondendo...</pre>
+    </div>`);
+  const alvo = conversa.querySelector('.agente-resposta');
+
+  try {
+    const r = await fetch('/api/whatsapp/teste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ texto: pergunta, nome: window.usuarioLogado?.nome }),
+    });
+    const dados = await r.json();
+    if (!r.ok) throw new Error(dados.erro || 'Não deu pra perguntar.');
+    alvo.classList.remove('agente-pensando');
+    // textContent, não innerHTML: a resposta é texto do robô e não pode
+    // virar marcação na tela.
+    alvo.textContent = dados.responderia;
+
+    const estado = document.getElementById('agente-estado');
+    if (estado) {
+      estado.textContent = dados.configurado ? 'Evolution configurada' : 'Ainda sem o chip';
+      estado.className = 'agente-estado' + (dados.configurado ? ' agente-estado--ok' : '');
+    }
+  } catch (erro) {
+    alvo.classList.remove('agente-pensando');
+    alvo.textContent = erro.message;
   } finally {
     botao.disabled = false;
   }
