@@ -215,6 +215,16 @@ from backend.armazenamento import (
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
     pendencias_compras,
+    criar_reserva,
+    buscar_reserva,
+    listar_reservas,
+    atualizar_reserva,
+    reservas_por_avisar,
+    marcar_reservas_avisadas,
+    dia_operacional_de,
+    hora_virada_da_loja,
+    STATUS_DE_RESERVA,
+    ORIGENS_DE_RESERVA,
     listar_pedidos_recebidos,
     dias_esperando_entrega,
     DIAS_ENTREGA_ATRASADA,
@@ -1979,6 +1989,135 @@ def _atividades_do_dia(lojas, usuario):
         atividade(True, f"Concluir {n} {_plural(n, 'tarefa', 'tarefas')} do ClickUp com prazo até hoje", link="clickup.html")
 
     return pendentes + feitas
+
+
+# ---------------------------------------------------------------------
+# RESERVAS (29/09) — pedido do chefe. Aqui é só o cadastro; o aviso no
+# grupo da liderança (todo dia às 15h, e reserva nova na hora) entra
+# depois, lendo daqui.
+# ---------------------------------------------------------------------
+
+def _reserva_visivel(reserva):
+    return _loja_visivel(reserva["loja"])
+
+
+def _dia_operacional_de_hoje(loja):
+    """Em que turno a loja está AGORA. Às 2h da manhã numa loja que vira
+    às 04:30, o dia operacional ainda é o de ontem — então "as reservas
+    de hoje" pra quem está no salão às 2h são as da noite que começou
+    ontem, não as da noite que vem."""
+    return dia_operacional_de(datetime.now().isoformat(timespec="minutes"),
+                              hora_virada_da_loja(loja))
+
+
+@app.route('/api/reservas', methods=['GET'])
+def api_listar_reservas():
+    """Reservas por dia operacional. Sem período, traz o turno de hoje.
+
+    `de`/`ate` são datas AAAA-MM-DD. Gerente e operação recebem só a loja
+    deles, mesmo pedindo outra."""
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+
+    loja_pedida = (request.args.get('loja') or '').strip()
+    if loja_pedida and loja_pedida not in LOJAS:
+        return jsonify({"erro": "Loja inválida."}), 400
+    if loja_pedida:
+        lojas = [_loja_no_escopo(loja_pedida)]
+    else:
+        lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
+
+    de = (request.args.get('de') or '').strip()
+    ate = (request.args.get('ate') or '').strip()
+    for rotulo, valor in (("de", de), ("ate", ate)):
+        if valor:
+            try:
+                date.fromisoformat(valor)
+            except ValueError:
+                return jsonify({"erro": "Data inválida em '%s'." % rotulo}), 400
+    if not de and not ate:
+        # Sem período: o turno de agora. Cada loja pode estar num dia
+        # operacional diferente (viradas diferentes), então o intervalo
+        # cobre do menor ao maior.
+        dias = sorted({_dia_operacional_de_hoje(loja) for loja in lojas}) or [date.today().isoformat()]
+        de, ate = dias[0], dias[-1]
+
+    status = [s for s in (request.args.get('status') or '').split(',') if s]
+    for s in status:
+        if s not in STATUS_DE_RESERVA:
+            return jsonify({"erro": "Status inválido: %s" % s}), 400
+
+    reservas = listar_reservas(lojas, de=de or None, ate=ate or None, status=status or None)
+    return jsonify({
+        "reservas": reservas,
+        "de": de,
+        "ate": ate,
+        "pessoas": sum(r["pessoas"] for r in reservas),
+        "lojas": lojas,
+    })
+
+
+@app.route('/api/reservas', methods=['POST'])
+def api_criar_reserva():
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+
+    dados = request.get_json(silent=True) or {}
+    loja = _loja_no_escopo((dados.get('loja') or '').strip())
+    if loja not in LOJAS:
+        return jsonify({"erro": "Escolha a loja da reserva."}), 400
+
+    origem = (dados.get('origem') or 'sistema').strip()
+    if origem not in ORIGENS_DE_RESERVA:
+        return jsonify({"erro": "Origem inválida."}), 400
+
+    try:
+        reserva_id = criar_reserva(
+            loja=loja,
+            nome=dados.get('nome'),
+            pessoas=dados.get('pessoas'),
+            quando_iso=(dados.get('quando') or '').strip(),
+            telefone=dados.get('telefone') or '',
+            observacao=dados.get('observacao') or '',
+            origem=origem,
+            status=(dados.get('status') or 'confirmada').strip(),
+            criado_por=(_usuario_logado() or {}).get('nome'),
+        )
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
+    return jsonify({"reserva": buscar_reserva(reserva_id)}), 201
+
+
+@app.route('/api/reservas/<int:reserva_id>', methods=['PUT'])
+def api_atualizar_reserva(reserva_id):
+    """Remarcar, mudar o número de pessoas, confirmar presença, cancelar.
+
+    Não existe DELETE: cancelar é um status. Apagar perderia a informação
+    de que alguém desmarcou, que é o que a liderança quer enxergar."""
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
+
+    reserva = buscar_reserva(reserva_id)
+    if not reserva or not _reserva_visivel(reserva):
+        # 404 também quando é de outra loja: dizer "existe mas não é sua"
+        # já entrega que a reserva existe.
+        return jsonify({"erro": "Reserva não encontrada."}), 404
+
+    dados = request.get_json(silent=True) or {}
+    if 'loja' in dados:
+        nova = _loja_no_escopo((dados.get('loja') or '').strip())
+        if nova not in LOJAS:
+            return jsonify({"erro": "Loja inválida."}), 400
+        dados['loja'] = nova
+
+    try:
+        atualizar_reserva(reserva_id, dados, (_usuario_logado() or {}).get('nome'))
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
+    return jsonify({"reserva": buscar_reserva(reserva_id)})
 
 
 # Quantos alertas o sininho lista de uma vez. O badge mostra o total de

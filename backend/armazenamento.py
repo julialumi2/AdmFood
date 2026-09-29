@@ -821,6 +821,52 @@ def inicializar_banco():
             """
         )
 
+        # Reservas de mesa (29/09), pedido do chefe. Por loja, como tudo
+        # que é operação.
+        #
+        # `quando` é a hora que o cliente marcou. `dia_operacional` é a
+        # que manda nas listagens: reserva de sábado 01:00 numa loja que
+        # vira às 04:30 pertence ao turno de SEXTA, e é o time de sexta à
+        # noite que precisa saber dela. Fica gravado em vez de calculado
+        # na leitura pra consulta ser um WHERE simples — e porque o valor
+        # fica estável e auditável.
+        #
+        # (Consequência: mudar a hora de virada de uma loja não move as
+        # reservas já gravadas. Elas ficam no turno em que foram
+        # marcadas, que é o que quem anotou tinha em mente.)
+        #
+        # `origem` existe desde já porque a próxima etapa é reserva
+        # entrando por DM do Instagram, e vai importar saber de onde veio.
+        # `avisado_em` é o que impede o grupo de receber a mesma reserva
+        # nova duas vezes.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reserva (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loja TEXT NOT NULL,
+                nome TEXT NOT NULL,
+                telefone TEXT NOT NULL DEFAULT '',
+                pessoas INTEGER NOT NULL,
+                quando TEXT NOT NULL,
+                dia_operacional TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'confirmada',
+                origem TEXT NOT NULL DEFAULT 'sistema',
+                observacao TEXT NOT NULL DEFAULT '',
+                criado_em TEXT NOT NULL,
+                criado_por TEXT,
+                atualizado_em TEXT,
+                atualizado_por TEXT,
+                avisado_em TEXT
+            )
+            """
+        )
+        # A listagem do dia e a da semana são sempre por loja + dia
+        # operacional; sem índice isso vira varredura da tabela inteira
+        # assim que houver histórico.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_reserva_loja_dia ON reserva (loja, dia_operacional)"
+        )
+
         # Cadastro de fornecedor — semente do futuro módulo de Compras/
         # Cotação (ver seção 9 da documentação), começando só pelo diretório,
         # sem fluxo de cotação ainda. De rede toda (não por loja, diferente
@@ -2951,6 +2997,162 @@ def horas_virada_das_lojas():
 def hora_virada_da_loja(loja):
     """A hora de virada de uma loja, ou 00:00 se ela não tem uma."""
     return horas_virada_das_lojas().get(loja, VIRADA_PADRAO)
+
+
+STATUS_DE_RESERVA = ("pendente", "confirmada", "cancelada", "compareceu", "nao_compareceu")
+ORIGENS_DE_RESERVA = ("sistema", "telefone", "whatsapp", "instagram", "presencial")
+MAXIMO_PESSOAS_POR_RESERVA = 200
+
+
+def dia_operacional_de(quando_iso, hora_virada):
+    """A que turno pertence um instante. Antes da hora de virada, ainda é
+    o dia anterior — 01:00 de sábado numa loja que vira às 04:30 é o
+    turno de sexta.
+
+    `quando_iso` no formato AAAA-MM-DDTHH:MM (ou com segundos)."""
+    quando = datetime.fromisoformat(quando_iso)
+    h, m = (int(p) for p in (hora_virada or VIRADA_PADRAO).split(":"))
+    if (quando.hour, quando.minute) < (h, m):
+        return (quando.date() - timedelta(days=1)).isoformat()
+    return quando.date().isoformat()
+
+
+def criar_reserva(loja, nome, pessoas, quando_iso, telefone="", observacao="",
+                  origem="sistema", status="confirmada", criado_por=None):
+    """Grava uma reserva e devolve o id. Valida aqui, não só na rota: a
+    próxima entrada vai ser o robô do Instagram, que não passa pela tela."""
+    nome = (nome or "").strip()
+    if not nome:
+        raise ValueError("Diga o nome de quem reservou.")
+    try:
+        pessoas = int(pessoas)
+    except (TypeError, ValueError):
+        raise ValueError("Número de pessoas inválido.")
+    if pessoas < 1 or pessoas > MAXIMO_PESSOAS_POR_RESERVA:
+        raise ValueError("Número de pessoas fora do razoável.")
+    try:
+        datetime.fromisoformat(quando_iso)
+    except (TypeError, ValueError):
+        raise ValueError("Data e hora inválidas.")
+    if status not in STATUS_DE_RESERVA:
+        raise ValueError("Status inválido.")
+    if origem not in ORIGENS_DE_RESERVA:
+        raise ValueError("Origem inválida.")
+
+    agora = datetime.now().isoformat()
+    dia = dia_operacional_de(quando_iso, hora_virada_da_loja(loja))
+    with conexao() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO reserva (loja, nome, telefone, pessoas, quando, dia_operacional,
+                                 status, origem, observacao, criado_em, criado_por)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (loja, nome, (telefone or "").strip(), pessoas, quando_iso, dia,
+             status, origem, (observacao or "").strip(), agora, criado_por),
+        )
+        return cur.lastrowid
+
+
+def buscar_reserva(reserva_id):
+    with conexao() as conn:
+        linha = conn.execute("SELECT * FROM reserva WHERE id = ?", (reserva_id,)).fetchone()
+    return dict(linha) if linha else None
+
+
+def listar_reservas(lojas, de=None, ate=None, status=None):
+    """Reservas dessas lojas, por dia operacional. `de`/`ate` são datas
+    AAAA-MM-DD, inclusivas. Sem status, traz tudo menos as canceladas —
+    cancelada some da lista do dia mas fica no banco, porque saber que
+    alguém desmarcou é informação."""
+    if not lojas:
+        return []
+    condicoes = ["loja IN (%s)" % ",".join("?" * len(lojas))]
+    parametros = list(lojas)
+    if de:
+        condicoes.append("dia_operacional >= ?")
+        parametros.append(de)
+    if ate:
+        condicoes.append("dia_operacional <= ?")
+        parametros.append(ate)
+    if status:
+        condicoes.append("status IN (%s)" % ",".join("?" * len(status)))
+        parametros.extend(status)
+    else:
+        condicoes.append("status != 'cancelada'")
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT * FROM reserva WHERE %s ORDER BY quando, nome" % " AND ".join(condicoes),
+            parametros,
+        ).fetchall()
+    return [dict(l) for l in linhas]
+
+
+def atualizar_reserva(reserva_id, campos, quem=None):
+    """Muda o que veio em `campos`. Mexer em `quando` ou `loja` recalcula
+    o dia operacional — senão a reserva remarcada continuaria aparecendo
+    no turno antigo."""
+    permitidos = {"nome", "telefone", "pessoas", "quando", "status", "observacao", "loja"}
+    campos = {k: v for k, v in campos.items() if k in permitidos}
+    if not campos:
+        return False
+    if "status" in campos and campos["status"] not in STATUS_DE_RESERVA:
+        raise ValueError("Status inválido.")
+    if "pessoas" in campos:
+        try:
+            campos["pessoas"] = int(campos["pessoas"])
+        except (TypeError, ValueError):
+            raise ValueError("Número de pessoas inválido.")
+        if campos["pessoas"] < 1 or campos["pessoas"] > MAXIMO_PESSOAS_POR_RESERVA:
+            raise ValueError("Número de pessoas fora do razoável.")
+    if "quando" in campos:
+        try:
+            datetime.fromisoformat(campos["quando"])
+        except (TypeError, ValueError):
+            raise ValueError("Data e hora inválidas.")
+
+    atual = buscar_reserva(reserva_id)
+    if not atual:
+        return False
+    if "quando" in campos or "loja" in campos:
+        loja = campos.get("loja", atual["loja"])
+        campos["dia_operacional"] = dia_operacional_de(
+            campos.get("quando", atual["quando"]), hora_virada_da_loja(loja))
+
+    campos["atualizado_em"] = datetime.now().isoformat()
+    campos["atualizado_por"] = quem
+    with conexao() as conn:
+        conn.execute(
+            "UPDATE reserva SET %s WHERE id = ?" % ", ".join("%s = ?" % c for c in campos),
+            list(campos.values()) + [reserva_id],
+        )
+    return True
+
+
+def reservas_por_avisar(lojas):
+    """Reservas que o grupo da liderança ainda não viu. É `avisado_em`
+    que impede o mesmo aviso de sair duas vezes quando o job repetir."""
+    if not lojas:
+        return []
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT * FROM reserva WHERE avisado_em IS NULL AND status != 'cancelada' "
+            "AND loja IN (%s) ORDER BY criado_em" % ",".join("?" * len(lojas)),
+            list(lojas),
+        ).fetchall()
+    return [dict(l) for l in linhas]
+
+
+def marcar_reservas_avisadas(ids):
+    if not ids:
+        return 0
+    with conexao() as conn:
+        cur = conn.execute(
+            "UPDATE reserva SET avisado_em = ? WHERE id IN (%s) AND avisado_em IS NULL"
+            % ",".join("?" * len(ids)),
+            [datetime.now().isoformat()] + list(ids),
+        )
+        return cur.rowcount
 
 
 def definir_hora_virada(loja, hora, quem=None):

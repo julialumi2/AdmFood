@@ -24,6 +24,7 @@ Não precisa instalar nada — usa só o que já está no `requirements.txt`.
 |---|---|
 | `test_baixa_estoque.py` | O motor da Etapa 0: desconta venda × ficha técnica, é idempotente (roda a cada 15 min), corrige pra cima quando a venda some, respeita o dia em que a loja ligou a baixa, e resolve composição de combo. |
 | `test_alertas.py` | O sininho: o badge conta o que não coube na lista, "marcar como lido" cala tudo e é por pessoa, alerta resolvido perde a marca, e o de backup vem em primeiro com "lido" valendo só a semana. |
+| `test_reservas.py` | O módulo de reservas: o dia operacional (reserva de 01:00 pertence ao turno da noite anterior), remarcar recalculando o turno, cancelar como status, escopo por loja e a fila de avisos. |
 | `test_acessos.py` | Os três perfis, conta desativada perdendo acesso na hora, "sair de todos os aparelhos", e a trava por loja — inclusive que adulterar o parâmetro da URL não entrega dado de outra loja. |
 
 ## Como funciona
