@@ -443,11 +443,6 @@ def inicializar_banco():
             )
             """
         )
-        # Quem digitou o custo à mão: a data já era gravada e nem ela voltava
-        # pra tela, e é esse custo que manda na margem (QA 22/09).
-        colunas_custo = {c["name"] for c in conn.execute("PRAGMA table_info(item_cardapio_custo)").fetchall()}
-        if "quem" not in colunas_custo:
-            conn.execute("ALTER TABLE item_cardapio_custo ADD COLUMN quem TEXT")
         colunas_item_cardapio = {c["name"] for c in conn.execute("PRAGMA table_info(item_cardapio)").fetchall()}
         if "tipo" not in colunas_item_cardapio:
             # Complemento (Granola, Leite em pó...) vira o mesmo tipo de
@@ -560,6 +555,18 @@ def inicializar_banco():
             )
             """
         )
+
+        # Quem digitou o custo à mão: a data já era gravada e nem ela voltava
+        # pra tela, e é esse custo que manda na margem (QA 22/09).
+        #
+        # Fica DEPOIS do CREATE de propósito. Estava antes, e num banco
+        # vazio o ALTER estourava ("no such table") — ou seja,
+        # inicializar_banco() não conseguia criar um banco do zero, e só
+        # funcionava porque os bancos existentes já tinham a tabela.
+        # Achado pela suíte de testes em 29/09.
+        colunas_custo = {c["name"] for c in conn.execute("PRAGMA table_info(item_cardapio_custo)").fetchall()}
+        if "quem" not in colunas_custo:
+            conn.execute("ALTER TABLE item_cardapio_custo ADD COLUMN quem TEXT")
 
         # Vendas por prato, extraídas do mesmo detalhe de pedido que já é
         # buscado pra somar faturamento (ver _itens_vendidos em
