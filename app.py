@@ -1986,14 +1986,28 @@ def _atividades_do_dia(lojas, usuario):
 # cadastro de hoje, "abaixo do mínimo" sozinho passa de 200.
 MAXIMO_ALERTAS_LISTADOS = 10
 
+# Em que ordem os tipos entram na lista. Tem que ser a MESMA ordem dos
+# grupos no script.js (GRUPOS_ALERTA): o sininho agrupa por tipo na tela,
+# e se o corte de 10 fosse por ordem de montagem um grupo inteiro poderia
+# sumir enquanto sobravam dez "estoque baixo".
+#
+# Backup primeiro porque é o único que, se for ignorado, custa o sistema
+# inteiro — os outros custam dinheiro ou uma compra errada (29/09).
+ORDEM_DOS_TIPOS = ("backup", "contagem", "preco", "estoque")
+
 # Depois de quantos dias sem contagem o saldo de estoque da loja deixa de
 # valer como alerta. Com a baixa automática ligada o número só desce entre
 # uma contagem e outra; passado esse prazo, o alerta certo é "essa loja
 # precisa contar", não 41 insumos abaixo do mínimo (28/09).
 DIAS_SEM_CONTAGEM_PRA_AVISAR = 21
 
+# Depois de quantos dias sem ninguém baixar uma cópia o sistema começa a
+# cobrar. O backup automático grava do lado do banco, na mesma máquina:
+# enquanto o arquivo não sair dali, ele não protege de perder o servidor.
+DIAS_SEM_BAIXAR_BACKUP_PRA_AVISAR = 7
 
-def _alertas_ativos(lojas, eh_gestao):
+
+def _alertas_ativos(lojas, eh_gestao, eh_admin=False):
     """TODOS os alertas ativos, sem corte — quem corta é a exibição.
 
     Sem corte aqui porque o "marcar como lido" precisa calar tudo, não só
@@ -2076,13 +2090,39 @@ def _alertas_ativos(lojas, eh_gestao):
             "link": "estoque.html",
         })
 
+    # A cópia do banco ainda não saiu da máquina. O backup automático roda
+    # todo dia, mas grava ao lado do próprio banco — se o servidor sumir,
+    # leva as duas coisas. Quem tira a cópia de lá é ela, pela tela.
+    #
+    # A chave leva a semana de propósito: "marcar como lido" cala o aviso
+    # até a semana virar, não pra sempre. Um clique não pode desligar
+    # justamente o alerta que protege contra perder tudo.
+    if eh_admin:
+        baixado = (listar_execucoes_rotina().get("backup_baixado") or {}).get("ultimaEm")
+        dias = (hoje - date.fromisoformat(baixado[:10])).days if baixado else None
+        if dias is None or dias > DIAS_SEM_BAIXAR_BACKUP_PRA_AVISAR:
+            ano, semana, _ = hoje.isocalendar()
+            alertas.append({
+                "tipo": "backup",
+                "chave": f"backup|{ano}-{semana:02d}",
+                "titulo": "Cópia do banco fora do servidor",
+                "detalhe": (f"A última foi baixada há {dias} dias"
+                            if dias is not None else
+                            "Nenhuma cópia foi baixada ainda"),
+                "destaque": None,
+                # Grave a partir do dobro do prazo: uma semana é lembrete,
+                # duas já é risco de perder trabalho de verdade.
+                "grave": dias is None or dias > DIAS_SEM_BAIXAR_BACKUP_PRA_AVISAR * 2,
+                "link": "configuracoes.html",
+            })
+
     return alertas
 
 
 def _lojas_e_perfil_pros_alertas():
     lojas = [loja for loja in LOJAS if _loja_visivel(loja)]
-    eh_gestao = (_usuario_logado() or {}).get('papel') in ('admin', 'gerente')
-    return lojas, eh_gestao
+    papel = (_usuario_logado() or {}).get('papel')
+    return lojas, papel in ('admin', 'gerente'), papel == 'admin'
 
 
 @app.route('/api/alertas', methods=['GET'])
@@ -2105,9 +2145,13 @@ def api_alertas():
     for alerta in alertas:
         alerta["lido"] = alerta["chave"] in lidas
 
-    # Não lido primeiro: o corte da lista não pode esconder um aviso novo
-    # atrás de dez que ela já leu.
-    alertas.sort(key=lambda a: a["lido"])
+    # Não lido primeiro (o corte não pode esconder um aviso novo atrás de
+    # dez já lidos), e dentro disso na ordem dos tipos — senão o tipo que
+    # é montado por último nunca aparece quando há muito alerta ativo.
+    alertas.sort(key=lambda a: (
+        a["lido"],
+        ORDEM_DOS_TIPOS.index(a["tipo"]) if a["tipo"] in ORDEM_DOS_TIPOS else len(ORDEM_DOS_TIPOS),
+    ))
     return jsonify({
         # O badge conta o não lido de TUDO, não só do que coube na tela.
         "total": sum(1 for a in alertas if not a["lido"]),
@@ -2267,6 +2311,10 @@ def api_baixar_backup(nome):
     # Só nome no formato admfood-AAAA-MM-DD.db — nada de caminho vindo de fora.
     if not NOME_DE_BACKUP.match(nome):
         abort(404)
+    # Marca que uma cópia saiu do servidor: é isso que apaga o alerta do
+    # sininho. Vale tanto o banco sozinho quanto o pacote completo — o
+    # banco é a parte insubstituível, nota fiscal e foto se refazem.
+    marcar_execucao_rotina("backup_baixado", nome)
     return send_from_directory(PASTA_BACKUPS, nome, as_attachment=True)
 
 
@@ -2304,11 +2352,16 @@ def api_baixar_backup_completo():
             os.remove(copia_banco)
 
     pacote.seek(0)
+    nome_zip = f"admfood-{date.today().isoformat()}.zip"
+    # Só aqui, com o zip pronto: marcar antes diria que a cópia saiu numa
+    # montagem que falhou no meio, e o sininho ficaria calado justamente
+    # na semana sem backup.
+    marcar_execucao_rotina("backup_baixado", nome_zip)
     return send_file(
         pacote,
         mimetype='application/zip',
         as_attachment=True,
-        download_name=f"admfood-{date.today().isoformat()}.zip",
+        download_name=nome_zip,
     )
 
 

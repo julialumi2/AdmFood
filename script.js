@@ -1052,6 +1052,13 @@ const ICONE_ALERTA = { preco: 'triangle-alert', estoque: 'package', contagem: 'c
 // ordem aqui é a ordem em que aparecem no popover.
 const GRUPOS_ALERTA = [
   {
+    // Primeiro da lista de propósito: os outros alertas custam dinheiro ou
+    // uma compra errada. Esse custa o sistema inteiro.
+    tipo: 'backup',
+    titulo: 'Cópia de segurança',
+    explica: 'A cópia diária do banco é gravada no próprio servidor. Enquanto ninguém baixar uma para fora dele, perder o servidor é perder tudo junto. Baixe em Configurações — o aviso some sozinho.',
+  },
+  {
     tipo: 'contagem',
     titulo: 'Contagem atrasada',
     explica: 'A loja desconta as vendas do estoque, mas ninguém confere o físico faz tempo. Enquanto não contar, o saldo dela não vale — e a sugestão de compra sai errada.',
