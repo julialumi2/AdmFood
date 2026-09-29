@@ -30,7 +30,7 @@ import os
 import sys
 import tempfile
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 # A raiz do projeto precisa estar no path ANTES de importar o app, e o
 # DATABASE_PATH precisa estar no ambiente antes ainda: armazenamento.py
@@ -239,6 +239,42 @@ class Mundo:
         08/09). Pra testar o estado 'desligado' é preciso desligar."""
         with self.conexao() as conn:
             conn.execute("DELETE FROM baixa_automatica_loja WHERE loja = ?", (loja,))
+
+    def fornecedor(self, nome="Fornecedor do Teste", categoria="Geral"):
+        with self.conexao() as conn:
+            cur = conn.execute(
+                "INSERT INTO fornecedor (nome, categoria, criado_em) VALUES (?, ?, ?)",
+                (nome, categoria, date.today().isoformat()))
+            return cur.lastrowid
+
+    def pedido(self, loja, fornecedor_id, itens, status="enviado"):
+        """Um pedido de compra já lançado, com itens.
+
+        `itens`: [{insumo_id, quantidade, preco}]. Inserido direto em vez
+        de passar por criar_pedidos_diretos porque aquela função exige
+        fornecedor homologado com preço válido — setup que não é o que
+        estes testes querem exercitar.
+
+        Todo pedido pertence a uma cotação (`cotacao_id` é NOT NULL: até
+        o pedido direto usa uma cotação oculta), então o fixture cria uma
+        de verdade em vez de inventar um id."""
+        from backend.armazenamento import criar_cotacao
+        agora = datetime.now().isoformat()
+        if not getattr(self, "_cotacao_dos_testes", None):
+            self._cotacao_dos_testes = criar_cotacao("Cotação do teste")
+        with self.conexao() as conn:
+            cur = conn.execute(
+                "INSERT INTO pedido_compra (cotacao_id, fornecedor_id, loja, status, criado_em, token) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (self._cotacao_dos_testes, fornecedor_id, loja, status, agora, uuid.uuid4().hex))
+            pedido_id = cur.lastrowid
+            for item in itens:
+                conn.execute(
+                    "INSERT INTO pedido_compra_item (pedido_id, insumo_id, quantidade, "
+                    "preco_unitario, quantidade_pedida, quantidade_recebida) VALUES (?, ?, ?, ?, ?, 0)",
+                    (pedido_id, item["insumo_id"], item["quantidade"],
+                     item.get("preco", 1.0), item["quantidade"]))
+        return pedido_id
 
     def estoque(self, insumo_id, loja):
         """Quanto tem hoje — pra conferir depois de uma baixa."""

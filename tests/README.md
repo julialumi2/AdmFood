@@ -26,6 +26,7 @@ Não precisa instalar nada — usa só o que já está no `requirements.txt`.
 | `test_alertas.py` | O sininho: o badge conta o que não coube na lista, "marcar como lido" cala tudo e é por pessoa, alerta resolvido perde a marca, e o de backup vem em primeiro com "lido" valendo só a semana. |
 | `test_reservas.py` | O módulo de reservas: o dia operacional (reserva de 01:00 pertence ao turno da noite anterior), remarcar recalculando o turno, cancelar como status, escopo por loja e a fila de avisos. |
 | `test_agente_whatsapp.py` | O robô do WhatsApp: quem entra e quem não entra, não responder duas vezes, o relatório de faturamento saindo no formato exato que ela manda hoje, e a recusa a pedidos de ação (ele só consulta). |
+| `test_recebimento.py` | Confirmar recebimento — a única ação que soma no estoque a partir de uma compra: soma certo, não soma duas vezes, vale o que chegou (não o que foi pedido), item extra entra, item faltante é registrado, e nota fiscal que não bate é sinalizada. |
 | `test_acessos.py` | Os três perfis, conta desativada perdendo acesso na hora, "sair de todos os aparelhos", e a trava por loja — inclusive que adulterar o parâmetro da URL não entrega dado de outra loja. |
 
 ## Como funciona
@@ -74,8 +75,8 @@ ficaria pendurado.
 
 ## O que ainda não tem
 
-Bastante. Falta compras (cotação → pedido → recebimento), cardápio e CMV,
-sincronização com a Cardápio Web, e as pendências de cadastro. Há cerca de
-90 scripts descartáveis de onde portar, escritos ao longo das últimas
+Bastante. Falta a cotação (link do fornecedor, escolher o melhor preço,
+gerar pedidos), cardápio e CMV, sincronização com a Cardápio Web, e as
+pendências de cadastro. Há cerca de 90 scripts descartáveis de onde portar, escritos ao longo das últimas
 semanas — o caminho é trazer um de cada vez, refazendo em cima do `Mundo`
 em vez de copiar o banco de produção.
