@@ -9873,6 +9873,30 @@ document.getElementById('form-novo-insumo')?.addEventListener('submit', async (e
 // ideal não conta como sem mínimo (o ajuste vale no lugar dele).
 let pendenciasAba = 'minimo';
 
+// De quantos dias de consumo o mínimo sugerido cobre. Não é número novo:
+// é o mesmo 7 que a quantidade ideal usava antes de 04/09, então a conta
+// é uma que ela já conhece de outra tela.
+const DIAS_COBERTOS_PELO_MINIMO = 7;
+
+// Arredonda pra um número que dá pra ler numa tela: 1.234,5678 não ajuda
+// ninguém a decidir estoque mínimo. Quanto maior o valor, menos casa
+// decimal importa.
+function _arredondarSugestao(valor) {
+  if (valor >= 100) return Math.round(valor);
+  if (valor >= 10) return Math.round(valor * 10) / 10;
+  if (valor >= 1) return Math.round(valor * 100) / 100;
+  return Math.round(valor * 1000) / 1000;
+}
+
+// O mínimo que o consumo real sugere pra esse insumo nessa loja, ou null
+// quando não dá pra calcular — que acontece quando a ficha técnica dos
+// produtos que usam o insumo não tem a gramatura dele.
+function _minimoSugerido(insumoId, loja) {
+  const porDia = estoqueConsumoMedio[insumoId]?.[loja];
+  if (!(porDia > 0)) return null;
+  return { porDia, valor: _arredondarSugestao(porDia * DIAS_COBERTOS_PELO_MINIMO) };
+}
+
 function _pendenciasCadastro() {
   const minimo = [];
   const fornecedor = new Map(); // insumoId -> { insumo, lojas: [] }
@@ -9881,7 +9905,9 @@ function _pendenciasCadastro() {
     Object.entries(insumo.porLoja || {}).forEach(([loja, dados]) => {
       if (!dados.aplica || !LOJAS_ESTOQUE.includes(loja)) return;
       const temAjuste = estoqueAjustesIdeal[insumo.id]?.[loja] != null;
-      if (!(dados.estoqueMinimo > 0) && !temAjuste) minimo.push({ insumo, loja });
+      if (!(dados.estoqueMinimo > 0) && !temAjuste) {
+        minimo.push({ insumo, loja, sugestao: _minimoSugerido(insumo.id, loja) });
+      }
       if (!(dados.fornecedorIds || []).length && !dados.fornecedorHomologadoId) {
         if (!fornecedor.has(insumo.id)) fornecedor.set(insumo.id, { insumo, lojas: [] });
         fornecedor.get(insumo.id).lojas.push(loja);
@@ -9942,7 +9968,7 @@ function renderPendencias() {
     aba.setAttribute('aria-selected', String(ativa));
   });
   document.getElementById('pendencias-explicacao').textContent = pendenciasAba === 'minimo'
-    ? 'Sem mínimo, o item não entra sozinho na sugestão de compra (igual na VMarket). Coloque o mínimo, ou tire da loja se ela não usa esse insumo.'
+    ? 'Sem mínimo, o item não entra sozinho na sugestão de compra nem no alerta de estoque baixo. O campo já vem com o que o consumo real sugere — confira e salve, ou tire da loja se ela não usa esse insumo.'
     : 'Sem fornecedor que cota, o item não vai em nenhum link de cotação. Na VMarket todo produto tem pelo menos um. Escolha quem vende: ele passa a cotar nessas lojas.';
 
   const porNome = (a, b) => a.insumo.nome.localeCompare(b.insumo.nome, 'pt-BR');
@@ -9956,21 +9982,30 @@ function renderPendencias() {
       if (!itens.length) return '';
       return `
         <p class="pendencias-grupo">${escaparHtml(loja)} · ${_qtdTexto(itens.length, 'insumo', 'insumos')}</p>
-        ${itens.map(({ insumo }) => `
+        ${itens.map(({ insumo, sugestao }) => {
+          const unidade = escaparHtml(insumo.unidadeMedida || '');
+          // Onde dá, o campo já vem preenchido: o trabalho vira conferir,
+          // não decidir. Onde não dá, a linha diz por quê — senão o campo
+          // vazio parece esquecimento em vez de falta de dado.
+          const origem = sugestao
+            ? `Sugerido: ${_formatarNumeroBR(sugestao.valor)} ${unidade} — ${DIAS_COBERTOS_PELO_MINIMO} dias de consumo (${_formatarNumeroBR(sugestao.porDia)} ${unidade}/dia)`
+            : 'Sem consumo calculado: a ficha técnica dos produtos que usam este insumo não tem a gramatura dele';
+          return `
           <div class="pendencia-linha" data-insumo="${insumo.id}" data-loja="${escaparHtml(loja)}">
             <div class="pendencia-insumo">
               <strong title="${escaparHtml(insumo.nome)}">${escaparHtml(insumo.nome)}</strong>
               <span>${escaparHtml(insumo.categoria || '')}</span>
+              <span class="pendencia-origem${sugestao ? '' : ' pendencia-origem--sem'}">${escaparHtml(origem)}</span>
             </div>
             <label class="pendencia-campo">
               Mínimo
-              <input type="number" min="0" step="any" data-campo="minimo" aria-label="Estoque mínimo de ${escaparHtml(insumo.nome)} na ${escaparHtml(loja)}">
-              <span class="pendencia-unidade">${escaparHtml(insumo.unidadeMedida || '')}</span>
+              <input type="number" min="0" step="any" data-campo="minimo"${sugestao ? ` value="${sugestao.valor}"` : ''} aria-label="Estoque mínimo de ${escaparHtml(insumo.nome)} na ${escaparHtml(loja)}">
+              <span class="pendencia-unidade">${unidade}</span>
             </label>
             <button type="button" class="btn-secondary-sm" data-acao="salvar-minimo">Salvar</button>
             <button type="button" class="btn-limpar-filtro" data-acao="tirar-da-loja">Não usa nesta loja</button>
           </div>
-        `).join('')}`;
+        `;}).join('')}`;
     }).join('');
     return;
   }

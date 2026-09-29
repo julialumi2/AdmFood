@@ -977,6 +977,20 @@
   color: var(--text-muted);
 }
 
+/* De onde veio o número que já está no campo. Some na leitura rápida e
+   está lá quando ela quiser conferir a conta — que é o que faz ela
+   confiar no valor sugerido em vez de apagar e digitar outro. */
+.pendencia-origem {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--success-texto);
+}
+
+/* Sem sugestão o texto não é um aviso bom, é a explicação de uma falta:
+   fica no cinza de apoio, não na cor de alerta. */
+.pendencia-origem--sem { color: var(--text-faint); }
+
 .pendencia-campo {
   justify-self: end;
   display: inline-flex;
