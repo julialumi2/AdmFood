@@ -16,6 +16,7 @@ from flask import (
 )
 
 from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON
+from backend import whatsapp_bot
 from backend.armazenamento import (
     inicializar_banco,
     buscar_faturamento_periodo,
@@ -215,6 +216,9 @@ from backend.armazenamento import (
     listar_registro_acoes,
     limpar_registro_acoes_antigos,
     pendencias_compras,
+    _normalizar_nome_insumo,
+    mensagem_ja_respondida,
+    marcar_mensagem_respondida,
     criar_reserva,
     buscar_reserva,
     listar_reservas,
@@ -673,6 +677,7 @@ def _exigir_login():
         # da loja preencher sem precisar de conta no sistema (ver seção 9).
         if (
             caminho in ROTAS_API_PUBLICAS
+            or caminho.startswith('/api/whatsapp/webhook/')
             or caminho.startswith('/api/contagens/token/')
             or caminho.startswith('/api/cotacoes/convite/')
             or caminho.startswith('/api/pedidos/confirmar/')
@@ -1991,6 +1996,459 @@ def _atividades_do_dia(lojas, usuario):
         atividade(True, f"Concluir {n} {_plural(n, 'tarefa', 'tarefas')} do ClickUp com prazo até hoje", link="clickup.html")
 
     return pendentes + feitas
+
+
+# =====================================================================
+# O AGENTE DO WHATSAPP (29/09)
+#
+# Quatro perguntas, todas de LEITURA. Ele não cria reserva, não confirma
+# recebimento, não mexe em estoque: resposta errada a pessoa percebe e
+# corrige, ação errada vira dado sujo no sistema.
+#
+# Três regras valem pra todas as respostas:
+#   1. nunca inventa — não sabe, diz que não sabe;
+#   2. sempre diz de qual loja e de qual período;
+#   3. sempre diz quando o dado foi atualizado, quando isso muda a
+#      confiança (sincronização de vendas, última contagem).
+# =====================================================================
+
+DIAS_DA_SEMANA_PT = ("Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
+                     "Sexta-feira", "Sábado", "Domingo")
+
+# Emoji e ordem do relatório que ela manda hoje à mão pro chefe. A ordem
+# é a do texto dela, não alfabética — a mensagem tem que chegar igual à
+# de sempre, senão quem lê precisa reaprender a ler.
+CANAIS_DO_RELATORIO = (
+    ("Presencial", "💵"),
+    ("iFood", "📱"),
+    ("Cardápio Web", "🌐"),
+    ("99 Food", "🛵"),
+)
+
+# Como o canal cru da Cardápio Web vira o nome do relatório. Mesmo mapa
+# do nomeExibicaoCanal do script.js — "portal" e "totem" são o balcão.
+CANAL_CRU_PRA_RELATORIO = {
+    "ifood": "iFood", "food99": "99 Food", "catalog": "Cardápio Web",
+    "portal": "Presencial", "totem": "Presencial", "presencial": "Presencial",
+}
+
+# Quantos mesmos-dias-da-semana anteriores entram na média de comparação.
+SEMANAS_COMPARADAS_NO_RELATORIO = 4
+# Abaixo de 90% da média é queda; acima de 110% é crescimento. Regra
+# deduzida dos relatórios que ela já mandava (confirmada nos 4 exemplos
+# de 27/09) — se o chefe usar outro corte, é só mexer aqui.
+FAIXA_NA_MEDIA = (0.90, 1.10)
+
+
+def _qtd(quantos, singular, plural):
+    """1 reserva, 2 reservas. Plural errado numa mensagem que vai
+    pro chefe todo dia incomoda mais do que parece."""
+    return "%d %s" % (quantos, singular if quantos == 1 else plural)
+
+
+def _dia_por_extenso(dia_iso):
+    d = date.fromisoformat(dia_iso)
+    return "%s - dia %02d/%02d" % (DIAS_DA_SEMANA_PT[d.weekday()], d.day, d.month)
+
+
+def _canais_do_dia(dia_iso):
+    """{loja: {canal do relatório: faturamento}} de um dia, já com o
+    presencial lançado à mão e os ajustes manuais de canal aplicados —
+    exatamente o que as telas mostram."""
+    linhas_periodo = _aplicar_presencial(
+        buscar_faturamento_periodo(dia_iso, dia_iso), buscar_presencial_periodo(dia_iso, dia_iso))
+    linhas_canais, _ = _aplicar_ajustes_canal(
+        _linhas_canais_com_presencial(dia_iso, dia_iso), linhas_periodo,
+        buscar_ajustes_canal_periodo(dia_iso, dia_iso))
+    por_loja = {}
+    for linha in linhas_canais:
+        nome = CANAL_CRU_PRA_RELATORIO.get(str(linha["canal"]).lower(), linha["canal"])
+        loja = por_loja.setdefault(linha["unidade"], {})
+        # Soma em vez de atribuir: "portal" e "totem" caem os dois em
+        # Presencial, e sobrescrever perderia um deles.
+        loja[nome] = loja.get(nome, 0) + (linha["faturamento"] or 0)
+    return por_loja
+
+
+def _mesmos_dias_das_semanas_anteriores(dia_iso, quantos=SEMANAS_COMPARADAS_NO_RELATORIO):
+    """As `quantos` datas do mesmo dia da semana antes dessa, da mais
+    antiga pra mais nova — é a ordem em que o relatório dela lista."""
+    d = date.fromisoformat(dia_iso)
+    return [(d - timedelta(weeks=i)).isoformat() for i in range(quantos, 0, -1)]
+
+
+def _status_do_dia(total, anteriores):
+    """🚨/⚠️/✅ comparando com a média dos mesmos dias da semana."""
+    valores = [v for v in anteriores if v]
+    if not valores:
+        return "⚠️ SEM COMPARAÇÃO"
+    media = sum(valores) / len(valores)
+    if not media:
+        return "⚠️ SEM COMPARAÇÃO"
+    razao = total / media
+    if razao < FAIXA_NA_MEDIA[0]:
+        return "🚨 ABAIXO"
+    if razao > FAIXA_NA_MEDIA[1]:
+        return "✅ CRESCENDO"
+    return "⚠️ NA MÉDIA"
+
+
+def relatorio_de_faturamento(dia_iso, lojas):
+    """O relatório que ela monta à mão hoje, no mesmo formato.
+
+    Mesma ordem, mesmos emojis, mesma comparação com os 4 mesmos dias da
+    semana. O ponto é chegar IDÊNTICO: o chefe não muda nada do lado
+    dele, só para de esperar alguém montar."""
+    canais_hoje = _canais_do_dia(dia_iso)
+    dias_antes = _mesmos_dias_das_semanas_anteriores(dia_iso)
+    totais_antes = {d: _totais_do_dia_por_loja(d) for d in dias_antes}
+
+    blocos = []
+    for loja in _ordem_do_relatorio(lojas):
+        canais = canais_hoje.get(loja, {})
+        total = sum(canais.values())
+        linhas = ["*Faturamento do dia %s*" % _nome_no_relatorio(loja),
+                  _dia_por_extenso(dia_iso), ""]
+        for nome, emoji in CANAIS_DO_RELATORIO:
+            linhas.append("%s %s: R$ %s" % (emoji, nome, _formatar_moeda(canais.get(nome, 0))))
+        anteriores = [(totais_antes[d].get(loja) or {}).get("faturamento_dia") or 0
+                      for d in dias_antes]
+        linhas += ["", "Total do dia: R$ %s" % _formatar_moeda(total),
+                   "Status: %s" % _status_do_dia(total, anteriores), ""]
+        for d, valor in zip(dias_antes, anteriores):
+            dd = date.fromisoformat(d)
+            linhas.append("- %02d/%02d/%d: R$ %s" % (dd.day, dd.month, dd.year, _formatar_moeda(valor)))
+        blocos.append("\n".join(linhas))
+    return "\n\n\n".join(blocos)
+
+
+# A ordem em que as lojas saem no relatório. Não é a do config.py nem
+# alfabética: é a que o chefe já está acostumado a ler todo dia.
+ORDEM_DO_RELATORIO = ("Hamburgueria Artesanos", "Tradiça ZN",
+                      "Tradiça Simus", "Açaí Na Lata")
+
+
+def _ordem_do_relatorio(lojas):
+    """Loja que eu não conheço vai pro fim, em vez de sumir — abrir uma
+    quinta loja não pode calar o relatório dela."""
+    conhecidas = [l for l in ORDEM_DO_RELATORIO if l in lojas]
+    return conhecidas + [l for l in lojas if l not in ORDEM_DO_RELATORIO]
+
+
+def _nome_no_relatorio(loja):
+    """No relatório dela o Açaí aparece como "Açaí NaLata" (o nome
+    fantasia), não como a loja é chamada no sistema."""
+    return {"Açaí Na Lata": "Açaí NaLata"}.get(loja, loja)
+
+
+def resposta_de_vendas(dia_iso, lojas, sincronizado_em=None):
+    corpo = relatorio_de_faturamento(dia_iso, lojas)
+    if sincronizado_em:
+        # Sem isso, número velho passa por número de hoje. A pessoa
+        # precisa saber que a sincronização não rodou antes de decidir
+        # qualquer coisa com esse valor.
+        corpo += "\n\n_Dados sincronizados em %s._" % sincronizado_em
+    return corpo
+
+
+def resposta_do_que_falta_comprar(lojas):
+    """Insumo abaixo do mínimo, pela mesma regra dos cartões de Insumos:
+    só loja com contagem recente e só insumo com mínimo cadastrado."""
+    ultimas = ultima_contagem_aprovada_por_loja()
+    hoje = date.today()
+    blocos = []
+    for loja in lojas:
+        quando = (ultimas.get(loja) or "")[:10]
+        dias = (hoje - date.fromisoformat(quando)).days if quando else None
+        if dias is None:
+            blocos.append("*%s*\nNunca teve contagem aprovada — o estoque dela não vale "
+                          "pra dizer o que falta." % _curto(loja))
+            continue
+
+        baixos = []
+        for linha in listar_insumos():
+            if linha["loja"] != loja or linha["eh_mistura"] or not linha["aplica"]:
+                continue
+            if not linha["estoque_minimo"] or linha["estoque_minimo"] <= 0:
+                continue
+            if _status_estoque(linha["quantidade_atual"], linha["estoque_minimo"]) != "critico":
+                continue
+            baixos.append(linha)
+        baixos.sort(key=lambda l: (l["quantidade_atual"] > 0,
+                                   l["quantidade_atual"] - l["estoque_minimo"]))
+
+        quando_contou = "hoje" if dias == 0 else ("ontem" if dias == 1 else "há %d dias" % dias)
+        if not baixos:
+            blocos.append("*%s*\nNada abaixo do mínimo. _Contagem de %s._"
+                          % (_curto(loja), quando_contou))
+            continue
+
+        linhas = ["*%s — %d abaixo do mínimo*" % (_curto(loja), len(baixos))]
+        for l in baixos[:8]:
+            marca = "🔴" if l["quantidade_atual"] <= 0 else "🟡"
+            atual = ("zerado" if l["quantidade_atual"] <= 0
+                     else "%s %s" % (_num_br(l["quantidade_atual"]), l["unidade_medida"]))
+            linhas.append("%s %s — %s (mínimo %s %s)" % (
+                marca, l["nome"], atual, _num_br(l["estoque_minimo"]), l["unidade_medida"]))
+        if len(baixos) > 8:
+            linhas.append("_+%d itens._" % (len(baixos) - 8))
+        linhas.append("_Contagem de %s._" % quando_contou)
+        blocos.append("\n".join(linhas))
+    return "\n\n".join(blocos)
+
+
+def resposta_de_reservas(dia_iso, lojas):
+    reservas = listar_reservas(lojas, de=dia_iso, ate=dia_iso)
+    if not reservas:
+        return "Nenhuma reserva no turno de %s." % _dia_por_extenso(dia_iso).lower()
+
+    blocos = []
+    for loja in lojas:
+        da_loja = [r for r in reservas if r["loja"] == loja]
+        if not da_loja:
+            continue
+        pessoas = sum(r["pessoas"] for r in da_loja)
+        linhas = ["*%s — turno de %s*" % (_curto(loja), _dia_por_extenso(dia_iso).lower()),
+                  "%s, %s" % (_qtd(len(da_loja), "reserva", "reservas"),
+                              _qtd(pessoas, "pessoa", "pessoas")), ""]
+        for r in da_loja:
+            hora = r["quando"][11:16]
+            marca = " · *a confirmar*" if r["status"] == "pendente" else ""
+            # A reserva de madrugada aparece no turno da noite anterior:
+            # sem a data ao lado, "01:00" na lista de ontem confunde.
+            outro_dia = (" (%s/%s)" % (r["quando"][8:10], r["quando"][5:7])
+                         if r["quando"][:10] != r["dia_operacional"] else "")
+            linhas.append("%s%s · %s · %s%s"
+                          % (hora, outro_dia, r["nome"],
+                             _qtd(r["pessoas"], "pessoa", "pessoas"), marca))
+        blocos.append("\n".join(linhas))
+    return "\n\n".join(blocos)
+
+
+def resposta_de_estoque(termo, lojas):
+    """Quanto tem de um insumo, em cada loja que usa."""
+    procurado = _normalizar_nome_insumo(termo)
+    if not procurado:
+        return "Me diz de qual insumo você quer saber."
+
+    achados = [l for l in listar_insumos()
+               if l["loja"] in lojas and l["aplica"]
+               and procurado in _normalizar_nome_insumo(l["nome"])]
+    if not achados:
+        return ("Não achei nenhum insumo com \"%s\" no nome. "
+                "Talvez esteja cadastrado com outro nome." % termo)
+
+    por_nome = {}
+    for l in achados:
+        por_nome.setdefault(l["nome"], []).append(l)
+
+    # Muitos nomes parecidos: não despeja tudo, pergunta.
+    if len(por_nome) > 4:
+        return ("Achei %d insumos com \"%s\" no nome:\n%s\n\nQual deles?"
+                % (len(por_nome), termo,
+                   "\n".join("• " + nome for nome in sorted(por_nome)[:10])))
+
+    blocos = []
+    for nome, linhas_do_insumo in sorted(por_nome.items()):
+        partes = ["*%s*" % nome]
+        for l in sorted(linhas_do_insumo, key=lambda x: x["loja"]):
+            minimo = l["estoque_minimo"] or 0
+            estado = _status_estoque(l["quantidade_atual"], minimo) if minimo else None
+            marca = {"critico": " 🔴", "baixo": " 🟡"}.get(estado, "")
+            alvo = " (mínimo %s %s)" % (_num_br(minimo), l["unidade_medida"]) if minimo else " (sem mínimo cadastrado)"
+            partes.append("%s: %s %s%s%s" % (_curto(l["loja"]), _num_br(l["quantidade_atual"]),
+                                             l["unidade_medida"], marca, alvo))
+        blocos.append("\n".join(partes))
+    return "\n\n".join(blocos)
+
+
+
+# ---------------------------------------------------------------------
+# O ROTEADOR: de que a pessoa está falando.
+#
+# Por padrão de texto, não por LLM — e isso é uma etapa, não a decisão
+# final. Sem chave de API não dá pra testar nada, e o que importa nesta
+# fase são as respostas estarem certas. Trocar isto aqui por um modelo
+# depois não mexe em nenhuma delas: o modelo só escolhe qual chamar.
+# ---------------------------------------------------------------------
+
+O_QUE_SEI_FAZER = (
+    "Por enquanto eu sei responder:\n"
+    "• *quanto vendeu ontem* — ou hoje, ou uma data\n"
+    "• *o que falta comprar*\n"
+    "• *reservas de hoje* — ou de amanhã\n"
+    "• *quanto tem de bacon* — estoque de um insumo\n\n"
+    "Pode escrever do seu jeito, não precisa ser exatamente assim."
+)
+
+
+def _dia_citado(texto, lojas):
+    """Que dia a pergunta quer. Sem data explícita, ONTEM — é o dia
+    fechado, e é sobre ele que o relatório diário fala."""
+    achado = re.search(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", texto)
+    if achado:
+        d, m, a = achado.groups()
+        ano = int(a) if a else date.today().year
+        if ano < 100:
+            ano += 2000
+        try:
+            return date(ano, int(m), int(d)).isoformat()
+        except ValueError:
+            return None
+    # "hoje" usa o dia operacional: às 2h da manhã ainda é a noite de
+    # ontem, e é esse movimento que a pessoa quer ver.
+    hoje_operacional = dia_operacional_de(
+        datetime.now().isoformat(timespec="minutes"),
+        min((hora_virada_da_loja(l) for l in lojas), default=VIRADA_PADRAO))
+    if re.search(r"\bhoje\b|agora|at[ée] agora|parcial", texto):
+        return hoje_operacional
+    if re.search(r"amanh[ãa]", texto):
+        return (date.fromisoformat(hoje_operacional) + timedelta(days=1)).isoformat()
+    if re.search(r"anteontem", texto):
+        return (date.fromisoformat(hoje_operacional) - timedelta(days=2)).isoformat()
+    return (date.fromisoformat(hoje_operacional) - timedelta(days=1)).isoformat()
+
+
+def montar_resposta_do_agente(texto, lojas, nome_de_quem=None):
+    """De que a pessoa está falando, e a resposta. Só leitura."""
+    limpo = _normalizar_nome_insumo(texto or "")
+    if not limpo:
+        return O_QUE_SEI_FAZER
+
+    # PEDIDO DE AÇÃO vem antes de qualquer assunto. "cancela a reserva da
+    # Marina" casava com "reserva" e ele respondia com a LISTA de
+    # reservas — como se tivesse entendido e feito. Fingir que entendeu é
+    # pior que não entender, e fica mais perigoso quando ele puder
+    # escrever de verdade.
+    if re.search(r"\b(cancela|cancelar|criar|cria|marca|marcar|agenda|agendar"
+                 r"|confirma|confirmar|apaga|apagar|deleta|deletar|remove|remover"
+                 r"|muda|mudar|altera|alterar|manda|mandar|envia|enviar|avisa|avisar"
+                 r"|lanca|lancar|registra|registrar|atualiza|atualizar)\b", limpo):
+        return ("Por enquanto eu só *consulto* — não consigo criar, cancelar nem mudar "
+                "nada, e não mando mensagem pra ninguém. É de propósito: errar lendo "
+                "você percebe, errar fazendo vira dado errado no sistema.\n\n"
+                + O_QUE_SEI_FAZER)
+
+    if re.search(r"\b(ajuda|help|menu|o que voce faz|oi|ola|bom dia|boa tarde|boa noite)\b", limpo):
+        saudacao = "Oi%s! " % (", " + nome_de_quem.split(" ")[0] if nome_de_quem else "")
+        return saudacao + O_QUE_SEI_FAZER
+
+    if re.search(r"\b(vendeu|vendi|venda|vendas|faturou|faturamento|fatura)\b", limpo):
+        dia = _dia_citado(limpo, lojas)
+        if not dia:
+            return "Não entendi a data. Tenta assim: *quanto vendeu dia 27/09*."
+        execucoes = listar_execucoes_rotina()
+        quando = (execucoes.get("sincronizacao_hoje") or execucoes.get("sincronizacao_diaria") or {}).get("ultimaEm")
+        return resposta_de_vendas(dia, lojas, _quando_legivel(quando))
+
+    if re.search(r"\b(falta comprar|comprar|faltando|abaixo do minimo|repor|reposicao)\b", limpo):
+        return resposta_do_que_falta_comprar(lojas)
+
+    if re.search(r"\b(reserva|reservas|mesa|mesas)\b", limpo):
+        return resposta_de_reservas(_dia_citado_pra_reserva(limpo, lojas), lojas)
+
+    achado = re.search(r"\b(?:quanto tem de|tem de|estoque de|quanto tem|tem)\s+(.+)$", limpo)
+    if achado:
+        return resposta_de_estoque(achado.group(1).strip(), lojas)
+
+    return "Não entendi. " + O_QUE_SEI_FAZER
+
+
+def _dia_citado_pra_reserva(texto, lojas):
+    """Reserva sem data é a de HOJE, não a de ontem — ninguém pergunta
+    quem reservou num dia que já passou."""
+    if re.search(r"\bontem\b|\d{1,2}[/-]\d{1,2}|amanh[ãa]", texto):
+        return _dia_citado(texto, lojas)
+    return dia_operacional_de(
+        datetime.now().isoformat(timespec="minutes"),
+        min((hora_virada_da_loja(l) for l in lojas), default=VIRADA_PADRAO))
+
+
+def _quando_legivel(iso):
+    if not iso:
+        return None
+    try:
+        q = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    return "%02d/%02d às %02d:%02d" % (q.day, q.month, q.hour, q.minute)
+
+
+# ---------------------------------------------------------------------
+# O WEBHOOK. A Evolution chama aqui quando chega mensagem.
+# ---------------------------------------------------------------------
+
+@app.route('/api/whatsapp/webhook/<token>', methods=['POST'])
+def api_webhook_whatsapp(token):
+    """Sem login: quem chama é a Evolution, não uma pessoa. O segredo
+    está na URL, e as travas de verdade são as quatro abaixo."""
+    esperado = os.environ.get("WHATSAPP_WEBHOOK_TOKEN", "")
+    # Sem token configurado o webhook fica fechado, em vez de aberto —
+    # deploy pela metade não pode virar porta aberta.
+    if not esperado or token != esperado:
+        abort(404)
+
+    corpo = request.get_json(silent=True) or {}
+    if str(corpo.get("event", "")).lower().replace("_", ".") != "messages.upsert":
+        return jsonify({"ignorado": "evento"})
+
+    dados = corpo.get("data") or {}
+    if whatsapp_bot.eh_do_proprio_robo(dados):
+        # Sem isso a resposta dispara o webhook de novo, pra sempre.
+        return jsonify({"ignorado": "propria"})
+
+    numero = whatsapp_bot.numero_da_mensagem(dados)
+    texto = whatsapp_bot.texto_da_mensagem(dados)
+    if not numero or not texto:
+        return jsonify({"ignorado": "sem numero ou sem texto"})
+    if numero not in whatsapp_bot.numeros_permitidos():
+        # Quem está na lista vê faturamento e custo: o robô não tem tela
+        # pra esconder dinheiro por cargo.
+        return jsonify({"ignorado": "fora da lista"})
+
+    mensagem_id = whatsapp_bot.id_da_mensagem(dados)
+    if mensagem_id and mensagem_ja_respondida(mensagem_id):
+        # A Evolution reentrega quando não recebe 200 na primeira.
+        return jsonify({"ignorado": "repetida"})
+
+    try:
+        resposta = montar_resposta_do_agente(
+            texto, list(LOJAS), whatsapp_bot.nome_de_quem_mandou(dados))
+    except Exception:
+        import traceback
+        print("❌ O agente quebrou montando a resposta:")
+        traceback.print_exc()
+        # Ela precisa saber que perguntou e não foi respondida, em vez
+        # de ficar esperando.
+        resposta = "Deu erro aqui montando a resposta. Já registrei; tenta de novo daqui a pouco."
+
+    if mensagem_id:
+        marcar_mensagem_respondida(mensagem_id)
+    try:
+        whatsapp_bot.responder(numero, resposta)
+    except Exception:
+        import traceback
+        print("❌ Não consegui enviar a resposta pela Evolution:")
+        traceback.print_exc()
+        return jsonify({"erro": "falha ao enviar"}), 502
+    return jsonify({"respondido": True})
+
+
+@app.route('/api/whatsapp/teste', methods=['POST'])
+def api_testar_agente():
+    """O que o agente responderia, sem WhatsApp nenhum no meio. É por
+    aqui que dá pra construir e testar tudo antes do chip chegar."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    dados = request.get_json(silent=True) or {}
+    texto = (dados.get('texto') or '').strip()
+    if not texto:
+        return jsonify({"erro": "Manda o texto da pergunta."}), 400
+    return jsonify({
+        "configurado": whatsapp_bot.configurado(),
+        "responderia": montar_resposta_do_agente(texto, list(LOJAS), dados.get('nome')),
+    })
 
 
 # ---------------------------------------------------------------------

@@ -821,6 +821,18 @@ def inicializar_banco():
             """
         )
 
+        # Mensagem de WhatsApp que o robô já respondeu. A Evolution
+        # reentrega o webhook quando não recebe 200 na primeira, e sem
+        # isso a pessoa recebe a mesma resposta duas ou três vezes.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS whatsapp_mensagem_vista (
+                mensagem_id TEXT PRIMARY KEY,
+                quando TEXT NOT NULL
+            )
+            """
+        )
+
         # Reservas de mesa (29/09), pedido do chefe. Por loja, como tudo
         # que é operação.
         #
@@ -2997,6 +3009,25 @@ def horas_virada_das_lojas():
 def hora_virada_da_loja(loja):
     """A hora de virada de uma loja, ou 00:00 se ela não tem uma."""
     return horas_virada_das_lojas().get(loja, VIRADA_PADRAO)
+
+
+def mensagem_ja_respondida(mensagem_id):
+    with conexao() as conn:
+        return conn.execute(
+            "SELECT 1 FROM whatsapp_mensagem_vista WHERE mensagem_id = ?", (mensagem_id,)
+        ).fetchone() is not None
+
+
+def marcar_mensagem_respondida(mensagem_id):
+    """Guarda por 7 dias — o suficiente pra cobrir reentrega, e sem
+    deixar a tabela crescer pra sempre."""
+    agora = datetime.now()
+    with conexao() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO whatsapp_mensagem_vista (mensagem_id, quando) VALUES (?, ?)",
+            (mensagem_id, agora.isoformat()))
+        conn.execute("DELETE FROM whatsapp_mensagem_vista WHERE quando < ?",
+                     ((agora - timedelta(days=7)).isoformat(),))
 
 
 STATUS_DE_RESERVA = ("pendente", "confirmada", "cancelada", "compareceu", "nao_compareceu")
