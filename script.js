@@ -9897,6 +9897,60 @@ function _minimoSugerido(insumoId, loja) {
   return { porDia, valor: _arredondarSugestao(porDia * DIAS_COBERTOS_PELO_MINIMO) };
 }
 
+// Quantos insumos de cada categoria cada fornecedor já abastece, por loja:
+// "loja|categoria" -> { fornecedorId: quantos }. É a base da segunda
+// sugestão — quem traz os vizinhos provavelmente traz este também.
+function _quemAbasteceCadaCategoria() {
+  const mapa = {};
+  estoqueInsumos.forEach((insumo) => {
+    Object.entries(insumo.porLoja || {}).forEach(([loja, dados]) => {
+      if (!dados.aplica) return;
+      const ids = new Set([...(dados.fornecedorIds || [])]);
+      if (dados.fornecedorHomologadoId) ids.add(dados.fornecedorHomologadoId);
+      if (!ids.size) return;
+      const chave = `${loja}|${insumo.categoria || ''}`;
+      const cont = mapa[chave] || (mapa[chave] = {});
+      ids.forEach((id) => { cont[id] = (cont[id] || 0) + 1; });
+    });
+  });
+  return mapa;
+}
+
+// O fornecedor que domina a categoria nessa loja, ou null. Exige 2 itens
+// no mínimo e estar à frente do segundo: numa categoria com seis
+// fornecedores de um item cada, o primeiro da lista é acaso, e sugestão
+// por acaso é pior que campo vazio — ela clicaria em Ligar confiando.
+function _dominanteDaCategoria(mapaCategorias, loja, categoria) {
+  const cont = mapaCategorias[`${loja}|${categoria || ''}`] || {};
+  const ordenado = Object.entries(cont).sort((a, b) => b[1] - a[1]);
+  if (!ordenado.length) return null;
+  const [id, quantos] = ordenado[0];
+  if (quantos < 2) return null;
+  if (ordenado.length > 1 && quantos === ordenado[1][1]) return null;
+  return { id: Number(id), quantos };
+}
+
+function _sugestaoFornecedor(insumo, lojas, mapaCategorias) {
+  const historico = insumo.fornecedoresDoHistorico || [];
+  if (historico.length === 1) {
+    return { id: historico[0], razao: 'já vendeu ou cotou este insumo' };
+  }
+  const dominante = _dominanteDaCategoria(mapaCategorias, lojas[0], insumo.categoria);
+  if (historico.length > 1) {
+    // Vários já venderam: só desempata se um deles também domina a
+    // categoria. Escolher entre dois que já venderam é decisão
+    // comercial dela, não dedução minha.
+    if (dominante && historico.includes(dominante.id)) {
+      return { id: dominante.id, razao: `já vendeu este insumo e abastece ${dominante.quantos} de ${insumo.categoria} nesta loja` };
+    }
+    return null;
+  }
+  if (dominante) {
+    return { id: dominante.id, razao: `abastece ${dominante.quantos} insumos de ${insumo.categoria} nesta loja` };
+  }
+  return null;
+}
+
 function _pendenciasCadastro() {
   const minimo = [];
   const fornecedor = new Map(); // insumoId -> { insumo, lojas: [] }
@@ -9914,7 +9968,12 @@ function _pendenciasCadastro() {
       }
     });
   });
-  return { minimo, fornecedor: [...fornecedor.values()] };
+  const mapaCategorias = _quemAbasteceCadaCategoria();
+  const comSugestao = [...fornecedor.values()].map((p) => ({
+    ...p,
+    sugestao: _sugestaoFornecedor(p.insumo, p.lojas, mapaCategorias),
+  }));
+  return { minimo, fornecedor: comSugestao };
 }
 
 function _atualizarBotaoPendencias() {
@@ -9940,13 +9999,14 @@ function fecharModalPendencias() {
   renderEstoqueTab();
 }
 
-function _opcoesFornecedorPendencia(insumo) {
+function _opcoesFornecedorPendencia(insumo, sugeridoId) {
   const ativos = fornecedoresPorId ? [...fornecedoresPorId.values()].filter((f) => f.ativo !== false) : [];
   const doHistorico = new Set(insumo.fornecedoresDoHistorico || []);
-  const opcao = (f) => `<option value="${f.id}">${escaparHtml(f.nome)}</option>`;
+  const opcao = (f) => `<option value="${f.id}"${f.id === sugeridoId ? ' selected' : ''}>${escaparHtml(f.nome)}</option>`;
   const jaVenderam = ativos.filter((f) => doHistorico.has(f.id)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const outros = ativos.filter((f) => !doHistorico.has(f.id)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  return `<option value="">Quem vende?</option>${jaVenderam.length ? `<optgroup label="Já cotou ou vendeu">${jaVenderam.map(opcao).join('')}</optgroup>` : ''}<optgroup label="${jaVenderam.length ? 'Outros fornecedores' : 'Fornecedores'}">${outros.map(opcao).join('')}</optgroup>`;
+  // Quando há sugestão, o placeholder não pode continuar selecionado.
+  return `<option value=""${sugeridoId ? '' : ' selected'}>Quem vende?</option>${jaVenderam.length ? `<optgroup label="Já cotou ou vendeu">${jaVenderam.map(opcao).join('')}</optgroup>` : ''}<optgroup label="${jaVenderam.length ? 'Outros fornecedores' : 'Fornecedores'}">${outros.map(opcao).join('')}</optgroup>`;
 }
 
 function renderPendencias() {
@@ -9969,7 +10029,7 @@ function renderPendencias() {
   });
   document.getElementById('pendencias-explicacao').textContent = pendenciasAba === 'minimo'
     ? 'Sem mínimo, o item não entra sozinho na sugestão de compra nem no alerta de estoque baixo. O campo já vem com o que o consumo real sugere — confira e salve, ou tire da loja se ela não usa esse insumo.'
-    : 'Sem fornecedor que cota, o item não vai em nenhum link de cotação. Na VMarket todo produto tem pelo menos um. Escolha quem vende: ele passa a cotar nessas lojas.';
+    : 'Sem fornecedor que cota, o item não vai em nenhum link de cotação. Já vem escolhido quem o histórico ou a categoria sugere — confira e clique em Ligar, ou troque por outro.';
 
   const porNome = (a, b) => a.insumo.nome.localeCompare(b.insumo.nome, 'pt-BR');
   if (pendenciasAba === 'minimo') {
@@ -10014,13 +10074,16 @@ function renderPendencias() {
     lista.innerHTML = '<p class="pendencias-vazio">Nenhum insumo sem fornecedor aqui.</p>';
     return;
   }
-  lista.innerHTML = fornecedorVisivel.sort(porNome).map(({ insumo, lojas }) => `
+  lista.innerHTML = fornecedorVisivel.sort(porNome).map(({ insumo, lojas, sugestao }) => `
     <div class="pendencia-linha" data-insumo="${insumo.id}" data-lojas="${escaparHtml(lojas.join('|'))}">
       <div class="pendencia-insumo">
         <strong title="${escaparHtml(insumo.nome)}">${escaparHtml(insumo.nome)}</strong>
         <span>${escaparHtml(insumo.categoria || '')} · sem fornecedor em ${escaparHtml(lojas.join(', '))}</span>
+        <span class="pendencia-origem${sugestao ? '' : ' pendencia-origem--sem'}">${escaparHtml(sugestao
+          ? `Sugerido: ${sugestao.razao}`
+          : 'Sem sugestão: ninguém cotou este insumo ainda e a categoria não tem fornecedor dominante nesta loja')}</span>
       </div>
-      <select data-campo="fornecedor" aria-label="Fornecedor que cota ${escaparHtml(insumo.nome)}">${_opcoesFornecedorPendencia(insumo)}</select>
+      <select data-campo="fornecedor" aria-label="Fornecedor que cota ${escaparHtml(insumo.nome)}">${_opcoesFornecedorPendencia(insumo, sugestao?.id)}</select>
       <button type="button" class="btn-secondary-sm" data-acao="ligar-fornecedor">Ligar</button>
       ${lojas.length === 1 ? '<button type="button" class="btn-limpar-filtro" data-acao="tirar-da-loja">Não usa nesta loja</button>' : '<span></span>'}
     </div>
