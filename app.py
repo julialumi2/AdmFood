@@ -15,7 +15,7 @@ from flask import (
     send_file, send_from_directory, session,
 )
 
-from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO
 from backend import whatsapp_bot
 from backend.armazenamento import (
     inicializar_banco,
@@ -7243,6 +7243,10 @@ def api_config_lojas():
         # ao colar, nome de loja que não bate — e sem isto a tela mostrava
         # a mesma coisa nos três casos (30/09).
         "dadosFiscais": DADOS_FISCAIS_ESTADO if ehAdmin else None,
+        # Como o valor chegou, sem mostrar o valor: tamanho, começo, fim
+        # e se veio quebrado em linhas. Sem isto cada palpite custa um
+        # deploy, e em 30/09 custou três.
+        "dadosFiscaisComoChegou": DADOS_FISCAIS_IMPRESSAO if (ehAdmin and DADOS_FISCAIS_ESTADO != "ok") else None,
     })
 
 

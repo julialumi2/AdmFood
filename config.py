@@ -8,6 +8,7 @@ definidas direto no painel, sem precisar de nenhum arquivo.
 
 import base64
 import json
+import re
 import os
 
 from dotenv import load_dotenv
@@ -68,28 +69,62 @@ EQUIPE_INICIAL_JSON = os.environ.get("EQUIPE_INICIAL", "").strip()
 # exatamente a mesma tela (30/09).
 
 
+def _impressao_do_valor(bruto):
+    """Como o valor chegou, sem mostrar o valor.
+
+    Diagnosticar isso pelo painel custa um deploy por tentativa, e a
+    gente gastou três em 30/09. Tamanho, começo, fim e se veio quebrado
+    em linhas é o suficiente pra comparar com o que era pra ter chegado,
+    e não é o suficiente pra vazar CNPJ nenhum."""
+    limpo = re.sub(r"\s", "", bruto)
+    return {
+        "tamanho": len(bruto),
+        "tamanhoSemEspacos": len(limpo),
+        "comeca": limpo[:8],
+        "termina": limpo[-8:],
+        "temQuebraDeLinha": len(bruto.strip().splitlines()) > 1,
+        "pareceJson": limpo.startswith("{"),
+    }
+
+
 def _ler_dados_fiscais():
-    bruto = (os.environ.get("DADOS_FISCAIS_LOJAS", "") or "").strip()
-    if not bruto:
-        return {}, "ausente"
-    if not bruto.startswith("{"):
-        # Não parece JSON: tenta base64 antes de desistir.
+    """Devolve (dados, estado). O estado vai pra tela de Configurações
+    porque cada causa tem um conserto diferente."""
+    bruto = os.environ.get("DADOS_FISCAIS_LOJAS", "") or ""
+    if not bruto.strip():
+        return {}, "ausente", None
+
+    impressao = _impressao_do_valor(bruto)
+    if not impressao["pareceJson"]:
+        # Não parece JSON: tenta base64. Tira espaço e quebra de linha
+        # antes — painel que embrulha uma linha de 640 caracteres em
+        # várias entrega um base64 tecnicamente inválido com o conteúdo
+        # intacto, e desistir aí seria desistir à toa (30/09).
         try:
-            bruto = base64.b64decode(bruto, validate=True).decode("utf-8").strip()
+            texto = base64.b64decode(re.sub(r"\s", "", bruto), validate=True)
+            bruto = texto.decode("utf-8")
         except (ValueError, UnicodeDecodeError):
-            return {}, "invalido"
+            return {}, "invalido", impressao
     try:
         dados = json.loads(bruto)
     except ValueError:
-        # JSON malformado não pode derrubar a subida do app: isso aqui é
-        # texto de uma mensagem, não regra de negócio.
-        return {}, "invalido"
+        # Última tentativa: sem as quebras de linha. Painel que embrulha
+        # o valor pode ter partido no meio de um texto entre aspas, e aí
+        # o JSON fica inválido com o conteúdo inteiro — nenhuma razão
+        # social nossa tem quebra de linha dentro, então juntar de volta
+        # não perde nada (30/09).
+        try:
+            dados = json.loads("".join(bruto.splitlines()))
+        except ValueError:
+            # JSON malformado não pode derrubar a subida do app: isso
+            # aqui é texto de uma mensagem, não regra de negócio.
+            return {}, "invalido", impressao
     if not isinstance(dados, dict):
-        return {}, "invalido"
-    return dados, "ok"
+        return {}, "invalido", impressao
+    return dados, "ok", impressao
 
 
-_DADOS_FISCAIS, DADOS_FISCAIS_ESTADO = _ler_dados_fiscais()
+_DADOS_FISCAIS, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO = _ler_dados_fiscais()
 
 
 def _fiscal(loja):

@@ -707,3 +707,16 @@
 
 .config-aviso-fiscal--ruim { border-left-color: var(--danger); background-color: var(--danger-soft); }
 .config-aviso-fiscal--ok { border-left-color: var(--success); background-color: var(--success-soft); }
+
+.config-aviso-fiscal-detalhe {
+  margin: var(--space-2) 0 0;
+  padding-left: 16px;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.config-aviso-fiscal-detalhe code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text-dark);
+}

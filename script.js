@@ -12896,7 +12896,7 @@ async function carregarConfigLojas() {
     }
 
     renderConfigLojasTabela();
-    _avisarSobreDadosFiscais(dados.dadosFiscais, lojas);
+    _avisarSobreDadosFiscais(dados.dadosFiscais, lojas, dados.dadosFiscaisComoChegou);
   } catch (erro) {
     console.error('Falha ao carregar lojas cadastradas:', erro);
     tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Tente de novo em instantes.</td></tr>`;
@@ -12907,7 +12907,7 @@ async function carregarConfigLojas() {
 // porque o repositório é público. Quando faltam, o pedido sai com "Não
 // informado" e nada na tela dizia o motivo — e são três motivos
 // diferentes, com três consertos diferentes (30/09).
-function _avisarSobreDadosFiscais(estado, lojas) {
+function _avisarSobreDadosFiscais(estado, lojas, comoChegou) {
   const caixa = document.getElementById('config-aviso-fiscal');
   if (!caixa) return;
   if (!estado) { caixa.innerHTML = ''; return; }   // não é admin
@@ -12927,7 +12927,21 @@ function _avisarSobreDadosFiscais(estado, lojas) {
     texto = 'Dados fiscais das ' + lojas.length + ' lojas carregados — os pedidos saem com razão social e CNPJ.';
   }
 
-  caixa.innerHTML = '<p class="config-aviso-fiscal config-aviso-fiscal--' + tom + '">' + texto + '</p>';
+  // O valor exato que era pra ter chegado. Comparar com o que chegou
+  // resolve na hora se o painel cortou, embrulhou ou trocou o conteúdo —
+  // sem isso, cada palpite custa um deploy inteiro.
+  let comparacao = '';
+  if (comoChegou) {
+    comparacao = '<p class="config-aviso-fiscal-detalhe">Chegou assim: <strong>'
+      + comoChegou.tamanho + ' caracteres</strong>'
+      + (comoChegou.temQuebraDeLinha ? ', <strong>quebrado em mais de uma linha</strong>' : ', numa linha só')
+      + ', começando em <code>' + escaparHtml(comoChegou.comeca) + '</code>'
+      + ' e terminando em <code>' + escaparHtml(comoChegou.termina) + '</code>.'
+      + (comoChegou.pareceJson ? ' Está no formato JSON.' : ' Está no formato base64.')
+      + '</p>';
+  }
+
+  caixa.innerHTML = '<p class="config-aviso-fiscal config-aviso-fiscal--' + tom + '">' + texto + '</p>' + comparacao;
 }
 
 function renderConfigLojasTabela() {

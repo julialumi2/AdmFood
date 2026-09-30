@@ -91,4 +91,49 @@ for nome, porque in (("BACKUP_AUTOMATICO", "vazia desligaria a cópia diária do
     conferir("%s tem default no compose (%s)" % (nome, porque),
              bool(re.search(r'\$\{' + nome + r':-[^}]+\}', compose)), True)
 
+secao("4) o valor dos dados fiscais aguenta o que o painel faz com ele")
+# Em 30/09 esse valor foi cadastrado tres vezes e nao funcionou nenhuma.
+# Painel de deploy mexe no que voce cola: embrulha linha de 640
+# caracteres, apara espaco, as vezes corta. O codigo tem que aceitar o
+# que ainda da pra recuperar e recusar o que nao da — recusar silencioso
+# e o que custou o dia.
+import base64  # noqa: E402
+import sys     # noqa: E402
+
+VALOR = ('{"Hamburgueria Artesanos":{"nomeFantasia":"A","razaoSocial":"B","cnpj":"1"},'
+         '"Acai Na Lata":{"nomeFantasia":"C","razaoSocial":"D","cnpj":"2"}}')
+B64 = base64.b64encode(VALOR.encode("utf-8")).decode()
+QUEBRA = chr(10)
+
+
+def estado_com(valor):
+    os.environ["DADOS_FISCAIS_LOJAS"] = valor
+    sys.modules.pop("config", None)
+    import config
+    return config.DADOS_FISCAIS_ESTADO
+
+
+_guardado = os.environ.get("DADOS_FISCAIS_LOJAS")
+
+for rotulo, valor, esperado in (
+        ("variavel vazia", "", "ausente"),
+        ("JSON numa linha", VALOR, "ok"),
+        ("JSON embrulhado no meio de um texto entre aspas",
+         VALOR[:60] + QUEBRA + VALOR[60:], "ok"),
+        ("base64 numa linha", B64, "ok"),
+        ("base64 embrulhado em varias linhas",
+         QUEBRA.join(B64[i:i + 40] for i in range(0, len(B64), 40)), "ok"),
+        ("base64 com espaco em volta", "  " + B64 + "  ", "ok"),
+        ("base64 cortado pela metade", B64[:len(B64) // 2], "invalido"),
+        ("base64 com lixo no meio", B64[:20] + "RTQ" + B64[20:], "invalido"),
+        ("texto que nao e nem um nem outro", "qualquer coisa", "invalido"),
+        ("JSON que nao e objeto", "[1, 2, 3]", "invalido")):
+    conferir(rotulo, estado_com(valor), esperado)
+
+if _guardado is None:
+    os.environ.pop("DADOS_FISCAIS_LOJAS", None)
+else:
+    os.environ["DADOS_FISCAIS_LOJAS"] = _guardado
+sys.modules.pop("config", None)
+
 terminar()
