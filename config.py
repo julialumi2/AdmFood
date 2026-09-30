@@ -136,6 +136,15 @@ def _fiscal(loja):
     }
 
 
+# O grupo do WhatsApp onde o robô posta o aviso de reservas (todo dia às
+# 15h, e reserva nova na hora). É um id de grupo, não um telefone — sai
+# do próprio WhatsApp e não pode ficar em arquivo versionado.
+#
+# Vazio desliga o aviso sem derrubar nada: a tela de Reservas continua
+# funcionando e o texto continua visível ali.
+GRUPO_WHATSAPP_LIDERANCA = os.environ.get("GRUPO_WHATSAPP_LIDERANCA", "").strip()
+
+
 # Dicionário com as configurações individuais de cada unidade/loja.
 LOJAS = {
     "Hamburgueria Artesanos": {

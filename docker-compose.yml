@@ -43,6 +43,7 @@ services:
       - EVOLUTION_INSTANCIA=${EVOLUTION_INSTANCIA}
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
       - WHATSAPP_WEBHOOK_TOKEN=${WHATSAPP_WEBHOOK_TOKEN}
+      - GRUPO_WHATSAPP_LIDERANCA=${GRUPO_WHATSAPP_LIDERANCA}
 
       # Cópia diária do banco. Precisa do :-true: sem ele, variável não
       # definida no painel chegaria como vazia e desligaria o backup —

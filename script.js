@@ -14170,7 +14170,53 @@ async function iniciarTelaDeReservas() {
   });
   document.getElementById('reservas-lista')?.addEventListener('click', aoClicarNaReserva);
 
+  // O aviso do grupo e coisa de gestao: operacao anota reserva, nao
+  // decide o que a lideranca ve.
+  if (['admin', 'gerente'].includes(window.usuarioLogado?.papel)) {
+    document.getElementById('aviso-grupo').style.display = '';
+    document.querySelector('.aviso-grupo-acoes')?.addEventListener('click', (evento) => {
+      const botao = evento.target.closest('[data-tipo]');
+      if (botao) carregarPreviaDoAviso(botao.dataset.tipo);
+    });
+    carregarPreviaDoAviso();
+  }
+
   carregarReservas();
+}
+
+// O texto que o robo posta no grupo da lideranca as 15h. Mostrado aqui
+// porque o aviso so existe de verdade quando alguem consegue conferir o
+// que ele diz antes de ele dizer (30/09).
+async function carregarPreviaDoAviso(tipo) {
+  const caixa = document.getElementById('aviso-grupo-texto');
+  const legenda = document.getElementById('aviso-grupo-legenda');
+  if (!caixa) return;
+  try {
+    const url = '/api/reservas/aviso' + (tipo ? '?tipo=' + tipo : '');
+    const r = await fetch(url, { credentials: 'same-origin' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.erro || 'não deu pra ler');
+
+    caixa.textContent = d.vazio
+      ? 'Nenhuma reserva no turno de hoje — nesse caso o robô não posta nada. '
+        + 'Aviso diário em dia vazio vira ruído, e ruído diário ensina a ignorar o aviso.'
+      : d.texto;
+    caixa.classList.toggle('aviso-grupo-texto--vazio', !!d.vazio);
+
+    document.querySelectorAll('.aviso-grupo-acoes [data-tipo]').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tipo === d.tipo);
+    });
+
+    const fila = d.novasNaFila
+      ? ` ${d.novasNaFila} reserva(s) esperando pra virar aviso de "reserva nova".`
+      : '';
+    legenda.textContent = d.configurado
+      ? `Sai todo dia às ${d.hora} (segunda, a semana inteira).${fila}`
+      : `Sairia todo dia às ${d.hora}, mas o robô ainda não tem chip — por enquanto o aviso só existe aqui.${fila}`;
+  } catch (erro) {
+    caixa.textContent = erro.message;
+    legenda.textContent = '';
+  }
 }
 
 async function carregarReservas() {

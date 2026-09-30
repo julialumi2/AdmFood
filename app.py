@@ -15,7 +15,7 @@ from flask import (
     send_file, send_from_directory, session,
 )
 
-from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO, GRUPO_WHATSAPP_LIDERANCA
 from backend import whatsapp_bot
 from backend.armazenamento import (
     inicializar_banco,
@@ -2449,6 +2449,232 @@ def _quando_legivel(iso):
     except ValueError:
         return None
     return "%02d/%02d às %02d:%02d" % (q.day, q.month, q.hour, q.minute)
+
+
+# ---------------------------------------------------------------------
+# O AVISO DE RESERVAS NO GRUPO DA LIDERANÇA (30/09), pedido do chefe:
+# "agente de IA mandando no grupo da liderança todo dia às 15h quais são
+# as reservas do dia (segunda, as reservas da semana) e reservas novas
+# assim que agendadas".
+# ---------------------------------------------------------------------
+
+HORA_DO_AVISO_DE_RESERVAS = (15, 0)
+MINUTOS_ENTRE_BUSCAS_DE_RESERVA_NOVA = 2
+
+# Reserva anotada há mais de um dia não é "nova" pra ninguém. Sem este
+# corte, a primeira vez que o aviso ligasse despejaria o cadastro
+# inteiro no grupo de uma vez — e o mesmo depois de qualquer parada
+# longa. As antigas são marcadas como avisadas sem sair mensagem.
+HORAS_PRA_UMA_RESERVA_AINDA_SER_NOVA = 24
+
+
+def _linha_de_reserva(reserva, com_loja=False):
+    """Uma reserva em uma linha. Mesmo formato do que o robô responde
+    quando perguntam por reservas — a liderança lê as duas coisas."""
+    hora = reserva["quando"][11:16]
+    # Reserva de madrugada aparece no turno da noite anterior: sem a data
+    # ao lado, "01:00" na lista de hoje confunde.
+    outro_dia = (" (%s/%s)" % (reserva["quando"][8:10], reserva["quando"][5:7])
+                 if reserva["quando"][:10] != reserva["dia_operacional"] else "")
+    partes = [hora + outro_dia]
+    if com_loja:
+        partes.append(_curto(reserva["loja"]))
+    partes.append(reserva["nome"])
+    partes.append(_qtd(reserva["pessoas"], "pessoa", "pessoas"))
+    if reserva["status"] == "pendente":
+        partes.append("*a confirmar*")
+    return " · ".join(partes)
+
+
+def _rodape_do_aviso(reservas, sufixo=""):
+    pessoas = sum(r["pessoas"] for r in reservas)
+    return "_%s, %s%s_" % (_qtd(len(reservas), "reserva", "reservas"),
+                           _qtd(pessoas, "pessoa", "pessoas"), sufixo)
+
+
+def texto_do_aviso_do_dia(dia_iso, lojas):
+    """As reservas de um turno, agrupadas por loja. None quando não há
+    nenhuma: "nenhuma reserva hoje" todo santo dia é ruído, e ruído
+    diário é o que ensina as pessoas a ignorar o aviso."""
+    reservas = listar_reservas(lojas, de=dia_iso, ate=dia_iso)
+    if not reservas:
+        return None
+
+    linhas = ["📅 *Reservas de hoje*", _dia_por_extenso(dia_iso), ""]
+    for loja in lojas:
+        da_loja = [r for r in reservas if r["loja"] == loja]
+        if not da_loja:
+            continue
+        linhas.append("*%s*" % _curto(loja))
+        linhas.extend(_linha_de_reserva(r) for r in da_loja)
+        linhas.append("")
+    linhas.append(_rodape_do_aviso(reservas))
+    return "\n".join(linhas)
+
+
+def texto_do_aviso_da_semana(primeiro_dia_iso, lojas):
+    """Segunda-feira o aviso é da semana inteira, não do dia.
+
+    Este sai mesmo vazio, ao contrário do diário: uma vez por semana o
+    grupo precisa ver que o robô está vivo, e "nenhuma reserva na
+    semana" é informação de verdade pra quem escala equipe."""
+    primeiro = date.fromisoformat(primeiro_dia_iso)
+    ultimo = primeiro + timedelta(days=6)
+    reservas = listar_reservas(lojas, de=primeiro.isoformat(), ate=ultimo.isoformat())
+
+    cabecalho = ["📅 *Reservas da semana*",
+                 "de %02d/%02d a %02d/%02d" % (primeiro.day, primeiro.month,
+                                               ultimo.day, ultimo.month), ""]
+    if not reservas:
+        return "\n".join(cabecalho + ["Nenhuma reserva marcada pra esta semana."])
+
+    linhas = list(cabecalho)
+    for passo in range(7):
+        dia = (primeiro + timedelta(days=passo)).isoformat()
+        do_dia = [r for r in reservas if r["dia_operacional"] == dia]
+        if not do_dia:
+            continue
+        linhas.append("*%s*" % _dia_por_extenso(dia))
+        linhas.extend(_linha_de_reserva(r, com_loja=True) for r in do_dia)
+        linhas.append("")
+    linhas.append(_rodape_do_aviso(reservas, " na semana"))
+    return "\n".join(linhas)
+
+
+def texto_de_reservas_novas(reservas):
+    """Uma mensagem só, mesmo quando chegam várias juntas — três avisos
+    seguidos no grupo incomodam mais do que informam."""
+    if not reservas:
+        return None
+    if len(reservas) == 1:
+        r = reservas[0]
+        linhas = ["🆕 *Reserva nova* — %s" % _curto(r["loja"]),
+                  "%s, às %s" % (_dia_por_extenso(r["dia_operacional"]), r["quando"][11:16]),
+                  "%s · %s" % (r["nome"], _qtd(r["pessoas"], "pessoa", "pessoas"))]
+        if r["status"] == "pendente":
+            linhas.append("_Ainda a confirmar._")
+        if (r.get("observacao") or "").strip():
+            linhas.append("_%s_" % r["observacao"].strip())
+        return "\n".join(linhas)
+
+    linhas = ["🆕 *%s novas*" % _qtd(len(reservas), "reserva", "reservas"), ""]
+    for r in reservas:
+        linhas.append("%s · %s · %s · %s"
+                      % (_curto(r["loja"]), _dia_por_extenso(r["dia_operacional"]),
+                         r["quando"][11:16], r["nome"]))
+    return "\n".join(linhas)
+
+
+def mandar_pro_grupo_da_lideranca(texto):
+    """(enviou, motivo). Nunca levanta exceção: isto roda dentro de um
+    job agendado, e job que morre por causa de rede para de rodar pra
+    sempre sem ninguém perceber."""
+    if not texto:
+        return False, "nada a avisar"
+    if not GRUPO_WHATSAPP_LIDERANCA:
+        return False, "GRUPO_WHATSAPP_LIDERANCA não configurado"
+    if not whatsapp_bot.configurado():
+        return False, "Evolution não configurada"
+    try:
+        whatsapp_bot.responder(GRUPO_WHATSAPP_LIDERANCA, texto)
+    except Exception as falha:
+        print("❌ Não consegui avisar o grupo da liderança:", falha)
+        return False, "falha ao enviar: %s" % falha
+    return True, "enviado"
+
+
+def _rodar_aviso_de_reservas():
+    """O job das 15h. Segunda manda a semana; nos outros dias, o turno
+    de hoje — e nada, quando não há reserva nenhuma."""
+    hoje = date.today()
+    if hoje.weekday() == 0:
+        texto = texto_do_aviso_da_semana(hoje.isoformat(), list(LOJAS))
+    else:
+        texto = texto_do_aviso_do_dia(hoje.isoformat(), list(LOJAS))
+    enviou, motivo = mandar_pro_grupo_da_lideranca(texto)
+    marcar_execucao_rotina("aviso_reservas", motivo)
+    return enviou
+
+
+def _rodar_aviso_de_reservas_novas():
+    """Reserva anotada vira aviso em até dois minutos.
+
+    De propósito não sai de dentro da rota que cria: a rota ficaria
+    esperando uma chamada HTTP pra Evolution, e uma reserva anotada
+    durante um deploy não seria avisada nunca. Aqui ela é pega na
+    próxima rodada."""
+    pendentes = reservas_por_avisar(list(LOJAS))
+    if not pendentes:
+        return 0
+
+    corte = (datetime.now() - timedelta(hours=HORAS_PRA_UMA_RESERVA_AINDA_SER_NOVA)).isoformat()
+    novas = [r for r in pendentes if (r.get("criado_em") or "") >= corte]
+    antigas = [r for r in pendentes if (r.get("criado_em") or "") < corte]
+
+    # As velhas saem da fila caladas — ver HORAS_PRA_UMA_RESERVA_AINDA_SER_NOVA.
+    if antigas:
+        marcar_reservas_avisadas([r["id"] for r in antigas])
+
+    if not novas:
+        return 0
+    enviou, motivo = mandar_pro_grupo_da_lideranca(texto_de_reservas_novas(novas))
+    if not enviou:
+        # Não marca: sem Evolution ainda, elas continuam na fila e saem
+        # quando o chip entrar. Só não podem envelhecer além do corte.
+        return 0
+    marcar_reservas_avisadas([r["id"] for r in novas])
+    marcar_execucao_rotina("aviso_reserva_nova", "%d avisada(s)" % len(novas))
+    return len(novas)
+
+
+# O aviso de reservas no grupo da liderança (30/09). Fica fora do `if`
+# da sincronização de propósito: reserva não depende de venda
+# sincronizada, e desligar a sincronização num ambiente de teste não
+# pode desligar isto junto.
+if _ESTE_WORKER_AGENDA:
+    from apscheduler.schedulers.background import BackgroundScheduler as _AgendadorReservas
+
+    _scheduler_reservas = _AgendadorReservas(timezone="America/Sao_Paulo")
+    _scheduler_reservas.add_job(
+        _rodar_aviso_de_reservas, "cron",
+        hour=HORA_DO_AVISO_DE_RESERVAS[0], minute=HORA_DO_AVISO_DE_RESERVAS[1])
+    _scheduler_reservas.add_job(
+        _rodar_aviso_de_reservas_novas, "interval",
+        minutes=MINUTOS_ENTRE_BUSCAS_DE_RESERVA_NOVA)
+    _scheduler_reservas.add_job(
+        _bater_ponto_do_agendador, "interval", seconds=SEGUNDOS_BATIMENTO_AGENDADOR)
+    _scheduler_reservas.start()
+
+
+@app.route('/api/reservas/aviso', methods=['GET'])
+def api_previa_do_aviso_de_reservas():
+    """O texto que vai (ou iria) pro grupo. Existe pra dar pra conferir o
+    aviso hoje, sem chip e sem esperar as 15h."""
+    erro_acesso = _exigir_gestao()
+    if erro_acesso:
+        return erro_acesso
+
+    hoje = date.today()
+    tipo = (request.args.get('tipo') or '').strip()
+    if tipo not in ('dia', 'semana'):
+        tipo = 'semana' if hoje.weekday() == 0 else 'dia'
+    lojas = [l for l in LOJAS if _loja_visivel(l)]
+
+    if tipo == 'semana':
+        # A segunda-feira da semana de hoje, não o dia de hoje.
+        texto = texto_do_aviso_da_semana(
+            (hoje - timedelta(days=hoje.weekday())).isoformat(), lojas)
+    else:
+        texto = texto_do_aviso_do_dia(hoje.isoformat(), lojas)
+
+    return jsonify({
+        "tipo": tipo,
+        "texto": texto,
+        "vazio": texto is None,
+        "hora": "%02d:%02d" % HORA_DO_AVISO_DE_RESERVAS,
+        "configurado": bool(GRUPO_WHATSAPP_LIDERANCA) and whatsapp_bot.configurado(),
+        "novasNaFila": len(reservas_por_avisar(list(LOJAS))),
+    })
 
 
 # ---------------------------------------------------------------------
