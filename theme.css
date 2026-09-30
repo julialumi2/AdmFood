@@ -233,7 +233,9 @@ body {
   flex-shrink: 0;
 }
 
-.logo-icon svg { width: 19px; height: 19px; }
+/* 21px, não 19: o A tem menos massa que o ícone de talheres que
+   estava aqui antes, e com 19 ele ficava tímido dentro do quadrado. */
+.logo-icon svg { width: 21px; height: 21px; }
 
 .sidebar .brand-name {
   font-family: var(--fonte-corpo);

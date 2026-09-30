@@ -8,6 +8,9 @@
     <meta name="theme-color" content="#FFFAFA">
   <title>AdmFood</title>
   <link rel="icon" type="image/x-icon" href="imgs/favicon.ico">
+  <!-- SVG primeiro: navegador moderno prefere ele e não precisa
+       de um PNG por tamanho. Os dois de baixo ficam de reserva. -->
+  <link rel="icon" type="image/svg+xml" href="imgs/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
   <link rel="apple-touch-icon" href="imgs/apple-touch-icon.png">
   <link rel="stylesheet" href="landing.css">
@@ -20,13 +23,16 @@
 
   <!-- HEADER / TOPBAR -->
   <header class="topbar">
-    <div class="logo-img">
-      <img src="imgs/Adm Food Logo-Photoroom.png" alt="Logo AdmFood" class="logo-img" />
-    </div>
-
-    <span class="brand-name">
-      <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
-    </span>
+    <!-- Marca e nome num bloco só. Antes eram dois filhos soltos do
+         .topbar (que é space-between), e o nome era puxado de volta
+         com margin-left:-780px pra encostar na logo — número que só
+         funcionava com o PNG largo que estava aqui antes. -->
+    <a class="topbar-marca" href="index.html">
+      <img src="imgs/marca-admfood.svg" alt="" class="logo-img" width="40" height="40" />
+      <span class="brand-name">
+        <span class="brand-dark">Adm.</span><span class="brand-red">Food</span>
+      </span>
+    </a>
 
     <!-- Botões de Ação no canto direito -->
     <div class="header-actions">

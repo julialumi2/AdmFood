@@ -66,12 +66,18 @@ body {
   display: block;
 }
 
+.topbar-marca {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-decoration: none;
+}
+
 .brand-name {
   font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 25px;
   letter-spacing: -0.5px;
-  margin-left: -780px;
 }
 
 .brand-dark {
