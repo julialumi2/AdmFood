@@ -138,4 +138,23 @@ conferir("não acha mais", buscar_usuario_por_whatsapp(NUM_OPERACAO), None)
 conferir("mas a conta continua ativa",
          mundo.cliente(mundo.OPERACAO).get("/api/alertas").status_code, 200)
 
+secao("9) o painel de diagnostico registra, mas nao guarda telefone")
+# Sem este painel, robo calado tem quatro causas e todas dao o mesmo
+# silencio. Com ele, cada silencio tem nome.
+from backend.armazenamento import listar_chamadas_webhook  # noqa: E402
+
+chamadas = listar_chamadas_webhook()
+resultados = [c["resultado"] for c in chamadas]
+conferir("registrou uma resposta", any(r.startswith("respondido") for r in resultados), True)
+conferir("registrou o numero desconhecido",
+         any("nao cadastrado" in r for r in resultados), True)
+
+# A promessa que o painel faz: da pra reconhecer o proprio numero, nao
+# da pra montar lista de telefone a partir dele.
+numeros = [c["numero"] for c in chamadas if c["numero"]]
+conferir("nenhum numero inteiro foi gravado",
+         any(n in numeros for n in (NUM_ADMIN, NUM_OPERACAO, "5511000000000")), False)
+conferir("mas da pra reconhecer pelo fim", any(n.endswith("0001") for n in numeros), True)
+conferir("mascarado no meio", all("..." in n for n in numeros), True)
+
 terminar()

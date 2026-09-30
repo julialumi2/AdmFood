@@ -221,6 +221,8 @@ from backend.armazenamento import (
     marcar_mensagem_respondida,
     buscar_usuario_por_whatsapp,
     definir_whatsapp_do_usuario,
+    registrar_chamada_webhook,
+    listar_chamadas_webhook,
     criar_reserva,
     buscar_reserva,
     listar_reservas,
@@ -2461,10 +2463,19 @@ def api_webhook_whatsapp(token):
     # Sem token configurado o webhook fica fechado, em vez de aberto —
     # deploy pela metade não pode virar porta aberta.
     if not esperado or token != esperado:
+        corpo = request.get_json(silent=True) or {}
+        if corpo.get("event") and corpo.get("data"):
+            # Tem cara de Evolution: vale avisar que ela esta chamando
+            # com o segredo errado. Varredor de internet bate em URL
+            # aleatoria o dia todo e encheria o painel — esse fica de
+            # fora.
+            registrar_chamada_webhook(None, "token errado")
         abort(404)
 
     corpo = request.get_json(silent=True) or {}
-    if str(corpo.get("event", "")).lower().replace("_", ".") != "messages.upsert":
+    evento = str(corpo.get("event", "")).lower().replace("_", ".")
+    if evento != "messages.upsert":
+        registrar_chamada_webhook(None, "evento que nao interessa: " + (evento or "sem nome"))
         return jsonify({"ignorado": "evento"})
 
     dados = corpo.get("data") or {}
@@ -2475,6 +2486,9 @@ def api_webhook_whatsapp(token):
     numero = whatsapp_bot.numero_da_mensagem(dados)
     texto = whatsapp_bot.texto_da_mensagem(dados)
     if not numero or not texto:
+        # Grupo (a Evolution manda o grupo no lugar do numero), audio,
+        # foto, figurinha. O robo so le texto no privado, por enquanto.
+        registrar_chamada_webhook(numero, "sem numero (grupo?) ou sem texto")
         return jsonify({"ignorado": "sem numero ou sem texto"})
 
     # Quem é essa pessoa no sistema. Não é uma lista à parte: é o próprio
@@ -2486,11 +2500,15 @@ def api_webhook_whatsapp(token):
     if not quem:
         # Número desconhecido não recebe nem "não te conheço": responder
         # qualquer coisa já confirma que o número é de um sistema.
+        # Calado pra quem mandou, visível no painel pra ela: é o caso
+        # mais comum de "mandei e ele não respondeu".
+        registrar_chamada_webhook(numero, "numero nao cadastrado em nenhum funcionario")
         return jsonify({"ignorado": "nao cadastrado"})
 
     mensagem_id = whatsapp_bot.id_da_mensagem(dados)
     if mensagem_id and mensagem_ja_respondida(mensagem_id):
         # A Evolution reentrega quando não recebe 200 na primeira.
+        registrar_chamada_webhook(numero, "repetida (ja tinha respondido)")
         return jsonify({"ignorado": "repetida"})
 
     try:
@@ -2515,8 +2533,29 @@ def api_webhook_whatsapp(token):
         import traceback
         print("❌ Não consegui enviar a resposta pela Evolution:")
         traceback.print_exc()
+        registrar_chamada_webhook(numero, "montei a resposta mas a Evolution recusou o envio")
         return jsonify({"erro": "falha ao enviar"}), 502
+    registrar_chamada_webhook(numero, "respondido: " + quem.get("nome", "?"))
     return jsonify({"respondido": True})
+
+
+@app.route('/api/whatsapp/diagnostico', methods=['GET'])
+def api_diagnostico_whatsapp():
+    """As últimas chamadas que chegaram no webhook, e o que o sistema
+    fez com cada uma.
+
+    Existe por um motivo prático: sem isto, robô calado tem quatro
+    causas que dão exatamente o mesmo silêncio — a Evolution não chamou,
+    chamou com o token errado, mandou evento que não interessa, ou o
+    número de quem perguntou não está em cadastro nenhum. Só a última é
+    culpa de quem mandou a mensagem."""
+    erro_admin = _exigir_admin()
+    if erro_admin:
+        return erro_admin
+    return jsonify({
+        "configurado": whatsapp_bot.configurado(),
+        "chamadas": listar_chamadas_webhook(),
+    })
 
 
 @app.route('/api/whatsapp/teste', methods=['POST'])

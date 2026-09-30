@@ -14374,6 +14374,44 @@ function iniciarPainelDoAgente() {
     const botao = evento.target.closest('[data-pergunta]');
     if (botao) perguntarAoAgente(botao.dataset.pergunta);
   });
+
+  document.getElementById('agente-atualizar-log')?.addEventListener('click', carregarChegandoDoWhatsApp);
+  carregarChegandoDoWhatsApp();
+}
+
+// Cada resultado ganha uma cor: verde respondeu, vermelho ficou calado
+// por culpa de configuração, cinza o robô ignorou de propósito.
+function corDoResultadoDoWebhook(resultado) {
+  if (resultado.startsWith('respondido')) return 'ok';
+  if (resultado.startsWith('repetida') || resultado.startsWith('sem numero')) return 'neutro';
+  return 'ruim';
+}
+
+async function carregarChegandoDoWhatsApp() {
+  const lista = document.getElementById('agente-chegando-lista');
+  if (!lista) return;
+  try {
+    const r = await fetch('/api/whatsapp/diagnostico', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('não deu pra ler');
+    const dados = await r.json();
+    if (!dados.chamadas.length) {
+      // O estado vazio é informação: se ela mandou mensagem e nada
+      // aparece, o problema é antes daqui — a Evolution não está
+      // chamando o AdmFood.
+      lista.innerHTML = dados.configurado
+        ? '<p class="agente-chegando-vazio">Nada chegou ainda. Se você já mandou mensagem pro robô e esta lista continua vazia, a Evolution não está conseguindo chamar o AdmFood — confere a URL do webhook no painel dela.</p>'
+        : '<p class="agente-chegando-vazio">Nada chegou ainda, e é esperado: as variáveis da Evolution ainda não estão no servidor.</p>';
+      return;
+    }
+    lista.innerHTML = dados.chamadas.map((c) => `
+      <div class="agente-chegando-linha agente-chegando-linha--${corDoResultadoDoWebhook(c.resultado)}">
+        <span class="agente-chegando-hora">${new Date(c.quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+        <span class="agente-chegando-numero">${escaparHtml(c.numero || '—')}</span>
+        <span class="agente-chegando-resultado">${escaparHtml(c.resultado)}</span>
+      </div>`).join('');
+  } catch (erro) {
+    lista.innerHTML = `<p class="agente-chegando-vazio">${escaparHtml(erro.message)}</p>`;
+  }
 }
 
 async function perguntarAoAgente(pergunta) {

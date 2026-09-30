@@ -843,6 +843,29 @@ def inicializar_banco():
             """
         )
 
+        # O que chegou no webhook e o que o sistema fez com cada um
+        # (30/09). Quando o robo fica calado sao quatro causas possiveis
+        # — a Evolution nao chamou, chamou com o token errado, mandou
+        # evento que nao interessa, ou o numero nao esta cadastrado — e
+        # todas dao exatamente o mesmo silencio na tela.
+        #
+        # O texto da mensagem NAO entra aqui, de proposito: a Evolution
+        # foi configurada pra nao arquivar conversa nenhuma na VPS, e
+        # nao faria sentido o AdmFood arquivar do lado de ca. O numero
+        # entra mascarado pelo mesmo motivo — o suficiente pra ela
+        # reconhecer o proprio, nao o bastante pra virar lista de
+        # telefone.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS whatsapp_webhook_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                quando TEXT NOT NULL,
+                numero TEXT,
+                resultado TEXT NOT NULL
+            )
+            """
+        )
+
         # Reservas de mesa (29/09), pedido do chefe. Por loja, como tudo
         # que é operação.
         #
@@ -3075,6 +3098,38 @@ def marcar_mensagem_respondida(mensagem_id):
             (mensagem_id, agora.isoformat()))
         conn.execute("DELETE FROM whatsapp_mensagem_vista WHERE quando < ?",
                      ((agora - timedelta(days=7)).isoformat(),))
+
+
+CHAMADAS_DE_WEBHOOK_GUARDADAS = 50
+
+
+def _mascarar_numero(numero):
+    """"5511999998888" vira "5511...8888". Da pra reconhecer o proprio
+    numero e digitar no cadastro; nao da pra montar lista de contato."""
+    digitos = re.sub(r"\D", "", numero or "")
+    if len(digitos) < 8:
+        return digitos or None
+    return digitos[:4] + "..." + digitos[-4:]
+
+
+def registrar_chamada_webhook(numero, resultado):
+    """Uma linha por chamada recebida. Guarda so as ultimas 50: isto e
+    painel de diagnostico, nao historico."""
+    with conexao() as conn:
+        conn.execute(
+            "INSERT INTO whatsapp_webhook_log (quando, numero, resultado) VALUES (?, ?, ?)",
+            (datetime.now().isoformat(), _mascarar_numero(numero), resultado))
+        conn.execute(
+            "DELETE FROM whatsapp_webhook_log WHERE id NOT IN "
+            "(SELECT id FROM whatsapp_webhook_log ORDER BY id DESC LIMIT ?)",
+            (CHAMADAS_DE_WEBHOOK_GUARDADAS,))
+
+
+def listar_chamadas_webhook(limite=CHAMADAS_DE_WEBHOOK_GUARDADAS):
+    with conexao() as conn:
+        return [dict(linha) for linha in conn.execute(
+            "SELECT quando, numero, resultado FROM whatsapp_webhook_log "
+            "ORDER BY id DESC LIMIT ?", (limite,))]
 
 
 STATUS_DE_RESERVA = ("pendente", "confirmada", "cancelada", "compareceu", "nao_compareceu")

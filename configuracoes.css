@@ -625,7 +625,66 @@
 
 .agente-pensando { color: var(--text-faint); font-style: italic; }
 
+/* "Chegando do WhatsApp" — o diagnostico. Fica depois da conversa
+   porque so importa depois que o chip estiver de pe. */
+.agente-chegando {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-color);
+}
+
+.agente-chegando-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.agente-chegando-topo h4 {
+  margin: 0 0 2px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.agente-chegando-vazio {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Uma linha por chamada. A faixa colorida na esquerda e o que responde
+   a pergunta de longe: respondeu ou nao? */
+.agente-chegando-linha {
+  display: grid;
+  grid-template-columns: 92px 118px 1fr;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: 7px 11px;
+  border-left: 3px solid var(--border-color);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.agente-chegando-linha + .agente-chegando-linha { border-top: 1px solid var(--border-color); }
+.agente-chegando-linha--ok { border-left-color: var(--success); }
+.agente-chegando-linha--ruim { border-left-color: var(--danger); }
+.agente-chegando-linha--neutro { border-left-color: var(--border-strong); }
+
+.agente-chegando-hora { font-variant-numeric: tabular-nums; }
+
+.agente-chegando-numero {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text-dark);
+}
+
+.agente-chegando-resultado { color: var(--text-dark); }
+
 @media (max-width: 768px) {
   .agente-form { flex-direction: column; }
   .agente-form button { width: 100%; }
+  .agente-chegando-topo { flex-direction: column; }
+  .agente-chegando-linha { grid-template-columns: 1fr; gap: 2px; padding: 9px 11px; }
 }
