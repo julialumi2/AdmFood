@@ -1,3 +1,13 @@
+# ATENÇÃO: esta lista é fechada. Variável que não estiver aqui NÃO entra
+# no container, por mais que esteja cadastrada no painel do Dokploy — ela
+# some em silêncio e o app se comporta como se nunca tivesse sido
+# configurada. Foi o que aconteceu com DADOS_FISCAIS_LOJAS em 30/09:
+# dois deploys, valor certo no painel, e o pedido saindo com "Não
+# informado" no CNPJ.
+#
+# Cadastrou variável nova no painel? Acrescenta ela aqui também.
+# tests/test_variaveis_ambiente.py cobra isso.
+
 services:
   app:
     build: .
@@ -15,6 +25,29 @@ services:
       - GRUPO_WHATSAPP_ZN=${GRUPO_WHATSAPP_ZN}
       - TOKEN_SIMUS=${TOKEN_SIMUS}
       - GRUPO_WHATSAPP_SIMUS=${GRUPO_WHATSAPP_SIMUS}
+
+      # Sessão e primeiro acesso
+      - SECRET_KEY=${SECRET_KEY}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
+      - ADMIN_INICIAL_NOME=${ADMIN_INICIAL_NOME:-Admin}
+      - ADMIN_INICIAL_EMAIL=${ADMIN_INICIAL_EMAIL}
+      - ADMIN_INICIAL_SENHA=${ADMIN_INICIAL_SENHA}
+      - EQUIPE_INICIAL=${EQUIPE_INICIAL}
+      - BOOTSTRAP_FORCAR=${BOOTSTRAP_FORCAR}
+
+      # Razão social e CNPJ das lojas (o repositório é público)
+      - DADOS_FISCAIS_LOJAS=${DADOS_FISCAIS_LOJAS}
+
+      # O robô do WhatsApp
+      - EVOLUTION_URL=${EVOLUTION_URL}
+      - EVOLUTION_INSTANCIA=${EVOLUTION_INSTANCIA}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - WHATSAPP_WEBHOOK_TOKEN=${WHATSAPP_WEBHOOK_TOKEN}
+
+      # Cópia diária do banco. Precisa do :-true: sem ele, variável não
+      # definida no painel chegaria como vazia e desligaria o backup —
+      # que é o contrário do que o código faz quando ela não existe.
+      - BACKUP_AUTOMATICO=${BACKUP_AUTOMATICO:-true}
     volumes:
       - admfood_data:/app/data
     restart: unless-stopped
