@@ -1,3 +1,5 @@
+/* Mesma pilha do --fonte-display/--fonte-corpo do theme.css. Literal
+   porque esta tela não carrega o theme.css (ver inventário 30/09). */
 /* Tela de login — split-screen. Painel esquerdo é a mesma linguagem visual
    da sidebar do painel (carvão + brilho de chama), painel direito é o
    formulário de acesso. Página fica sempre escura (não segue o interruptor
@@ -18,7 +20,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 body {
@@ -86,7 +88,7 @@ body {
 .brand-mark i, .brand-mark svg { width: 20px; height: 20px; }
 
 .brand-name {
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 19px;
   letter-spacing: -0.02em;
@@ -102,7 +104,7 @@ body {
 }
 
 .brand-copy h1 {
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 2.1rem;
   line-height: 1.15;
@@ -139,7 +141,7 @@ body {
 }
 
 .form-title {
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 1.6rem;
   color: #ffffff;

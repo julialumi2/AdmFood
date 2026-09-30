@@ -1,9 +1,11 @@
+/* Mesma pilha do --fonte-display/--fonte-corpo do theme.css. Literal
+   porque esta tela não carrega o theme.css (ver inventário 30/09). */
 /* --- RESET E ESTILOS GERAIS --- */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* --- MODO CLARO PADRÃO VS MODO ESCURO --- */
@@ -63,7 +65,7 @@ body {
 }
 
 .brand-name {
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 25px;
   letter-spacing: -0.5px;
@@ -238,7 +240,7 @@ input:checked + .slider::before {
   padding: 12px 24px;
   background-color: var(--primary-color);
   color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 700;
   font-size: 15px;
   text-decoration: none;
@@ -565,7 +567,7 @@ input:checked + .slider::before {
 }
 
 .footerbrand-name {
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 25px;
   letter-spacing: -0.5px;

@@ -8,6 +8,12 @@
    --------------------------------------------------------------------- */
 :root {
   /* Cor de marca */
+  /* Duas famílias, não uma. Display só em título e número grande;
+     corpo, tabela e formulário continuam em Jakarta, porque mexer na
+     fonte deles mudaria a altura de linha e, com ela, o layout. */
+  --fonte-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fonte-corpo: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
   --primary: #D93829;
   --primary-hover: #B92E21;
   --primary-soft: rgba(217, 56, 41, 0.08);
@@ -144,7 +150,7 @@ body.dark-mode {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--fonte-corpo);
 }
 
 /* overflow-x:hidden só no body não basta — um elemento com margem negativa
@@ -357,7 +363,7 @@ body {
 .logo-icon svg { width: 19px; height: 19px; }
 
 .sidebar .brand-name {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--fonte-corpo);
   font-weight: 800;
   font-size: 1.15rem;
   letter-spacing: -0.02em;
@@ -808,6 +814,7 @@ body {
 .title-row h1,
 .dashboard-title-area h1,
 .page-title {
+  font-family: var(--fonte-display);
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.2;
@@ -1194,6 +1201,7 @@ body.dark-mode .tag-categoria[data-cor="9"] { background-color: rgba(239, 68, 68
 
 .card-value,
 .store-value {
+  font-family: var(--fonte-display);
   font-size: 1.4rem;
   font-weight: 600;
   color: var(--text-dark);
@@ -1306,7 +1314,37 @@ body.dark-mode .tag-categoria[data-cor="9"] { background-color: rgba(239, 68, 68
   gap: var(--space-2);
 }
 
+/* Título que não usa .page-title nem .panel-title — a folha de cada
+   tela tem alguns. Fica depois dos dois pra não ganhar deles. */
+h1, h2, h3, h4 {
+  font-family: var(--fonte-display);
+}
+
+/* Número grande de tela que inventou a própria classe em vez de reusar
+   .store-value / .card-value. São oito telas, cada uma com um nome
+   diferente pra mesma coisa (inventário 30/09) — a lista mora aqui, e
+   não espalhada por oito folhas, pra próxima troca de fonte ser um
+   lugar só.
+   Nenhuma dessas declara font-family na folha dela; se alguma passar a
+   declarar, ela ganha daqui e o número volta pra Jakarta sozinho. */
+.hero-value,
+.home-kpi-valor,
+.veredito-pct,
+.economia-total,
+.curva-numero-valor,
+.mv-indicador-valor,
+.preparo-metrica-valor,
+.metrics-grid .metric-value,
+.detalhe-custo-total strong,
+.semana-linha-valor.destaque,
+.guia-secao-titulo,
+.guia-etapa-nome,
+.detalhe-titulo {
+  font-family: var(--fonte-display);
+}
+
 .panel-title {
+  font-family: var(--fonte-display);
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-dark);

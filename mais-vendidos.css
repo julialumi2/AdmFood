@@ -670,7 +670,7 @@ body.dark-mode {
 
 .mv-preco small {
   display: block;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: var(--fonte-corpo);
   font-size: 0.64rem;
   font-weight: 600;
   color: var(--text-faint);
