@@ -20,7 +20,13 @@ pode ter chave nem telefone:
     EVOLUTION_INSTANCIA    nome da instância criada na Evolution
     EVOLUTION_API_KEY      a chave da Evolution (ela autentica o envio)
     WHATSAPP_WEBHOOK_TOKEN segredo que vai na URL do webhook
-    WHATSAPP_NUMEROS       quem pode falar com o robô, separado por vírgula
+
+Quem pode falar com o robô NÃO está aqui: é o campo `whatsapp` do
+cadastro de usuário (30/09). Assim o robô responde com o mesmo perfil e
+a mesma loja que a pessoa tem nas telas, e a permissão se mantém sozinha
+— desativou a conta, o robô para de responder. Uma lista de números em
+variável de ambiente seria uma segunda lista de permissão pra manter em
+sincronia, que é como esse tipo de coisa apodrece.
 """
 import os
 import re
@@ -32,16 +38,6 @@ TEMPO_LIMITE_ENVIO_S = 20
 
 def so_digitos(texto):
     return re.sub(r"\D", "", texto or "")
-
-
-def numeros_permitidos():
-    """Só estes números recebem resposta.
-
-    É a trava mais importante do módulo: sem ela, quem descobrir o número
-    pergunta o faturamento da rede. O robô não tem tela pra esconder
-    dinheiro de quem não é admin — quem está na lista vê tudo."""
-    crus = os.environ.get("WHATSAPP_NUMEROS", "")
-    return {so_digitos(n) for n in crus.split(",") if so_digitos(n)}
 
 
 def configurado():

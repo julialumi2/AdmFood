@@ -600,6 +600,16 @@
             <select id="usuarioLoja"></select>
             <span class="panel-subtitle" id="usuarioLojaAjuda">A pessoa só enxerga o estoque, as compras e as vendas dessa loja.</span>
           </div>
+          <div class="form-group">
+            <label for="usuarioWhatsapp">WhatsApp <span style="font-weight:400; text-transform:none; letter-spacing:normal;">(opcional)</span></label>
+            <input type="tel" id="usuarioWhatsapp" placeholder="11 99999-9999" maxlength="25">
+            <span class="panel-subtitle">
+              Preenchendo, a pessoa passa a poder perguntar as coisas pro robô no
+              WhatsApp — e ele responde <strong>com o mesmo perfil que ela tem
+              aqui</strong>. Quem não vê faturamento na tela não vê no WhatsApp.
+              Em branco, o robô não atende essa pessoa.
+            </span>
+          </div>
           <p id="usuarioErro" class="panel-subtitle" style="display:none; color: var(--danger);"></p>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" onclick="fecharModalUsuario()">Cancelar</button>

@@ -219,6 +219,8 @@ from backend.armazenamento import (
     _normalizar_nome_insumo,
     mensagem_ja_respondida,
     marcar_mensagem_respondida,
+    buscar_usuario_por_whatsapp,
+    definir_whatsapp_do_usuario,
     criar_reserva,
     buscar_reserva,
     listar_reservas,
@@ -1551,6 +1553,9 @@ def _formatar_membro_equipe(usuario):
         "ativo": bool(usuario["ativo"]),
         "criadoEm": usuario["criado_em"],
         "senhaProvisoria": bool(usuario.get("trocar_senha")),
+        # Quem tem número aqui fala com o robô do WhatsApp, com o mesmo
+        # perfil que tem no sistema (30/09).
+        "whatsapp": usuario.get("whatsapp") or "",
     }
 
 
@@ -1602,6 +1607,8 @@ def api_criar_usuario():
     # A senha que o admin digita aqui passa pelo WhatsApp e fica anotada em
     # algum lugar: ela serve pra primeira entrada, não pra sempre (QA 22/09).
     usuario_id = criar_usuario(nome, email, gerar_hash_senha(senha), papel, loja, trocar_senha=True)
+    if (dados.get('whatsapp') or '').strip():
+        definir_whatsapp_do_usuario(usuario_id, dados['whatsapp'])
     return jsonify({"usuario": _formatar_membro_equipe(buscar_usuario_por_id(usuario_id))})
 
 
@@ -1631,6 +1638,10 @@ def api_atualizar_usuario(usuario_id):
         campos['loja'] = loja
     if 'ativo' in dados:
         campos['ativo'] = 1 if dados['ativo'] else 0
+    if 'whatsapp' in dados:
+        # Só dígitos, e vazio vira NULL — é assim que se tira alguém do
+        # robô sem mexer no acesso dela ao sistema (30/09).
+        campos['whatsapp'] = re.sub(r'\D', '', dados.get('whatsapp') or '') or None
     if 'senha' in dados and dados['senha']:
         erro_senha = _erro_da_senha(dados['senha'])
         if erro_senha:
@@ -2309,11 +2320,60 @@ def _dia_citado(texto, lojas):
     return (date.fromisoformat(hoje_operacional) - timedelta(days=1)).isoformat()
 
 
-def montar_resposta_do_agente(texto, lojas, nome_de_quem=None):
-    """De que a pessoa está falando, e a resposta. Só leitura."""
+# Quem pode saber de quê, no robô. É o MESMO recorte das telas: gerente
+# e operação perderam faturamento em 22/09 (ver PAGINAS_POR_PAPEL), e é
+# esse mesmo corte que vale aqui.
+#
+# Pedido do chefe em 30/09, e a razão dele é boa: "ele nunca deve
+# responder algo pra alguém que não tenha acesso a determinado dado".
+# Um robô que responde faturamento pra quem não vê faturamento na tela
+# seria uma porta lateral pra contornar os perfis do sistema.
+ASSUNTOS_POR_PAPEL = {
+    "admin": {"vendas", "comprar", "reservas", "estoque"},
+    "gerente": {"comprar", "reservas", "estoque"},
+    "operacao": {"comprar", "reservas", "estoque"},
+}
+
+RECUSA_POR_ASSUNTO = {
+    "vendas": "Faturamento é informação de gestão — não posso te passar por aqui.",
+}
+
+
+def _pode_saber(usuario, assunto):
+    papel = (usuario or {}).get("papel")
+    return assunto in ASSUNTOS_POR_PAPEL.get(papel, set())
+
+
+def _lojas_de(usuario):
+    """As lojas que essa pessoa enxerga. Mesma regra de
+    _loja_do_usuario: admin vê a rede, o resto vê só a sua — e quem
+    ficou sem loja no cadastro não vê nenhuma, em vez de cair no
+    "todas"."""
+    if (usuario or {}).get("papel") == "admin":
+        return list(LOJAS)
+    minha = (usuario or {}).get("loja")
+    return [minha] if minha in LOJAS else []
+
+
+def montar_resposta_do_agente(texto, lojas, nome_de_quem=None, usuario=None):
+    """De que a pessoa está falando, e a resposta. Só leitura.
+
+    `usuario` é quem está perguntando (achado pelo WhatsApp). Sem ele, o
+    comportamento é o de admin — é assim que a tela de teste em
+    Configurações funciona, que já é só de admin. O webhook SEMPRE passa
+    um usuário."""
     limpo = _normalizar_nome_insumo(texto or "")
     if not limpo:
         return O_QUE_SEI_FAZER
+
+    if usuario is not None:
+        lojas = _lojas_de(usuario)
+        if not lojas:
+            # Cadastro pela metade: papel definido, loja em branco. Falha
+            # fechando, igual às telas.
+            return ("Sua conta está sem loja definida no sistema, então eu não "
+                    "consigo saber de qual loja te responder. Fala com quem "
+                    "administra o AdmFood.")
 
     # PEDIDO DE AÇÃO vem antes de qualquer assunto. "cancela a reserva da
     # Marina" casava com "reserva" e ele respondia com a LISTA de
@@ -2333,7 +2393,16 @@ def montar_resposta_do_agente(texto, lojas, nome_de_quem=None):
         saudacao = "Oi%s! " % (", " + nome_de_quem.split(" ")[0] if nome_de_quem else "")
         return saudacao + O_QUE_SEI_FAZER
 
-    if re.search(r"\b(vendeu|vendi|venda|vendas|faturou|faturamento|fatura)\b", limpo):
+    def recusar(assunto):
+        """Recusa sem vazar. Não diz quanto foi nem dá pista: quem não
+        pode saber não pode saber nem por tabela."""
+        return (RECUSA_POR_ASSUNTO.get(assunto, "Isso está fora do que posso te passar.")
+                + "\n\n" + O_QUE_SEI_FAZER)
+
+    if re.search(r"\b(vendeu|vendi|venda|vendas|faturou|faturamento|fatura"
+                 r"|ticket|margem|lucro|cmv|quanto entrou)\b", limpo):
+        if usuario is not None and not _pode_saber(usuario, "vendas"):
+            return recusar("vendas")
         dia = _dia_citado(limpo, lojas)
         if not dia:
             return "Não entendi a data. Tenta assim: *quanto vendeu dia 27/09*."
@@ -2342,13 +2411,19 @@ def montar_resposta_do_agente(texto, lojas, nome_de_quem=None):
         return resposta_de_vendas(dia, lojas, _quando_legivel(quando))
 
     if re.search(r"\b(falta comprar|comprar|faltando|abaixo do minimo|repor|reposicao)\b", limpo):
+        if usuario is not None and not _pode_saber(usuario, "comprar"):
+            return recusar("comprar")
         return resposta_do_que_falta_comprar(lojas)
 
     if re.search(r"\b(reserva|reservas|mesa|mesas)\b", limpo):
+        if usuario is not None and not _pode_saber(usuario, "reservas"):
+            return recusar("reservas")
         return resposta_de_reservas(_dia_citado_pra_reserva(limpo, lojas), lojas)
 
     achado = re.search(r"\b(?:quanto tem de|tem de|estoque de|quanto tem|tem)\s+(.+)$", limpo)
     if achado:
+        if usuario is not None and not _pode_saber(usuario, "estoque"):
+            return recusar("estoque")
         return resposta_de_estoque(achado.group(1).strip(), lojas)
 
     return "Não entendi. " + O_QUE_SEI_FAZER
@@ -2401,10 +2476,17 @@ def api_webhook_whatsapp(token):
     texto = whatsapp_bot.texto_da_mensagem(dados)
     if not numero or not texto:
         return jsonify({"ignorado": "sem numero ou sem texto"})
-    if numero not in whatsapp_bot.numeros_permitidos():
-        # Quem está na lista vê faturamento e custo: o robô não tem tela
-        # pra esconder dinheiro por cargo.
-        return jsonify({"ignorado": "fora da lista"})
+
+    # Quem é essa pessoa no sistema. Não é uma lista à parte: é o próprio
+    # cadastro de usuário, com o WhatsApp dela. Isso é o que faz o robô
+    # responder com o MESMO perfil e a MESMA loja das telas (pedido do
+    # chefe, 30/09) — e faz a permissão se manter sozinha: desativou a
+    # conta, o robô para de responder na hora.
+    quem = buscar_usuario_por_whatsapp(numero)
+    if not quem:
+        # Número desconhecido não recebe nem "não te conheço": responder
+        # qualquer coisa já confirma que o número é de um sistema.
+        return jsonify({"ignorado": "nao cadastrado"})
 
     mensagem_id = whatsapp_bot.id_da_mensagem(dados)
     if mensagem_id and mensagem_ja_respondida(mensagem_id):
@@ -2413,7 +2495,10 @@ def api_webhook_whatsapp(token):
 
     try:
         resposta = montar_resposta_do_agente(
-            texto, list(LOJAS), whatsapp_bot.nome_de_quem_mandou(dados))
+            texto, list(LOJAS),
+            # O nome do cadastro, não o `pushName` do WhatsApp: aquele é
+            # escolhido por quem manda e não é identidade nenhuma.
+            quem.get("nome"), usuario=quem)
     except Exception:
         import traceback
         print("❌ O agente quebrou montando a resposta:")

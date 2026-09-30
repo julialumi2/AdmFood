@@ -271,6 +271,16 @@ def inicializar_banco():
             # Loja do funcionário: gerente e operação só enxergam a dela.
             # NULL = a rede inteira, que é o caso do admin (card #35, 17/09).
             conn.execute("ALTER TABLE usuario ADD COLUMN loja TEXT")
+        if "whatsapp" not in colunas_usuario:
+            # O WhatsApp de quem pode falar com o robô (30/09). Guardado
+            # só em dígitos, com DDI, pra bater com o que a Evolution
+            # manda ("5511999999999@s.whatsapp.net").
+            #
+            # É este campo que resolve o pedido do chefe: o robô acha a
+            # pessoa por aqui e responde com o MESMO perfil e a MESMA
+            # loja que ela tem no sistema. Quem não tem número cadastrado
+            # não é atendido.
+            conn.execute("ALTER TABLE usuario ADD COLUMN whatsapp TEXT")
         # 'equipe' era o único papel de funcionário antes do card #35. Virou
         # 'operacao', o mesmo acesso do dia a dia com nome que diz o que é.
         conn.execute("UPDATE usuario SET papel = 'operacao' WHERE papel = 'equipe'")
@@ -2186,6 +2196,43 @@ def buscar_usuario_por_email(email):
     with conexao() as conn:
         linha = conn.execute("SELECT * FROM usuario WHERE email = ?", (email.strip().lower(),)).fetchone()
         return dict(linha) if linha else None
+
+
+def buscar_usuario_por_whatsapp(numero):
+    """Quem é o dono desse número de WhatsApp, se estiver cadastrado e
+    ativo.
+
+    Compara só dígitos dos dois lados: o cadastro pode estar como
+    "(11) 99999-9999" e a Evolution manda "5511999999999". O casamento é
+    pelo FIM do número, pra tolerar o 55 e o nono dígito — mas exige ao
+    menos 10 dígitos, senão "999" casaria com meio mundo.
+
+    Conta desativada não é encontrada: é a mesma trava do `ativo` que
+    derruba a sessão web, valendo de graça pro robô."""
+    so_numeros = re.sub(r"\D", "", numero or "")
+    if len(so_numeros) < 10:
+        return None
+    with conexao() as conn:
+        linhas = conn.execute(
+            "SELECT * FROM usuario WHERE ativo = 1 AND whatsapp IS NOT NULL AND whatsapp != ''"
+        ).fetchall()
+    for linha in linhas:
+        cadastrado = re.sub(r"\D", "", linha["whatsapp"] or "")
+        if len(cadastrado) < 10:
+            continue
+        curto, longo = sorted((so_numeros, cadastrado), key=len)
+        if longo.endswith(curto):
+            return dict(linha)
+    return None
+
+
+def definir_whatsapp_do_usuario(usuario_id, numero):
+    """Grava só os dígitos. Vazio apaga — é assim que se tira alguém do
+    robô sem desativar a conta dela no sistema."""
+    so_numeros = re.sub(r"\D", "", numero or "") or None
+    with conexao() as conn:
+        conn.execute("UPDATE usuario SET whatsapp = ? WHERE id = ?", (so_numeros, usuario_id))
+    return so_numeros
 
 
 def buscar_usuario_por_id(usuario_id):

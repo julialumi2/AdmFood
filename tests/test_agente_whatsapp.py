@@ -23,12 +23,18 @@ from _base import Mundo, conferir, secao, terminar
 mundo = Mundo()
 
 os.environ["WHATSAPP_WEBHOOK_TOKEN"] = "segredo-do-teste"
-os.environ["WHATSAPP_NUMEROS"] = "5511999990001, +55 11 99999-0002"
 os.environ["EVOLUTION_URL"] = "https://zap.exemplo.invalid"
 os.environ["EVOLUTION_INSTANCIA"] = "admfood"
 os.environ["EVOLUTION_API_KEY"] = "chave-de-teste"
 
 from backend import whatsapp_bot  # noqa: E402
+from backend.armazenamento import definir_whatsapp_do_usuario  # noqa: E402
+
+# Quem pode falar com o robô agora é quem tem WhatsApp no CADASTRO — a
+# permissão é o perfil do sistema, não uma lista no ambiente (pedido do
+# chefe, 30/09). Quem testa isso a fundo é o test_agente_permissao.
+definir_whatsapp_do_usuario(mundo.ADMIN, "5511999990001")
+definir_whatsapp_do_usuario(mundo.GERENTE, "+55 11 99999-0002")
 
 enviados = []
 whatsapp_bot.responder = lambda numero, texto: enviados.append((numero, texto))
@@ -58,7 +64,9 @@ r = cliente.post(URL, json=mensagem("oi", id="A1"))
 conferir("200", r.status_code, 200)
 conferir("respondeu", r.get_json().get("respondido"), True)
 conferir("pro número certo", enviados[0][0], "5511999990001")
-conferir("cumprimenta pelo primeiro nome", enviados[0][1].startswith("Oi, Julia!"), True)
+# O nome vem do CADASTRO, não do pushName que quem manda escolhe.
+conferir("cumprimenta pelo primeiro nome do cadastro",
+         enviados[0][1].startswith("Oi, Admin!"), True)
 conferir("e diz o que sabe fazer", "o que falta comprar" in enviados[0][1], True)
 
 secao("2) o segredo da URL")
@@ -75,7 +83,7 @@ secao("3) quem NÃO recebe resposta")
 enviados.clear()
 casos = [
     (mensagem(fromMe=True, id="B1"), "propria", "mensagem do próprio robô"),
-    (mensagem(numero="5511000000000", id="B2"), "fora da lista", "número fora da lista"),
+    (mensagem(numero="5511000000000", id="B2"), "nao cadastrado", "número não cadastrado"),
     (mensagem(grupo=True, id="B3"), "sem numero ou sem texto", "grupo"),
 ]
 for corpo, esperado, rotulo in casos:
@@ -99,7 +107,7 @@ conferir("enviou uma vez só", len(enviados), 1)
 secao("5) número escrito de outro jeito na lista")
 enviados.clear()
 cliente.post(URL, json=mensagem("oi", numero="5511999990002", id="C1", nome="Ket"))
-conferir("+55 11 99999-0002 é o mesmo 5511999990002", len(enviados), 1)
+conferir("cadastrado como +55 11 99999-0002, recebido como 5511999990002", len(enviados), 1)
 
 secao("6) mensagem citada (responder no WhatsApp)")
 enviados.clear()

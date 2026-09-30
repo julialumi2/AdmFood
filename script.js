@@ -14560,6 +14560,7 @@ function abrirModalEditarUsuario(usuario) {
   _preencherLojasUsuario();
   document.getElementById('usuarioPapel').value = usuario.papel === 'equipe' ? 'operacao' : usuario.papel;
   if (usuario.loja) document.getElementById('usuarioLoja').value = usuario.loja;
+  document.getElementById('usuarioWhatsapp').value = usuario.whatsapp || '';
   atualizarCampoLojaUsuario();
   document.getElementById('usuarioSenha').required = false;
   document.getElementById('usuarioSenhaOpcional').style.display = 'inline';
@@ -14745,6 +14746,9 @@ async function salvarUsuario(event) {
     papel,
     // Admin enxerga a rede inteira, então não fica preso a loja nenhuma.
     loja: papel === 'admin' ? null : document.getElementById('usuarioLoja').value,
+    // Em branco tira a pessoa do robô, sem mexer no acesso dela ao
+    // sistema. O backend guarda só os dígitos.
+    whatsapp: document.getElementById('usuarioWhatsapp').value.trim(),
   };
   const senha = document.getElementById('usuarioSenha').value;
   if (senha) corpo.senha = senha;
