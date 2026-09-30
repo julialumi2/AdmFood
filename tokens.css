@@ -48,6 +48,13 @@
   --fonte-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --fonte-corpo: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
+  /* As duas fontes do NOME. "Adm" é a metade séria e recua; "Food" é a
+     metade solta. A Fraunces tem um eixo chamado `wonk` que torce as
+     letras de propósito — é o que faz o nome não parecer só fonte
+     bonita escolhida de catálogo (30/09). */
+  --fonte-nome-adm: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fonte-nome-food: 'Fraunces', Georgia, 'Times New Roman', serif;
+
   --primary: #D93829;
   --primary-hover: #B92E21;
   --primary-soft: rgba(217, 56, 41, 0.08);

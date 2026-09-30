@@ -222,8 +222,10 @@ body {
 }
 
 .logo-icon {
-  width: 36px;
-  height: 36px;
+  /* 44px pra caber a marca de 32px com folga. A versão com as barras
+     é a única que se usa — decisão dela em 30/09. */
+  width: 44px;
+  height: 44px;
   background-color: var(--primary);
   border-radius: 8px;
   display: flex;
@@ -233,19 +235,40 @@ body {
   flex-shrink: 0;
 }
 
-/* 21px, não 19: o A tem menos massa que o ícone de talheres que
-   estava aqui antes, e com 19 ele ficava tímido dentro do quadrado. */
-.logo-icon svg { width: 21px; height: 21px; }
+.logo-icon svg { width: 32px; height: 32px; }
 
 .sidebar .brand-name {
-  font-family: var(--fonte-corpo);
   font-weight: 800;
   font-size: 1.15rem;
   letter-spacing: -0.02em;
 }
 
-.brand-dark { color: #FAFAFA; }
-.brand-red { color: var(--primary); }
+/* O NOME, em duas fontes.
+   "Adm" recua: fonte sem serifa e 78% do tamanho do "Food".
+   "Food" avança: serifa macia, com o eixo `wonk` torcendo as letras.
+   O alinhamento é pela base, não pelo centro — senão a parte menor
+   flutua no meio da maior. */
+.brand-dark,
+.brand-red {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.brand-dark {
+  font-family: var(--fonte-nome-adm);
+  font-weight: 800;
+  font-size: 0.78em;
+  letter-spacing: -0.02em;
+  color: #FAFAFA;
+}
+
+.brand-red {
+  font-family: var(--fonte-nome-food);
+  font-weight: 700;
+  font-variation-settings: 'SOFT' 60, 'WONK' 1;
+  letter-spacing: -0.01em;
+  color: var(--primary);
+}
 
 /* "Painel" não dizia nada a quem está dentro do painel. */
 .sidebar-section-title { display: none; }

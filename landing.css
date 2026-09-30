@@ -74,7 +74,6 @@ body {
 }
 
 .brand-name {
-  font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 25px;
   letter-spacing: -0.5px;
@@ -644,4 +643,27 @@ input:checked + .slider::before {
   .features-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* O NOME, em duas fontes (30/09). "Adm" recua: sem serifa e a 78 por
+   cento do tamanho. "Food" avança: serifa macia com o eixo `wonk`, que
+   torce as letras de propósito. Alinhado pela base, senão a parte menor
+   flutua no meio da maior. Repetido aqui porque esta tela não carrega o
+   theme.css — os tokens vêm do tokens.css. */
+.brand-name .brand-dark, .footerbrand-name .brand-dark {
+  display: inline-block;
+  vertical-align: baseline;
+  font-family: var(--fonte-nome-adm);
+  font-weight: 800;
+  font-size: 0.78em;
+  letter-spacing: -0.02em;
+}
+
+.brand-name .brand-red, .footerbrand-name .brand-red {
+  display: inline-block;
+  vertical-align: baseline;
+  font-family: var(--fonte-nome-food);
+  font-weight: 700;
+  font-variation-settings: 'SOFT' 60, 'WONK' 1;
+  letter-spacing: -0.01em;
 }
