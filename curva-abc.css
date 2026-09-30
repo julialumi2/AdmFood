@@ -385,7 +385,7 @@
 }
 
 .curva-chip-categoria[data-cor="1"] { background-color: rgba(37, 99, 235, 0.10); color: #1D4ED8; }
-.curva-chip-categoria[data-cor="2"] { background-color: rgba(245, 158, 11, 0.14); color: #B45309; }
+.curva-chip-categoria[data-cor="2"] { background-color: rgba(245, 158, 11, 0.14); color: var(--warning-texto); }
 .curva-chip-categoria[data-cor="3"] { background-color: rgba(139, 92, 246, 0.12); color: #6D28D9; }
 .curva-chip-categoria[data-cor="4"] { background-color: rgba(20, 184, 166, 0.14); color: #0F766E; }
 .curva-chip-categoria[data-cor="5"] { background-color: rgba(236, 72, 153, 0.12); color: #BE185D; }

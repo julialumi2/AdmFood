@@ -37,13 +37,13 @@
 .pedido-estagio[data-estado="concluido"] .pedido-estagio-marcador {
   background-color: var(--success);
   border-color: var(--success);
-  color: #fff;
+  color: var(--texto-sobre-cor);
 }
 
 .pedido-estagio[data-estado="atual"] .pedido-estagio-marcador {
   background-color: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--texto-sobre-cor);
 }
 
 .pedido-estagio-texto {

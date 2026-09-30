@@ -501,8 +501,8 @@
   height: 32px;
   border-radius: 50%;
   border: none;
-  background-color: #3F3F46;
-  color: #fff;
+  background-color: var(--neutro-700);
+  color: var(--texto-sobre-cor);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -510,7 +510,7 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.detalhe-produto-btn-foto:hover { background-color: #18181B; }
+.detalhe-produto-btn-foto:hover { background-color: var(--sidebar-bg); }
 .detalhe-produto-btn-foto i, .detalhe-produto-btn-foto svg { width: 15px; height: 15px; }
 
 .detalhe-produto-campos {
@@ -634,8 +634,8 @@
   height: 22px;
   border-radius: 50%;
   border: none;
-  background-color: #3F3F46;
-  color: #fff;
+  background-color: var(--neutro-700);
+  color: var(--texto-sobre-cor);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1515,7 +1515,7 @@ body.dark-mode {
 .detalhe-tamanho-aba.atual {
   border-color: var(--primary);
   background-color: var(--primary);
-  color: #fff;
+  color: var(--texto-sobre-cor);
 }
 
 /* Etiquetas de tamanho e "a partir de" no cartão da lista */

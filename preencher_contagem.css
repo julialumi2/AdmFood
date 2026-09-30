@@ -257,7 +257,7 @@ body {
   padding: 8px var(--space-3);
   border-radius: var(--radius-sm);
   background-color: var(--success);
-  color: #fff;
+  color: var(--texto-sobre-cor);
   font-size: 0.9rem;
 }
 
@@ -390,7 +390,7 @@ body {
   border: none;
   border-radius: var(--radius-sm);
   background-color: var(--primary);
-  color: #fff;
+  color: var(--texto-sobre-cor);
   font: inherit;
   font-weight: 700;
   font-size: 1rem;

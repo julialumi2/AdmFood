@@ -62,7 +62,7 @@
   margin: 0 0 var(--space-3);
   padding: 10px 12px;
   border: 1px solid var(--border-color);
-  border-left: 3px solid var(--warning, #F59E0B);
+  border-left: 3px solid var(--warning, var(--grafico-2));
   border-radius: 8px;
   background-color: var(--surface-muted);
 }

@@ -1,12 +1,14 @@
 /* Mesma pilha do --fonte-display/--fonte-corpo do theme.css. Literal
    porque esta tela não carrega o theme.css (ver inventário 30/09). */
+@import url('tokens.css');
+
 /* Mesma identidade visual da tela de login (fundo carvão + acento chama). */
 
 :root {
-  --flame: #d93829;
-  --char-2: #09090B;
-  --kraft-text: #FAFAFA;
-  --ink-muted: #A1A1AA;
+  --flame: var(--primary);
+  --char-2: var(--neutro-950);
+  --kraft-text: var(--neutro-000);
+  --ink-muted: var(--sidebar-text-muted);
   --border-claro: rgba(255, 255, 255, 0.12);
 }
 
@@ -72,7 +74,7 @@ body {
   font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 1.4rem;
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   margin-bottom: 12px;
 }
 
@@ -95,7 +97,7 @@ body {
 
 .recovery-passos li + li { margin-top: 8px; }
 
-.recovery-passos strong { color: #ffffff; font-weight: 700; }
+.recovery-passos strong { color: var(--texto-sobre-cor); font-weight: 700; }
 
 .card-footer { margin-top: 24px; }
 

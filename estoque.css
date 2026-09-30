@@ -506,7 +506,7 @@
 
 /* O homologado é o que vai direto em pedido: ganha um anel em vez de outra cor. */
 .fornecedor-avatar.homologado {
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--primary);
   margin-right: 7px;
 }
 

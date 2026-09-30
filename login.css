@@ -1,18 +1,20 @@
 /* Mesma pilha do --fonte-display/--fonte-corpo do theme.css. Literal
    porque esta tela não carrega o theme.css (ver inventário 30/09). */
+@import url('tokens.css');
+
 /* Tela de login — split-screen. Painel esquerdo é a mesma linguagem visual
    da sidebar do painel (carvão + brilho de chama), painel direito é o
    formulário de acesso. Página fica sempre escura (não segue o interruptor
    claro/escuro do resto do sistema — é a "porta de entrada", não precisa). */
 
 :root {
-  --flame: #d93829;
-  --flame-deep: #B92E21;
-  --char: #18181B;
-  --char-2: #09090B;
-  --kraft-text: #FAFAFA;
-  --ink-muted: #A1A1AA;
-  --ink-faint: #71717A;
+  --flame: var(--primary);
+  --flame-deep: var(--primary-hover);
+  --char: var(--text-dark);
+  --char-2: var(--neutro-950);
+  --kraft-text: var(--neutro-000);
+  --ink-muted: var(--sidebar-text-muted);
+  --ink-faint: var(--text-faint);
   --border-claro: rgba(255, 255, 255, 0.12);
 }
 
@@ -80,7 +82,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--texto-sobre-cor);
   flex-shrink: 0;
   box-shadow: 0 4px 10px rgba(217, 56, 41, 0.35);
 }
@@ -109,7 +111,7 @@ body {
   font-size: 2.1rem;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   margin-bottom: 16px;
 }
 
@@ -144,7 +146,7 @@ body {
   font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 800;
   font-size: 1.6rem;
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   margin-bottom: 8px;
 }
 
@@ -156,7 +158,7 @@ body {
 
 .form-erro {
   background-color: rgba(180, 35, 24, 0.14);
-  color: #F97066;
+  color: var(--danger-forte);
   border: 1px solid rgba(180, 35, 24, 0.35);
   border-radius: 8px;
   padding: 10px 14px;
@@ -211,7 +213,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
   outline: none;
   padding: 12px 14px;
   font-size: 14px;
-  color: #F4F4F5;
+  color: var(--neutro-100);
 }
 
 .input-icon-wrap input::placeholder { color: var(--ink-faint); }
@@ -249,7 +251,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
 .btn-primary {
   width: 100%;
   background-image: linear-gradient(155deg, var(--flame), var(--flame-deep));
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   border: none;
   border-radius: 10px;
   padding: 13px;
@@ -315,7 +317,7 @@ form { display: flex; flex-direction: column; gap: 20px; }
   flex: 1;
   height: 4px;
   border-radius: 999px;
-  background-color: #E4E4E7;
+  background-color: var(--neutro-200);
   overflow: hidden;
 }
 
@@ -328,9 +330,9 @@ form { display: flex; flex-direction: column; gap: 20px; }
   transition: width 0.18s ease, background-color 0.18s ease;
 }
 
-.forca-senha[data-forca="2"] .forca-senha-barra span { background-color: #F59E0B; }
+.forca-senha[data-forca="2"] .forca-senha-barra span { background-color: var(--grafico-2); }
 .forca-senha[data-forca="3"] .forca-senha-barra span,
-.forca-senha[data-forca="4"] .forca-senha-barra span { background-color: #16A34A; }
+.forca-senha[data-forca="4"] .forca-senha-barra span { background-color: var(--success); }
 
 .forca-senha-texto {
   font-size: 0.72rem;

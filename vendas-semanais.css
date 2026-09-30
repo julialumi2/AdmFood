@@ -13,19 +13,19 @@
   --veredito-fundo: var(--surface-muted);
 }
 
-.semana-hero.veredito-otimo { --veredito: #047857; --veredito-fundo: #ECFDF5; }
-.semana-hero.veredito-bom { --veredito: #B45309; --veredito-fundo: #FFFBEB; }
-.semana-hero.veredito-ruim { --veredito: #B42318; --veredito-fundo: #FEF3F2; }
+.semana-hero.veredito-otimo { --veredito: var(--success-texto); --veredito-fundo: var(--success-soft); }
+.semana-hero.veredito-bom { --veredito: var(--warning-texto); --veredito-fundo: var(--warning-soft); }
+.semana-hero.veredito-ruim { --veredito: var(--danger-texto); --veredito-fundo: var(--danger-soft); }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .semana-hero.veredito-otimo { --veredito: #34D399; --veredito-fundo: rgba(52, 211, 153, 0.12); }
-  :root:not([data-theme="light"]) .semana-hero.veredito-bom { --veredito: #FBBF24; --veredito-fundo: rgba(251, 191, 36, 0.12); }
-  :root:not([data-theme="light"]) .semana-hero.veredito-ruim { --veredito: #F97066; --veredito-fundo: rgba(249, 112, 102, 0.12); }
+  :root:not([data-theme="light"]) .semana-hero.veredito-otimo { --veredito: var(--success-forte); --veredito-fundo: rgba(52, 211, 153, 0.12); }
+  :root:not([data-theme="light"]) .semana-hero.veredito-bom { --veredito: var(--warning-forte); --veredito-fundo: rgba(251, 191, 36, 0.12); }
+  :root:not([data-theme="light"]) .semana-hero.veredito-ruim { --veredito: var(--danger-forte); --veredito-fundo: rgba(249, 112, 102, 0.12); }
 }
 
-:root[data-theme="dark"] .semana-hero.veredito-otimo { --veredito: #34D399; --veredito-fundo: rgba(52, 211, 153, 0.12); }
-:root[data-theme="dark"] .semana-hero.veredito-bom { --veredito: #FBBF24; --veredito-fundo: rgba(251, 191, 36, 0.12); }
-:root[data-theme="dark"] .semana-hero.veredito-ruim { --veredito: #F97066; --veredito-fundo: rgba(249, 112, 102, 0.12); }
+:root[data-theme="dark"] .semana-hero.veredito-otimo { --veredito: var(--success-forte); --veredito-fundo: rgba(52, 211, 153, 0.12); }
+:root[data-theme="dark"] .semana-hero.veredito-bom { --veredito: var(--warning-forte); --veredito-fundo: rgba(251, 191, 36, 0.12); }
+:root[data-theme="dark"] .semana-hero.veredito-ruim { --veredito: var(--danger-forte); --veredito-fundo: rgba(249, 112, 102, 0.12); }
 
 /* --- Semana fechada: o cartão de fechamento --------------------------- */
 .semana-hero {
@@ -169,10 +169,10 @@
 
 .canais-barra span { display: block; height: 100%; }
 
-.canal-ifood { background-color: #EC4899; }
-.canal-catalog { background-color: #2563EB; }
-.canal-food99 { background-color: #F59E0B; }
-.canal-portal { background-color: #14B8A6; }
+.canal-ifood { background-color: var(--grafico-5); }
+.canal-catalog { background-color: var(--info); }
+.canal-food99 { background-color: var(--grafico-2); }
+.canal-portal { background-color: var(--grafico-4); }
 
 .canais-legenda {
   display: flex;
@@ -279,10 +279,10 @@
   box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 3px var(--text-dark);
 }
 
-.fita-barra.cor-otimo { --barra-cor: #047857; }
-.fita-barra.cor-bom { --barra-cor: #F59E0B; }
-.fita-barra.cor-ruim { --barra-cor: #B42318; }
-.fita-barra.cor-sem-cmv { --barra-cor: #D4D4D8; }
+.fita-barra.cor-otimo { --barra-cor: var(--success-texto); }
+.fita-barra.cor-bom { --barra-cor: var(--grafico-2); }
+.fita-barra.cor-ruim { --barra-cor: var(--danger-texto); }
+.fita-barra.cor-sem-cmv { --barra-cor: var(--sidebar-text); }
 
 @media (prefers-reduced-motion: no-preference) {
   .fita-barra { animation: fita-sobe 0.4s ease-out both; }
@@ -325,20 +325,20 @@
   white-space: nowrap;
 }
 
-.chip-otimo { background-color: #ECFDF5; color: #047857; }
-.chip-bom { background-color: #FFFBEB; color: #B45309; }
-.chip-ruim { background-color: #FEF3F2; color: #B42318; }
+.chip-otimo { background-color: var(--success-soft); color: var(--success-texto); }
+.chip-bom { background-color: var(--warning-soft); color: var(--warning-texto); }
+.chip-ruim { background-color: var(--danger-soft); color: var(--danger-texto); }
 .chip-sem-cmv { background-color: var(--surface-muted); color: var(--text-faint); }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: #34D399; }
-  :root:not([data-theme="light"]) .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: #FBBF24; }
-  :root:not([data-theme="light"]) .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: #F97066; }
+  :root:not([data-theme="light"]) .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: var(--success-forte); }
+  :root:not([data-theme="light"]) .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: var(--warning-forte); }
+  :root:not([data-theme="light"]) .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: var(--danger-forte); }
 }
 
-:root[data-theme="dark"] .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: #34D399; }
-:root[data-theme="dark"] .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: #FBBF24; }
-:root[data-theme="dark"] .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: #F97066; }
+:root[data-theme="dark"] .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: var(--success-forte); }
+:root[data-theme="dark"] .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: var(--warning-forte); }
+:root[data-theme="dark"] .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: var(--danger-forte); }
 
 .num-mono {
   font-variant-numeric: tabular-nums;

@@ -18,16 +18,16 @@
 .loja-simus { --cor-loja: var(--loja-simus); }
 
 :root {
-  --loja-artesanos: #2563EB;
-  --loja-acai: #8B5CF6;
-  --loja-zn: #F59E0B;
-  --loja-simus: #14B8A6;
+  --loja-artesanos: var(--info);
+  --loja-acai: var(--grafico-3);
+  --loja-zn: var(--grafico-2);
+  --loja-simus: var(--grafico-4);
 }
 
 body.dark-mode {
   --loja-artesanos: #60A5FA;
   --loja-acai: #A78BFA;
-  --loja-zn: #FBBF24;
+  --loja-zn: var(--warning-forte);
   --loja-simus: #2DD4BF;
 }
 
@@ -847,7 +847,7 @@ button.tag-pendente:focus-visible { outline: 2px solid var(--warning); outline-o
   margin-top: 4px;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--warning, #F59E0B);
+  color: var(--warning, var(--grafico-2));
   text-transform: none;
   letter-spacing: 0;
 }

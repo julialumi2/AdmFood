@@ -1,5 +1,7 @@
 /* Mesma pilha do --fonte-display/--fonte-corpo do theme.css. Literal
    porque esta tela não carrega o theme.css (ver inventário 30/09). */
+@import url('tokens.css');
+
 /* --- RESET E ESTILOS GERAIS --- */
 * {
   box-sizing: border-box;
@@ -15,11 +17,11 @@
   --bg-secondary: #f8f6f0;
   --text-color: #1a1a1a;
   --text-muted: #666666;
-  --card-bg: #ffffff;
+  --card-bg: var(--texto-sobre-cor);
   --card-border: #eae6df;
-  --border-color: #e2ddd3;
+  --border-color: var(--border-color);
   --footer-bg: #ede9e1;
-  --primary-color: #d93829; /* Vermelho AdmFood */
+  --primary-color: var(--primary); /* Vermelho AdmFood */
   --brand-dark-color: #333333;
 }
 
@@ -29,12 +31,12 @@ body.dark-theme {
   --bg-color: #121214;
   --bg-secondary: #1a1a1e;
   --text-color: #f5f5f7;
-  --text-muted: #a1a1aa;
+  --text-muted: var(--sidebar-text-muted);
   --card-bg: #202024;
   --card-border: #2e2e32;
   --border-color: #2e2e32;
-  --footer-bg: #18181b;
-  --brand-dark-color: #ffffff;
+  --footer-bg: var(--text-dark);
+  --brand-dark-color: var(--texto-sobre-cor);
 }
 
 body {
@@ -109,7 +111,7 @@ body {
 .btn-acesse-painel {
   padding: 8px 16px;
   background-color: var(--primary-color);
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
@@ -176,7 +178,7 @@ body {
 }
 
 input:checked + .slider {
-  background-color: #2e2e32;
+  background-color: var(--card-border);
 }
 
 input:checked + .slider::before {
@@ -220,14 +222,14 @@ input:checked + .slider::before {
 }
 
 .hero-text h1 {
-  color: #ffffff; /* Texto branco para destacar no fundo escuro */
+  color: var(--texto-sobre-cor); /* Texto branco para destacar no fundo escuro */
   font-size: 42px;
   font-weight: 800;
   margin-bottom: 20px;
 }
 
 .hero-text p {
-  color: #e2ddd3;
+  color: var(--border-color);
   font-size: 18px;
   margin-bottom: 30px;
   max-width: 600px;
@@ -239,7 +241,7 @@ input:checked + .slider::before {
   gap: 8px;
   padding: 12px 24px;
   background-color: var(--primary-color);
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 700;
   font-size: 15px;
@@ -251,7 +253,7 @@ input:checked + .slider::before {
 }
 
 .btn-white:hover {
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   color: var(--primary-color);
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
@@ -588,11 +590,11 @@ input:checked + .slider::before {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
 }
 
 .btn-back-top {
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
   text-decoration: none;
   font-weight: 600;
   font-size: 13px;

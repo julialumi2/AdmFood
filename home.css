@@ -115,7 +115,7 @@
 .home-gestao-bloco-topo a {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--home-destaque);
+  color: var(--primary);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -140,8 +140,8 @@
 }
 
 .home-curva-item:first-child .ranking-posicao {
-  background-color: var(--home-destaque-suave);
-  color: var(--home-destaque);
+  background-color: var(--danger-soft);
+  color: var(--primary);
 }
 
 .home-curva-info {
@@ -264,7 +264,7 @@
   height: 16px;
   margin-top: 3px;
   flex-shrink: 0;
-  color: #FBBF24;
+  color: var(--warning-forte);
 }
 
 .hero-insight p {
@@ -273,7 +273,7 @@
   text-wrap: pretty;
 }
 
-.hero-insight strong { color: #FFFFFF; font-weight: 600; }
+.hero-insight strong { color: var(--texto-sobre-cor); font-weight: 600; }
 
 .hero-insight a {
   margin-left: 4px;
@@ -283,7 +283,7 @@
   white-space: nowrap;
 }
 
-.hero-insight a:hover { color: #FFFFFF; }
+.hero-insight a:hover { color: var(--texto-sobre-cor); }
 
 .hero-insight-proximo {
   flex-shrink: 0;
@@ -307,7 +307,7 @@
 
 .hero-insight a:focus-visible,
 .hero-insight-proximo:focus-visible {
-  outline: 2px solid #FBBF24;
+  outline: 2px solid var(--warning-forte);
   outline-offset: 2px;
 }
 
@@ -414,7 +414,7 @@
 .home-rotina-item.feita .home-rotina-check {
   border-color: var(--success);
   background-color: var(--success);
-  color: #FFFFFF;
+  color: var(--texto-sobre-cor);
 }
 
 .home-rotina-item.feita .home-rotina-texto {
@@ -446,8 +446,8 @@
   color: var(--text-faint);
 }
 
-.home-rotina-acao:hover { color: var(--home-destaque); }
-.home-rotina-acao:hover svg { color: var(--home-destaque); }
+.home-rotina-acao:hover { color: var(--primary); }
+.home-rotina-acao:hover svg { color: var(--primary); }
 
 .home-rotina-acao:focus-visible {
   outline: 2px solid var(--info);

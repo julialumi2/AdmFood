@@ -1,5 +1,7 @@
 /* Mesma pilha do --fonte-display/--fonte-corpo do theme.css. Literal
    porque esta tela não carrega o theme.css (ver inventário 30/09). */
+@import url('tokens.css');
+
 /* --- RESET E ESTILOS GERAIS --- */
 * {
   box-sizing: border-box;
@@ -9,7 +11,7 @@
 }
 
 body {
-  background-color: #F4F4F5; /* Fundo off-white */
+  background-color: var(--neutro-100); /* Fundo off-white */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,22 +51,22 @@ body {
 }
 
 .brand-dark {
-  color: #18181B;
+  color: var(--text-dark);
 }
 
 .brand-red {
-  color: #d93829;
+  color: var(--primary);
 }
 
 /* --- CARD --- */
 .registro-card {
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   width: 100%;
   border-radius: 16px;
   padding: 36px 32px;
   position: relative;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-  border: 1px solid #E4E4E7;
+  border: 1px solid var(--neutro-200);
   text-align: center;
 }
 
@@ -76,19 +78,19 @@ body {
   left: 0;
   right: 0;
   height: 5px;
-  background-color: #d93829;
+  background-color: var(--primary);
 }
 
 .card-title {
   font-size: 22px;
   font-weight: 700;
-  color: #09090B;
+  color: var(--neutro-950);
   margin-bottom: 10px;
 }
 
 .card-subtitle {
   font-size: 14px;
-  color: #52525B;
+  color: var(--text-muted);
   line-height: 1.5;
   margin-bottom: 28px;
 }
@@ -110,40 +112,40 @@ body {
 .form-label {
   font-size: 13px;
   font-weight: 700;
-  color: #18181B;
+  color: var(--text-dark);
 }
 
 .form-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #D4D4D8;
+  border: 1px solid var(--sidebar-text);
   border-radius: 10px;
   font-size: 14px;
-  color: #27272A;
+  color: var(--neutro-800);
   outline: none;
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-input::placeholder {
-  color: #A1A1AA;
+  color: var(--sidebar-text-muted);
 }
 
 .form-input:focus {
-  border-color: #d93829;
+  border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(217, 56, 41, 0.15);
 }
 
 /* --- CARD --- */
 .registro-card {
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   width: 100%;
   border-radius: 16px;
   padding: 36px 32px;
   position: relative;
   overflow: hidden;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-  border: 1px solid #E4E4E7;
+  border: 1px solid var(--neutro-200);
   text-align: center;
 }
 
@@ -155,19 +157,19 @@ body {
   left: 0;
   right: 0;
   height: 5px;
-  background-color: #d93829;
+  background-color: var(--primary);
 }
 
 .card-title {
   font-size: 22px;
   font-weight: 700;
-  color: #09090B;
+  color: var(--neutro-950);
   margin-bottom: 10px;
 }
 
 .card-subtitle {
   font-size: 14px;
-  color: #52525B;
+  color: var(--text-muted);
   line-height: 1.5;
   margin-bottom: 28px;
 }
@@ -189,35 +191,35 @@ body {
 .form-label {
   font-size: 13px;
   font-weight: 700;
-  color: #18181B;
+  color: var(--text-dark);
 }
 
 .form-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #D4D4D8;
+  border: 1px solid var(--sidebar-text);
   border-radius: 10px;
   font-size: 14px;
-  color: #27272A;
+  color: var(--neutro-800);
   outline: none;
-  background-color: #ffffff;
+  background-color: var(--card-bg);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-input::placeholder {
-  color: #A1A1AA;
+  color: var(--sidebar-text-muted);
 }
 
 .form-input:focus {
-  border-color: #d93829;
+  border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(217, 56, 41, 0.15);
 }
 
 /* --- BOTÃO --- */
 .btn-primary {
   width: 100%;
-  background-color: #d93829;
-  color: #ffffff;
+  background-color: var(--primary);
+  color: var(--texto-sobre-cor);
   border: none;
   border-radius: 10px;
   padding: 12px;
@@ -229,7 +231,7 @@ body {
 }
 
 .btn-primary:hover {
-  background-color: #B92E21;
+  background-color: var(--primary-hover);
 }
 
 /* --- DIVISOR 'OU' --- */
@@ -244,12 +246,12 @@ body {
 .divider::after {
   content: '';
   flex: 1;
-  border-bottom: 1px solid #E4E4E7;
+  border-bottom: 1px solid var(--neutro-200);
 }
 
 .divider span {
   padding: 0 12px;
-  color: #71717A;
+  color: var(--text-faint);
   font-size: 12px;
   font-weight: 500;
 }
@@ -261,20 +263,20 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background-color: #FAFAFA;
-  border: 1px solid #D4D4D8;
+  background-color: var(--neutro-000);
+  border: 1px solid var(--sidebar-text);
   border-radius: 10px;
   padding: 11px;
   font-size: 14px;
   font-weight: 600;
-  color: #27272A;
+  color: var(--neutro-800);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .btn-google:hover {
-  background-color: #F4F4F5;
-  border-color: #A1A1AA;
+  background-color: var(--neutro-100);
+  border-color: var(--neutro-400);
 }
 
 .google-icon {
@@ -287,14 +289,14 @@ body {
   margin-top: 10px;
   text-align: center;
   font-size: 13px;
-  color: #52525B;
+  color: var(--text-muted);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .link-red {
-  color: #d93829;
+  color: var(--primary);
   font-weight: 600;
   text-decoration: none;
   transition: color 0.2s ease;
@@ -302,7 +304,7 @@ body {
 
 .link-red:hover {
   text-decoration: underline;
-  color: #B92E21;
+  color: var(--primary-hover);
 }
 
 /* --- FOOTER / LINK VOLTAR --- */
@@ -311,7 +313,7 @@ body {
 }
 
 .link-back {
-  color: #d93829;
+  color: var(--primary);
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
@@ -320,5 +322,5 @@ body {
 
 .link-back:hover {
   text-decoration: underline;
-  color: #B92E21;
+  color: var(--primary-hover);
 }

@@ -435,7 +435,7 @@
   transition: width 0.18s ease, background-color 0.18s ease;
 }
 
-.forca-senha[data-forca="2"] .forca-senha-barra span { background-color: var(--warning, #F59E0B); }
+.forca-senha[data-forca="2"] .forca-senha-barra span { background-color: var(--warning, var(--grafico-2)); }
 .forca-senha[data-forca="3"] .forca-senha-barra span,
 .forca-senha[data-forca="4"] .forca-senha-barra span { background-color: var(--success); }
 
@@ -513,7 +513,7 @@
 
 .btn-perigo-contorno:hover {
   background-color: var(--danger);
-  color: #ffffff;
+  color: var(--texto-sobre-cor);
 }
 
 .btn-perigo-contorno:focus-visible {

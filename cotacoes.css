@@ -68,7 +68,7 @@
 .convidar-aviso-todos {
   margin-bottom: var(--space-2);
   padding: 10px 12px;
-  border: 1px solid var(--warning, #F59E0B);
+  border: 1px solid var(--warning, var(--grafico-2));
   border-left-width: 3px;
   border-radius: 8px;
   background-color: var(--warning-soft, rgba(245, 158, 11, 0.12));
@@ -92,7 +92,7 @@
   letter-spacing: 0;
 }
 
-.comparacao-fornecedor-leva.abaixo-do-minimo { color: var(--warning, #F59E0B); }
+.comparacao-fornecedor-leva.abaixo-do-minimo { color: var(--warning, var(--grafico-2)); }
 
 /* Desativado no meio da cotação: o preço dele continua aqui (QA 22/09) */
 .comparacao-fornecedor-inativo {
@@ -114,7 +114,7 @@
   padding: 1px 7px;
   border-radius: 999px;
   background-color: var(--warning-soft, rgba(245, 158, 11, 0.16));
-  color: var(--warning, #F59E0B);
+  color: var(--warning, var(--grafico-2));
   font-size: 0.7rem;
   font-weight: 700;
 }
@@ -233,7 +233,7 @@
 .icone-whatsapp-fornecedor {
   display: inline-flex;
   align-items: center;
-  color: #25D366;
+  color: var(--whatsapp);
   flex-shrink: 0;
 }
 

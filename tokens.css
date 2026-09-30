@@ -1,0 +1,182 @@
+/* tokens.css — as variáveis de cor, espaço e sombra do AdmFood.
+   ======================================================================
+
+   Só variável aqui dentro. Nenhuma regra de layout, nenhum seletor de
+   componente: é isto que deixa o login, o registro, o esquecisenha e a
+   landing usarem os mesmos tokens sem herdar o layout do theme.css
+   (elas nunca carregaram o theme, e era por isso que tinham 88 cores
+   escritas na mão — inventário de 30/09).
+
+   Quem usa:
+     theme.css       @import — e com ele as 23 telas de dentro
+     login.css       @import
+     registro.css    @import
+     esquecisenha.css @import
+     landing.css     @import
+
+   Cor nova vai AQUI, não na folha da tela. Cor escrita na mão numa
+   folha não muda quando a paleta muda e não escurece no modo escuro. */
+
+:root {
+  /* Texto em cima de fundo colorido (botão vermelho, pílula de status).
+     Não vira escuro no modo escuro de propósito: o fundo continua
+     colorido, então o texto tem que continuar claro. */
+  --texto-sobre-cor: #FFFFFF;
+
+  /* As versões claras das cores de estado. Existiam só como valor do
+     modo escuro de --success-texto e companhia; viraram token porque
+     oito folhas usavam elas também no modo claro, como acento. */
+  --success-forte: #34D399;
+  --warning-forte: #FBBF24;
+  --danger-forte: #F97066;
+  --info-forte: #3B82F6;
+
+  /* A escala neutra que faltava. Já estava espalhada em registro.css,
+     login.css e cardapio.css escrita na mão. */
+  --neutro-000: #FAFAFA;
+  --neutro-100: #F4F4F5;
+  --neutro-200: #E4E4E7;
+  --neutro-400: #A1A1AA;
+  --neutro-700: #3F3F46;
+  --neutro-800: #27272A;
+  --neutro-950: #09090B;
+
+  /* Cor de marca */
+  /* Duas famílias, não uma. Display só em título e número grande;
+     corpo, tabela e formulário continuam em Jakarta, porque mexer na
+     fonte deles mudaria a altura de linha e, com ela, o layout. */
+  --fonte-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fonte-corpo: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --primary: #D93829;
+  --primary-hover: #B92E21;
+  --primary-soft: rgba(217, 56, 41, 0.08);
+
+  /* Neutros zinc com fundo quase branco (a paleta de 28/09, em slate com
+     off-white, foi desfeita a pedido dela no mesmo dia). */
+  /* Fundo do sistema, claro (pedido dela, 25/09). Era o creme #F3EBDB. */
+  --bg-main: #FFFAFA;
+  --card-bg: #FFFFFF;
+  --header-bg: #FFFFFF;
+  --header-vidro: rgba(255, 255, 255, 0.62);
+  --header-vidro-borda: rgba(24, 24, 27, 0.08);
+  --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --sidebar-bg: #18181B;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-active-text: #FFFFFF;
+  --sidebar-text: #D4D4D8;
+  --sidebar-text-muted: #A1A1AA;
+
+  --text-dark: #18181B;
+  --text-muted: #52525B;
+  --text-faint: #71717A;
+
+  --border-color: #E6DDCC;
+  --border-strong: #D5C9B3;
+  --surface-muted: #F7F2E8;
+  --surface-muted-border: #E6DDCC;
+  --input-bg: #FFFFFF;
+  --input-border: #D5C9B3;
+
+  /* O fio entre células da faixa de indicadores e a cor de ícone. Valor
+     literal, não var(--border-color): custom property com var() dentro
+     resolve no :root, então o body.dark-mode trocaria --border-color
+     depois e a faixa ficaria com o fio bege no escuro. */
+  --divisoria: #E6DDCC;
+  --icone-neutro: #71717A;
+
+  /* Semânticas. A cor pura (--success...) é pra preenchimento com texto
+     branco em cima; a -texto é pra escrever na cor, e clareia no modo
+     escuro pra continuar legível. */
+  --success: #047857;
+  --success-texto: #047857;
+  --success-soft: #ECFDF5;
+  --warning: #B45309;
+  --warning-texto: #B45309;
+  --warning-soft: #FFFBEB;
+  --danger: #B42318;
+  --danger-texto: #B42318;
+  --danger-soft: #FEF3F2;
+  --info: #2563EB;
+  --info-soft: #EFF6FF;
+  --whatsapp: #25D366;
+  --whatsapp-hover: #20bd5a;
+
+  /* Gráficos, na ordem de uso (mesma lista de CORES_GRAFICO no script.js) */
+  --grafico-1: #2563EB;
+  --grafico-2: #F59E0B;
+  --grafico-3: #8B5CF6;
+  --grafico-4: #14B8A6;
+  --grafico-5: #EC4899;
+  --grafico-outros: #A1A1AA;
+
+  /* Escala de espaçamento (múltiplos de 4px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Raio de borda: 8px em todo cartão e contêiner */
+  --radius-sm: 8px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  /* Sombras quase imperceptíveis; a forte fica pra janela e menu flutuante */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.14);
+
+  --sidebar-width: 260px;
+  /* Desde 2026-09-14 o menu encosta na borda (sem a margem de 16px de cada
+     lado do menu flutuante, que exigia somar 32px aqui). */
+  --sidebar-width-collapsed: 80px;
+}
+
+body.dark-mode {
+  /* No escuro a escala neutra inverte; as de estado e o texto sobre cor
+     ficam iguais, que é o ponto delas. */
+  --neutro-000: #18181B;
+  --neutro-100: #27272A;
+  --neutro-200: #3F3F46;
+  --neutro-400: #71717A;
+  --neutro-700: #D4D4D8;
+  --neutro-800: #E4E4E7;
+  --neutro-950: #FAFAFA;
+
+  --bg-main: #09090B;
+  --card-bg: #18181B;
+  --header-bg: #18181B;
+  --header-vidro: rgba(24, 24, 27, 0.55);
+  --header-vidro-borda: rgba(255, 255, 255, 0.08);
+  --header-vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --text-dark: #FAFAFA;
+  --text-muted: #A1A1AA;
+  --text-faint: #71717A;
+
+  --border-color: #27272A;
+  --border-strong: #3F3F46;
+  --surface-muted: #27272A;
+  --surface-muted-border: #27272A;
+  --input-bg: #18181B;
+  --input-border: #3F3F46;
+  --divisoria: #27272A;
+  --icone-neutro: #71717A;
+
+  --primary-soft: rgba(217, 56, 41, 0.16);
+  --success-texto: #34D399;
+  --success-soft: rgba(52, 211, 153, 0.12);
+  --warning-texto: #FBBF24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --danger-texto: #F97066;
+  --danger-soft: rgba(249, 112, 102, 0.12);
+  --info-soft: rgba(37, 99, 235, 0.16);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
