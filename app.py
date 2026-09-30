@@ -15,7 +15,7 @@ from flask import (
     send_file, send_from_directory, session,
 )
 
-from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO
 from backend import whatsapp_bot
 from backend.armazenamento import (
     inicializar_banco,
@@ -7214,6 +7214,8 @@ def api_config_lojas():
         }
         if ehAdmin:
             linha["tokenMascarado"] = _mascarar_token(cfg.get("cardapio_web_token"))
+            # Só se tem ou não tem — o valor em si não volta pra tela.
+            linha["temDadosFiscais"] = bool(cfg.get("cnpj"))
         else:
             linha["tokenMascarado"] = "conectada" if cfg.get("cardapio_web_token") else "— não configurado —"
         lojas.append(linha)
@@ -7236,6 +7238,11 @@ def api_config_lojas():
             if not _sincronizacao_em_dia(ultimo_dia_sincronizado(l["nome"]), date.today())
         ],
         "lojas": lojas,
+        # Por que os dados fiscais não carregaram, quando não carregam.
+        # São três consertos diferentes — variável ausente, JSON quebrado
+        # ao colar, nome de loja que não bate — e sem isto a tela mostrava
+        # a mesma coisa nos três casos (30/09).
+        "dadosFiscais": DADOS_FISCAIS_ESTADO if ehAdmin else None,
     })
 
 

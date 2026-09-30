@@ -6,6 +6,7 @@ veja .env.example pro modelo). Em produção (Dokploy), as variáveis são
 definidas direto no painel, sem precisar de nenhum arquivo.
 """
 
+import base64
 import json
 import os
 
@@ -53,12 +54,42 @@ EQUIPE_INICIAL_JSON = os.environ.get("EQUIPE_INICIAL", "").strip()
 #
 # Sem a variável, os três campos ficam em branco e a mensagem cai pra
 # "Não informado" (app.py) — o pedido continua saindo normalmente.
-try:
-    _DADOS_FISCAIS = json.loads(os.environ.get("DADOS_FISCAIS_LOJAS", "") or "{}")
-except ValueError:
-    # JSON malformado não pode derrubar a subida do app: isso aqui é texto
-    # de uma mensagem, não regra de negócio. Fica em branco e segue.
-    _DADOS_FISCAIS = {}
+#
+# Aceita também em base64, pro caso de o painel mexer no valor: tem
+# painel que lê uma linha começando com "{" como mapa de YAML, e tem
+# painel que come as aspas. Uma linha de letras e números não dá margem
+# pra isso. Pra gerar:
+#
+#   python -c "import base64,io;print(base64.b64encode(io.open('x.json','rb').read()).decode())"
+#
+# `DADOS_FISCAIS_ESTADO` existe porque falha de configuração em silêncio
+# custa um deploy inteiro pra diagnosticar: sem ele, "variável não
+# chegou", "JSON quebrou ao colar" e "nome de loja não bate" davam
+# exatamente a mesma tela (30/09).
+
+
+def _ler_dados_fiscais():
+    bruto = (os.environ.get("DADOS_FISCAIS_LOJAS", "") or "").strip()
+    if not bruto:
+        return {}, "ausente"
+    if not bruto.startswith("{"):
+        # Não parece JSON: tenta base64 antes de desistir.
+        try:
+            bruto = base64.b64decode(bruto, validate=True).decode("utf-8").strip()
+        except (ValueError, UnicodeDecodeError):
+            return {}, "invalido"
+    try:
+        dados = json.loads(bruto)
+    except ValueError:
+        # JSON malformado não pode derrubar a subida do app: isso aqui é
+        # texto de uma mensagem, não regra de negócio.
+        return {}, "invalido"
+    if not isinstance(dados, dict):
+        return {}, "invalido"
+    return dados, "ok"
+
+
+_DADOS_FISCAIS, DADOS_FISCAIS_ESTADO = _ler_dados_fiscais()
 
 
 def _fiscal(loja):

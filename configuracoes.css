@@ -688,3 +688,22 @@
   .agente-chegando-topo { flex-direction: column; }
   .agente-chegando-linha { grid-template-columns: 1fr; gap: 2px; padding: 9px 11px; }
 }
+
+/* Aviso dos dados fiscais, embaixo da tabela de lojas. */
+.config-aviso-fiscal {
+  margin: var(--space-4) 0 0;
+  padding: 10px 13px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-dark);
+}
+
+.config-aviso-fiscal code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.94em;
+}
+
+.config-aviso-fiscal--ruim { border-left-color: var(--danger); background-color: var(--danger-soft); }
+.config-aviso-fiscal--ok { border-left-color: var(--success); background-color: var(--success-soft); }

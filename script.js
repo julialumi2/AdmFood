@@ -12896,10 +12896,38 @@ async function carregarConfigLojas() {
     }
 
     renderConfigLojasTabela();
+    _avisarSobreDadosFiscais(dados.dadosFiscais, lojas);
   } catch (erro) {
     console.error('Falha ao carregar lojas cadastradas:', erro);
     tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger-texto);">Não foi possível carregar as lojas. Tente de novo em instantes.</td></tr>`;
   }
+}
+
+// Os dados fiscais (razão social e CNPJ) vêm por variável de ambiente
+// porque o repositório é público. Quando faltam, o pedido sai com "Não
+// informado" e nada na tela dizia o motivo — e são três motivos
+// diferentes, com três consertos diferentes (30/09).
+function _avisarSobreDadosFiscais(estado, lojas) {
+  const caixa = document.getElementById('config-aviso-fiscal');
+  if (!caixa) return;
+  if (!estado) { caixa.innerHTML = ''; return; }   // não é admin
+
+  const semDados = lojas.filter(l => l.temDadosFiscais === false).map(l => l.nome);
+  let tom = 'ruim';
+  let texto;
+
+  if (estado === 'ausente') {
+    texto = 'A variável <code>DADOS_FISCAIS_LOJAS</code> não chegou no servidor. Enquanto isso, todo pedido de compra sai com "Não informado" no lugar da razão social e do CNPJ.';
+  } else if (estado === 'invalido') {
+    texto = 'A variável <code>DADOS_FISCAIS_LOJAS</code> chegou, mas o conteúdo dela não é um JSON válido — quase sempre é quebra de linha ao colar, ou o painel mexeu nas aspas. Os pedidos saem com "Não informado".';
+  } else if (semDados.length) {
+    texto = 'Dados fiscais carregados, mas sem <strong>' + semDados.map(escaparHtml).join('</strong>, <strong>') + '</strong>. O nome da loja dentro do JSON precisa bater letra por letra com o nome aqui da tabela, acento incluído.';
+  } else {
+    tom = 'ok';
+    texto = 'Dados fiscais das ' + lojas.length + ' lojas carregados — os pedidos saem com razão social e CNPJ.';
+  }
+
+  caixa.innerHTML = '<p class="config-aviso-fiscal config-aviso-fiscal--' + tom + '">' + texto + '</p>';
 }
 
 function renderConfigLojasTabela() {
