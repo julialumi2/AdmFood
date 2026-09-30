@@ -256,6 +256,10 @@ body {
 
 .brand-dark {
   font-family: var(--fonte-nome-adm);
+  /* O ponto do "Adm." saiu a pedido dela (30/09). Ele dava o respiro
+     entre as duas fontes; sem ele o "m" encosta no "F" e a troca
+     parece acidente. Este margin é esse respiro, na medida do ponto. */
+  margin-right: 0.055em;
   font-weight: 800;
   font-size: 0.78em;
   letter-spacing: -0.02em;

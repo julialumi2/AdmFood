@@ -355,6 +355,10 @@ form { display: flex; flex-direction: column; gap: 20px; }
    theme.css — os tokens vêm do tokens.css. */
 .brand-name .b1 {
   display: inline-block;
+  /* O ponto do "Adm." saiu a pedido dela (30/09). Ele dava o respiro
+     entre as duas fontes; sem ele o "m" encosta no "F" e a troca
+     parece acidente. Este margin é esse respiro, na medida do ponto. */
+  margin-right: 0.055em;
   vertical-align: baseline;
   font-family: var(--fonte-nome-adm);
   font-weight: 800;
