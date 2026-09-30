@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('theme-toggle-checkbox')?.addEventListener('change', () => _renderEconomiaCotacoes());
   }
 
-  // 4.0995 TELA DE CONTAGENS (admin)
+  // 4.0995 TELA DE CONTAGENS (a lista é de equipe; Requisições, só admin)
   if (document.getElementById('contagens-tabela-body')) {
     carregarContagens();
     carregarRequisicoes();
@@ -7323,6 +7323,15 @@ let requisicaoConferenciaAtual = null;
 async function carregarRequisicoes() {
   const tbody = document.getElementById('requisicoes-tabela-body');
   if (!tbody) return;
+  // A rota é de admin, mas Contagens é tela de operação: sem esta linha,
+  // quem trabalha na loja abre Contagens e leva um 403 no bloco de
+  // Requisições. A guarda mora AQUI e não em quem chama porque são
+  // quatro chamadas espalhadas, e a quinta ia esquecer de novo (30/09).
+  if (!_souAdmin()) {
+    const bloco = document.getElementById('bloco-requisicoes');
+    if (bloco) bloco.style.display = 'none';
+    return;
+  }
   tbody.innerHTML = _linhaCarregando(5);
   try {
     const resposta = await fetch('/api/requisicoes');

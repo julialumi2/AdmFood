@@ -8276,9 +8276,15 @@ def _montar_bloco_preparo(pedidos):
 
 @app.route('/api/preparo', methods=['GET'])
 def api_preparo():
-    erro_admin = _exigir_gestao()
-    if erro_admin:
-        return erro_admin
+    # Equipe, não gestão: Preparo é tempo de pedido, não dinheiro — a
+    # resposta não tem um único campo de valor. A tela está na lista da
+    # operação desde sempre (ver PAGINAS_POR_PAPEL), mas as duas rotas
+    # exigiam gestão, então ela abria VAZIA pra quem trabalha na loja.
+    # Ninguém tinha percebido porque não há funcionário cadastrado em
+    # produção ainda (varredura de 30/09).
+    erro_acesso = _exigir_equipe()
+    if erro_acesso:
+        return erro_acesso
     inicio_str = request.args.get('inicio')
     fim_str = request.args.get('fim')
 
@@ -8349,7 +8355,8 @@ def api_preparo():
 def api_preparo_do_dia():
     """Os pedidos mais demorados de um dia numa loja — o que "Dias mais
     lentos" não abria (QA 22/09)."""
-    erro = _exigir_gestao()
+    # Equipe, pelo mesmo motivo do /api/preparo acima.
+    erro = _exigir_equipe()
     if erro:
         return erro
     loja = request.args.get('loja') or ''
