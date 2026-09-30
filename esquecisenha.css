@@ -101,11 +101,21 @@ body {
 
 .card-footer { margin-top: 24px; }
 
+/* Alvo de toque de 44px. O link tem 13px de altura de texto; no dedo
+   isso é um alvo de 13px, que erra. O padding negativo na margem
+   mantém o espaçamento visual igual ao que era (medido em 375px,
+   30/09). */
 .link-back {
   color: var(--flame);
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 12px;
+  margin: -12px 0;
 }
 
 .link-back:hover { text-decoration: underline; }

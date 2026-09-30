@@ -238,12 +238,21 @@ form { display: flex; flex-direction: column; gap: 20px; }
   margin-top: -8px;
 }
 
+/* Alvo de toque de 44px. O link tem 13px de altura de texto; no dedo
+   isso é um alvo de 13px, que erra. O padding negativo na margem
+   mantém o espaçamento visual igual ao que era (medido em 375px,
+   30/09). */
 .link-forgot {
   color: var(--ink-muted);
   font-size: 12.5px;
   font-weight: 600;
   text-decoration: none;
   transition: color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  margin: -12px -4px;
 }
 
 .link-forgot:hover { color: var(--kraft-text); text-decoration: underline; }
