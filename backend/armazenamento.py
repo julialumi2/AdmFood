@@ -5,6 +5,7 @@ a sincronização roda separada (via sincronizar.py) e a página só lê daqui.
 """
 
 import hashlib
+import json
 import math
 import os
 import re
@@ -332,6 +333,35 @@ def inicializar_banco():
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pedido_preparo_dia ON pedido_preparo(dia)"
+        )
+
+        # O detalhe de cada pedido da Cardápio Web, já mastigado.
+        #
+        # O histórico da CW não traz o valor do pedido: pra cada um é
+        # preciso uma segunda chamada em /orders/{id}. Só que o dia de HOJE
+        # é sincronizado de 15 em 15 minutos, e a rotina das 6h reconfere os
+        # 7 dias anteriores — então o mesmo pedido, já fechado e que não
+        # muda mais, era rebuscado dezenas de vezes por dia.
+        #
+        # `atualizado_em` é o que torna isso seguro: é o updated_at que a
+        # própria CW devolve no histórico. Pedido reaberto ganha updated_at
+        # novo, o guardado deixa de valer e o detalhe é buscado de novo —
+        # que é exatamente o caso que DIAS_RECONFERIDOS_NA_SINCRONIZACAO_
+        # DIARIA existe pra pegar. Sem essa coluna, cache viraria número
+        # errado de faturamento, que é o pior lugar possível pra errar.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedido_cw_detalhe (
+                unidade TEXT NOT NULL,
+                pedido_id INTEGER NOT NULL,
+                atualizado_em TEXT NOT NULL,
+                total REAL NOT NULL,
+                tipo TEXT,
+                itens_json TEXT NOT NULL,
+                guardado_em TEXT NOT NULL,
+                PRIMARY KEY (unidade, pedido_id)
+            )
+            """
         )
 
         conn.execute(
@@ -2540,6 +2570,64 @@ def historico_de_preco_cardapio(item_id, limite=12):
             "WHERE preco_cardapio_id = ? ORDER BY id DESC LIMIT ?",
             (item_id, limite),
         )]
+
+
+def detalhes_cw_guardados(unidade, pedido_ids):
+    """O que já se sabe desses pedidos: {id: {atualizado_em, total, tipo,
+    itens}}. Quem chama compara o `atualizado_em` com o do histórico antes
+    de confiar — ver a tabela pedido_cw_detalhe."""
+    if not pedido_ids:
+        return {}
+    guardados = {}
+    ids = list(pedido_ids)
+    with conexao() as conn:
+        # Em lotes porque o SQLite tem teto de variáveis por consulta e um
+        # dia cheio em quatro lojas passa fácil de mil pedidos.
+        for inicio in range(0, len(ids), 400):
+            lote = ids[inicio:inicio + 400]
+            marcadores = ", ".join("?" for _ in lote)
+            for linha in conn.execute(
+                f"SELECT pedido_id, atualizado_em, total, tipo, itens_json "
+                f"FROM pedido_cw_detalhe WHERE unidade = ? AND pedido_id IN ({marcadores})",
+                [unidade, *lote],
+            ):
+                try:
+                    itens = json.loads(linha["itens_json"])
+                except ValueError:
+                    continue          # linha corrompida: busca de novo
+                guardados[linha["pedido_id"]] = {
+                    "atualizado_em": linha["atualizado_em"],
+                    "total": linha["total"],
+                    "tipo": linha["tipo"],
+                    "itens": itens,
+                }
+    return guardados
+
+
+def guardar_detalhes_cw(unidade, registros):
+    """Grava (ou atualiza) o detalhe mastigado de cada pedido.
+    `registros`: [{id, atualizado_em, total, tipo, itens}]."""
+    if not registros:
+        return 0
+    agora = datetime.now().isoformat()
+    with conexao() as conn:
+        for r in registros:
+            conn.execute(
+                """
+                INSERT INTO pedido_cw_detalhe
+                    (unidade, pedido_id, atualizado_em, total, tipo, itens_json, guardado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(unidade, pedido_id) DO UPDATE SET
+                    atualizado_em = excluded.atualizado_em,
+                    total = excluded.total,
+                    tipo = excluded.tipo,
+                    itens_json = excluded.itens_json,
+                    guardado_em = excluded.guardado_em
+                """,
+                (unidade, r["id"], r["atualizado_em"], r["total"], r.get("tipo"),
+                 json.dumps(r.get("itens") or [], ensure_ascii=False), agora),
+            )
+    return len(registros)
 
 
 def salvar_pedidos_do_dia(unidade, dia_iso, pedidos_detalhados):

@@ -22,6 +22,8 @@ from backend.armazenamento import (
     salvar_resumo_do_dia,
     salvar_pedidos_do_dia,
     salvar_itens_vendidos_do_dia,
+    detalhes_cw_guardados,
+    guardar_detalhes_cw,
     horas_virada_das_lojas,
     VIRADA_PADRAO,
 )
@@ -54,16 +56,31 @@ def sincronizar_dia(dia: date, unidades=None):
             continue
 
         try:
-            resumo = buscar_resumo_do_dia(token, dia, viradas.get(nome_unidade, VIRADA_PADRAO))
+            resumo = buscar_resumo_do_dia(
+                token, dia, viradas.get(nome_unidade, VIRADA_PADRAO),
+                # O detalhe de pedido já fechado não muda, e o dia de hoje é
+                # resincronizado de 15 em 15 minutos: sem isto, o mesmo
+                # pedido era rebuscado dezenas de vezes por dia, uma
+                # requisição e 0,65s de espera cada.
+                buscar_guardados=lambda ids: detalhes_cw_guardados(nome_unidade, ids),
+            )
             salvar_resumo_do_dia(nome_unidade, dia_iso, resumo)
             salvar_pedidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
             salvar_itens_vendidos_do_dia(nome_unidade, dia_iso, resumo["pedidos_detalhados"])
+            # Guardar só depois de o dia inteiro ter sido gravado: se algo
+            # acima falhar, o detalhe não fica guardado como se tivesse
+            # entrado no faturamento.
+            guardar_detalhes_cw(nome_unidade, resumo["pedidos_detalhados"])
             if not resumo["quantidade_pedidos"] and not resumo["faturamento_dia"]:
                 print(f"🔒 {nome_unidade} ({dia_iso}): sem venda nenhuma, gravado como dia fechado.")
             else:
+                economia = ""
+                if resumo.get("detalhes_reaproveitados"):
+                    economia = (f", {resumo['detalhes_reaproveitados']} detalhe(s) reaproveitado(s)"
+                                f" e {resumo['detalhes_buscados']} buscado(s)")
                 print(
                     f"✅ {nome_unidade} ({dia_iso}): "
-                    f"R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos"
+                    f"R$ {resumo['faturamento_dia']:.2f}, {resumo['quantidade_pedidos']} pedidos{economia}"
                 )
         except Exception as erro:
             print(f"❌ {nome_unidade} ({dia_iso}): {erro}")

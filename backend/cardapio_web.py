@@ -346,26 +346,70 @@ def _duracao_minutos(criado_em, atualizado_em):
     return max((fim - inicio).total_seconds() / 60, 0.0)
 
 
-def buscar_resumo_do_dia(token, dia, hora_virada="00:00"):
+def buscar_resumo_do_dia(token, dia, hora_virada="00:00", buscar_guardados=None):
     """
     Retorna {"faturamento_dia": float, "quantidade_pedidos": int,
     "canais": [{"canal": str, "quantidade_pedidos": int, "faturamento": float}],
-    "pedidos_detalhados": [{"id", "canal", "tipo", "criado_em", "atualizado_em",
-    "duracao_minutos", "itens": [{"nome", "quantidade"}]}]}
+    "pedidos_detalhados": [{"id", "canal", "tipo", "total", "criado_em",
+    "atualizado_em", "duracao_minutos", "itens": [{"nome", "quantidade"}]}],
+    "detalhes_buscados": int, "detalhes_reaproveitados": int}
 
     "tipo" é o order_type da Cardápio Web (delivery, takeout, onsite,
     closed_table): a embalagem pra viagem só desconta em delivery e retirada.
+
+    `buscar_guardados`: função que recebe a lista de ids do dia e devolve
+    {pedido_id: {"atualizado_em", "total", "tipo", "itens"}} — o que o
+    chamador já guardou de sincronizações anteriores. É função, e não
+    dicionário pronto, porque os ids só existem depois da chamada de
+    histórico aqui dentro; assim o chamador carrega só os do dia, em vez
+    do histórico inteiro da loja.
+
+    Cada pedido cujo `atualizado_em` bater com o do histórico pula a
+    chamada de detalhe, que é a cara da sincronização: é UMA requisição
+    POR PEDIDO, com 0,65s de espera cada, e o dia de hoje é sincronizado
+    de 15 em 15 minutos.
+
+    O `atualizado_em` é o que mantém isso correto. Pedido fechado pode ser
+    reaberto do lado da CW (é pra isso que a rotina das 6h reconfere 7 dias),
+    e quando isso acontece ele volta com updated_at novo — o guardado deixa
+    de bater e o detalhe é buscado de novo. Comparar só o id daria número
+    errado de faturamento, que é o pior lugar possível pra errar.
+
+    Este módulo não fala com banco de propósito: quem guarda é o chamador.
     """
     todos_pedidos = buscar_pedidos_do_dia(token, dia, hora_virada)
     pedidos = [p for p in todos_pedidos if p["status"] in STATUS_CONCLUIDOS]
 
+    ja_conhecidos = {}
+    if buscar_guardados and pedidos:
+        try:
+            ja_conhecidos = buscar_guardados([p["id"] for p in pedidos]) or {}
+        except Exception as falha:
+            # Cache é otimização: se o banco der problema, a sincronização
+            # continua pela API como sempre fez, só mais devagar.
+            print("⚠️  Não consegui ler os detalhes guardados:", falha)
+
     canais = {}
     faturamento_dia = 0.0
     pedidos_detalhados = []
+    buscados = reaproveitados = 0
 
     for pedido in pedidos:
-        detalhes = buscar_detalhes_pedido(token, pedido["id"])
-        total = _total_com_desconto_ifood(detalhes, pedido["sales_channel"])
+        guardado = ja_conhecidos.get(pedido["id"])
+        if guardado and guardado.get("atualizado_em") == pedido["updated_at"]:
+            total = guardado["total"]
+            tipo = guardado.get("tipo")
+            itens = guardado.get("itens") or []
+            reaproveitados += 1
+            precisou_chamar = False
+        else:
+            detalhes = buscar_detalhes_pedido(token, pedido["id"])
+            total = _total_com_desconto_ifood(detalhes, pedido["sales_channel"])
+            tipo = detalhes.get("order_type")
+            itens = _itens_vendidos(detalhes)
+            buscados += 1
+            precisou_chamar = True
+
         faturamento_dia += total
 
         canal = canais.setdefault(
@@ -378,18 +422,24 @@ def buscar_resumo_do_dia(token, dia, hora_virada="00:00"):
         pedidos_detalhados.append({
             "id": pedido["id"],
             "canal": pedido["sales_channel"],
-            "tipo": detalhes.get("order_type"),
+            "tipo": tipo,
+            "total": total,
             "criado_em": pedido["created_at"],
             "atualizado_em": pedido["updated_at"],
             "duracao_minutos": _duracao_minutos(pedido["created_at"], pedido["updated_at"]),
-            "itens": _itens_vendidos(detalhes),
+            "itens": itens,
         })
 
-        time.sleep(ESPERA_ENTRE_CHAMADAS_SEGUNDOS)
+        # A espera é do limite de requisição; sem requisição não há o que
+        # esperar. É daqui que vem o ganho de tempo, não só de cota.
+        if precisou_chamar:
+            time.sleep(ESPERA_ENTRE_CHAMADAS_SEGUNDOS)
 
     return {
         "faturamento_dia": faturamento_dia,
         "quantidade_pedidos": len(pedidos),
         "canais": list(canais.values()),
         "pedidos_detalhados": pedidos_detalhados,
+        "detalhes_buscados": buscados,
+        "detalhes_reaproveitados": reaproveitados,
     }
