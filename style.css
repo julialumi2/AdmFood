@@ -1,7 +1,3 @@
-/* Estilos específicos da tela de Resumo (Home) — a base compartilhada
-   (sidebar, cabeçalho, cards, gráfico) está em theme.css, com a paleta
-   grafite de 2026-09-15. Aqui ficam só as cores próprias da Home: o texto
-   dos botões de ação rápida, o azul do ranking e o âmbar de loja atrasada. */
 body.pagina-home {
   --texto-botao: #3F3F46;
   --borda-forte: var(--border-strong);

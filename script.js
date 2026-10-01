@@ -18178,7 +18178,12 @@ async function carregarVendasSemanais(loja) {
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'falha ao carregar');
     vendasSemanaisDados = dados.semanas || [];
-    vendasSemanaisSelecionada = vendasSemanaisDados.length ? vendasSemanaisDados[0].periodoInicio : null;
+    // Abre na última semana FECHADA, não na que está correndo. A semana em
+    // andamento é a única da tela sem CMV, sem veredito e sem comparação —
+    // abrir nela era abrir no único cartão que não responde nada. Ela não
+    // some: vira a tirinha de recado logo acima (01/10).
+    const primeiraFechada = vendasSemanaisDados.find((s) => !s.emAndamento);
+    vendasSemanaisSelecionada = (primeiraFechada || vendasSemanaisDados[0] || {}).periodoInicio || null;
     renderVendasSemanais();
   } catch (erro) {
     console.error('Falha ao carregar vendas semanais:', erro);
@@ -18206,11 +18211,115 @@ function _deltaHTML(variacao, subirEhBom) {
   return `<span class="semana-delta ${classe}">${subiu ? '↑' : '↓'} ${_pctBR(Math.abs(variacao), 1)}</span>`;
 }
 
+// Os recados que a tela precisa dar antes dos números. Vazio quando não há
+// nada a dizer — aviso que aparece todo dia é aviso que ninguém lê.
+//
+// Os três vêm de coisas que a tela mostrava sem explicar: o CMV em branco
+// nas semanas recentes (ele só existe onde a planilha cobriu — o sistema
+// não calcula CMV semanal sozinho), a semana que ainda está correndo, e
+// semanas que cobrem os mesmos dias.
+function _recadosVendasSemanais(semanas) {
+  const recados = [];
+
+  const emAndamento = semanas.find((s) => s.emAndamento);
+  if (emAndamento) {
+    recados.push({
+      tom: 'neutro',
+      titulo: `Semana em andamento · ${emAndamento.diasComDadoDiario} de ${emAndamento.diasNoPeriodo} dias`,
+      texto: `${_periodoSemanaLabel(emAndamento.periodoInicio, emAndamento.periodoFim)} · R$ ${_formatarMoedaBR(emAndamento.total)} até agora. O CMV dela só vale quando a semana fechar.`,
+      acao: `<button type="button" class="btn-limpar-filtro" data-acao="ver-semana" data-inicio="${emAndamento.periodoInicio}">ver assim mesmo</button>`,
+    });
+  }
+
+  // CMV em branco em semana JÁ FECHADA é o buraco principal da tela: é o
+  // número que ela existe pra mostrar.
+  const fechadasSemCmv = semanas.filter((s) => !s.emAndamento && s.cmv === null);
+  const ultimaComCmv = semanas.find((s) => s.cmv !== null);
+  if (fechadasSemCmv.length) {
+    const ate = ultimaComCmv
+      ? ` A última semana com CMV lançado vai até ${_periodoSemanaLabel(ultimaComCmv.periodoInicio, ultimaComCmv.periodoFim).split(' a ')[1]}.`
+      : '';
+    recados.push({
+      tom: 'alerta',
+      titulo: `${fechadasSemCmv.length === 1 ? '1 semana fechada sem CMV' : `${fechadasSemCmv.length} semanas fechadas sem CMV`}`,
+      texto: `O CMV vem da planilha importada; o sistema ainda não calcula o semanal sozinho.${ate} Sem ele, essas semanas não têm veredito.`,
+      acao: '<button type="button" class="btn-limpar-filtro" data-acao="abrir-importar">importar planilha</button>',
+    });
+  }
+
+  // Duas semanas cobrindo o mesmo dia fazem a coluna de total somar aquele
+  // dia duas vezes. Acontece na emenda entre o que veio da planilha e o que
+  // o sistema passou a montar sozinho.
+  const sobrepostas = [];
+  for (let i = 0; i < semanas.length; i += 1) {
+    for (let j = i + 1; j < semanas.length; j += 1) {
+      if (semanas[i].periodoInicio <= semanas[j].periodoFim
+          && semanas[j].periodoInicio <= semanas[i].periodoFim) {
+        const ini = semanas[i].periodoInicio > semanas[j].periodoInicio ? semanas[i].periodoInicio : semanas[j].periodoInicio;
+        const fim = semanas[i].periodoFim < semanas[j].periodoFim ? semanas[i].periodoFim : semanas[j].periodoFim;
+        sobrepostas.push({ ini, fim, dias: Math.round((new Date(fim) - new Date(ini)) / 86400000) + 1 });
+      }
+    }
+  }
+  if (sobrepostas.length) {
+    const dias = sobrepostas.reduce((t, s) => t + s.dias, 0);
+    const maior = sobrepostas.reduce((a, b) => (b.dias > a.dias ? b : a));
+    recados.push({
+      tom: 'alerta',
+      titulo: `${dias === 1 ? '1 dia aparece' : `${dias} dias aparecem`} em duas semanas`,
+      texto: `A maior sobreposição é de ${maior.dias} ${maior.dias === 1 ? 'dia' : 'dias'}, em ${_periodoSemanaLabel(maior.ini, maior.fim)}. Somar a coluna de total conta esses dias duas vezes.`,
+      acao: '',
+    });
+  }
+
+  return recados;
+}
+
+function _renderRecadosVendasSemanais(semanas) {
+  const caixa = document.getElementById('vs-recados');
+  if (!caixa) return;
+  const recados = _recadosVendasSemanais(semanas);
+  caixa.innerHTML = recados.map((r) => `
+    <div class="vs-recado vs-recado-${r.tom}">
+      <div class="vs-recado-texto">
+        <strong>${escaparHtml(r.titulo)}</strong>
+        <span>${escaparHtml(r.texto)}</span>
+      </div>
+      ${r.acao}
+    </div>`).join('');
+
+  caixa.querySelectorAll('[data-acao="ver-semana"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      vendasSemanaisSelecionada = btn.dataset.inicio;
+      renderVendasSemanais();
+      document.getElementById('semana-hero-container')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+  caixa.querySelectorAll('[data-acao="abrir-importar"]').forEach((btn) => {
+    // O botão de importar já existe no topo e só aparece pra admin — daqui
+    // a gente só leva até ele, em vez de criar um segundo caminho.
+    btn.addEventListener('click', () => {
+      const area = document.getElementById('vendas-semanais-importar-area');
+      if (!area || area.style.display === 'none') return;
+      area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      area.querySelector('button, label')?.focus();
+    });
+  });
+  // Pra quem não é admin o botão de importar não existe: o recado explica o
+  // que falta, mas sem oferecer uma ação que a pessoa não pode fazer.
+  if (window.usuarioLogado?.papel !== 'admin') {
+    caixa.querySelectorAll('[data-acao="abrir-importar"]').forEach((b) => b.remove());
+  }
+}
+
 function renderVendasSemanais() {
   const semanas = vendasSemanaisDados;
   const heroEl = document.getElementById('semana-hero-container');
   const fitaCard = document.getElementById('fita-card');
   if (!heroEl || !fitaCard) return;
+
+  _renderRecadosVendasSemanais(semanas);
 
   if (!semanas.length) {
     heroEl.innerHTML = '';

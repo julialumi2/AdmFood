@@ -8,6 +8,64 @@
    eyebrow), veredito é diagnóstico, e confundir os dois faria "RUIM" parecer
    um botão. */
 
+/* OS RECADOS, antes dos números. A tela mostrava CMV em branco e semanas
+   sobrepostas sem dizer nada — quem lia tinha que descobrir sozinho que o
+   buraco existia. Fica vazio quando não há o que dizer: aviso que aparece
+   todo dia é aviso que ninguém lê. */
+#vs-recados:empty { display: none; }
+
+#vs-recados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.vs-recado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--card-bg);
+}
+
+/* A borda da esquerda é o que diz o tom, em vez de pintar o cartão todo:
+   recado colorido inteiro competiria com o veredito, que é o herói da
+   tela. */
+.vs-recado-alerta { border-left: 3px solid var(--warning); }
+.vs-recado-neutro { border-left: 3px solid var(--border-strong); }
+
+.vs-recado-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vs-recado-texto strong {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.vs-recado-texto span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.vs-recado .btn-limpar-filtro { flex-shrink: 0; }
+
+@media (max-width: 768px) {
+  .vs-recado {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+}
+
 .semana-hero {
   --veredito: var(--text-muted);
   --veredito-fundo: var(--surface-muted);
