@@ -246,6 +246,18 @@ conferir("'27 09' sem barra não vira data",
 conferir("e a resposta nomeia o dia pedido",
          "27/09" in perguntar("quanto faturou dia 27/09"), True)
 
+# Dia da semana e período ele não sabe ler. O certo é dizer isso, não
+# devolver ontem de cara limpa — era o que acontecia até 01/10.
+for pedido in ("quanto vendeu segunda", "quanto vendeu sabado",
+               "quanto vendeu essa semana", "quanto vendeu no mes",
+               "quanto vendeu em janeiro", "quanto vendeu semana passada"):
+    conferir("não chuta: " + pedido, _dia_citado(pedido, LOJAS_DO_TESTE), None)
+conferir("e avisa em vez de responder outro dia",
+         "não consegui ler qual" in perguntar("quanto vendeu segunda"), True)
+conferir("'quanto vendeu' puro continua sendo ontem",
+         _dia_citado("quanto vendeu", LOJAS_DO_TESTE),
+         (hoje - timedelta(days=1)).isoformat())
+
 secao("12c) jeitos de perguntar que o ensaio de 01/10 pegou")
 conferir("'quanto vendemos' é venda", "Faturamento do dia" in perguntar("quanto vendemos ontem"), True)
 conferir("'quem reservou' é reserva", "turno de" in perguntar("quem reservou hoje"), True)

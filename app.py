@@ -2334,6 +2334,20 @@ def _dia_citado(texto, lojas):
         return (date.fromisoformat(hoje_operacional) + timedelta(days=1)).isoformat()
     if re.search(r"anteontem", limpo):
         return (date.fromisoformat(hoje_operacional) - timedelta(days=2)).isoformat()
+    if re.search(r"\bontem\b", limpo):
+        return (date.fromisoformat(hoje_operacional) - timedelta(days=1)).isoformat()
+    # Falou de tempo de um jeito que eu não sei ler: devolve None pra quem
+    # chamou perguntar, em vez de cair no "ontem" como se tivesse
+    # entendido. É o mesmo princípio do resto desta função — fingir que
+    # entendeu é pior que não entender —, e vem do ensaio de 01/10, onde
+    # "quanto vendeu segunda" respondia uma quarta-feira de cara limpa.
+    if re.search(r"\b(segunda|terca|quarta|quinta|sexta|sabado|domingo"
+                 r"|semana|quinzena|mes|meses|ano|anos|retrasad\w*|passad\w*"
+                 r"|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto"
+                 r"|setembro|outubro|novembro|dezembro)\b", limpo):
+        return None
+    # Sem nenhuma pista de tempo, ONTEM: é o dia fechado, e é sobre ele
+    # que o relatório diário fala.
     return (date.fromisoformat(hoje_operacional) - timedelta(days=1)).isoformat()
 
 
@@ -2428,7 +2442,11 @@ def montar_resposta_do_agente(texto, lojas, nome_de_quem=None, usuario=None):
         # normalização (ver _dia_citado).
         dia = _dia_citado(texto, lojas)
         if not dia:
-            return "Não entendi a data. Tenta assim: *quanto vendeu dia 27/09*."
+            return ("Entendi que você quer um dia, mas não consegui ler qual. "
+                    "Eu respondo por *um dia de cada vez* — sei ler _hoje_, "
+                    "_ontem_, _anteontem_ e data escrita, tipo *quanto vendeu "
+                    "dia 27/09*. Dia da semana e período (semana, mês) eu ainda "
+                    "não sei.")
         execucoes = listar_execucoes_rotina()
         quando = (execucoes.get("sincronizacao_hoje") or execucoes.get("sincronizacao_diaria") or {}).get("ultimaEm")
         return resposta_de_vendas(dia, lojas, _quando_legivel(quando))
