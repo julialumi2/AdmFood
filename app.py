@@ -979,20 +979,33 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
 
         def _rodar_sincronizacao_hoje():
             contas = [sincronizar_dia(date.today())]
-            # De madrugada, o dia operacional das lojas que viram às 5h ainda
-            # é o de ontem: sem isso, a venda das 2h só apareceria na
-            # reconferência da noite seguinte (25/09).
-            viradas = horas_virada_das_lojas().values()
-            maior_virada = max((int(h.split(":")[0]) for h in viradas), default=0)
-            if datetime.now().hour < maior_virada:
+            # De madrugada o dia operacional ainda é o de ontem nas lojas que
+            # viram às 04:30: sem isto, a venda das 2h só apareceria na
+            # reconferência da manhã seguinte (25/09).
+            #
+            # Compara hora E minuto. Antes pegava só a hora da virada —
+            # "04:30" virava 4 —, então das 04:00 às 04:30 ele parava de
+            # sincronizar ontem enquanto o dia de ontem ainda estava aberto,
+            # e o de hoje ainda não tinha começado. Não custou nada até
+            # agora porque a venda acaba às 3h (ela, 01/10), mas é o tipo de
+            # engano que só aparece quando o horário muda.
+            agora = datetime.now().strftime("%H:%M")
+            if any(agora < virada for virada in horas_virada_das_lojas().values()):
                 contas.append(sincronizar_dia(date.today() - timedelta(days=1)))
             marcar_execucao_rotina(
                 "sincronizacao_hoje",
                 date.today().isoformat() + " — " + _texto_do_esforco(contas))
 
         _scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
-        # 6h, não 3h: às 3h as lojas que viram às 5h ainda estão vendendo, e
-        # a reconferência fecharia o dia pela metade (25/09).
+        # 6h, não 3h. O motivo escrito aqui antes estava errado duas vezes
+        # ("as lojas que viram às 5h ainda estão vendendo"): a virada é
+        # 04:30, não 5h, e a venda acaba às 3h, que é quando as lojas fecham
+        # (ela, 01/10).
+        #
+        # O motivo de verdade é outro, e continua valendo: o dia operacional
+        # de ontem só termina na virada das 04:30, e os últimos pedidos da
+        # noite ainda levam um tempo pra serem fechados do lado da Cardápio
+        # Web. Reconferir às 3h fecharia o dia antes de ele acabar.
         _scheduler.add_job(_rodar_sincronizacao_diaria, "cron", hour=6, minute=0)
         _scheduler.add_job(
             _rodar_sincronizacao_hoje, "interval", minutes=15, next_run_time=datetime.now()
