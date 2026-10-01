@@ -17,15 +17,18 @@
 .semana-hero.veredito-bom { --veredito: var(--warning-texto); --veredito-fundo: var(--warning-soft); }
 .semana-hero.veredito-ruim { --veredito: var(--danger-texto); --veredito-fundo: var(--danger-soft); }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .semana-hero.veredito-otimo { --veredito: var(--success-forte); --veredito-fundo: rgba(52, 211, 153, 0.12); }
-  :root:not([data-theme="light"]) .semana-hero.veredito-bom { --veredito: var(--warning-forte); --veredito-fundo: rgba(251, 191, 36, 0.12); }
-  :root:not([data-theme="light"]) .semana-hero.veredito-ruim { --veredito: var(--danger-forte); --veredito-fundo: rgba(249, 112, 102, 0.12); }
-}
+/* As três linhas acima já valem nos dois temas: --success-texto e
+   --success-soft (e as irmãs) têm valor próprio dentro de body.dark-mode,
+   no tokens.css. Aqui existia uma sobrescrita por
+   @media (prefers-color-scheme) + [data-theme], que o app NUNCA aciona —
+   ele liga o escuro com body.classList.toggle('dark-mode'), e esta era a
+   única das 26 folhas usando outro mecanismo.
 
-:root[data-theme="dark"] .semana-hero.veredito-otimo { --veredito: var(--success-forte); --veredito-fundo: rgba(52, 211, 153, 0.12); }
-:root[data-theme="dark"] .semana-hero.veredito-bom { --veredito: var(--warning-forte); --veredito-fundo: rgba(251, 191, 36, 0.12); }
-:root[data-theme="dark"] .semana-hero.veredito-ruim { --veredito: var(--danger-forte); --veredito-fundo: rgba(249, 112, 102, 0.12); }
+   O efeito não era "não funciona": era pior. Com o sistema operacional em
+   escuro e o app em claro, o veredito ficava com a cor do escuro em cima
+   do cartão branco — #34D399 sobre rgb(231,250,243), contraste de 1,77:1
+   contra o mínimo de 4,5:1. Medido no navegador dela em 01/10, com o app
+   em modo claro. */
 
 /* --- Semana fechada: o cartão de fechamento --------------------------- */
 .semana-hero {
@@ -330,15 +333,10 @@
 .chip-ruim { background-color: var(--danger-soft); color: var(--danger-texto); }
 .chip-sem-cmv { background-color: var(--surface-muted); color: var(--text-faint); }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: var(--success-forte); }
-  :root:not([data-theme="light"]) .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: var(--warning-forte); }
-  :root:not([data-theme="light"]) .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: var(--danger-forte); }
-}
-
-:root[data-theme="dark"] .chip-otimo { background-color: rgba(52, 211, 153, 0.12); color: var(--success-forte); }
-:root[data-theme="dark"] .chip-bom { background-color: rgba(251, 191, 36, 0.12); color: var(--warning-forte); }
-:root[data-theme="dark"] .chip-ruim { background-color: rgba(249, 112, 102, 0.12); color: var(--danger-forte); }
+/* Mesma história das pílulas de veredito lá em cima: as três linhas
+   acima já viram escuro sozinhas pelos tokens, e a sobrescrita que
+   existia aqui só servia pra pintar o chip com a cor do escuro enquanto o
+   app estava claro. */
 
 .num-mono {
   font-variant-numeric: tabular-nums;
