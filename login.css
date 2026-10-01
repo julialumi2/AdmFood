@@ -77,7 +77,7 @@ body {
 .brand-mark {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: 50%;
   background-image: linear-gradient(155deg, var(--flame), var(--flame-deep));
   display: flex;
   align-items: center;
@@ -91,7 +91,7 @@ body {
    prato) e a 20px vira mancha. O ladrilho continua 38px, entao isso e
    so folga interna — nada de layout muda. */
 .brand-mark i { width: 20px; height: 20px; }
-.brand-mark svg, .brand-mark img { width: 28px; height: 28px; }
+.brand-mark svg, .brand-mark img { width: 38px; height: 38px; }
 
 .brand-name {
   font-weight: 800;

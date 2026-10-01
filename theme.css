@@ -227,7 +227,10 @@ body {
   width: 44px;
   height: 44px;
   background-color: var(--primary);
-  border-radius: 8px;
+  /* Círculo, não quadrado (escolha dela, 01/10): o símbolo dela já é
+     redondo, e o quadrado deixava quatro cantos vermelhos sobrando em
+     volta dele. */
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -235,8 +238,11 @@ body {
   flex-shrink: 0;
 }
 
+/* A imagem ocupa o ladrilho inteiro: a folga do círculo já vem dentro
+   do próprio marca-branca.svg, centrada pelo centro de massa da tinta
+   (a caixa do desenho inclui a folha e deixava a maçã torta). */
 .logo-icon svg,
-.logo-icon img { width: 32px; height: 32px; }
+.logo-icon img { width: 44px; height: 44px; }
 
 .sidebar .brand-name {
   font-weight: 800;
