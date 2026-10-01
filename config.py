@@ -145,6 +145,19 @@ def _fiscal(loja):
 GRUPO_WHATSAPP_LIDERANCA = os.environ.get("GRUPO_WHATSAPP_LIDERANCA", "").strip()
 
 
+# O endereço público do sistema, tipo "https://admfood.exemplo.com.br".
+#
+# Até agora o servidor nunca precisou saber a própria URL: todo link de
+# contagem e de cotação é montado no NAVEGADOR, com location.origin, e
+# quem aperta "Enviar por WhatsApp" já está numa tela. O lembrete
+# automático de requisição é a primeira coisa que manda link sem ninguém
+# na frente, e aí não há origin pra perguntar.
+#
+# Vazio desliga o lembrete em vez de mandar link quebrado: metade de um
+# link não é melhor que nenhum.
+URL_PUBLICA = os.environ.get("URL_PUBLICA", "").strip().rstrip("/")
+
+
 # Dicionário com as configurações individuais de cada unidade/loja.
 LOJAS = {
     "Hamburgueria Artesanos": {

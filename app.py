@@ -15,7 +15,7 @@ from flask import (
     send_file, send_from_directory, session,
 )
 
-from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO, GRUPO_WHATSAPP_LIDERANCA
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO, GRUPO_WHATSAPP_LIDERANCA, URL_PUBLICA
 from backend import whatsapp_bot
 from backend.armazenamento import (
     inicializar_banco,
@@ -73,6 +73,7 @@ from backend.armazenamento import (
     quantidades_tipicas_por_insumo,
     listar_execucoes_rotina,
     marcar_execucao_rotina,
+    _mascarar_numero,
     listar_insumos,
     listar_insumos_por_loja,
     salvar_insumos_da_loja,
@@ -2728,6 +2729,169 @@ def api_previa_do_aviso_de_reservas():
         "configurado": bool(GRUPO_WHATSAPP_LIDERANCA) and whatsapp_bot.configurado(),
         "novasNaFila": len(reservas_por_avisar(list(LOJAS))),
     })
+
+
+# ---------------------------------------------------------------------
+# O LEMBRETE DE REQUISIÇÃO (01/10), pedido dela: "o sistema enviasse o
+# link de requisição sozinho todo domingo para o funcionário do açaí".
+#
+# O sistema NÃO cria a requisição: quem cria é a Ket, e o ritmo dela está
+# nos dados — das 208 requisições já feitas, 109 nasceram numa sexta e 87
+# num domingo. O lembrete só pega a que está aberta e manda o link pra
+# quem conta o estoque daquela loja.
+#
+# Não criar é decisão, não preguiça: a requisição carrega descrição,
+# prazo e quais categorias entram. Chutar isso toda semana encheria o
+# sistema de requisição que ninguém pediu, e a loja não saberia qual
+# responder.
+# ---------------------------------------------------------------------
+
+# Domingo. date.weekday() conta de segunda=0 a domingo=6.
+DIA_DO_LEMBRETE_DE_REQUISICAO = 6
+HORA_DO_LEMBRETE_DE_REQUISICAO = (9, 0)
+
+# Só o Açaí, porque é o que ela pediu. As outras três já recebem o link
+# pelo botão "Enviar por WhatsApp" na tela, e passar a mandar sozinho pra
+# elas seria começar a escrever pra gente que não pediu nada.
+LOJAS_DO_LEMBRETE_DE_REQUISICAO = ("Açaí Na Lata",)
+
+
+def link_da_requisicao(token):
+    """O link público da requisição, ou None sem URL_PUBLICA configurada."""
+    if not URL_PUBLICA or not token:
+        return None
+    return "%s/preencher_contagem.html?token=%s" % (URL_PUBLICA, token)
+
+
+def requisicao_aberta_da_loja(loja):
+    """A requisição dessa loja que ainda dá pra responder: aberta e dentro
+    do prazo. A mais recente, se houver mais de uma."""
+    candidatas = [
+        c for c in listar_contagens()
+        if c["loja"] == loja and c["status"] == "aberta"
+        and not _contagem_fora_do_prazo(c)
+    ]
+    if not candidatas:
+        return None
+    return max(candidatas, key=lambda c: c["criado_em"] or "")
+
+
+def texto_do_lembrete_de_requisicao(loja, contagem, primeiro_nome):
+    """A MESMA mensagem do botão da tela (_envioContagemHTML no
+    script.js). De propósito: quem recebe não deve notar diferença entre
+    o link mandado à mão e o mandado sozinho."""
+    prazo = contagem.get("prazo_validade") or ""
+    ate = ""
+    if prazo:
+        dia, _, hora = prazo.partition("T")
+        ate = " (até %s/%s%s)" % (dia[8:10], dia[5:7],
+                                  (" às " + hora[:5]) if hora else "")
+    return ("Oi, %s! Pode fazer a contagem de estoque da %s? É só abrir o link "
+            "e preencher quanto tem de cada item%s:\n%s"
+            % (primeiro_nome, loja, ate, link_da_requisicao(contagem["token"])))
+
+
+def previa_do_lembrete_de_requisicao(lojas):
+    """O que o lembrete mandaria agora: uma entrada por loja, com o
+    motivo quando não dá pra mandar.
+
+    Devolve sempre a loja, mesmo sem nada a enviar — "não chegou link" tem
+    quatro causas (requisição não existe, venceu, ninguém cadastrado,
+    sistema sem URL) e todas dão o mesmo silêncio no celular de quem
+    esperava."""
+    contatos = listar_contatos_contagem()
+    saida = []
+    for loja in lojas:
+        item = {"loja": loja, "mensagens": [], "motivo": None}
+        if not URL_PUBLICA:
+            item["motivo"] = "URL_PUBLICA não configurada — não sei montar o link"
+            saida.append(item)
+            continue
+        contagem = requisicao_aberta_da_loja(loja)
+        if not contagem:
+            item["motivo"] = "nenhuma requisição aberta e no prazo"
+            saida.append(item)
+            continue
+        da_loja = [c for c in contatos if c["loja"] == loja]
+        if not da_loja:
+            item["motivo"] = "ninguém cadastrado em quem conta o estoque"
+            saida.append(item)
+            continue
+        item["requisicao"] = {"id": contagem["id"],
+                              "descricao": contagem["descricao"],
+                              "prazo": contagem["prazo_validade"]}
+        for contato in da_loja:
+            item["mensagens"].append({
+                "para": contato["nome"],
+                "telefone": _mascarar_numero(contato["telefone"]),
+                "texto": texto_do_lembrete_de_requisicao(
+                    loja, contagem, contato["nome"].strip().split(" ")[0]),
+            })
+        saida.append(item)
+    return saida
+
+
+def _rodar_lembrete_de_requisicao():
+    """O job do domingo. Nunca levanta exceção: job que morre por causa
+    de rede para de rodar pra sempre sem ninguém perceber.
+
+    Quando não há o que mandar, avisa o grupo da liderança em vez de
+    ficar quieto — o silêncio é justamente o problema que isto resolve."""
+    enviados, problemas = 0, []
+    contatos = {c["id"]: c for c in listar_contatos_contagem()}
+    for item in previa_do_lembrete_de_requisicao(LOJAS_DO_LEMBRETE_DE_REQUISICAO):
+        if item["motivo"]:
+            problemas.append("%s: %s" % (item["loja"], item["motivo"]))
+            continue
+        if not whatsapp_bot.configurado():
+            problemas.append("%s: Evolution não configurada" % item["loja"])
+            continue
+        for msg, contato in zip(item["mensagens"],
+                                [c for c in contatos.values() if c["loja"] == item["loja"]]):
+            try:
+                whatsapp_bot.responder(contato["telefone"], msg["texto"])
+                enviados += 1
+            except Exception as falha:
+                print("❌ Não consegui mandar o lembrete de requisição:", falha)
+                problemas.append("%s: falha ao enviar (%s)" % (item["loja"], falha))
+
+    detalhe = ("%d link(s) enviado(s)" % enviados) if enviados else "nada enviado"
+    if problemas:
+        detalhe += " — " + "; ".join(problemas)
+        mandar_pro_grupo_da_lideranca(
+            "⚠️ O lembrete de requisição de domingo não saiu:\n• "
+            + "\n• ".join(problemas))
+    marcar_execucao_rotina("lembrete_requisicao", detalhe)
+    return enviados
+
+
+@app.route('/api/requisicoes/lembrete', methods=['GET'])
+def api_previa_do_lembrete_de_requisicao():
+    """O que o lembrete mandaria, sem esperar domingo e sem chip. É por
+    aqui que dá pra conferir tudo antes da Evolution existir."""
+    erro_acesso = _exigir_gestao()
+    if erro_acesso:
+        return erro_acesso
+    lojas = [l for l in LOJAS_DO_LEMBRETE_DE_REQUISICAO if _loja_visivel(l)]
+    return jsonify({
+        "lojas": previa_do_lembrete_de_requisicao(lojas),
+        "dia": "domingo",
+        "hora": "%02d:%02d" % HORA_DO_LEMBRETE_DE_REQUISICAO,
+        "urlPublica": bool(URL_PUBLICA),
+        "evolucaoConfigurada": whatsapp_bot.configurado(),
+    })
+
+
+# O job entra AQUI, e não lá em cima junto com os de reserva, porque o
+# bloco do agendador roda no import: registrar antes da função existir dá
+# NameError e o agendador inteiro não sobe (foi o que aconteceu com o
+# aviso das 15h quando ele nasceu).
+if _ESTE_WORKER_AGENDA:
+    _scheduler_reservas.add_job(
+        _rodar_lembrete_de_requisicao, "cron",
+        day_of_week=DIA_DO_LEMBRETE_DE_REQUISICAO,
+        hour=HORA_DO_LEMBRETE_DE_REQUISICAO[0],
+        minute=HORA_DO_LEMBRETE_DE_REQUISICAO[1])
 
 
 # ---------------------------------------------------------------------

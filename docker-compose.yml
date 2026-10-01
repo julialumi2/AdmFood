@@ -45,6 +45,10 @@ services:
       - WHATSAPP_WEBHOOK_TOKEN=${WHATSAPP_WEBHOOK_TOKEN}
       - GRUPO_WHATSAPP_LIDERANCA=${GRUPO_WHATSAPP_LIDERANCA}
 
+      # O endereço público do sistema. Só o lembrete automático de
+      # requisição usa: todo outro link é montado no navegador.
+      - URL_PUBLICA=${URL_PUBLICA}
+
       # Cópia diária do banco. Precisa do :-true: sem ele, variável não
       # definida no painel chegaria como vazia e desligaria o backup —
       # que é o contrário do que o código faz quando ela não existe.
