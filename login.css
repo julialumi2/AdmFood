@@ -87,12 +87,25 @@ body {
   box-shadow: 0 4px 10px rgba(217, 56, 41, 0.35);
 }
 
-.brand-mark i, .brand-mark svg { width: 20px; height: 20px; }
+/* 28px, nao 20px: a marca nova e um desenho com miolo (garfo, barras,
+   prato) e a 20px vira mancha. O ladrilho continua 38px, entao isso e
+   so folga interna — nada de layout muda. */
+.brand-mark i { width: 20px; height: 20px; }
+.brand-mark svg, .brand-mark img { width: 28px; height: 28px; }
 
 .brand-name {
   font-weight: 800;
   font-size: 19px;
   letter-spacing: -0.02em;
+  /* A escrita e o desenho DELA, nao uma fonte: entra como imagem. O texto
+     continua no HTML, so sai da vista. 5.905 e a razao largura/altura do PNG. */
+  display: inline-block;
+  height: 20px;
+  width: calc(20px * 5.905);
+  background: url('imgs/escrita-branca.png') no-repeat left center / contain;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .brand-name .b1 { color: var(--kraft-text); }

@@ -37,6 +37,8 @@ body.dark-theme {
   --border-color: #2e2e32;
   --footer-bg: var(--text-dark);
   --brand-dark-color: var(--texto-sobre-cor);
+  /* esta tela tambem aceita .dark-theme, que o tokens.css nao conhece */
+  --escrita-marca: url('imgs/escrita-branca.png');
 }
 
 body {
@@ -77,6 +79,15 @@ body {
   font-weight: 800;
   font-size: 25px;
   letter-spacing: -0.5px;
+  /* A escrita e o desenho DELA, nao uma fonte: entra como imagem. O texto
+     continua no HTML, so sai da vista. 5.905 e a razao largura/altura do PNG. */
+  display: inline-block;
+  height: 26px;
+  width: calc(26px * 5.905);
+  background: var(--escrita-marca) no-repeat left center / contain;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .brand-dark {
@@ -580,6 +591,15 @@ input:checked + .slider::before {
   letter-spacing: -0.5px;
   display: inline-block;
   margin-bottom: 12px;
+  /* A escrita e o desenho DELA, nao uma fonte: entra como imagem. O texto
+     continua no HTML, so sai da vista. 5.905 e a razao largura/altura do PNG. */
+  display: inline-block;
+  height: 26px;
+  width: calc(26px * 5.905);
+  background: var(--escrita-marca) no-repeat left center / contain;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .footer-bottom {

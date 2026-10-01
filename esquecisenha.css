@@ -55,6 +55,15 @@ body {
   font-weight: 800;
   font-size: 22px;
   letter-spacing: -0.02em;
+  /* A escrita e o desenho DELA, nao uma fonte: entra como imagem. O texto
+     continua no HTML, so sai da vista. 5.905 e a razao largura/altura do PNG. */
+  display: inline-block;
+  height: 23px;
+  width: calc(23px * 5.905);
+  background: url('imgs/escrita-branca.png') no-repeat left center / contain;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .brand-dark { color: var(--kraft-text); }

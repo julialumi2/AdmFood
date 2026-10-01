@@ -235,12 +235,22 @@ body {
   flex-shrink: 0;
 }
 
-.logo-icon svg { width: 32px; height: 32px; }
+.logo-icon svg,
+.logo-icon img { width: 32px; height: 32px; }
 
 .sidebar .brand-name {
   font-weight: 800;
   font-size: 1.15rem;
   letter-spacing: -0.02em;
+  /* A escrita e o desenho DELA, nao uma fonte: entra como imagem. O texto
+     continua no HTML, so sai da vista. 5.905 e a razao largura/altura do PNG. */
+  display: inline-block;
+  height: 1.25rem;
+  width: calc(1.25rem * 5.905);
+  background: url('imgs/escrita-branca.png') no-repeat left center / contain;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* O NOME, em duas fontes.

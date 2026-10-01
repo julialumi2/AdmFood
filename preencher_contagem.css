@@ -28,6 +28,18 @@ body {
   text-align: center;
 }
 
+.contagem-publica-header .brand-name {
+  /* A escrita e o desenho DELA, nao uma fonte: entra como imagem. O texto
+     continua no HTML, so sai da vista. 5.905 e a razao largura/altura do PNG. */
+  display: inline-block;
+  height: 24px;
+  width: calc(24px * 5.905);
+  background: var(--escrita-marca) no-repeat left center / contain;
+  text-indent: -9999px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
 .contagem-publica-header .brand-name .brand-dark { color: var(--text-dark); }
 .contagem-publica-header .brand-name .brand-red { color: var(--primary); }
 

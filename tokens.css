@@ -55,6 +55,11 @@
   --fonte-nome-adm: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --fonte-nome-food: 'Fraunces', Georgia, 'Times New Roman', serif;
 
+  /* A escrita do nome, desenhada por ela. Quem usa troca o texto por esta
+     imagem (ver .brand-name nas folhas). Aqui so mora qual das duas vale:
+     a escura em fundo claro, a branca no modo escuro. */
+  --escrita-marca: url('imgs/escrita-escura.png');
+
   --primary: #D93829;
   --primary-hover: #B92E21;
   --primary-soft: rgba(217, 56, 41, 0.08);
@@ -144,6 +149,7 @@
 }
 
 body.dark-mode {
+  --escrita-marca: url('imgs/escrita-branca.png');
   /* No escuro a escala neutra inverte; as de estado e o texto sobre cor
      ficam iguais, que é o ponto delas. */
   --neutro-000: #18181B;
