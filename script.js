@@ -13350,16 +13350,55 @@ function _renderEstoqueCriticoHome(estoque) {
   const total = estoque.total || 0;
   card.classList.toggle('tem-alerta', total > 0);
   document.getElementById('home-estoque-total').textContent = total.toLocaleString('pt-BR');
-  document.getElementById('home-estoque-sub').textContent = total
-    ? `${total === 1 ? 'item zerado ou abaixo' : 'itens zerados ou abaixo'} do mínimo${estoque.zerados ? ` · ${estoque.zerados} ${estoque.zerados === 1 ? 'zerado' : 'zerados'}` : ''}`
-    : 'Nenhum insumo zerado ou abaixo do mínimo';
-  // Cada loja leva pra tabela dela já filtrada em "crítico".
-  document.getElementById('home-estoque-lojas').innerHTML = (estoque.porLoja || [])
-    .filter((l) => l.criticos > 0)
-    .map((l) => `
-      <a href="estoque.html?loja=${encodeURIComponent(l.loja)}&nivel=critico" title="${escaparHtml(l.loja)}: ${l.criticos} em nível crítico">
-        ${escaparHtml(_nomeCurtoLoja(l.loja))} <strong>${l.criticos}</strong>
-      </a>`).join('');
+  // A idade da contagem anda junto do número. Com a baixa automática
+  // ligada o saldo só DESCE entre uma contagem e outra, então loja parada
+  // acumula "crítico" sozinha — o número parece falta e é maresia. Em
+  // 01/10, três lojas estavam há 20 dias sem contar e respondiam por 196
+  // dos 235 críticos.
+  const envelhecer = estoque.diasPraEnvelhecer ?? 10;
+  const lojas = estoque.porLoja || [];
+  // Loja fora do prazo não entra no número: o saldo dela só desceu desde a
+  // última contagem. Ela aparece na lista, com a idade, levando pra
+  // Requisições — porque o que ela precisa é contar, não ser contada.
+  const vencidas = lojas.filter((l) => l.contagemVale === false);
+  const envelhecendo = lojas.filter((l) => l.contagemVale !== false && (l.diasSemContagem ?? 0) >= envelhecer);
+  const partes = [];
+  if (total) {
+    partes.push(`${total === 1 ? 'item zerado ou abaixo' : 'itens zerados ou abaixo'} do mínimo`);
+    if (estoque.zerados) partes.push(`${estoque.zerados} ${estoque.zerados === 1 ? 'zerado' : 'zerados'}`);
+  }
+  if (vencidas.length) {
+    partes.push(`${vencidas.length === 1 ? '1 loja fora da conta' : `${vencidas.length} lojas fora da conta`}, sem contar há ${Math.min(...vencidas.map((l) => l.diasSemContagem ?? 0))}+ dias`);
+  } else if (envelhecendo.length) {
+    partes.push(`${envelhecendo.length === 1 ? '1 loja sem contar há' : `${envelhecendo.length} lojas sem contar há`} ${Math.max(...envelhecendo.map((l) => l.diasSemContagem ?? 0))} dias`);
+  }
+  document.getElementById('home-estoque-sub').textContent =
+    partes.length ? partes.join(' · ') : 'Nenhum insumo zerado ou abaixo do mínimo';
+
+  document.getElementById('home-estoque-lojas').innerHTML = lojas
+    .filter((l) => l.criticos > 0 || l.contagemVale === false)
+    .map((l) => {
+      const dias = l.diasSemContagem;
+      const vencida = l.contagemVale === false;
+      const velha = !vencida && (dias ?? 0) >= envelhecer;
+      const idade = dias == null ? 'nunca foi contada' : `contada há ${dias} dias`;
+      const classe = vencida ? ' class="contagem-vencida"' : (velha ? ' class="contagem-velha"' : '');
+      // Vencida leva pra Requisições; o resto leva pra tabela já filtrada
+      // em "crítico".
+      const destino = vencida
+        ? 'contagens.html'
+        : `estoque.html?loja=${encodeURIComponent(l.loja)}&nivel=critico`;
+      const titulo = vencida
+        ? `${l.loja}: ${idade}, o saldo dela não entra na conta até contar de novo`
+        : `${l.loja}: ${l.criticos} em nível crítico · ${idade}`;
+      const numero = vencida
+        ? `<span class="home-estoque-idade">${dias == null ? 'sem contagem' : dias + 'd'}</span>`
+        : `<strong>${l.criticos}</strong>${velha ? ` <span class="home-estoque-idade">${dias}d</span>` : ''}`;
+      return `
+      <a href="${destino}"${classe} title="${escaparHtml(titulo)}">
+        ${escaparHtml(_nomeCurtoLoja(l.loja))} ${numero}
+      </a>`;
+    }).join('');
 }
 
 function _renderCurvaAHome(produtos) {

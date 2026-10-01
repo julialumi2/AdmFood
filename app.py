@@ -3196,6 +3196,16 @@ ORDEM_DOS_TIPOS = ("backup", "contagem", "preco", "estoque")
 # precisa contar", não 41 insumos abaixo do mínimo (28/09).
 DIAS_SEM_CONTAGEM_PRA_AVISAR = 21
 
+# Antes do penhasco acima existe uma rampa. Até 21 dias o sistema confiava
+# no saldo sem dizer nada, e no dia 21 a história virava do avesso de uma
+# vez: três lojas viravam "sem contagem" no mesmo dia e 196 dos 235
+# críticos sumiam (medido em 01/10, com as três a 20 dias).
+#
+# Daí um aviso mais cedo, que NÃO invalida o saldo — só diz que ele está
+# envelhecendo, enquanto ainda dá pra agir sem perder a confiança no
+# número.
+DIAS_PRA_CONTAGEM_ENVELHECER = 10
+
 # Depois de quantos dias sem ninguém baixar uma cópia o sistema começa a
 # cobrar. O backup automático grava do lado do banco, na mesma máquina:
 # enquanto o arquivo não sair dali, ele não protege de perder o servidor.
@@ -3238,6 +3248,21 @@ def _alertas_ativos(lojas, eh_gestao, eh_admin=False):
         dias = (hoje - date.fromisoformat(quando)).days if quando else None
         if dias is not None and dias <= DIAS_SEM_CONTAGEM_PRA_AVISAR:
             confiaveis.add(loja)
+            # Envelhecendo, mas o saldo ainda vale: avisa sem derrubar os
+            # alertas de insumo da loja. É a rampa antes do penhasco — sem
+            # ela, ninguém sabia que a contagem estava vencendo até o dia
+            # em que venceu.
+            if dias >= DIAS_PRA_CONTAGEM_ENVELHECER:
+                alertas.append({
+                    "tipo": "contagem",
+                    "chave": f"contagem-envelhecendo|{loja}",
+                    "titulo": f"{_curto(loja)}: contagem envelhecendo",
+                    "detalhe": (f"Última há {dias} dias — vale até {DIAS_SEM_CONTAGEM_PRA_AVISAR}, "
+                                f"depois o saldo dela para de contar"),
+                    "destaque": f"{dias}d",
+                    "grave": False,
+                    "link": "contagens.html",
+                })
             continue
         alertas.append({
             # Tipo próprio: "a loja não foi contada" não é "o insumo está
@@ -3394,12 +3419,45 @@ def api_home_gestao():
             if linha["quantidade_atual"] <= 0:
                 contagem["zerados"] += 1
 
+    # Há quanto tempo cada loja não tem contagem aprovada. Sem isto o
+    # número de críticos parecia um fato, e não era: com a baixa automática
+    # ligada, o saldo só DESCE entre uma contagem e outra, então uma loja
+    # parada há três semanas acumula "crítico" sozinha, sem ninguém ter
+    # consumido nada a mais (medido em 01/10: três lojas em 20 dias, 196
+    # dos 235 críticos vinham delas).
+    #
+    # Mandar a idade junto deixa quem lê calibrar sozinho, em vez de
+    # confiar no número até o dia em que o alerta de "sem contagem" vira a
+    # história do avesso de uma vez.
+    ultimas = ultima_contagem_aprovada_por_loja()
+    hoje_contagem = date.today()
+    for loja, contagem in criticos.items():
+        quando = (ultimas.get(loja) or "")[:10]
+        dias = (hoje_contagem - date.fromisoformat(quando)).days if quando else None
+        contagem["diasSemContagem"] = dias
+        # Mesma régua do sininho (_alertas_ativos): passou do prazo, o saldo
+        # da loja não vale como alerta. Sem isso as duas telas se
+        # contradiziam — o sininho dizia "o saldo da ZN não vale até
+        # contar" e a Home somava os críticos da ZN no total assim mesmo.
+        contagem["contagemVale"] = dias is not None and dias <= DIAS_SEM_CONTAGEM_PRA_AVISAR
+
+    confiaveis_home = [c for c in criticos.values() if c["contagemVale"]]
+
     resposta = {
         "dias": DIAS_DA_HOME,
         "estoqueCritico": {
-            "total": sum(c["criticos"] for c in criticos.values()),
-            "zerados": sum(c["zerados"] for c in criticos.values()),
+            # Só o que está ancorado em contagem que ainda vale. Loja fora do
+            # prazo continua na lista abaixo, com a idade, mas o que ela
+            # precisa é contar — não aparecer num número que não significa
+            # nada.
+            "total": sum(c["criticos"] for c in confiaveis_home),
+            "zerados": sum(c["zerados"] for c in confiaveis_home),
             "porLoja": list(criticos.values()),
+            # A partir de quantos dias o saldo deixa de valer como alerta —
+            # a tela usa pra dizer de quem desconfiar, com o mesmo número
+            # que os alertas usam.
+            "diasPraDesconfiar": DIAS_SEM_CONTAGEM_PRA_AVISAR,
+            "diasPraEnvelhecer": DIAS_PRA_CONTAGEM_ENVELHECER,
         },
         "atividades": _atividades_do_dia(lojas, _usuario_logado()),
     }

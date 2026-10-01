@@ -108,6 +108,51 @@ conferir("e nenhum de estoque dessa loja", len(do_tipo(d, "estoque")), 0)
 for loja in mundo.LOJAS:
     contagem_aprovada_em(loja, hoje.isoformat())
 
+secao("7b) a rampa antes do penhasco: contagem envelhecendo")
+# Até 01/10 a confiança no saldo era binária: até 21 dias o sistema não
+# dizia nada, e no dia 21 a história virava do avesso. Medido naquele dia:
+# três lojas a 20 dias respondiam por 196 dos 235 "críticos" — e ninguém
+# tinha sido avisado.
+from app import DIAS_PRA_CONTAGEM_ENVELHECER, DIAS_SEM_CONTAGEM_PRA_AVISAR  # noqa: E402
+
+
+def so_contou_em(loja, quando):
+    """O sistema olha a contagem MAIS RECENTE, então pra envelhecer a loja
+    não basta inserir uma antiga — as outras precisam sair."""
+    with mundo.conexao() as conn:
+        conn.execute("DELETE FROM contagem WHERE loja = ?", (loja,))
+    contagem_aprovada_em(loja, quando)
+
+
+so_contou_em(LOJA, (hoje - timedelta(days=DIAS_PRA_CONTAGEM_ENVELHECER + 2)).isoformat())
+d = alertas()
+envelhecendo = [a for a in do_tipo(d, "contagem") if "envelhecendo" in a["chave"]]
+conferir("avisa antes de vencer", len(envelhecendo), 1)
+conferir("sem ser grave: o saldo ainda vale", envelhecendo[0]["grave"], False)
+conferir("e os alertas de insumo continuam de pé", len(do_tipo(d, "estoque")) > 0, True)
+
+so_contou_em(LOJA, (hoje - timedelta(days=DIAS_PRA_CONTAGEM_ENVELHECER - 2)).isoformat())
+d = alertas()
+conferir("contagem fresca não vira aviso",
+         [a for a in do_tipo(d, "contagem") if "envelhecendo" in a["chave"]], [])
+
+secao("7c) a Home não conta loja cuja contagem venceu")
+# O sininho dizia "o saldo dessa loja não vale até contar" e a Home somava
+# os críticos dela no total assim mesmo — as duas telas se contradiziam.
+so_contou_em(LOJA, (hoje - timedelta(days=DIAS_SEM_CONTAGEM_PRA_AVISAR + 3)).isoformat())
+casa = admin.get("/api/home/gestao").get_json()["estoqueCritico"]
+minha = next(l for l in casa["porLoja"] if l["loja"] == LOJA)
+conferir("a loja aparece na lista", minha["loja"], LOJA)
+conferir("marcada como fora do prazo", minha["contagemVale"], False)
+conferir("com a idade junto", minha["diasSemContagem"], DIAS_SEM_CONTAGEM_PRA_AVISAR + 3)
+conferir("e os críticos dela não entram no total", casa["total"], 0)
+conferir("o painel manda a régua pra tela usar a mesma",
+         casa["diasPraDesconfiar"], DIAS_SEM_CONTAGEM_PRA_AVISAR)
+
+so_contou_em(LOJA, hoje.isoformat())
+casa = admin.get("/api/home/gestao").get_json()["estoqueCritico"]
+conferir("contada hoje, volta pra conta", casa["total"] > 0, True)
+
 secao("8) backup: cobra, vem em primeiro, e some quando ela baixa")
 with mundo.conexao() as conn:
     conn.execute("DELETE FROM execucao_rotina WHERE nome = 'backup_baixado'")

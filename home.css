@@ -90,6 +90,33 @@
   outline-offset: 2px;
 }
 
+/* Loja com contagem envelhecendo. A pílula sai do vermelho e vai pro
+   âmbar de propósito: o número dela não é "falta", é saldo velho — com a
+   baixa automática ligada ele só desce entre uma contagem e outra. Mesmo
+   vermelho dos outros diria que as duas coisas são a mesma (01/10). */
+.home-estoque-lojas a.contagem-velha {
+  background-color: var(--warning-soft);
+  color: var(--warning-texto);
+}
+
+.home-estoque-lojas a.contagem-velha:focus-visible { outline-color: var(--warning); }
+
+/* Loja fora do prazo: o saldo dela nem entra no número. Neutra de
+   propósito — vermelho e âmbar dizem "olha o estoque", e aqui não há
+   estoque pra olhar, só contagem pra fazer. */
+.home-estoque-lojas a.contagem-vencida {
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+}
+
+.home-estoque-lojas a.contagem-vencida:focus-visible { outline-color: var(--text-muted); }
+
+.home-estoque-idade {
+  font-weight: 700;
+  opacity: 0.75;
+}
+
 /* PAINEL DE GESTÃO OPERACIONAL */
 .home-gestao-bloco + .home-gestao-bloco {
   border-top: 1px solid var(--border-color);
