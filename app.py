@@ -2297,8 +2297,22 @@ O_QUE_SEI_FAZER = (
 
 def _dia_citado(texto, lojas):
     """Que dia a pergunta quer. Sem data explícita, ONTEM — é o dia
-    fechado, e é sobre ele que o relatório diário fala."""
-    achado = re.search(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", texto)
+    fechado, e é sobre ele que o relatório diário fala.
+
+    Recebe o texto CRU, não o já normalizado. O normalizador do agente é
+    o de nome de insumo, e ele troca pontuação por espaço: "27/09" chega
+    aqui como "27 09" e a regex de data não casa mais. O estrago era
+    silencioso — toda pergunta com data respondia o movimento de ONTEM,
+    com um cabeçalho afirmando um dia que ninguém pediu, e o texto de
+    ajuda ensinava justamente "dia 27/09" (achado no ensaio de 01/10).
+
+    O espaço opcional em volta da barra aceita quem escreve "27 / 09".
+    Separador nenhum ("27 09") fica de fora de propósito: num texto solto
+    dois números seguidos são quantidade muito mais vezes que data.
+
+    As buscas por palavra continuam no normalizado, que é onde "sábado"
+    vira "sabado" e o acento deixa de atrapalhar."""
+    achado = re.search(r"(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?", texto or "")
     if achado:
         d, m, a = achado.groups()
         ano = int(a) if a else date.today().year
@@ -2308,16 +2322,17 @@ def _dia_citado(texto, lojas):
             return date(ano, int(m), int(d)).isoformat()
         except ValueError:
             return None
+    limpo = _normalizar_nome_insumo(texto or "")
     # "hoje" usa o dia operacional: às 2h da manhã ainda é a noite de
     # ontem, e é esse movimento que a pessoa quer ver.
     hoje_operacional = dia_operacional_de(
         datetime.now().isoformat(timespec="minutes"),
         min((hora_virada_da_loja(l) for l in lojas), default=VIRADA_PADRAO))
-    if re.search(r"\bhoje\b|agora|at[ée] agora|parcial", texto):
+    if re.search(r"\bhoje\b|agora|at[ée] agora|parcial", limpo):
         return hoje_operacional
-    if re.search(r"amanh[ãa]", texto):
+    if re.search(r"amanh[ãa]", limpo):
         return (date.fromisoformat(hoje_operacional) + timedelta(days=1)).isoformat()
-    if re.search(r"anteontem", texto):
+    if re.search(r"anteontem", limpo):
         return (date.fromisoformat(hoje_operacional) - timedelta(days=2)).isoformat()
     return (date.fromisoformat(hoje_operacional) - timedelta(days=1)).isoformat()
 
@@ -2401,11 +2416,17 @@ def montar_resposta_do_agente(texto, lojas, nome_de_quem=None, usuario=None):
         return (RECUSA_POR_ASSUNTO.get(assunto, "Isso está fora do que posso te passar.")
                 + "\n\n" + O_QUE_SEI_FAZER)
 
-    if re.search(r"\b(vendeu|vendi|venda|vendas|faturou|faturamento|fatura"
+    # "vendemos" e "faturamos" entraram no ensaio de 01/10: ninguém
+    # pergunta "quanto vendeu" falando da própria loja, pergunta "quanto
+    # vendemos" — e isso caía em "não entendi".
+    if re.search(r"\b(vendeu|vendi|vendemos|vendido|vendidos|venda|vendas"
+                 r"|faturou|faturamos|faturamento|fatura"
                  r"|ticket|margem|lucro|cmv|quanto entrou)\b", limpo):
         if usuario is not None and not _pode_saber(usuario, "vendas"):
             return recusar("vendas")
-        dia = _dia_citado(limpo, lojas)
+        # O texto CRU, não o normalizado: a barra da data morre na
+        # normalização (ver _dia_citado).
+        dia = _dia_citado(texto, lojas)
         if not dia:
             return "Não entendi a data. Tenta assim: *quanto vendeu dia 27/09*."
         execucoes = listar_execucoes_rotina()
@@ -2417,12 +2438,21 @@ def montar_resposta_do_agente(texto, lojas, nome_de_quem=None, usuario=None):
             return recusar("comprar")
         return resposta_do_que_falta_comprar(lojas)
 
-    if re.search(r"\b(reserva|reservas|mesa|mesas)\b", limpo):
+    # "reservou" e "marcada" vêm antes do estoque de propósito: sem elas,
+    # "tem gente marcada hoje" caía na regra de estoque logo abaixo e o
+    # robô respondia "não achei nenhum insumo com 'gente marcada hoje' no
+    # nome" — fingir que entendeu, que é o que esta função evita no resto.
+    if re.search(r"\b(reserva|reservas|reservou|reservaram|reservado|reservados"
+                 r"|mesa|mesas|marcada|marcadas|marcado|marcados)\b", limpo):
         if usuario is not None and not _pode_saber(usuario, "reservas"):
             return recusar("reservas")
-        return resposta_de_reservas(_dia_citado_pra_reserva(limpo, lojas), lojas)
+        return resposta_de_reservas(_dia_citado_pra_reserva(texto, lojas), lojas)
 
-    achado = re.search(r"\b(?:quanto tem de|tem de|estoque de|quanto tem|tem)\s+(.+)$", limpo)
+    # As formas longas vêm primeiro: "acabou o" tem que ganhar de
+    # "acabou", senão o insumo capturado seria "o pao" em vez de "pao".
+    achado = re.search(r"\b(?:quanto tem de|quanto resta de|quanto sobrou de|tem de"
+                       r"|estoque de|acabou o|acabou a|acabou|sobrou|quanto tem|tem)"
+                       r"\s+(.+)$", limpo)
     if achado:
         if usuario is not None and not _pode_saber(usuario, "estoque"):
             return recusar("estoque")
@@ -2433,8 +2463,13 @@ def montar_resposta_do_agente(texto, lojas, nome_de_quem=None, usuario=None):
 
 def _dia_citado_pra_reserva(texto, lojas):
     """Reserva sem data é a de HOJE, não a de ontem — ninguém pergunta
-    quem reservou num dia que já passou."""
-    if re.search(r"\bontem\b|\d{1,2}[/-]\d{1,2}|amanh[ãa]", texto):
+    quem reservou num dia que já passou.
+
+    Texto CRU aqui também, pelo mesmo motivo do _dia_citado: normalizado,
+    a barra da data já virou espaço."""
+    if re.search(r"\bontem\b|\d{1,2}\s*[/-]\s*\d{1,2}|amanh[ãa]",
+                 _normalizar_nome_insumo(texto or "")) or re.search(
+                     r"\d{1,2}\s*[/-]\s*\d{1,2}", texto or ""):
         return _dia_citado(texto, lojas)
     return dia_operacional_de(
         datetime.now().isoformat(timespec="minutes"),

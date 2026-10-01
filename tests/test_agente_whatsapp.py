@@ -215,6 +215,46 @@ conferir("o que não é do sistema também não vira chute", "sei responder" in 
 secao("12) insumo que não existe")
 conferir("diz que não achou", "Não achei" in perguntar("quanto tem de caviar?"), True)
 
+secao("12b) a data pedida é a data respondida")
+# Até 01/10 o robô respondia TODA pergunta com data com o movimento de
+# ONTEM. O normalizador do agente é o de nome de insumo e troca pontuação
+# por espaço, então "27/09" chegava no _dia_citado como "27 09" e a regex
+# de data não casava mais — caía no fallback silencioso.
+#
+# O teste da seção 10 não pegou porque conferia só que a resposta TINHA
+# "Faturamento do dia", não QUAL dia ela trazia. Daí conferir o dia aqui:
+# o perigo deste bug era parecer resposta certa.
+from app import _dia_citado  # noqa: E402
+
+LOJAS_DO_TESTE = list(mundo.LOJAS)
+hoje = date.today()
+conferir("dia 27/09 é 27/09", _dia_citado("quanto vendeu dia 27/09", LOJAS_DO_TESTE),
+         date(hoje.year, 9, 27).isoformat())
+conferir("aceita 30-09", _dia_citado("quanto vendeu 30-09", LOJAS_DO_TESTE),
+         date(hoje.year, 9, 30).isoformat())
+conferir("aceita espaço na barra", _dia_citado("vendas de 1 / 10", LOJAS_DO_TESTE),
+         date(hoje.year, 10, 1).isoformat())
+conferir("sem data é ontem", _dia_citado("quanto vendeu", LOJAS_DO_TESTE),
+         (hoje - timedelta(days=1)).isoformat())
+conferir("anteontem continua valendo", _dia_citado("quanto vendeu anteontem", LOJAS_DO_TESTE),
+         (hoje - timedelta(days=2)).isoformat())
+# Dois números soltos NÃO são data: num texto de restaurante isso é
+# quantidade muito mais vezes que dia.
+conferir("'27 09' sem barra não vira data",
+         _dia_citado("vendi 27 09 unidades", LOJAS_DO_TESTE),
+         (hoje - timedelta(days=1)).isoformat())
+conferir("e a resposta nomeia o dia pedido",
+         "27/09" in perguntar("quanto faturou dia 27/09"), True)
+
+secao("12c) jeitos de perguntar que o ensaio de 01/10 pegou")
+conferir("'quanto vendemos' é venda", "Faturamento do dia" in perguntar("quanto vendemos ontem"), True)
+conferir("'quem reservou' é reserva", "turno de" in perguntar("quem reservou hoje"), True)
+conferir("'acabou o X' é estoque", "Bacon do teste" in perguntar("acabou o bacon?"), True)
+# "tem gente marcada hoje" caía na regra de estoque e o robô respondia
+# "não achei nenhum insumo com 'gente marcada hoje' no nome".
+conferir("'gente marcada' não vira busca de insumo",
+         "Não achei" in perguntar("tem gente marcada hoje"), False)
+
 secao("13) a rota de teste, sem WhatsApp nenhum")
 r = admin.post("/api/whatsapp/teste", json={"texto": "o que falta comprar", "nome": "Julia"})
 conferir("200", r.status_code, 200)
