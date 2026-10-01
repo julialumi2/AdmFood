@@ -13972,6 +13972,17 @@ function _rotinaRodandoHTML(execucao, diasDeFolga) {
     : `<span class="backup-ok">${texto}</span>`;
 }
 
+// Quanto a sincronização precisou pedir pra Cardápio Web e quanto já sabia.
+// O histórico deles não traz o valor do pedido: é uma chamada por pedido,
+// com espera entre elas. Desde 01/10 o detalhe de pedido já fechado fica
+// guardado, e esta linha é onde dá pra VER isso acontecendo — cache sem
+// número à vista é promessa, e promessa que ninguém mede apodrece primeiro.
+function _esforcoDaSincronizacaoHTML(execucao, prefixo = '') {
+  const detalhe = execucao?.detalhe;
+  if (!detalhe) return '';
+  return `<span class="backup-ok">${escaparHtml(prefixo + detalhe)}</span>`;
+}
+
 async function carregarBackups() {
   const resumo = document.getElementById('backup-resumo');
   const tbody = document.getElementById('backup-tbody');
@@ -14005,8 +14016,10 @@ async function carregarBackups() {
       </div>
       <div>
         <span class="backup-rotulo">Sincronização das vendas</span>
-        <span class="backup-valor">${dados.automatico === false ? '—' : 'de 15 em 15 min e às 03:00'}</span>
+        <span class="backup-valor">${dados.automatico === false ? '—' : 'de 15 em 15 min e às 06:00'}</span>
         ${_rotinaRodandoHTML(dados.execucoes?.sincronizacao_hoje, 1)}
+        ${_esforcoDaSincronizacaoHTML(dados.execucoes?.sincronizacao_hoje)}
+        ${_esforcoDaSincronizacaoHTML(dados.execucoes?.sincronizacao_diaria, 'reconferência diária: ')}
       </div>
     `;
 

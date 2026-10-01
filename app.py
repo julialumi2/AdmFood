@@ -958,21 +958,37 @@ if os.environ.get("SINCRONIZACAO_AUTOMATICA", "false").lower() == "true":
         # ajuste manual de canal resolve (ver seção 6.3 da documentação).
         DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA = 7
 
+        def _texto_do_esforco(contas):
+            """"7 detalhes buscados, 240 reaproveitados" — o que a
+            sincronização precisou pedir pra Cardápio Web e o que já
+            sabia. Vai pro painel: cache sem número à vista é promessa, e
+            promessa que ninguém mede é a que apodrece primeiro."""
+            buscados = sum(c.get("buscados", 0) for c in contas)
+            reaproveitados = sum(c.get("reaproveitados", 0) for c in contas)
+            if not buscados and not reaproveitados:
+                return "nenhum pedido no período"
+            return "%d detalhe(s) buscado(s), %d reaproveitado(s)" % (buscados, reaproveitados)
+
         def _rodar_sincronizacao_diaria():
-            for dias_atras in range(1, DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA + 1):
-                sincronizar_dia(date.today() - timedelta(days=dias_atras))
-            marcar_execucao_rotina("sincronizacao_diaria", f"{DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA} dias reconferidos")
+            contas = [sincronizar_dia(date.today() - timedelta(days=dias_atras))
+                      for dias_atras in range(1, DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA + 1)]
+            marcar_execucao_rotina(
+                "sincronizacao_diaria",
+                f"{DIAS_RECONFERIDOS_NA_SINCRONIZACAO_DIARIA} dias reconferidos — "
+                + _texto_do_esforco(contas))
 
         def _rodar_sincronizacao_hoje():
-            sincronizar_dia(date.today())
+            contas = [sincronizar_dia(date.today())]
             # De madrugada, o dia operacional das lojas que viram às 5h ainda
             # é o de ontem: sem isso, a venda das 2h só apareceria na
             # reconferência da noite seguinte (25/09).
             viradas = horas_virada_das_lojas().values()
             maior_virada = max((int(h.split(":")[0]) for h in viradas), default=0)
             if datetime.now().hour < maior_virada:
-                sincronizar_dia(date.today() - timedelta(days=1))
-            marcar_execucao_rotina("sincronizacao_hoje", date.today().isoformat())
+                contas.append(sincronizar_dia(date.today() - timedelta(days=1)))
+            marcar_execucao_rotina(
+                "sincronizacao_hoje",
+                date.today().isoformat() + " — " + _texto_do_esforco(contas))
 
         _scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
         # 6h, não 3h: às 3h as lojas que viram às 5h ainda estão vendendo, e

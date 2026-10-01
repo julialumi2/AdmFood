@@ -42,8 +42,15 @@ from backend.armazenamento import (
 
 def sincronizar_dia(dia: date, unidades=None):
     """`unidades`: só essas lojas, em vez das quatro — pra consertar o
-    histórico de uma sem recalcular o das outras (28/09)."""
+    histórico de uma sem recalcular o das outras (28/09).
+
+    Devolve {"buscados", "reaproveitados"}: quantos detalhes de pedido
+    precisaram de chamada na API e quantos vieram do que já estava
+    guardado. Quem agenda carimba isso no painel — sem número à vista o
+    cache é só uma promessa, e promessa que ninguém mede é a que apodrece
+    primeiro."""
     dia_iso = dia.isoformat()
+    buscados = reaproveitados = 0
     # Cada loja tem a sua hora de virada: no Artesanos e nas Tradiças o dia
     # vai até de madrugada, e essas vendas caíam no dia seguinte (25/09).
     viradas = horas_virada_das_lojas()
@@ -71,6 +78,8 @@ def sincronizar_dia(dia: date, unidades=None):
             # acima falhar, o detalhe não fica guardado como se tivesse
             # entrado no faturamento.
             guardar_detalhes_cw(nome_unidade, resumo["pedidos_detalhados"])
+            buscados += resumo.get("detalhes_buscados", 0)
+            reaproveitados += resumo.get("detalhes_reaproveitados", 0)
             if not resumo["quantidade_pedidos"] and not resumo["faturamento_dia"]:
                 print(f"🔒 {nome_unidade} ({dia_iso}): sem venda nenhuma, gravado como dia fechado.")
             else:
@@ -84,6 +93,8 @@ def sincronizar_dia(dia: date, unidades=None):
                 )
         except Exception as erro:
             print(f"❌ {nome_unidade} ({dia_iso}): {erro}")
+
+    return {"buscados": buscados, "reaproveitados": reaproveitados}
 
 
 if __name__ == "__main__":
