@@ -18332,7 +18332,15 @@ function renderVendasSemanais() {
   const semana = semanas.find(s => s.periodoInicio === vendasSemanaisSelecionada) || semanas[0];
   const isAdmin = window.usuarioLogado?.papel === 'admin';
   const veredito = VEREDITO[semana.classificacao];
-  const ehMaisRecente = semana.periodoInicio === semanas[0].periodoInicio;
+  // O rótulo comparava com semanas[0], que é a semana em andamento — e
+  // como a tela passou a abrir na última FECHADA, ele dizia "selecionada"
+  // logo de cara, como se a pessoa tivesse escolhido algo.
+  const primeiraFechada = semanas.find((s) => !s.emAndamento);
+  const rotuloDaSemana = semana.emAndamento
+    ? 'Semana em andamento'
+    : (primeiraFechada && semana.periodoInicio === primeiraFechada.periodoInicio
+      ? 'Última semana fechada'
+      : 'Semana selecionada');
 
   const canaisComValor = CANAIS_VENDAS_SEMANAIS.filter(c => semana.canais[c.chave]);
   const barras = canaisComValor.map(c => {
@@ -18369,7 +18377,7 @@ function renderVendasSemanais() {
     <div class="semana-hero ${veredito ? 'veredito-' + semana.classificacao : ''}">
       <div class="semana-hero-topo">
         <div>
-          <span class="semana-hero-rotulo">${ehMaisRecente ? 'Semana mais recente' : 'Semana selecionada'}</span>
+          <span class="semana-hero-rotulo">${rotuloDaSemana}</span>
           <span class="semana-hero-periodo">${_periodoSemanaLabel(semana.periodoInicio, semana.periodoFim)} · ${semana.periodoInicio.slice(0, 4)}</span>
         </div>
         <span class="semana-hero-etiquetas">${etiquetaAndamento}${etiquetaFechados}<span class="tag-origem" title="${origemTitulo}">${semana.origem === 'sistema' ? 'do sistema' : 'da planilha'}</span></span>
