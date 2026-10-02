@@ -861,6 +861,21 @@ def inicializar_banco():
             """
         )
 
+        # Quantos lugares a loja aceita reservar por dia (02/10). O teto
+        # é do FORMULÁRIO do site, não da casa: quem atende precisa poder
+        # encaixar a mesa que o dono mandou encaixar. Sem linha = o
+        # padrão, que é LUGARES_POR_DIA_PADRAO.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS limite_de_reserva_loja (
+                loja TEXT PRIMARY KEY,
+                lugares_por_dia INTEGER NOT NULL,
+                alterado_em TEXT NOT NULL,
+                alterado_por TEXT
+            )
+            """
+        )
+
         # Mensagem de WhatsApp que o robô já respondeu. A Evolution
         # reentrega o webhook quando não recebe 200 na primeira, e sem
         # isso a pessoa recebe a mesma resposta duas ou três vezes.
@@ -3168,6 +3183,48 @@ def hora_virada_da_loja(loja):
     """A hora de virada de uma loja, ou 00:00 se ela não tem uma."""
     return horas_virada_das_lojas().get(loja, VIRADA_PADRAO)
 
+# Quantas pessoas cabem num dia quando ninguém definiu nada. 60 veio do
+# chefe da Julia; quem muda é ela, em Configurações.
+LUGARES_POR_DIA_PADRAO = 60
+
+
+def lugares_por_dia_das_lojas(conn=None):
+    """{loja: lugares} de quem tem teto diferente do padrão.
+
+    `conn` existe porque quem grava reserva consulta isso de dentro de uma
+    transação já travada — abrir conexão nova ali é ler de fora da trava."""
+    consulta = "SELECT loja, lugares_por_dia FROM limite_de_reserva_loja"
+    if conn is not None:
+        return {l["loja"]: l["lugares_por_dia"] for l in conn.execute(consulta)}
+    with conexao() as propria:
+        return {l["loja"]: l["lugares_por_dia"] for l in propria.execute(consulta)}
+
+
+def lugares_por_dia_da_loja(loja, conn=None):
+    """O teto de reservas por dia dessa loja."""
+    return lugares_por_dia_das_lojas(conn).get(loja, LUGARES_POR_DIA_PADRAO)
+
+
+def gravar_lugares_por_dia(loja, lugares, quem=None):
+    """Muda o teto de uma loja. `lugares` vazio volta pro padrão."""
+    if lugares in (None, ""):
+        with conexao() as conn:
+            conn.execute("DELETE FROM limite_de_reserva_loja WHERE loja = ?", (loja,))
+        return LUGARES_POR_DIA_PADRAO
+    try:
+        lugares = int(lugares)
+    except (TypeError, ValueError):
+        raise ValueError("Número de lugares inválido.")
+    if lugares < 1:
+        raise ValueError("O teto por dia precisa ser pelo menos 1.")
+    with conexao() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO limite_de_reserva_loja "
+            "(loja, lugares_por_dia, alterado_em, alterado_por) VALUES (?, ?, ?, ?)",
+            (loja, lugares, datetime.now().isoformat(), quem),
+        )
+    return lugares
+
 
 def mensagem_ja_respondida(mensagem_id):
     with conexao() as conn:
@@ -3221,7 +3278,11 @@ def listar_chamadas_webhook(limite=CHAMADAS_DE_WEBHOOK_GUARDADAS):
 
 
 STATUS_DE_RESERVA = ("pendente", "confirmada", "cancelada", "compareceu", "nao_compareceu")
-ORIGENS_DE_RESERVA = ("sistema", "telefone", "whatsapp", "instagram", "presencial")
+# "site" é a reserva que a própria pessoa fez na página pública, sem
+# ninguém da casa no meio. Fica separada das outras porque é a única que
+# nasce sem um funcionário por trás: é por ela que dá pra ver quanto o
+# formulário está trazendo, e é ela que precisa de confirmação humana.
+ORIGENS_DE_RESERVA = ("sistema", "telefone", "whatsapp", "instagram", "presencial", "site")
 MAXIMO_PESSOAS_POR_RESERVA = 200
 
 
@@ -3238,8 +3299,48 @@ def dia_operacional_de(quando_iso, hora_virada):
     return quando.date().isoformat()
 
 
+class LotacaoEsgotada(ValueError):
+    """Não cabe mais gente nesse dia.
+
+    Herda de ValueError porque quem chama já trata ValueError como
+    "o pedido estava errado" — e carrega quantos lugares sobraram, pra
+    página poder dizer "ainda cabem 8" em vez de só "lotado"."""
+
+    def __init__(self, dia, livres, teto):
+        self.dia = dia
+        self.livres = livres
+        self.teto = teto
+        if livres > 0:
+            super().__init__(
+                "Nesse dia sobra%s %d lugar%s. Diminua o grupo ou escolha outra data."
+                % ("" if livres == 1 else "m", livres, "" if livres == 1 else "es")
+            )
+        else:
+            super().__init__("Esse dia já está lotado. Escolha outra data.")
+
+
+def lugares_reservados_no_dia(loja, dia, conn=None):
+    """Quantas pessoas já estão marcadas nesse turno.
+
+    Cancelada não conta — a mesa voltou. Não-compareceu também não, mas
+    esse é veredito do dia seguinte: na hora de reservar o lugar ainda
+    estava ocupado, e por isso ele conta enquanto o dia não passou.
+
+    `conn` existe pra contagem poder rodar DENTRO da transação de quem
+    está gravando. Contar por fora é contar antes da trava."""
+    consulta = (
+        "SELECT COALESCE(SUM(pessoas), 0) AS total FROM reserva "
+        "WHERE loja = ? AND dia_operacional = ? "
+        "AND status NOT IN ('cancelada', 'nao_compareceu')"
+    )
+    if conn is not None:
+        return conn.execute(consulta, (loja, dia)).fetchone()["total"]
+    with conexao() as propria:
+        return propria.execute(consulta, (loja, dia)).fetchone()["total"]
+
 def criar_reserva(loja, nome, pessoas, quando_iso, telefone="", observacao="",
-                  origem="sistema", status="confirmada", criado_por=None):
+                  origem="sistema", status="confirmada", criado_por=None,
+                  respeitar_limite=False):
     """Grava uma reserva e devolve o id. Valida aqui, não só na rota: a
     próxima entrada vai ser o robô do Instagram, que não passa pela tela."""
     nome = (nome or "").strip()
@@ -3263,6 +3364,18 @@ def criar_reserva(loja, nome, pessoas, quando_iso, telefone="", observacao="",
     agora = datetime.now().isoformat()
     dia = dia_operacional_de(quando_iso, hora_virada_da_loja(loja))
     with conexao() as conn:
+        # O teto por dia só vale pra quem veio de fora. Quem atende no
+        # balcão continua podendo encaixar — é a casa que decide se cabe.
+        #
+        # A trava vem ANTES de contar: sem ela, dois formulários enviados
+        # no mesmo segundo leem "cabe" e os dois gravam. É o mesmo bug do
+        # pedido duplicado do QA de 22/09.
+        if respeitar_limite:
+            travar_para_escrita(conn)
+            teto = lugares_por_dia_da_loja(loja, conn)
+            ocupados = lugares_reservados_no_dia(loja, dia, conn)
+            if ocupados + pessoas > teto:
+                raise LotacaoEsgotada(dia, max(0, teto - ocupados), teto)
         cur = conn.execute(
             """
             INSERT INTO reserva (loja, nome, telefone, pessoas, quando, dia_operacional,

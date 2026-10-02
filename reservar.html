@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artesanos Burger · Reserve sua mesa</title>
+  <meta name="description" content="Smash prensado na chapa, em Sorocaba. Reserve a mesa do seu grupo no Artesanos Burger.">
+
+  <link rel="icon" href="imgs/favicon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="imgs/favicon-32.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,700;1,800;1,900&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="reservar.css">
+</head>
+<body>
+
+  <!-- TOPO -->
+  <header class="topo">
+    <a class="marca" href="#inicio">
+      <img class="marca-logo" src="imgs/artesanos-logo.png" alt="" onerror="this.remove()">
+      <span class="marca-nome">art.</span>
+    </a>
+    <nav class="topo-menu">
+      <a href="#a-casa">A casa</a>
+      <a href="#informacoes">Informações</a>
+    </nav>
+    <a class="btn btn-primario btn-topo" href="#reservas">Reservar</a>
+  </header>
+
+  <main id="inicio">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-texto">
+        <span class="sobrancelha">Smash na chapa · Sorocaba</span>
+        <h1 class="titulo-display">
+          Chega mais.<br>
+          <em>A chapa já está quente.</em>
+        </h1>
+        <p class="apoio">
+          Carne prensada na hora, pão brioche e o molho que só tem aqui.
+          Vindo em grupo, reserve a mesa — a gente já deixa preparada.
+        </p>
+        <div class="hero-botoes">
+          <a class="btn btn-primario" href="#reservas">Reservar uma mesa</a>
+          <a class="btn btn-contorno" href="https://artesanosburger.com.br" target="_blank" rel="noopener">Ver o cardápio</a>
+        </div>
+      </div>
+      <figure class="foto">
+        <img src="imgs/artesanos-casa.jpg" alt="O salão do Artesanos Burger"
+             onerror="this.closest('.foto').classList.add('sem-foto')">
+      </figure>
+    </section>
+
+    <!-- A CASA -->
+    <section class="casa" id="a-casa">
+      <div class="casa-texto">
+        <span class="sobrancelha">A casa</span>
+        <h2 class="titulo-display">
+          O smash é prensado na hora.<br>
+          <em>Sempre.</em>
+        </h2>
+        <p class="apoio">
+          Nada fica pronto esperando. A carne vai pra chapa quando o pedido
+          entra, o pão passa na manteiga e o queijo derrete em cima. É por
+          isso que a fila anda — e é por isso que vale reservar.
+        </p>
+      </div>
+      <div class="numeros">
+        <div class="numero-card">
+          <strong>110g</strong>
+          <span>de smash em cada clássico</span>
+        </div>
+        <div class="numero-card">
+          <strong>51 mil</strong>
+          <span>pessoas acompanham a gente</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- INFORMAÇÕES -->
+    <section class="informacoes" id="informacoes">
+      <div class="info-card">
+        <span class="sobrancelha">Endereço</span>
+        <p>Av. Washington Luiz, 1382<br>Sorocaba · SP</p>
+      </div>
+      <div class="info-card">
+        <span class="sobrancelha">Horários</span>
+        <p data-conferir>Todos os dias<br>18h — 23h</p>
+      </div>
+      <div class="info-card">
+        <span class="sobrancelha">Contato</span>
+        <p data-conferir>(15) 0000-0000<br>artesanosburger.com.br</p>
+      </div>
+    </section>
+
+    <!-- RESERVAS -->
+    <section class="reservas" id="reservas">
+      <div class="reservas-chamada">
+        <span class="sobrancelha">Reservas</span>
+        <h2 class="titulo-display">Guarde seu<br>lugar na chapa.</h2>
+        <p class="apoio">
+          A reserva é pra grupo, de <strong id="texto-minimo">5</strong> a
+          <strong id="texto-maximo">40</strong> pessoas. Escolha a data e a
+          página já diz se ainda cabe.
+        </p>
+        <p class="apoio apoio-menor">
+          Mesa menor que isso não precisa reservar: pode chegar que a gente
+          dá um jeito.
+        </p>
+      </div>
+
+      <form class="reservas-form" id="form-reserva" novalidate>
+        <div class="campo">
+          <label for="r-nome">Nome</label>
+          <input id="r-nome" name="nome" type="text" autocomplete="name"
+                 placeholder="Como podemos te chamar?" maxlength="80" required>
+        </div>
+
+        <div class="campo-dupla">
+          <div class="campo">
+            <label for="r-data">Data</label>
+            <input id="r-data" name="data" type="date" required>
+          </div>
+          <div class="campo">
+            <label for="r-hora">Horário</label>
+            <input id="r-hora" name="hora" type="time" step="900" value="20:00" required>
+          </div>
+        </div>
+
+        <!-- O medidor do dia. Nasce escondido: sem data escolhida não há
+             nada honesto a dizer. -->
+        <div class="vagas" id="vagas" hidden>
+          <div class="vagas-topo">
+            <span class="vagas-rotulo" id="vagas-rotulo">Conferindo o dia…</span>
+            <span class="vagas-conta" id="vagas-conta"></span>
+          </div>
+          <div class="vagas-trilho">
+            <div class="vagas-ocupado" id="vagas-ocupado" style="width:0%"></div>
+          </div>
+          <p class="vagas-recado" id="vagas-recado"></p>
+        </div>
+
+        <div class="campo-dupla">
+          <div class="campo">
+            <label for="r-pessoas">Pessoas</label>
+            <input id="r-pessoas" name="pessoas" type="number" inputmode="numeric"
+                   min="5" max="40" value="5" required>
+            <span class="campo-dica" id="dica-pessoas">De 5 a 40</span>
+          </div>
+          <div class="campo">
+            <label for="r-telefone">Contato</label>
+            <input id="r-telefone" name="telefone" type="tel" autocomplete="tel"
+                   placeholder="WhatsApp com DDD" maxlength="25" required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="r-obs">Observações <span class="opcional">(opcional)</span></label>
+          <input id="r-obs" name="observacao" type="text" maxlength="200"
+                 placeholder="Aniversário, restrição alimentar, mesa perto da janela...">
+        </div>
+
+        <p class="form-erro" id="form-erro" role="alert" hidden></p>
+
+        <button class="btn btn-primario btn-largo" type="submit" id="btn-reservar">
+          Pedir reserva
+        </button>
+        <p class="form-nota">
+          A casa confirma por WhatsApp. Se não puder vir, é só avisar.
+        </p>
+      </form>
+
+      <!-- O que aparece no lugar do formulário quando dá certo -->
+      <div class="reservas-ok" id="reserva-ok" hidden>
+        <span class="sobrancelha">Recebido</span>
+        <h2 class="titulo-display">Anotado,<br><em id="ok-nome">tudo certo.</em></h2>
+        <p class="apoio" id="ok-detalhe"></p>
+        <p class="form-nota">
+          Falta a casa confirmar — a gente chama no WhatsApp que você deixou.
+          Se precisar mudar alguma coisa, é só responder por lá.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <strong>Artesanos Burger</strong>
+    <span>Av. Washington Luiz, 1382 · Sorocaba · SP</span>
+  </footer>
+
+  <script src="reservar.js"></script>
+</body>
+</html>

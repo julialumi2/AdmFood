@@ -1,0 +1,381 @@
+/* Página pública de reservas do Artesanos Burger.
+   Não é tela do sistema: não carrega tokens.css nem theme.css, e não tem
+   modo escuro. O pedido do chefe (02/10) é fundo branco, logo e escritos
+   em marrom, uma foto da casa — e uma coisa que compromete a outra é a
+   página inteira ficar presa a essa escolha, de propósito.
+
+   A fonte é Poppins, escolha dela (02/10).
+
+   O marrom veio medido do logo deles. Quando chegar o arquivo original,
+   é esta linha que muda — nada mais no arquivo repete um hex. */
+:root {
+  --papel:         #ffffff;
+  --marrom:        #784437;  /* a marca */
+  --marrom-forte:  #452219;  /* títulos e o que precisa pesar */
+  --marrom-fraco:  #a08279;  /* apoio, rótulo, o que vem em segundo */
+  --marrom-leve:   #f4ece9;  /* linha, campo, fundo de bloco */
+  --alerta:        #b2301f;  /* lotado — convive com o marrom sem brigar */
+
+  --respiro:       clamp(1.25rem, 4vw, 3rem);
+  --margem:        clamp(1rem, 5vw, 5.5rem);
+  --curva:         14px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation: none !important; transition: none !important; }
+}
+
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--marrom);
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; display: block; }
+
+:focus-visible {
+  outline: 3px solid var(--marrom);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ---------- tipos ---------- */
+
+/* Uma família só, três registros. O logo deles é um sans pesado e
+   arredondado; trazer uma serifa pra cá seria inventar uma marca que não
+   é a deles. O que carrega a página é o peso e o tamanho, não a mistura. */
+.titulo-display {
+  font-weight: 900;
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--marrom-forte);
+  margin: 0 0 1.25rem;
+  text-wrap: balance;
+}
+.titulo-display em {
+  font-style: italic;
+  color: var(--marrom);
+}
+
+.sobrancelha {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--marrom-fraco);
+  margin-bottom: 1rem;
+}
+
+.apoio {
+  margin: 0 0 1.75rem;
+  max-width: 46ch;
+  color: var(--marrom);
+}
+.apoio strong { font-weight: 800; color: var(--marrom-forte); }
+.apoio-menor { font-size: 0.95rem; color: var(--marrom-fraco); }
+
+/* ---------- botões ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.95rem 1.75rem;
+  border: 2px solid var(--marrom);
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color .18s ease, color .18s ease, transform .18s ease;
+}
+.btn-primario { background: var(--marrom); color: var(--papel); }
+.btn-primario:hover { background: var(--marrom-forte); border-color: var(--marrom-forte); }
+.btn-contorno { background: transparent; color: var(--marrom); }
+.btn-contorno:hover { background: var(--marrom-leve); }
+.btn:active { transform: translateY(1px); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+.btn-largo { width: 100%; padding: 1.1rem; font-size: 1.05rem; }
+
+/* ---------- topo ---------- */
+
+.topo {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem var(--margem);
+  background: var(--papel);
+  border-bottom: 1px solid var(--marrom-leve);
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  margin-right: auto;
+}
+.marca-logo { width: 42px; height: 42px; object-fit: contain; }
+/* O "art." escrito só aparece sozinho quando o arquivo do logo não
+   carregou — aí ele é a marca, e não uma legenda do desenho. */
+.marca-nome {
+  font-weight: 900;
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+  color: var(--marrom);
+}
+.marca-logo + .marca-nome { display: none; }
+
+.topo-menu { display: flex; gap: 1.75rem; }
+.topo-menu a {
+  color: var(--marrom);
+  text-decoration: none;
+  font-weight: 500;
+  padding: .25rem 0;
+  border-bottom: 2px solid transparent;
+}
+.topo-menu a:hover { border-bottom-color: var(--marrom); }
+
+/* O topo é fixo: sem isso, o link do menu para a seção com o título já
+   por baixo da faixa. */
+main section[id] { scroll-margin-top: 5.5rem; }
+
+/* ---------- hero ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: var(--respiro);
+  align-items: center;
+  padding: clamp(3rem, 8vw, 6.5rem) var(--margem);
+}
+.hero-texto { min-width: 0; }
+.hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+/* A única foto da página. Fica no hero porque é lá que ela trabalha:
+   quem chega quer ver a casa antes de decidir. */
+.foto {
+  margin: 0;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--curva);
+  overflow: hidden;
+  background: var(--marrom-leve);
+}
+.foto img { width: 100%; height: 100%; object-fit: cover; }
+/* Sem o arquivo, vira um bloco da cor da casa em vez de ícone quebrado. */
+.foto.sem-foto {
+  background: var(--marrom-leve);
+  border: 1px dashed var(--marrom-fraco);
+}
+/* O alt da imagem quebrada apareceria por cima do bloco. Some com ele:
+   o lugar já se explica sozinho. */
+.foto.sem-foto img { display: none; }
+.foto.sem-foto::after {
+  content: 'art.';
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-weight: 900;
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  letter-spacing: -0.02em;
+  color: var(--marrom-fraco);
+}
+
+/* ---------- a casa ---------- */
+
+.casa {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: var(--respiro);
+  align-items: center;
+  padding: clamp(2.5rem, 6vw, 5rem) var(--margem);
+  border-top: 1px solid var(--marrom-leve);
+}
+.casa-texto { min-width: 0; }
+.casa .apoio { margin-bottom: 0; }
+
+.numeros { display: grid; gap: 1rem; }
+.numero-card {
+  padding: 1.5rem;
+  border-radius: var(--curva);
+  background: var(--marrom-leve);
+}
+.numero-card strong {
+  display: block;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--marrom-forte);
+}
+.numero-card span {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--marrom-fraco);
+}
+
+/* ---------- informações ---------- */
+
+.informacoes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--respiro);
+  padding: clamp(2.5rem, 6vw, 4rem) var(--margem);
+  border-top: 1px solid var(--marrom-leve);
+}
+.info-card p { margin: 0; font-weight: 500; }
+
+/* ---------- reservas ---------- */
+
+.reservas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--respiro);
+  align-items: start;
+  padding: clamp(3rem, 7vw, 5.5rem) var(--margem) clamp(4rem, 8vw, 6rem);
+  border-top: 1px solid var(--marrom-leve);
+}
+.reservas-chamada { position: sticky; top: 6rem; }
+.reservas-chamada .apoio { margin-bottom: 1rem; }
+
+.reservas-form { display: grid; gap: 1.1rem; }
+
+.campo { display: grid; gap: 0.4rem; min-width: 0; }
+.campo label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--marrom-fraco);
+}
+.campo .opcional { font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+.campo input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--marrom-leve);
+  border-radius: 10px;
+  background: var(--papel);
+  font: inherit;
+  color: var(--marrom-forte);
+  transition: border-color .15s ease;
+}
+.campo input::placeholder { color: var(--marrom-fraco); }
+.campo input:hover { border-color: var(--marrom-fraco); }
+.campo input:focus { border-color: var(--marrom); outline: none; }
+.campo input:focus-visible { outline: none; }
+
+.campo-dica { font-size: 0.8rem; color: var(--marrom-fraco); }
+
+.campo-dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+
+/* O medidor do dia — o que esta página faz que um site de restaurante
+   não faz. A barra é a ocupação real do turno, não enfeite. */
+.vagas {
+  padding: 1.1rem 1.25rem;
+  border: 2px solid var(--marrom-leve);
+  border-radius: var(--curva);
+  background: var(--marrom-leve);
+}
+.vagas-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+.vagas-rotulo { font-weight: 800; color: var(--marrom-forte); }
+.vagas-conta {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--marrom-fraco);
+  white-space: nowrap;
+}
+.vagas-trilho {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--papel);
+  overflow: hidden;
+}
+.vagas-ocupado {
+  height: 100%;
+  width: 0;
+  background: var(--marrom);
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+.vagas-recado {
+  margin: 0.7rem 0 0;
+  font-size: 0.9rem;
+  color: var(--marrom-fraco);
+}
+/* Lotado não é erro de preenchimento: é informação, e a cor diz isso
+   sem gritar. */
+.vagas.vagas-lotado { border-color: var(--alerta); }
+.vagas.vagas-lotado .vagas-rotulo,
+.vagas.vagas-lotado .vagas-recado { color: var(--alerta); }
+.vagas.vagas-lotado .vagas-ocupado { background: var(--alerta); }
+.vagas.vagas-carregando { opacity: .6; }
+
+.form-erro {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: var(--alerta);
+  color: var(--papel);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.form-nota { margin: 0; font-size: 0.85rem; color: var(--marrom-fraco); text-align: center; }
+
+.reservas-ok { align-self: center; }
+.reservas-ok .form-nota { text-align: left; }
+
+/* ---------- rodapé ---------- */
+
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 2rem var(--margem);
+  border-top: 1px solid var(--marrom-leve);
+  font-size: 0.9rem;
+  color: var(--marrom-fraco);
+}
+.rodape strong { font-weight: 900; color: var(--marrom); letter-spacing: -0.01em; }
+
+/* ---------- telas estreitas ---------- */
+
+@media (max-width: 900px) {
+  .hero, .casa, .reservas { grid-template-columns: 1fr; }
+  .hero { padding-top: clamp(2rem, 6vw, 3rem); }
+  .casa .numeros { grid-template-columns: 1fr 1fr; }
+  .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }
+  .reservas-chamada { position: static; }
+  .foto { aspect-ratio: 3 / 2; }
+  .topo-menu { display: none; }
+}
+
+@media (max-width: 480px) {
+  .campo-dupla { grid-template-columns: 1fr; }
+  .casa .numeros { grid-template-columns: 1fr; }
+  .hero-botoes .btn { width: 100%; }
+  .btn-topo { padding: 0.75rem 1.25rem; }
+}

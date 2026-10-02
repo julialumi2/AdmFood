@@ -225,6 +225,11 @@ from backend.armazenamento import (
     registrar_chamada_webhook,
     listar_chamadas_webhook,
     criar_reserva,
+    LotacaoEsgotada,
+    lugares_por_dia_da_loja,
+    lugares_reservados_no_dia,
+    dia_operacional_de,
+    hora_virada_da_loja,
     buscar_reserva,
     listar_reservas,
     atualizar_reserva,
@@ -485,7 +490,11 @@ _criar_equipe_inicial_se_necessario()
 
 PAGINAS_PUBLICAS = {"login.html", "esquecisenha.html", "preencher_contagem.html", "preencher_cotacao.html", "confirmar_pedido.html",
                     # política de privacidade da extensão do WhatsApp: a Chrome Web Store precisa abrir sem login
-                    "privacidade-extensao.html"}
+                    "privacidade-extensao.html",
+                    # a página de reserva do Artesanos: ela existe pra ser
+                    # mandada pro cliente, então login aqui seria o contrário
+                    # do que ela serve
+                    "reservar.html"}
 ROTAS_API_PUBLICAS = {"/api/login"}
 
 
@@ -686,6 +695,11 @@ def _exigir_login():
             or caminho.startswith('/api/contagens/token/')
             or caminho.startswith('/api/cotacoes/convite/')
             or caminho.startswith('/api/pedidos/confirmar/')
+            # A reserva pela página pública não tem token nenhum: quem
+            # chama é um cliente que nunca entrou no sistema. O que segura
+            # aqui é o limite por IP e por telefone, lá na própria rota.
+            or caminho == '/api/reservas/publica'
+            or caminho == '/api/reservas/disponibilidade'
         ):
             # Link público: o token é a senha, então o teto de tentativa por
             # IP é o que existe no lugar do login (ver _token_bloqueado_*).
@@ -3144,6 +3158,207 @@ def api_criar_reserva():
     except ValueError as erro:
         return jsonify({"erro": str(erro)}), 400
     return jsonify({"reserva": buscar_reserva(reserva_id)}), 201
+
+
+# ---------------------------------------------------------------------
+# RESERVA PELA PÁGINA PÚBLICA (02/10) — pedido do chefe: o cliente
+# preenche um formulário e a reserva nasce no sistema.
+#
+# É a primeira porta do AdmFood que grava no banco sem ninguém
+# autenticado do outro lado. As travas abaixo são o que existe no lugar
+# do login, e cada uma responde a um jeito concreto de abusar.
+# ---------------------------------------------------------------------
+
+# Só o Artesanos tem página, por enquanto. Constante, e não parâmetro da
+# requisição: se a loja viesse do corpo, qualquer um poderia criar reserva
+# em qualquer loja da rede mandando outro nome.
+LOJA_DO_SITE_DE_RESERVAS = "Hamburgueria Artesanos"
+
+# O formulário é pra grupo. Mesa de dois não precisa reservar — entra e
+# senta — e reservar lugar demais de uma vez trava o dia inteiro pra
+# todo mundo. Os dois números são do chefe da Julia (02/10).
+MINIMO_PESSOAS_NO_SITE = 5
+MAXIMO_PESSOAS_NO_SITE = 40
+
+RESERVAS_PUBLICAS_POR_JANELA = 3
+JANELA_RESERVA_PUBLICA_SEGUNDOS = 10 * 60
+# Reserva pra daqui a um ano é engano de digitação ou robô, não plano de
+# jantar.
+DIAS_MAXIMOS_DE_ANTECEDENCIA = 90
+_reservas_publicas_recentes = {}
+_TRAVA_RESERVA_PUBLICA = threading.Lock()
+
+
+def _reserva_publica_bloqueada(chaves):
+    """True quando esse IP (ou esse telefone) já reservou demais na janela.
+
+    Duas chaves porque elas pegam coisas diferentes: o IP segura o robô que
+    dispara em rajada, e o telefone segura a mesma pessoa criando dez
+    reservas de um celular só — que de IP pode vir de qualquer lugar."""
+    agora = time.time()
+    with _TRAVA_RESERVA_PUBLICA:
+        estourou = False
+        for chave in chaves:
+            if not chave:
+                continue
+            recentes = [t for t in _reservas_publicas_recentes.get(chave, [])
+                        if agora - t < JANELA_RESERVA_PUBLICA_SEGUNDOS]
+            recentes.append(agora)
+            _reservas_publicas_recentes[chave] = recentes
+            if len(recentes) > RESERVAS_PUBLICAS_POR_JANELA:
+                estourou = True
+        # Limpeza preguiçosa, igual à do limite de token: sem isso o
+        # dicionário cresce pra sempre num processo que não reinicia.
+        if len(_reservas_publicas_recentes) > 2000:
+            for chave in [c for c, v in _reservas_publicas_recentes.items()
+                          if not v or agora - v[-1] > JANELA_RESERVA_PUBLICA_SEGUNDOS]:
+                _reservas_publicas_recentes.pop(chave, None)
+        return estourou
+
+
+# A consulta é barata e a pessoa troca de data várias vezes até achar
+# uma que caiba — por isso o teto é bem mais alto que o de gravar. O que
+# ele segura é varredura: alguém raspando o ano inteiro pra montar o mapa
+# de lotação da casa.
+CONSULTAS_DE_VAGA_POR_MINUTO = 60
+_consultas_de_vaga = {}
+
+
+def _consulta_de_vaga_bloqueada(chave):
+    agora = time.time()
+    with _TRAVA_RESERVA_PUBLICA:
+        recentes = [t for t in _consultas_de_vaga.get(chave, []) if agora - t < 60]
+        recentes.append(agora)
+        _consultas_de_vaga[chave] = recentes
+        if len(_consultas_de_vaga) > 2000:
+            for c in [c for c, v in _consultas_de_vaga.items()
+                      if not v or agora - v[-1] > 60]:
+                _consultas_de_vaga.pop(c, None)
+        return len(recentes) > CONSULTAS_DE_VAGA_POR_MINUTO
+
+
+@app.route('/api/reservas/disponibilidade')
+def api_disponibilidade_de_reserva():
+    """Quantos lugares ainda cabem num dia, pra página poder dizer antes
+    de a pessoa preencher o resto.
+
+    Devolve só números: nome e telefone de quem já reservou é assunto de
+    dentro de casa. E responde 200 mesmo quando está lotado — lotado é uma
+    resposta, não um erro."""
+    if _consulta_de_vaga_bloqueada(_ip_de_quem_chamou()):
+        return jsonify({"erro": "Muitas consultas seguidas. Espera um minuto."}), 429
+
+    data = (request.args.get('data') or '').strip()
+    hora = (request.args.get('hora') or '').strip()
+    # Sem hora escolhida ainda, mira o meio da noite: é o horário que cai
+    # no mesmo dia operacional pra qualquer hora de virada.
+    try:
+        momento = datetime.fromisoformat("%sT%s" % (data, hora or "20:00"))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Data inválida."}), 400
+
+    hoje = datetime.now()
+    if momento.date() < hoje.date():
+        return jsonify({"erro": "Essa data já passou.", "aceita": False}), 400
+    if momento > hoje + timedelta(days=DIAS_MAXIMOS_DE_ANTECEDENCIA):
+        return jsonify({
+            "erro": "Só dá pra reservar com até %d dias de antecedência." % DIAS_MAXIMOS_DE_ANTECEDENCIA,
+            "aceita": False,
+        }), 400
+
+    loja = LOJA_DO_SITE_DE_RESERVAS
+    dia = dia_operacional_de(momento.isoformat(timespec='minutes'), hora_virada_da_loja(loja))
+    teto = lugares_por_dia_da_loja(loja)
+    ocupados = lugares_reservados_no_dia(loja, dia)
+    livres = max(0, teto - ocupados)
+    return jsonify({
+        "data": data,
+        "dia": dia,
+        "teto": teto,
+        "livres": livres,
+        # `aceita` já embute o mínimo: sobrar 3 lugares num formulário que
+        # só aceita grupo de 5 é o mesmo que não sobrar nada.
+        "aceita": livres >= MINIMO_PESSOAS_NO_SITE,
+        "minimo": MINIMO_PESSOAS_NO_SITE,
+        "maximo": min(MAXIMO_PESSOAS_NO_SITE, livres),
+    })
+
+@app.route('/api/reservas/publica', methods=['POST'])
+def api_criar_reserva_publica():
+    """A reserva que o próprio cliente faz, pela página do restaurante.
+
+    Nasce como *pendente*, nunca confirmada: quem confirma é a casa, que
+    é quem sabe se ainda tem mesa. A página promete retorno por mensagem,
+    e é essa promessa que o pendente representa."""
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get('nome') or '').strip()
+    telefone = (dados.get('telefone') or '').strip()
+    quando = (dados.get('quando') or '').strip()
+
+    digitos = re.sub(r"\D", "", telefone)
+    if len(digitos) < 10:
+        return jsonify({"erro": "Deixa um telefone com DDD pra gente confirmar."}), 400
+
+    if _reserva_publica_bloqueada([_ip_de_quem_chamou(), "tel:" + digitos]):
+        return jsonify({
+            "erro": "Já recebemos seus pedidos de reserva. Se precisar de mais, chama a gente no WhatsApp."
+        }), 429
+
+    try:
+        pessoas = int(dados.get('pessoas'))
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Diga quantas pessoas vão."}), 400
+    if pessoas < MINIMO_PESSOAS_NO_SITE:
+        return jsonify({"erro":
+            "O formulário é pra grupo de %d pessoas ou mais. Pra menos que isso, "
+            "pode chegar direto que a gente dá um jeito." % MINIMO_PESSOAS_NO_SITE}), 400
+    if pessoas > MAXIMO_PESSOAS_NO_SITE:
+        return jsonify({"erro":
+            "Pelo site dá pra reservar até %d pessoas. Pra grupo maior, chama a gente "
+            "no WhatsApp que a casa organiza." % MAXIMO_PESSOAS_NO_SITE}), 400
+
+    try:
+        momento = datetime.fromisoformat(quando)
+    except (TypeError, ValueError):
+        return jsonify({"erro": "Escolha a data e o horário da reserva."}), 400
+    agora = datetime.now()
+    if momento < agora:
+        return jsonify({"erro": "Essa data já passou. Escolha uma data daqui pra frente."}), 400
+    if momento > agora + timedelta(days=DIAS_MAXIMOS_DE_ANTECEDENCIA):
+        return jsonify({
+            "erro": "Só dá pra reservar com até %d dias de antecedência." % DIAS_MAXIMOS_DE_ANTECEDENCIA
+        }), 400
+
+    try:
+        reserva_id = criar_reserva(
+            loja=LOJA_DO_SITE_DE_RESERVAS,
+            nome=nome,
+            pessoas=pessoas,
+            quando_iso=momento.isoformat(timespec="minutes"),
+            telefone=telefone,
+            observacao=(dados.get('observacao') or '').strip(),
+            origem="site",
+            status="pendente",
+            criado_por=None,
+            respeitar_limite=True,
+        )
+    except LotacaoEsgotada as cheio:
+        # 409 e não 400: o pedido estava certo, o dia é que encheu. A
+        # página usa os lugares que sobraram pra sugerir o que fazer.
+        return jsonify({"erro": str(cheio), "lotado": True,
+                        "livres": cheio.livres}), 409
+    except ValueError as erro:
+        return jsonify({"erro": str(erro)}), 400
+
+    reserva = buscar_reserva(reserva_id)
+    # De volta vai só o que a página precisa pra dizer "deu certo". O resto
+    # da reserva é assunto de dentro de casa.
+    return jsonify({
+        "ok": True,
+        "nome": reserva["nome"],
+        "pessoas": reserva["pessoas"],
+        "quando": reserva["quando"],
+    }), 201
 
 
 @app.route('/api/reservas/<int:reserva_id>', methods=['PUT'])
