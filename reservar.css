@@ -25,11 +25,14 @@ html { scroll-behavior: smooth; }
    lugares diferentes do arquivo, e repetir o nome da fonte em quatro
    lugares é garantir que um deles fique pra trás na próxima troca.
 
-   Syne NÃO tem itálico de verdade. Onde o destaque era inclinação, ele
-   passou a ser peso + cor: inclinação sintética numa display geométrica
-   como essa entorta os terminais e parece defeito. */
+   Anton não tem itálico nem outros pesos: é uma fonte de um corte só, e
+   já nasce pesada. Por isso os títulos pedem peso 400 — pedir 800 faria o
+   navegador ENGROSSAR à força uma letra que já é grossa, e o resultado
+   borra os vazios das letras. Pelo mesmo motivo o destaque é cor, não
+   inclinação. */
 :root {
-  --fonte-titulo: 'Syne', 'Trebuchet MS', sans-serif;
+  --fonte-titulo: 'Anton', 'Arial Narrow', 'Haettenschweiler', sans-serif;
+  --peso-titulo: 400;
 }
 
 body {
@@ -53,10 +56,10 @@ img { max-width: 100%; display: block; }
 /* ---------- tipos ---------- */
 .titulo-display {
   font-family: var(--fonte-titulo);
-  font-weight: 800;
-  font-size: clamp(1.85rem, 4.8vw, 3.4rem);
-  line-height: 1.1;
-  letter-spacing: -0.025em;
+  font-weight: var(--peso-titulo);
+  font-size: clamp(2.3rem, 6.2vw, 4.4rem);
+  line-height: 1.08;
+  letter-spacing: 0;
   color: var(--marrom-forte);
   margin: 0 0 1.25rem;
   text-wrap: balance;
@@ -209,10 +212,10 @@ main section[id] { scroll-margin-top: 5rem; }
 .titulo-hero {
   margin: 0;
   font-family: var(--fonte-titulo);
-  font-weight: 800;
-  font-size: clamp(2.2rem, 7.4vw, 5.4rem);
+  font-weight: var(--peso-titulo);
+  font-size: clamp(2.9rem, 10vw, 7.5rem);
   line-height: 1;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.005em;
   color: var(--papel);
 }
 
@@ -235,10 +238,10 @@ main section[id] { scroll-margin-top: 5rem; }
   margin: 0.35rem 0 0;
   font-family: var(--fonte-titulo);
   font-style: normal;
-  font-weight: 700;
-  font-size: clamp(1.15rem, 2.9vw, 2.1rem);
+  font-weight: var(--peso-titulo);
+  font-size: clamp(1.4rem, 3.7vw, 2.7rem);
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--creme-fraco);
 }
 
@@ -367,8 +370,8 @@ main section[id] { scroll-margin-top: 5rem; }
 .numero strong {
   display: block;
   font-family: var(--fonte-titulo);
-  font-size: clamp(1.6rem, 3vw, 2.25rem);
-  font-weight: 800;
+  font-size: clamp(1.75rem, 3.3vw, 2.5rem);
+  font-weight: var(--peso-titulo);
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--marrom-forte);
