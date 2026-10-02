@@ -456,11 +456,33 @@ main section[id] { scroll-margin-top: 5.5rem; }
 /* ---------- reservas ---------- */
 
 .reservas {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--respiro);
   align-items: start;
   padding: clamp(3rem, 7vw, 5.5rem) var(--margem) clamp(4rem, 8vw, 6rem);
+}
+/* O ladrilho da marca também aqui, no lugar de uma foto de fundo: a faixa
+   de Informações logo acima já é escura com foto, e duas seções escuras
+   coladas viram uma mancha só — a fachada perderia o momento dela.
+   Textura resolve sem escurecer.
+
+   12% e não os 15% de "A casa": aqui o padrão fica atrás de rótulo de
+   12px, e a 15% o contraste deles cai pra beira do mínimo. Esta seção tem
+   mais texto pequeno que qualquer outra. */
+.reservas::before {
+  content: '';
+  position: absolute;
+  inset: -25%;
+  z-index: -1;
+  background: url('imgs/artesanos-ladrilho.png') repeat;
+  background-size: 265px auto;
+  transform: rotate(-6deg);
+  opacity: .12;
+  pointer-events: none;
 }
 .reservas-chamada { 
   position: sticky; 
@@ -681,7 +703,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
 }
 
 @media (max-width: 480px) {
-  .casa::before { background-size: 185px auto; }
+  .casa::before, .reservas::before { background-size: 185px auto; }
   .campo-dupla { grid-template-columns: 1fr; }
   /* Em tela bem estreita a pílula vira duas linhas, e a divisória
      vertical entre elas ficaria atravessada. */
