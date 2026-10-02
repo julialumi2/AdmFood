@@ -99,14 +99,9 @@ img { max-width: 100%; display: block; }
 
 /* ---------- topo ---------- */
 
-/* Ilha flutuante com vidro fosco. O que faz o vidro funcionar não é o
-   blur: é o conteúdo passar POR BAIXO. Por isso ela encolheu em largura e
-   descolou do topo — grudada na borda e ocupando a tela inteira, não teria
-   o que desfocar.
-
-   72% de opacidade não é estética: abaixo disso o marrom do hero vaza o
-   bastante pra derrubar o contraste do menu. Nesse valor ele fica em
-   ~7:1 no pior caso, que é a faixa passando por cima do hero escuro. */
+/* Ilha flutuante, sólida. Teve vidro fosco por um commit e ela não quis —
+   o fundo é chapado de novo, e com isso o contraste do menu volta pro
+   máximo da paleta em vez de depender do que passa por baixo. */
 .topo {
   position: sticky;
   top: clamp(8px, 1.4vw, 16px);
@@ -119,15 +114,8 @@ img { max-width: 100%; display: block; }
   padding: 0.45rem 0.45rem 0.45rem 1.15rem;
   border: 1px solid color-mix(in srgb, var(--marrom) 14%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--papel) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.6);
-  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  background: var(--papel);
   box-shadow: 0 6px 26px rgba(79, 38, 18, .12);
-}
-/* Sem backdrop-filter, o fundo translúcido vira só um painel desbotado
-   com o hero aparecendo por trás. Aí ele fecha. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .topo { background: var(--papel); }
 }
 
 .marca {
