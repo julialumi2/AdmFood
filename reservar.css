@@ -182,14 +182,14 @@ main section[id] { scroll-margin-top: 5.5rem; }
    janela, ela nunca passa do que cabe na primeira olhada. */
 .foto {
   margin: 0;
-  height: min(58vh, 480px);
-  aspect-ratio: 4 / 5;
+  height: min(50vh, 400px);
+  aspect-ratio: 4 / 3;
   width: auto;
   border-radius: var(--curva);
   overflow: hidden;
   background: var(--marrom-leve);
 }
-.foto img { width: 100%; height: 100%; object-fit: cover; }
+.foto img { width: 100%; height: 100%; object-fit: cover; object-position: center 42%; }
 /* Sem o arquivo, vira um bloco da cor da casa em vez de ícone quebrado. */
 .foto.sem-foto {
   background: var(--marrom-leve);
