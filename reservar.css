@@ -94,30 +94,51 @@ img { max-width: 100%; display: block; }
 .btn:active { transform: translateY(1px); }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 .btn-largo { width: 100%; padding: 1.1rem; font-size: 1.05rem; }
+/* O botão da faixa é menor: era ele que mandava na altura dela. */
+.btn-topo { padding: 0.6rem 1.35rem; font-size: 0.92rem; }
 
 /* ---------- topo ---------- */
 
+/* Ilha flutuante com vidro fosco. O que faz o vidro funcionar não é o
+   blur: é o conteúdo passar POR BAIXO. Por isso ela encolheu em largura e
+   descolou do topo — grudada na borda e ocupando a tela inteira, não teria
+   o que desfocar.
+
+   72% de opacidade não é estética: abaixo disso o marrom do hero vaza o
+   bastante pra derrubar o contraste do menu. Nesse valor ele fica em
+   ~7:1 no pior caso, que é a faixa passando por cima do hero escuro. */
 .topo {
   position: sticky;
-  top: 0;
+  top: clamp(8px, 1.4vw, 16px);
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem var(--margem);
-  background: var(--papel);
-  border-bottom: 1px solid var(--marrom-leve);
+  gap: 1.25rem;
+  width: min(100% - 2 * var(--margem), 72rem);
+  margin: clamp(8px, 1.4vw, 16px) auto 0;
+  padding: 0.45rem 0.45rem 0.45rem 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--marrom) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--papel) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  box-shadow: 0 6px 26px rgba(79, 38, 18, .12);
+}
+/* Sem backdrop-filter, o fundo translúcido vira só um painel desbotado
+   com o hero aparecendo por trás. Aí ele fecha. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topo { background: var(--papel); }
 }
 
 .marca {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   text-decoration: none;
   margin-right: auto;
 }
-.marca-desenho { height: 34px; width: auto; }
-.marca-escrita { height: 24px; width: auto; }
+.marca-desenho { height: 27px; width: auto; }
+.marca-escrita { height: 19px; width: auto; }
 /* O "art." em Poppins só entra quando o recorte da logo não carregou. A
    escrita deles é desenho, não fonte — então ela só serve de rede. */
 .marca-nome {
@@ -128,7 +149,7 @@ img { max-width: 100%; display: block; }
 }
 .marca-escrita + .marca-nome { display: none; }
 
-.topo-menu { display: flex; gap: 1.75rem; }
+.topo-menu { display: flex; gap: 1.5rem; font-size: 0.95rem; }
 .topo-menu a {
   color: var(--marrom);
   text-decoration: none;
@@ -140,7 +161,7 @@ img { max-width: 100%; display: block; }
 
 /* O topo é fixo: sem isso, o link do menu para a seção com o título já
    por baixo da faixa. */
-main section[id] { scroll-margin-top: 5.5rem; }
+main section[id] { scroll-margin-top: 5rem; }
 
 /* ---------- hero ---------- */
 
@@ -445,7 +466,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
 }
 .reservas-chamada { 
   position: sticky; 
-  top: 6rem; 
+  top: 5.5rem; 
 }
 .reservas-chamada .apoio { 
   margin-bottom: 1rem; 
@@ -670,5 +691,4 @@ main section[id] { scroll-margin-top: 5.5rem; }
   .numeros { flex-direction: column; border-radius: var(--curva); }
   .numero span { max-width: none; }
   .hero-botoes .btn { width: 100%; }
-  .btn-topo { padding: 0.75rem 1.25rem; }
 }
