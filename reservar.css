@@ -152,13 +152,6 @@ img { max-width: 100%; display: block; }
 main section[id] { scroll-margin-top: 5rem; }
 
 /* ---------- hero ---------- */
-
-/* Centralizado e empilhado, como as referências que ela mandou: o título
-   manda, o prato pousa em cima dele, o resto vem embaixo. */
-/* O hero é marrom e a escrita é clara (escolha dela). Como na faixa de
-   Informações, claro e escuro trocam de lado — e cada coisa que tinha
-   cor precisa do par DESTE fundo, não do par da página: o rótulo, o
-   apoio, os dois botões e as três peças soltas da marca. */
 .hero {
   display: grid;
   justify-items: center;
@@ -599,7 +592,7 @@ main section[id] { scroll-margin-top: 5rem; }
 }
 .form-nota { margin: 0; font-size: 0.85rem; color: var(--marrom-fraco); text-align: center; }
 
-.reservas-ok { align-self: center; }
+
 .reservas-ok .form-nota { text-align: left; }
 
 /* As pílulas da ocasião. O radio de verdade continua lá, só invisível:
@@ -659,6 +652,114 @@ main section[id] { scroll-margin-top: 5rem; }
   color: var(--marrom-fraco);
 }
 .campo-rotulo .opcional { font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* ---------- o cartão do formulário ---------- */
+
+/* O formulário é uma ilha escura na página clara. As cores são as que ela
+   especificou, e ficam PRESAS a este bloco: lá dentro claro e escuro
+   trocam de lado, e espalhar esses valores pelo arquivo faria o resto da
+   página herdar uma paleta que não é dela. */
+.reservas-form,
+.reservas-ok {
+  --cartao:        var(--marrom);        /* o mesmo do hero e de Informações */
+  --cartao-campo:  var(--marrom-forte);  /* o fundo fundo, pros campos */
+  --cartao-borda:  color-mix(in srgb, var(--papel) 22%, var(--marrom));
+  --cartao-texto:  var(--papel);
+  --cartao-apoio:  var(--creme-fraco);
+  --cartao-destaque: #e0a996;            /* o terracota da especificação dela */
+  /* O vermelho da página dá menos de 3:1 em cima do marrom. O alerta aqui
+     precisa CLAREAR pra ser visto. */
+  --cartao-alerta: #ef8a74;
+
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+  border: 1px solid var(--cartao-borda);
+  border-radius: 26px;
+  background: var(--cartao);
+  color: var(--cartao-texto);
+  /* Sem isto, o calendário e o relógio nativos do campo de data saem
+     escuros em cima de escuro — some o ícone e some o seletor inteiro
+     quando abre. É a única forma de avisar o navegador. */
+  color-scheme: dark;
+}
+
+.reservas-form .campo label,
+.reservas-form .campo-rotulo,
+.reservas-form .campo-dica,
+.reservas-form .form-nota { color: var(--cartao-apoio); }
+
+.reservas-form .campo input {
+  border: 1px solid var(--cartao-borda);
+  border-radius: 12px;
+  background: var(--cartao-campo);
+  color: var(--cartao-texto);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.reservas-form .campo input::placeholder { color: var(--cartao-apoio); opacity: .7; }
+.reservas-form .campo input:hover { border-color: var(--cartao-apoio); }
+/* O anel é o que faz o foco aparecer sem engrossar a borda e empurrar o
+   campo meio pixel. */
+.reservas-form .campo input:focus {
+  border-color: var(--cartao-destaque);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cartao-destaque) 28%, transparent);
+  outline: none;
+}
+.reservas-form :focus-visible { outline-color: var(--cartao-destaque); }
+
+.reservas-form .ocasioes label {
+  border-color: var(--cartao-borda);
+  color: var(--cartao-apoio);
+}
+.reservas-form .ocasioes label:hover { border-color: var(--cartao-apoio); }
+.reservas-form .ocasioes input:checked + label {
+  background: var(--cartao-destaque);
+  border-color: var(--cartao-destaque);
+  color: var(--cartao);
+}
+.reservas-form .ocasioes input:focus-visible + label { outline-color: var(--cartao-destaque); }
+
+.reservas-form .presente {
+  border-left-color: var(--cartao-destaque);
+  color: var(--cartao-texto);
+}
+
+.reservas-form .vagas {
+  border-color: var(--cartao-borda);
+  background: var(--cartao-campo);
+}
+.reservas-form .vagas-rotulo { color: var(--cartao-texto); }
+.reservas-form .vagas-conta,
+.reservas-form .vagas-recado { color: var(--cartao-apoio); }
+.reservas-form .vagas-trilho { background: var(--cartao); }
+.reservas-form .vagas-ocupado { background: var(--cartao-destaque); }
+.reservas-form .vagas.vagas-lotado { border-color: var(--cartao-alerta); }
+.reservas-form .vagas.vagas-lotado .vagas-rotulo,
+.reservas-form .vagas.vagas-lotado .vagas-recado { color: var(--cartao-alerta); }
+.reservas-form .vagas.vagas-lotado .vagas-ocupado { background: var(--cartao-alerta); }
+
+.reservas-form .form-erro {
+  background: var(--cartao-alerta);
+  color: var(--cartao-campo);
+}
+
+/* O botão de enviar: largura cheia, terracota, texto escuro. */
+.reservas-form .btn-primario {
+  background: var(--cartao-destaque);
+  border-color: var(--cartao-destaque);
+  color: var(--cartao-campo);
+}
+.reservas-form .btn-primario:hover {
+  background: var(--cartao-texto);
+  border-color: var(--cartao-texto);
+  color: var(--cartao-campo);
+}
+
+/* O painel de "deu certo" é o mesmo cartão, então herda tudo. */
+.reservas-ok { align-self: start; }
+.reservas-ok .titulo-display { color: var(--cartao-apoio); }
+.reservas-ok .titulo-display em { color: var(--cartao-texto); }
+.reservas-ok .sobrancelha,
+.reservas-ok .apoio,
+.reservas-ok .form-nota { color: var(--cartao-apoio); }
 
 /* ---------- rodapé ---------- */
 
