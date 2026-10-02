@@ -266,13 +266,10 @@ main section[id] { scroll-margin-top: 5.5rem; }
 /* ---------- os rituais ---------- */
 
 .rituais {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  gap: var(--respiro);
-  align-items: start;
   padding: clamp(3rem, 6vw, 4.5rem) var(--margem);
   border-top: 1px solid var(--marrom-leve);
 }
+.rituais-chamada { margin-bottom: clamp(2rem, 4vw, 3rem); }
 .rituais-chamada .titulo-display { margin-bottom: 0; }
 
 .rituais-lista {
@@ -280,24 +277,40 @@ main section[id] { scroll-margin-top: 5.5rem; }
   padding: 0;
   list-style: none;
   display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--respiro);
+  align-items: start;
 }
-/* A linha entre um e outro é a separação — caixa aqui transformaria três
-   coisas da casa em três planos de assinatura. */
-.ritual {
-  display: grid;
-  gap: 0.35rem;
-  padding: 1.35rem 0;
-  border-top: 1px solid var(--marrom-leve);
+/* Sem caixa em volta: a imagem já delimita cada um, e borda por cima
+   disso só empilharia moldura. */
+.ritual { display: grid; gap: 0.5rem; }
+.ritual-foto {
+  margin: 0 0 0.5rem;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--curva);
+  overflow: hidden;
+  background: var(--marrom-leve);
 }
-.ritual:first-child { border-top: 0; padding-top: 0; }
-.ritual:last-child { padding-bottom: 0; }
+.ritual-foto img { width: 100%; height: 100%; object-fit: cover; }
+/* Sem o arquivo, o espaço vira o ladrilho da marca em vez de ícone
+   quebrado — o mesmo truque do hero enquanto a foto não chegava. */
+.ritual-foto.sem-foto { position: relative; background: var(--marrom-leve); }
+.ritual-foto.sem-foto img { display: none; }
+.ritual-foto.sem-foto::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('imgs/artesanos-ladrilho.png') repeat;
+  background-size: 150px auto;
+  opacity: .18;
+}
 .ritual-nome {
-  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--marrom-forte);
 }
-.ritual p { margin: 0; color: var(--marrom); }
+.ritual p { margin: 0; color: var(--marrom); font-size: 0.95rem; }
 
 /* ---------- informações ---------- */
 
@@ -513,7 +526,9 @@ main section[id] { scroll-margin-top: 5.5rem; }
 /* ---------- telas estreitas ---------- */
 
 @media (max-width: 900px) {
-  .hero, .casa, .reservas, .rituais { grid-template-columns: 1fr; }
+  .hero, .casa, .reservas { grid-template-columns: 1fr; }
+  .rituais-lista { grid-template-columns: 1fr; }
+  .ritual-foto { aspect-ratio: 3 / 2; }
   .hero { padding-top: clamp(2rem, 6vw, 3rem); }
   .casa .numeros { grid-template-columns: 1fr 1fr; }
   .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }
