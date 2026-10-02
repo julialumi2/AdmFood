@@ -272,6 +272,19 @@ main section[id] { scroll-margin-top: 5rem; }
 .titulo-eco em {
   font-style: normal;
   font-family: 'Archivo Black', 'Arial Black', sans-serif;
+  /* 1,441 = a razão entre as alturas-x das duas fontes. É ele que desfaz
+     o encolhimento da linha e deixa as duas palavras com a mesma altura
+     de letra — igualar o font-size não resolveria, porque fontes
+     diferentes põem alturas diferentes dentro do mesmo corpo.
+
+     A palavra está em minúsculo, então quem fica lado a lado é o "o" da
+     Anton com o "a" da Archivo: a conta é pela ALTURA-X, não pela
+     maiúscula (que daria 1,246).
+
+     O número saiu de medir numa tela LARGA. Medindo no corpo pequeno eu
+     tinha chegado a 1,325 e estava errado: a 12-13px o navegador arredonda
+     a altura pra inteiro, e o arredondamento virou 8% de erro. */
+  font-size: 1.441em;
   letter-spacing: -0.02em;
   color: var(--papel);
 }
@@ -280,8 +293,8 @@ main section[id] { scroll-margin-top: 5rem; }
   font-family: var(--fonte-titulo);
   font-style: normal;
   font-weight: var(--peso-titulo);
-  font-size: clamp(1.4rem, 3.7vw, 2.7rem);
-  line-height: 1.1;
+  font-size: clamp(0.98rem, 2.56vw, 1.88rem);
+  line-height: 1.35;
   letter-spacing: 0;
   color: var(--creme-fraco);
 }
