@@ -227,6 +227,7 @@
         telefone: telefone,
         pessoas: pessoas,
         quando: campoData.value + 'T' + campoHora.value,
+        ocasiao: ocasiaoEscolhida(),
         observacao: campoObs.value.trim()
       })
     })
@@ -250,6 +251,14 @@
         mostrarErro('A conexão falhou. Tenta de novo em instantes?');
       });
   });
+
+  /* Nada marcado é resposta válida: o campo é opcional, e mandar vazio é
+     melhor do que inventar um "Outro" que não diz nada pra quem lê a
+     agenda depois. */
+  function ocasiaoEscolhida() {
+    var marcado = form.querySelector('input[name="ocasiao"]:checked');
+    return marcado ? marcado.value : '';
+  }
 
   function celebrar(reserva) {
     var painel = document.getElementById('reserva-ok');

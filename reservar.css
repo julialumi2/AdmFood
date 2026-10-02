@@ -263,6 +263,42 @@ main section[id] { scroll-margin-top: 5.5rem; }
   color: var(--marrom-fraco);
 }
 
+/* ---------- os rituais ---------- */
+
+.rituais {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: var(--respiro);
+  align-items: start;
+  padding: clamp(3rem, 6vw, 4.5rem) var(--margem);
+  border-top: 1px solid var(--marrom-leve);
+}
+.rituais-chamada .titulo-display { margin-bottom: 0; }
+
+.rituais-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+/* A linha entre um e outro é a separação — caixa aqui transformaria três
+   coisas da casa em três planos de assinatura. */
+.ritual {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1.35rem 0;
+  border-top: 1px solid var(--marrom-leve);
+}
+.ritual:first-child { border-top: 0; padding-top: 0; }
+.ritual:last-child { padding-bottom: 0; }
+.ritual-nome {
+  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--marrom-forte);
+}
+.ritual p { margin: 0; color: var(--marrom); }
+
 /* ---------- informações ---------- */
 
 /* A faixa escura da página. Ela separa o que é contar história (hero e
@@ -299,8 +335,13 @@ main section[id] { scroll-margin-top: 5.5rem; }
   align-items: start;
   padding: clamp(3rem, 7vw, 5.5rem) var(--margem) clamp(4rem, 8vw, 6rem);
 }
-.reservas-chamada { position: sticky; top: 6rem; }
-.reservas-chamada .apoio { margin-bottom: 1rem; }
+.reservas-chamada { 
+  position: sticky; 
+  top: 6rem; 
+}
+.reservas-chamada .apoio { 
+  margin-bottom: 1rem; 
+}
 
 .reservas-form { display: grid; gap: 1.1rem; }
 
@@ -400,6 +441,54 @@ main section[id] { scroll-margin-top: 5.5rem; }
 .reservas-ok { align-self: center; }
 .reservas-ok .form-nota { text-align: left; }
 
+/* As pílulas da ocasião. O radio de verdade continua lá, só invisível:
+   é ele que dá navegação por teclado e agrupamento por `name` de graça —
+   coisas que uma div com clique teria que reinventar pior. */
+.ocasioes {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ocasioes input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.ocasioes label {
+  padding: 0.6rem 1.15rem;
+  border: 2px solid var(--marrom-leve);
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--marrom);
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+.ocasioes label:hover { border-color: var(--marrom-fraco); }
+.ocasioes input:checked + label {
+  background: var(--marrom);
+  border-color: var(--marrom);
+  color: var(--papel);
+}
+.ocasioes input:focus-visible + label {
+  outline: 3px solid var(--marrom);
+  outline-offset: 3px;
+}
+
+/* O rótulo do grupo não é <label>: ele não aponta pra um campo só. */
+.campo-rotulo {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--marrom-fraco);
+}
+.campo-rotulo .opcional { font-weight: 500; letter-spacing: 0; text-transform: none; }
+
 /* ---------- rodapé ---------- */
 
 .rodape {
@@ -413,11 +502,18 @@ main section[id] { scroll-margin-top: 5.5rem; }
   color: var(--marrom-fraco);
 }
 .rodape strong { font-weight: 900; color: var(--marrom); letter-spacing: -0.01em; }
+/* Como eles assinam tudo no Instagram. Fica por último, que é o lugar de
+   assinatura. */
+.assinatura {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--marrom);
+}
 
 /* ---------- telas estreitas ---------- */
 
 @media (max-width: 900px) {
-  .hero, .casa, .reservas { grid-template-columns: 1fr; }
+  .hero, .casa, .reservas, .rituais { grid-template-columns: 1fr; }
   .hero { padding-top: clamp(2rem, 6vw, 3rem); }
   .casa .numeros { grid-template-columns: 1fr 1fr; }
   .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }

@@ -3180,6 +3180,13 @@ LOJA_DO_SITE_DE_RESERVAS = "Hamburgueria Artesanos"
 MINIMO_PESSOAS_NO_SITE = 5
 MAXIMO_PESSOAS_NO_SITE = 40
 
+# Por que a pessoa está reservando. Lista fechada, e não texto livre:
+# é o que permite a casa olhar a agenda e ver quantos aniversários tem na
+# semana. Quem não se encaixa simplesmente não marca nada — por isso o
+# campo é opcional e não tem opção "Outro", que só encheria o banco de
+# linha sem informação.
+OCASIOES_DE_RESERVA = ("Aniversário", "Confraternização", "Encontro com amigos")
+
 RESERVAS_PUBLICAS_POR_JANELA = 3
 JANELA_RESERVA_PUBLICA_SEGUNDOS = 10 * 60
 # Reserva pra daqui a um ano é engano de digitação ou robô, não plano de
@@ -3283,6 +3290,15 @@ def api_disponibilidade_de_reserva():
         "maximo": min(MAXIMO_PESSOAS_NO_SITE, livres),
     })
 
+def _observacao_com_ocasiao(ocasiao, observacao):
+    """Junta a ocasião e o recado numa linha só.
+
+    A ocasião vem na frente porque é o que decide o preparo: quem lê a
+    agenda precisa ver "Aniversário" antes de "mesa perto da janela"."""
+    partes = [p for p in (ocasiao, (observacao or '').strip()) if p]
+    return " — ".join(partes)
+
+
 @app.route('/api/reservas/publica', methods=['POST'])
 def api_criar_reserva_publica():
     """A reserva que o próprio cliente faz, pela página do restaurante.
@@ -3303,6 +3319,10 @@ def api_criar_reserva_publica():
         return jsonify({
             "erro": "Já recebemos seus pedidos de reserva. Se precisar de mais, chama a gente no WhatsApp."
         }), 429
+
+    ocasiao = (dados.get('ocasiao') or '').strip()
+    if ocasiao and ocasiao not in OCASIOES_DE_RESERVA:
+        return jsonify({"erro": "Ocasião inválida."}), 400
 
     try:
         pessoas = int(dados.get('pessoas'))
@@ -3336,7 +3356,7 @@ def api_criar_reserva_publica():
             pessoas=pessoas,
             quando_iso=momento.isoformat(timespec="minutes"),
             telefone=telefone,
-            observacao=(dados.get('observacao') or '').strip(),
+            observacao=_observacao_com_ocasiao(ocasiao, dados.get('observacao')),
             origem="site",
             status="pendente",
             criado_por=None,

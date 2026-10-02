@@ -178,4 +178,35 @@ conferir("teto em branco volta pro padrão",
          gravar_lugares_por_dia(LOJA, ""), LUGARES_POR_DIA_PADRAO)
 conferir("e volta a valer o padrão", lugares_por_dia_da_loja(LOJA), LUGARES_POR_DIA_PADRAO)
 
+secao("9) a ocasião vem na frente da observação")
+# Quem lê a agenda precisa ver "Aniversário" antes de "mesa perto da
+# janela" — é a ocasião que decide o preparo.
+def pedir_com(ocasiao, observacao, dias=60):
+    liberar_o_limite_por_ip()
+    quando = (date.today() + timedelta(days=dias)).isoformat() + "T20:00"
+    r = anonimo().post("/api/reservas/publica", json={
+        "nome": "Quem Comemora", "telefone": "15999991111", "quando": quando,
+        "pessoas": MINIMO, "ocasiao": ocasiao, "observacao": observacao,
+    })
+    if r.status_code != 201:
+        return r.status_code
+    with mundo.conexao() as conn:
+        return conn.execute(
+            "SELECT observacao FROM reserva ORDER BY id DESC LIMIT 1"
+        ).fetchone()["observacao"]
+
+conferir("as duas coisas viram uma linha só",
+         pedir_com("Aniversário", "uma alérgica a amendoim", 60),
+         "Aniversário — uma alérgica a amendoim")
+conferir("só a ocasião não deixa travessão solto",
+         pedir_com("Confraternização", "", 61), "Confraternização")
+conferir("só a observação também não",
+         pedir_com("", "mesa perto da janela", 62), "mesa perto da janela")
+conferir("sem nada, fica vazio", pedir_com("", "", 63), "")
+conferir("ocasião fora da lista é recusada",
+         pedir_com("Reunião de negócios", "", 64), 400)
+# Lista fechada e não texto livre: é o que permite contar quantos
+# aniversários tem na semana sem ninguém ler recado a recado.
+conferir("a lista é curta de propósito", len(aplicacao.OCASIOES_DE_RESERVA), 3)
+
 terminar()

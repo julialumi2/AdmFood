@@ -80,6 +80,30 @@
       </div>
     </section>
 
+    <!-- OS RITUAIS -->
+    <section class="rituais" id="rituais">
+      <div class="rituais-chamada">
+        <span class="sobrancelha">Motivos</span>
+        <h2 class="titulo-display">Nem todo dia<br><em>é igual.</em></h2>
+      </div>
+      <!-- Lista e não cards: são três coisas da casa, não três planos de
+           assinatura. O que separa é a linha, não a caixa. -->
+      <ul class="rituais-lista">
+        <li class="ritual">
+          <span class="ritual-nome">#TERÇOUEMDOBRO</span>
+          <p>Carne em dobro toda terça. Vale no salão e no delivery.</p>
+        </li>
+        <li class="ritual">
+          <span class="ritual-nome">Combo casal</span>
+          <p data-conferir>O pedido que já vem pensado pra dois.</p>
+        </li>
+        <li class="ritual">
+          <span class="ritual-nome">Aniversário</span>
+          <p data-conferir>Marque a mesa e a casa entra na comemoração.</p>
+        </li>
+      </ul>
+    </section>
+
     <!-- INFORMAÇÕES -->
     <section class="informacoes" id="informacoes">
       <div class="info-card">
@@ -161,10 +185,25 @@
           </div>
         </div>
 
+        <!-- Sem opção "Outro" e sem nada marcado de início: quem não se
+             encaixa deixa em branco, e a casa não recebe uma agenda cheia
+             de "Outro" que não diz nada. -->
         <div class="campo">
-          <label for="r-obs">Observações <span class="opcional">(opcional)</span></label>
+          <span class="campo-rotulo">O que vamos comemorar? <span class="opcional">(opcional)</span></span>
+          <div class="ocasioes">
+            <input type="radio" id="oc-aniversario" name="ocasiao" value="Aniversário">
+            <label for="oc-aniversario">Aniversário</label>
+            <input type="radio" id="oc-confra" name="ocasiao" value="Confraternização">
+            <label for="oc-confra">Confraternização</label>
+            <input type="radio" id="oc-encontro" name="ocasiao" value="Encontro com amigos">
+            <label for="oc-encontro">Encontro com amigos</label>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="r-obs">Mais alguma coisa? <span class="opcional">(opcional)</span></label>
           <input id="r-obs" name="observacao" type="text" maxlength="200"
-                 placeholder="Aniversário, restrição alimentar, mesa perto da janela...">
+                 placeholder="Restrição alimentar, mesa perto da janela, bolo...">
         </div>
 
         <p class="form-erro" id="form-erro" role="alert" hidden></p>
@@ -193,6 +232,7 @@
   <footer class="rodape">
     <strong>Artesanos Burger</strong>
     <span>Av. Washington Luiz, 1382 · Sorocaba · SP</span>
+    <span class="assinatura">#SEUSMASHPREFERIDO</span>
   </footer>
 
   <script src="reservar.js"></script>
