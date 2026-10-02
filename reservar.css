@@ -14,6 +14,7 @@
   --marrom-forte:  #452219;  /* títulos e o que precisa pesar */
   --marrom-fraco:  #8a5d51;  /* apoio, rótulo, o que vem em segundo */
   --marrom-leve:   #f2ece8;  /* linha, campo, fundo de bloco */
+  --creme-fraco:   #d8c8c1;  /* o apoio DENTRO da faixa marrom */
   --alerta:        #b2301f;  /* lotado — convive com o marrom sem brigar */
 
   --respiro:       clamp(1.25rem, 4vw, 3rem);
@@ -264,20 +265,30 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 /* ---------- informações ---------- */
 
+/* A faixa escura da página. Ela separa o que é contar história (hero e
+   "A casa") do que é agir (o formulário), e é onde o marrom da marca
+   aparece como campo cheio e não só como letra.
+
+   Sem borda em cima: a troca de cor já é a separação, e uma linha clara
+   em cima do marrom seria sujeira. */
 .informacoes {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--respiro);
-  padding: clamp(2.5rem, 6vw, 4rem) var(--margem);
-  border-top: 1px solid var(--marrom-leve);
+  padding: clamp(3rem, 6vw, 4.5rem) var(--margem);
+  background: var(--marrom);
+  color: var(--papel);
 }
+/* Claro e escuro trocam de lado aqui dentro — cada cor precisa do par
+   da faixa, não do par da página. */
+.informacoes .sobrancelha { color: var(--creme-fraco); }
 .info-card p { margin: 0; font-weight: 500; }
 .info-card a {
-  color: var(--marrom);
+  color: var(--papel);
   text-decoration: none;
-  border-bottom: 1px solid var(--marrom-leve);
+  border-bottom: 1px solid var(--creme-fraco);
 }
-.info-card a:hover { border-bottom-color: var(--marrom); }
+.info-card a:hover { border-bottom-color: var(--papel); }
 
 /* ---------- reservas ---------- */
 
@@ -287,7 +298,6 @@ main section[id] { scroll-margin-top: 5.5rem; }
   gap: var(--respiro);
   align-items: start;
   padding: clamp(3rem, 7vw, 5.5rem) var(--margem) clamp(4rem, 8vw, 6rem);
-  border-top: 1px solid var(--marrom-leve);
 }
 .reservas-chamada { position: sticky; top: 6rem; }
 .reservas-chamada .apoio { margin-bottom: 1rem; }
