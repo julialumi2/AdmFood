@@ -575,8 +575,26 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 @media (max-width: 900px) {
   .casa, .reservas { grid-template-columns: 1fr; }
-  .rituais-lista { grid-template-columns: 1fr; }
-  .ritual-foto { aspect-ratio: 3 / 2; }
+  /* Carrossel no lugar da pilha. O card ocupa 78% e não 100%: o pedaço
+     do próximo espiando na borda é o que avisa que desliza — sem ele a
+     pessoa vê um card e acha que acabou.
+     As margens negativas sangram até a borda da tela, senão o card
+     "espiando" pararia na margem e pareceria cortado por engano. */
+  .rituais-lista {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 78%;
+    gap: 0.9rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin-inline: calc(var(--margem) * -1);
+    padding-inline: var(--margem);
+    scroll-padding-inline: var(--margem);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .rituais-lista::-webkit-scrollbar { display: none; }
+  .ritual { scroll-snap-align: start; }
   .casa .numeros { grid-template-columns: 1fr 1fr; }
   .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }
   .reservas-chamada { position: static; }
