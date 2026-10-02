@@ -115,6 +115,9 @@
     if (parseInt(campoPessoas.value, 10) > maximo) {
       campoPessoas.value = Math.max(minimo, maximo);
     }
+    // O dia lotado encolhe o máximo, o máximo encolhe a mesa, e a mesa
+    // menor pode valer um presente menor. O recado tem que acompanhar.
+    atualizarPresente();
   }
 
   function consultarVagas() {
@@ -259,6 +262,60 @@
     var marcado = form.querySelector('input[name="ocasiao"]:checked');
     return marcado ? marcado.value : '';
   }
+
+  /* O "Niver no art." da casa, do destaque do Instagram deles:
+     traga +1 pagante e ganha milkshake, +5 um brownie, +10 lanche e
+     brownie.
+
+     `convidados` é gente ALÉM do aniversariante — é a leitura de "traga
+     +10 pagantes". Se a casa contar o aniversariante junto, é só baixar
+     os três números aqui; nada mais no arquivo depende deles. */
+  var PRESENTES_DE_NIVER = [
+    { convidados: 10, ganha: 'um lanche e um brownie da escolha dele' },
+    { convidados: 5,  ganha: 'um brownie da escolha dele' },
+    { convidados: 1,  ganha: 'um milkshake por conta da casa' }
+  ];
+
+  var recadoDoPresente = document.getElementById('presente-niver');
+
+  function faixaDoPresente(pessoas) {
+    var convidados = pessoas - 1;
+    for (var i = 0; i < PRESENTES_DE_NIVER.length; i++) {
+      if (convidados >= PRESENTES_DE_NIVER[i].convidados) {
+        return { agora: PRESENTES_DE_NIVER[i], acima: PRESENTES_DE_NIVER[i - 1] || null };
+      }
+    }
+    return null;
+  }
+
+  function atualizarPresente() {
+    if (!recadoDoPresente) return;
+    var pessoas = parseInt(campoPessoas.value, 10);
+    var faixa = ocasiaoEscolhida() === 'Aniversário' && pessoas
+      ? faixaDoPresente(pessoas) : null;
+
+    if (!faixa) {
+      recadoDoPresente.hidden = true;
+      return;
+    }
+
+    var texto = 'Com ' + plural(pessoas, 'pessoa', 'pessoas') +
+                ' na mesa, o aniversariante ganha ' + faixa.agora.ganha + '.';
+    // Só mostra o degrau de cima quando ele ainda cabe no que o
+    // formulário aceita — prometer um prêmio que precisa de 41 pessoas
+    // seria dizer "você não alcança".
+    if (faixa.acima && faixa.acima.convidados + 1 <= maximo) {
+      texto += ' A partir de ' + (faixa.acima.convidados + 1) +
+               ', ganha ' + faixa.acima.ganha + '.';
+    }
+    recadoDoPresente.textContent = texto;
+    recadoDoPresente.hidden = false;
+  }
+
+  form.addEventListener('change', function (evento) {
+    if (evento.target.name === 'ocasiao') atualizarPresente();
+  });
+  campoPessoas.addEventListener('input', atualizarPresente);
 
   function celebrar(reserva) {
     var painel = document.getElementById('reserva-ok');

@@ -492,6 +492,16 @@ main section[id] { scroll-margin-top: 5.5rem; }
   outline-offset: 3px;
 }
 
+/* O recado do "Niver no art.". Barra no lado em vez de caixa: ele é uma
+   consequência da escolha logo acima, não um bloco à parte. */
+.presente {
+  margin: 0.85rem 0 0;
+  padding: 0.15rem 0 0.15rem 0.9rem;
+  border-left: 3px solid var(--marrom);
+  font-size: 0.92rem;
+  color: var(--marrom-forte);
+}
+
 /* O rótulo do grupo não é <label>: ele não aponta pra um campo só. */
 .campo-rotulo {
   font-size: 0.78rem;
