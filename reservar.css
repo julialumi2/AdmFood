@@ -220,7 +220,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
   background: url('imgs/artesanos-ladrilho.png') repeat;
   background-size: 265px auto;
   transform: rotate(-6deg);
-  opacity: .08;
+  opacity: .15;
   pointer-events: none;
 }
 .casa-texto { min-width: 0; }
