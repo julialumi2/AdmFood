@@ -9,11 +9,11 @@
    O marrom veio medido do logo deles. Quando chegar o arquivo original,
    é esta linha que muda — nada mais no arquivo repete um hex. */
 :root {
-  --papel:         #ffffff;
+  --papel:         #fdfbf7;  /* creme, escolha dela — branco puro é frio demais pra marca */
   --marrom:        #794436;  /* a marca, medida do arquivo original */
   --marrom-forte:  #452219;  /* títulos e o que precisa pesar */
-  --marrom-fraco:  #a08279;  /* apoio, rótulo, o que vem em segundo */
-  --marrom-leve:   #f4ece9;  /* linha, campo, fundo de bloco */
+  --marrom-fraco:  #8a5d51;  /* apoio, rótulo, o que vem em segundo */
+  --marrom-leve:   #f2ece8;  /* linha, campo, fundo de bloco */
   --alerta:        #b2301f;  /* lotado — convive com o marrom sem brigar */
 
   --respiro:       clamp(1.25rem, 4vw, 3rem);
