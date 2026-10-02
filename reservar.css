@@ -95,7 +95,7 @@ img { max-width: 100%; display: block; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 .btn-largo { width: 100%; padding: 1.1rem; font-size: 1.05rem; }
 /* O botão da faixa é menor: era ele que mandava na altura dela. */
-.btn-topo { padding: 0.6rem 1.35rem; font-size: 0.92rem; justify-self: end; }
+.btn-topo { padding: 0.6rem 1.35rem; font-size: 0.92rem; }
 
 /* ---------- topo ---------- */
 
@@ -106,10 +106,7 @@ img { max-width: 100%; display: block; }
   position: sticky;
   top: clamp(8px, 1.4vw, 16px);
   z-index: 10;
-  /* Três colunas e não flex: só assim o menu fica no CENTRO da faixa, e
-     não no centro do que sobra entre a marca e o botão. */
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
   gap: 1.25rem;
   width: min(100% - 2 * var(--margem), 72rem);
@@ -126,7 +123,7 @@ img { max-width: 100%; display: block; }
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  justify-self: start;
+  margin-right: auto;
 }
 .marca-desenho { height: 27px; width: auto; }
 .marca-escrita { height: 19px; width: auto; }
@@ -140,7 +137,7 @@ img { max-width: 100%; display: block; }
 }
 .marca-escrita + .marca-nome { display: none; }
 
-.topo-menu { display: flex; gap: 1.5rem; font-size: 0.95rem; justify-self: center; }
+.topo-menu { display: flex; gap: 1.5rem; font-size: 0.95rem; }
 .topo-menu a {
   color: var(--marrom);
   text-decoration: none;
@@ -155,123 +152,170 @@ img { max-width: 100%; display: block; }
 main section[id] { scroll-margin-top: 5rem; }
 
 /* ---------- hero ---------- */
-
-/* Off-white quente, não branco puro: a página toda é creme, e branco puro
-   no meio dela leria como buraco e não como respiro. */
 .hero {
-  position: relative;
-  overflow: hidden;
+  display: grid;
+  justify-items: center;
   text-align: center;
-  background: #faf8f5;
-  color: var(--marrom);
-  padding: clamp(6rem, 9vw, 7.5rem) var(--margem) clamp(12rem, 25vw, 18rem);
+  padding: clamp(2rem, 4vw, 3.25rem) var(--margem) clamp(3rem, 5.5vw, 4.25rem);
+  background: var(--marrom);
+  color: var(--papel);
 }
-.hero .sobrancelha { color: var(--marrom-fraco); margin-bottom: 0.75rem; }
-.hero .apoio { margin: 0 auto 2rem; max-width: 44ch; color: var(--marrom-fraco); }
+.hero .sobrancelha { margin-bottom: 0.5rem; color: var(--creme-fraco); }
+.hero .apoio { margin: 0 0 1.75rem; max-width: 46ch; color: var(--creme-fraco); }
 .hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
 
+/* O botão cheio era marrom em fundo claro; aqui ele sumiria no próprio
+   fundo. Inverte: creme cheio, e o contorno em creme. */
+.hero .btn-primario {
+  background: var(--papel);
+  border-color: var(--papel);
+  color: var(--marrom-forte);
+}
+.hero .btn-primario:hover {
+  background: var(--marrom-leve);
+  border-color: var(--marrom-leve);
+}
+.hero .btn-contorno { color: var(--papel); border-color: var(--papel); }
+.hero .btn-contorno:hover { background: rgba(255, 254, 217, .14); }
+.hero :focus-visible { outline-color: var(--papel); }
+
+/* O palco. `isolation` prende o empilhamento aqui dentro: sem isso o
+   z-index do prato competiria com o cabeçalho fixo. */
 .hero-palco {
   position: relative;
-  z-index: 2;
+  isolation: isolate;
+  display: grid;
+  justify-items: center;
   width: 100%;
-  max-width: 56rem;
-  margin-inline: auto;
+  max-width: 62rem;
+  margin-bottom: clamp(1.25rem, 2.5vw, 2rem);
 }
 
-/* A serifa é só do título do hero. Espalhar ela pela página brigaria com
-   a Poppins que ela escolheu pro resto. */
 .titulo-hero {
-  margin: 0 0 1.25rem;
-  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-  font-weight: 600;
-  font-size: clamp(2.4rem, 6.5vw, 4.75rem);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
-  color: var(--marrom-forte);
-  text-wrap: balance;
+  margin: 0;
+  font-weight: 900;
+  font-size: clamp(2.8rem, 9.5vw, 7rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--papel);
 }
-.titulo-hero em { font-style: italic; font-weight: 700; color: var(--marrom); }
 
-/* O selo volta pro fluxo, abaixo dos botões: num hero centralizado não há
-   "lateral do prato" pra ele ocupar. */
+/* O prato fica no FLUXO, não solto: assim ele reserva o próprio espaço e
+   a linha de baixo nunca cai por cima dele. O que sobrepõe é a margem
+   negativa — só o terço de baixo do título, que é o quanto dá pra cobrir
+   sem trocar o efeito pela palavra. */
+.hero-lanche {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: clamp(190px, 25vw, 330px);
+  height: auto;
+  margin-top: clamp(-60px, -4.5vw, -22px);
+  filter: drop-shadow(0 20px 30px rgba(28, 12, 8, .45));
+  pointer-events: none;
+}
+
+.titulo-eco {
+  margin: 0.35rem 0 0;
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(1.35rem, 3.6vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--creme-fraco);
+}
+
+/* Os elementos soltos: a marca da casa no lugar dos cartões da
+   referência. Três e não oito — passou disso vira ruído em volta de um
+   título que é pra ser o que se lê primeiro. */
+.hero-solto {
+  position: absolute;
+  z-index: 1;
+  width: clamp(44px, 6vw, 78px);
+  height: auto;
+  opacity: .85;
+  pointer-events: none;
+}
+.hero-solto-esq   { left: -1%;  top: 6%;   transform: rotate(-16deg); }
+.hero-solto-dir   { right: 0;   top: 30%;  transform: rotate(13deg); }
+.hero-solto-baixo { right: 8%;  bottom: 2%; width: clamp(56px, 7vw, 96px); transform: rotate(-7deg); opacity: .5; }
+
+/* O selo de qualidade. Fica solto no palco e flutua em contratempo com o
+   prato — meio ciclo atrás —, pra os dois não subirem juntos e parecerem
+   uma coisa só balançando. */
 .hero-selo {
+  position: absolute;
+  z-index: 3;
+  right: 4%;
+  top: 52%;
   display: inline-flex;
   align-items: baseline;
   gap: 0.4rem;
-  margin-top: 1.5rem;
-  padding: 0.55rem 1.1rem;
-  border: 1px solid var(--marrom-leve);
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--creme-fraco);
   border-radius: 999px;
-  background: var(--papel);
-  color: var(--marrom);
-  font-size: 0.82rem;
+  background: var(--marrom-forte);
+  color: var(--papel);
+  font-size: 0.85rem;
   font-weight: 600;
   white-space: nowrap;
-  transform: rotate(-2deg);
-  animation: flutua-selo 5.5s ease-in-out 1.2s infinite;
+  transform: rotate(-5deg);
+  box-shadow: 0 10px 24px rgba(28, 12, 8, .45);
+  animation: flutua-selo 4.5s ease-in-out 3.2s infinite;
 }
-.hero-selo strong { font-weight: 800; font-size: 1rem; }
 /* Keyframes próprios: `transform` é uma propriedade só, e animar só o
    translate apagaria a rotação. */
 @keyframes flutua-selo {
-  0%, 100% { transform: rotate(-2deg) translateY(0); }
-  50%      { transform: rotate(-2deg) translateY(-7px); }
+  0%, 100% { transform: rotate(-5deg) translateY(0); }
+  50%      { transform: rotate(-5deg) translateY(-9px); }
+}
+.hero-selo strong { font-weight: 900; font-size: 1.05rem; }
+
+/* A entrada do hero. Um momento só, de pouco mais de um segundo: o
+   título sobe, o prato desce e POUSA no título — que é o movimento que a
+   composição já sugere parada — e o resto vem atrás.
+
+   `backwards` em vez de `opacity: 0` na regra base: assim o estado
+   escondido só existe enquanto a animação está pendente. Com movimento
+   reduzido ligado (a regra lá em cima desliga animação), tudo aparece
+   normal em vez de ficar preso em invisível — que é como página com
+   animação costuma sumir pra quem desligou. */
+@keyframes sobe-e-aparece {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+/* O prato não só desce: ele passa um pouco do ponto e volta. É o
+   assentar de um prato pousado na mesa, não um objeto deslizando. */
+@keyframes pousa {
+  0%   { opacity: 0; transform: translateY(-54px) scale(.94); }
+  65%  { opacity: 1; transform: translateY(7px) scale(1.01); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes so-aparece {
+  from { opacity: 0; }
 }
 
-/* Os ingredientes. Ritmos diferentes de propósito: três coisas subindo e
-   descendo no mesmo compasso viram um bloco balançando. */
-.hero-ingrediente {
-  position: absolute;
-  z-index: 1;
-  width: clamp(34px, 4.5vw, 58px);
-  height: auto;
-  color: var(--marrom-fraco);
-  opacity: .45;
-  pointer-events: none;
+.titulo-hero   { animation: sobe-e-aparece .55s ease-out backwards; }
+/* Duas animações no mesmo elemento: o pouso roda uma vez e a flutuação
+   assume quando ele termina (atraso = .15 + .8). As duas disputam a mesma
+   propriedade `transform`, e é o ATRASO que decide quem manda em cada
+   momento — sem ele a flutuação atropelaria o pouso desde o primeiro
+   quadro. */
+.hero-lanche {
+  animation:
+    pousa .8s cubic-bezier(.2, .72, .3, 1) .15s backwards,
+    flutua 4.5s ease-in-out .95s infinite;
 }
-.ing-tomate { left: 7%;  top: 17%;    animation: flutua 6s   ease-in-out infinite; }
-.ing-queijo { right: 8%; top: 29%;    animation: flutua 7.5s ease-in-out .8s infinite; }
-.ing-erva   { left: 13%; bottom: 28%; animation: flutua 6.8s ease-in-out 1.6s infinite; }
 @keyframes flutua {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-12px); }
+  50%      { transform: translateY(-11px); }
 }
-
-/* O prato, centralizado na base e saindo pela borda. A figure faz o
-   POSICIONAMENTO e a img faz a FLUTUAÇÃO: as duas mexem em `transform`, e
-   numa só uma apagaria a outra. */
-.hero-prato {
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  bottom: 0;
-  width: clamp(250px, 44vw, 520px);
-  margin: 0;
-  transform: translate(-50%, 17%);
-}
-.hero-prato img {
-  display: block;
-  width: 100%;
-  height: auto;
-  animation: flutua 5s ease-in-out infinite;
-  filter: drop-shadow(0 22px 26px rgba(79, 38, 18, .28));
-}
-/* A sombra de chão, separada do prato: ela fica parada enquanto ele sobe
-   e desce, que é o que dá a impressão de altura. Junto do prato, subiria
-   com ele e ele pareceria colado nela. */
-.hero-prato::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 15%;
-  width: 60%;
-  height: 20px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center,
-    rgba(79, 38, 18, .26) 0%, rgba(79, 38, 18, 0) 72%);
-  filter: blur(4px);
-}
+.titulo-eco    { animation: sobe-e-aparece .5s ease-out .42s backwards; }
+.hero .apoio   { animation: sobe-e-aparece .5s ease-out .54s backwards; }
+.hero-botoes   { animation: sobe-e-aparece .5s ease-out .64s backwards; }
+/* As peças soltas são decoração: entram por último e só desbotando, pra
+   não disputar atenção com o que precisa ser lido. */
+.hero-solto    { animation: so-aparece .7s ease-out .75s backwards; }
 
 /* ---------- a casa ---------- */
 
@@ -763,13 +807,23 @@ main section[id] { scroll-margin-top: 5rem; }
       rgba(79, 38, 18, .98) 100%);
   }
   .reservas-chamada { position: static; }
-  /* Sem o menu no meio, a faixa vira marca + botão nas pontas. */
-  .topo { grid-template-columns: 1fr auto; }
+  /* Na tela estreita o prato encolhe e os soltos saem: em volta de um
+     título que já ocupa a largura toda, eles viram sujeira. */
+  /* Largura já vem do clamp lá em cima — repetir aqui só criava uma
+     segunda verdade que brigava com a primeira. */
+  .hero-solto { display: none; }
+  /* O selo sai de cima do prato e desce pra baixo dele: lado a lado numa
+     tela estreita, os dois não cabem sem se sobrepor. */
+  .hero-selo {
+    position: static;
+    margin: 1rem auto 0;
+    transform: rotate(-3deg);
+  }
+  @keyframes flutua-selo {
+    0%, 100% { transform: rotate(-3deg) translateY(0); }
+    50%      { transform: rotate(-3deg) translateY(-7px); }
+  }
   .topo-menu { display: none; }
-  /* Os ingredientes saem: numa coluna estreita eles caem em cima do
-     título em vez de ficarem na lateral dele. */
-  .hero-ingrediente { display: none; }
-  .hero { padding-bottom: clamp(9rem, 46vw, 14rem); }
 }
 
 @media (max-width: 480px) {
