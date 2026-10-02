@@ -48,6 +48,7 @@ services:
       # O endereço público do sistema. Só o lembrete automático de
       # requisição usa: todo outro link é montado no navegador.
       - URL_PUBLICA=${URL_PUBLICA}
+      - HOST_DO_SITE_DE_RESERVAS=${HOST_DO_SITE_DE_RESERVAS}
 
       # Cópia diária do banco. Precisa do :-true: sem ele, variável não
       # definida no painel chegaria como vazia e desligaria o backup —

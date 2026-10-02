@@ -15,7 +15,7 @@ from flask import (
     send_file, send_from_directory, session,
 )
 
-from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO, GRUPO_WHATSAPP_LIDERANCA, URL_PUBLICA
+from config import LOJAS, SECRET_KEY, ADMIN_INICIAL_NOME, ADMIN_INICIAL_EMAIL, ADMIN_INICIAL_SENHA, EQUIPE_INICIAL_JSON, DADOS_FISCAIS_ESTADO, DADOS_FISCAIS_IMPRESSAO, GRUPO_WHATSAPP_LIDERANCA, URL_PUBLICA, HOST_DO_SITE_DE_RESERVAS
 from backend import whatsapp_bot
 from backend.armazenamento import (
     inicializar_banco,
@@ -723,7 +723,11 @@ def _exigir_login():
         return
 
     if caminho == '/' or caminho.endswith('.html'):
-        nome_pagina = 'index.html' if caminho == '/' else caminho.lstrip('/')
+        # A raiz do domínio de reservas é a landing, que é pública. Sem
+        # esta linha o visitante seria mandado pro login do sistema antes
+        # de a rota sequer rodar.
+        nome_pagina = ('reservar.html' if caminho == '/' and _veio_pelo_site_de_reservas()
+                       else 'index.html' if caminho == '/' else caminho.lstrip('/'))
         if nome_pagina in PAGINAS_PUBLICAS:
             return
         usuario = _usuario_logado()
@@ -1317,8 +1321,25 @@ EXTENSOES_PUBLICAS = {".html", ".css", ".js"}
 EXTENSOES_IMAGEM_PUBLICAS = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif", ".ico"}
 
 
+def _veio_pelo_site_de_reservas():
+    """True quando a requisição chegou pelo domínio da landing.
+
+    `request.host` traz a porta junto em desenvolvimento
+    ("localhost:5000"), e o cadastro do Dokploy nunca tem porta — por
+    isso a comparação derruba a porta dos dois lados. Sem isso, a
+    landing funcionaria em produção e não funcionaria aqui."""
+    if not HOST_DO_SITE_DE_RESERVAS:
+        return False
+    chegou = (request.host or "").lower().split(":")[0]
+    esperado = HOST_DO_SITE_DE_RESERVAS.split(":")[0]
+    return chegou == esperado
+
+
 @app.route('/')
 def home():
+    # No domínio da landing, a raiz é a landing. No resto, é o sistema.
+    if _veio_pelo_site_de_reservas():
+        return send_from_directory(DIRETORIO_BASE, 'reservar.html')
     return send_from_directory(DIRETORIO_BASE, 'index.html')
 
 

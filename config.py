@@ -157,6 +157,18 @@ GRUPO_WHATSAPP_LIDERANCA = os.environ.get("GRUPO_WHATSAPP_LIDERANCA", "").strip(
 # link não é melhor que nenhum.
 URL_PUBLICA = os.environ.get("URL_PUBLICA", "").strip().rstrip("/")
 
+# O endereço em que a landing de reservas atende, tipo
+# "reservas.artesanosburger.com.br". Mesmo app, mesmo container: o que
+# muda é só o domínio apontado pra cá no Dokploy.
+#
+# Existe porque, sem isso, quem digita o subdomínio cai na RAIZ do
+# sistema — ou seja, na tela de login do AdmFood. Com ele, a raiz desse
+# host serve a landing, e o cliente nunca vê que por trás é o mesmo app.
+#
+# Vazio desliga: sem o valor, a raiz continua sendo o sistema em
+# qualquer endereço, que é o comportamento de sempre.
+HOST_DO_SITE_DE_RESERVAS = os.environ.get("HOST_DO_SITE_DE_RESERVAS", "").strip().lower()
+
 
 # Dicionário com as configurações individuais de cada unidade/loja.
 LOJAS = {

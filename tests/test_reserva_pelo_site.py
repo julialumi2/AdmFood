@@ -209,4 +209,39 @@ conferir("ocasião fora da lista é recusada",
 # aniversários tem na semana sem ninguém ler recado a recado.
 conferir("a lista é curta de propósito", len(aplicacao.OCASIOES_DE_RESERVA), 3)
 
+secao("10) o domínio da landing serve a landing na raiz")
+# Mesmo app, mesmo container: o que separa é o domínio apontado no Dokploy.
+# Sem isso, quem digita reservas.artesanosburger.com.br cai na tela de
+# login do AdmFood — que é a última coisa que um cliente deveria ver.
+HOST = "reservas.artesanosburger.com.br"
+
+def abrir(caminho, host=None):
+    cabecalhos = {"Host": host} if host else {}
+    return anonimo().get(caminho, headers=cabecalhos)
+
+conferir("sem a variável, a raiz continua sendo o sistema",
+         abrir("/", HOST).status_code, 302)
+
+aplicacao.HOST_DO_SITE_DE_RESERVAS = HOST
+try:
+    r = abrir("/", HOST)
+    conferir("com a variável, a raiz do domínio de reservas abre direto",
+             r.status_code, 200)
+    conferir("e o que abre é a landing, não o sistema",
+             b"Reservar uma mesa" in r.data, True)
+    # A porta entra no Host em desenvolvimento e nunca no cadastro do
+    # Dokploy. Se a comparação não derrubasse a porta, a landing
+    # funcionaria em produção e não aqui.
+    conferir("a porta no Host não atrapalha",
+             abrir("/", HOST + ":5000").status_code, 200)
+    conferir("em outro domínio a raiz segue pedindo login",
+             abrir("/", "admfood.exemplo.com").status_code, 302)
+    conferir("e o caminho direto continua funcionando nos dois",
+             abrir("/reservar.html", HOST).status_code, 200)
+finally:
+    aplicacao.HOST_DO_SITE_DE_RESERVAS = ""
+
+conferir("desligada de novo, a raiz volta a pedir login",
+         abrir("/", HOST).status_code, 302)
+
 terminar()
