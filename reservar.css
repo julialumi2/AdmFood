@@ -10,7 +10,7 @@
    é esta linha que muda — nada mais no arquivo repete um hex. */
 :root {
   --papel:         #ffffff;
-  --marrom:        #784437;  /* a marca */
+  --marrom:        #794436;  /* a marca, medida do arquivo original */
   --marrom-forte:  #452219;  /* títulos e o que precisa pesar */
   --marrom-fraco:  #a08279;  /* apoio, rótulo, o que vem em segundo */
   --marrom-leve:   #f4ece9;  /* linha, campo, fundo de bloco */
@@ -129,16 +129,17 @@ img { max-width: 100%; display: block; }
   text-decoration: none;
   margin-right: auto;
 }
-.marca-logo { width: 42px; height: 42px; object-fit: contain; }
-/* O "art." escrito só aparece sozinho quando o arquivo do logo não
-   carregou — aí ele é a marca, e não uma legenda do desenho. */
+.marca-desenho { height: 34px; width: auto; }
+.marca-escrita { height: 24px; width: auto; }
+/* O "art." em Poppins só entra quando o recorte da logo não carregou. A
+   escrita deles é desenho, não fonte — então ela só serve de rede. */
 .marca-nome {
   font-weight: 900;
   font-size: 1.45rem;
   letter-spacing: -0.02em;
   color: var(--marrom);
 }
-.marca-logo + .marca-nome { display: none; }
+.marca-escrita + .marca-nome { display: none; }
 
 .topo-menu { display: flex; gap: 1.75rem; }
 .topo-menu a {
@@ -185,25 +186,42 @@ main section[id] { scroll-margin-top: 5.5rem; }
    o lugar já se explica sozinho. */
 .foto.sem-foto img { display: none; }
 .foto.sem-foto::after {
-  content: 'art.';
-  display: grid;
-  place-items: center;
+  content: '';
+  display: block;
   height: 100%;
-  font-weight: 900;
-  font-size: clamp(2.5rem, 7vw, 4.5rem);
-  letter-spacing: -0.02em;
-  color: var(--marrom-fraco);
+  background: url('imgs/artesanos-art.png') center / clamp(120px, 28%, 220px) no-repeat;
+  opacity: .25;
 }
 
 /* ---------- a casa ---------- */
 
 .casa {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1.3fr 0.7fr;
   gap: var(--respiro);
   align-items: center;
-  padding: clamp(2.5rem, 6vw, 5rem) var(--margem);
+  padding: clamp(3.5rem, 7vw, 6rem) var(--margem);
   border-top: 1px solid var(--marrom-leve);
+}
+/* O ladrilho da marca, montado do arquivo original deles: a escrita e o
+   desenho alternados, em encaixe de tijolo.
+   `inset` negativo + rotação: girar um fundo que se repete exige a camada
+   maior que a seção, senão a rotação descobre os cantos.
+   A opacidade é o volume — subir esse número é o que deixa o padrão mais
+   presente, e nada mais precisa mudar. */
+.casa::before {
+  content: '';
+  position: absolute;
+  inset: -25%;
+  z-index: -1;
+  background: url('imgs/artesanos-ladrilho.png') repeat;
+  background-size: 265px auto;
+  transform: rotate(-6deg);
+  opacity: .08;
+  pointer-events: none;
 }
 .casa-texto { min-width: 0; }
 .casa .apoio { margin-bottom: 0; }
@@ -212,7 +230,9 @@ main section[id] { scroll-margin-top: 5.5rem; }
 .numero-card {
   padding: 1.5rem;
   border-radius: var(--curva);
-  background: var(--marrom-leve);
+  border: 2px solid var(--marrom-leve);
+  background: color-mix(in srgb, var(--papel) 88%, transparent);
+  backdrop-filter: blur(2px);
 }
 .numero-card strong {
   display: block;
@@ -374,6 +394,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
 }
 
 @media (max-width: 480px) {
+  .casa::before { background-size: 185px auto; }
   .campo-dupla { grid-template-columns: 1fr; }
   .casa .numeros { grid-template-columns: 1fr; }
   .hero-botoes .btn { width: 100%; }
