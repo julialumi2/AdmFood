@@ -6,15 +6,20 @@
 
    A fonte é Poppins, escolha dela (02/10).
 
-   O marrom veio medido do logo deles. Quando chegar o arquivo original,
-   é esta linha que muda — nada mais no arquivo repete um hex. */
+   O par de cores é escolha dela. Os quatro tons do meio NÃO são
+   escolhidos à mão: saem de misturar esses dois, e por isso continuam na
+   mesma família se o par mudar de novo. Todos conferidos acima de 4,5:1
+   contra o fundo onde de fato aparecem.
+
+   Só o logo deles foge disso: o arquivo original é #794436, e repintar a
+   marca da casa pra combinar com a página seria mexer na marca. */
 :root {
-  --papel:         #fdfbf7;  /* creme, escolha dela — branco puro é frio demais pra marca */
-  --marrom:        #794436;  /* a marca, medida do arquivo original */
-  --marrom-forte:  #452219;  /* títulos e o que precisa pesar */
-  --marrom-fraco:  #8a5d51;  /* apoio, rótulo, o que vem em segundo */
-  --marrom-leve:   #f2ece8;  /* linha, campo, fundo de bloco */
-  --creme-fraco:   #d8c8c1;  /* o apoio DENTRO da faixa marrom */
+  --papel:         #fffed9;  /* o claro da paleta dela (02/10) */
+  --marrom:        #4f2612;  /* o marrom da paleta dela (02/10) */
+  --marrom-forte:  #391b0d;  /* títulos e o que precisa pesar */
+  --marrom-fraco:  #7b5c44;  /* apoio, rótulo, o que vem em segundo */
+  --marrom-leve:   #f1edc9;  /* linha, campo, fundo de bloco */
+  --creme-fraco:   #cec2a1;  /* o apoio DENTRO do marrom */
   --alerta:        #b2301f;  /* lotado — convive com o marrom sem brigar */
 
   --respiro:       clamp(1.25rem, 4vw, 3rem);
@@ -160,15 +165,36 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 /* Centralizado e empilhado, como as referências que ela mandou: o título
    manda, o prato pousa em cima dele, o resto vem embaixo. */
+/* O hero é marrom e a escrita é clara (escolha dela). Como na faixa de
+   Informações, claro e escuro trocam de lado — e cada coisa que tinha
+   cor precisa do par DESTE fundo, não do par da página: o rótulo, o
+   apoio, os dois botões e as três peças soltas da marca. */
 .hero {
   display: grid;
   justify-items: center;
   text-align: center;
-  padding: clamp(1.5rem, 3vw, 2.5rem) var(--margem) clamp(2.5rem, 5vw, 3.5rem);
+  padding: clamp(2rem, 4vw, 3.25rem) var(--margem) clamp(3rem, 5.5vw, 4.25rem);
+  background: var(--marrom);
+  color: var(--papel);
 }
-.hero .sobrancelha { margin-bottom: 0.5rem; }
-.hero .apoio { margin: 0 0 1.75rem; max-width: 46ch; }
+.hero .sobrancelha { margin-bottom: 0.5rem; color: var(--creme-fraco); }
+.hero .apoio { margin: 0 0 1.75rem; max-width: 46ch; color: var(--creme-fraco); }
 .hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+
+/* O botão cheio era marrom em fundo claro; aqui ele sumiria no próprio
+   fundo. Inverte: creme cheio, e o contorno em creme. */
+.hero .btn-primario {
+  background: var(--papel);
+  border-color: var(--papel);
+  color: var(--marrom-forte);
+}
+.hero .btn-primario:hover {
+  background: var(--marrom-leve);
+  border-color: var(--marrom-leve);
+}
+.hero .btn-contorno { color: var(--papel); border-color: var(--papel); }
+.hero .btn-contorno:hover { background: rgba(255, 254, 217, .14); }
+.hero :focus-visible { outline-color: var(--papel); }
 
 /* O palco. `isolation` prende o empilhamento aqui dentro: sem isso o
    z-index do prato competiria com o cabeçalho fixo. */
@@ -188,7 +214,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
   font-size: clamp(2.8rem, 9.5vw, 7rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
-  color: var(--marrom-forte);
+  color: var(--papel);
 }
 
 /* O prato fica no FLUXO, não solto: assim ele reserva o próprio espaço e
@@ -202,7 +228,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
   width: clamp(190px, 25vw, 330px);
   height: auto;
   margin-top: clamp(-60px, -4.5vw, -22px);
-  filter: drop-shadow(0 18px 26px rgba(69, 34, 25, .22));
+  filter: drop-shadow(0 20px 30px rgba(28, 12, 8, .45));
   pointer-events: none;
 }
 
@@ -213,7 +239,7 @@ main section[id] { scroll-margin-top: 5.5rem; }
   font-size: clamp(1.35rem, 3.6vw, 2.6rem);
   line-height: 1.05;
   letter-spacing: -0.02em;
-  color: var(--marrom);
+  color: var(--creme-fraco);
 }
 
 /* Os elementos soltos: a marca da casa no lugar dos cartões da
@@ -231,19 +257,38 @@ main section[id] { scroll-margin-top: 5.5rem; }
 .hero-solto-dir   { right: 0;   top: 30%;  transform: rotate(13deg); }
 .hero-solto-baixo { right: 8%;  bottom: 2%; width: clamp(56px, 7vw, 96px); transform: rotate(-7deg); opacity: .5; }
 
-/* A fachada, agora em faixa própria entre o hero e "A casa". */
-.fachada {
-  margin: 0;
-  padding: 0 var(--margem) clamp(2.5rem, 5vw, 4rem);
+/* A entrada do hero. Um momento só, de pouco mais de um segundo: o
+   título sobe, o prato desce e POUSA no título — que é o movimento que a
+   composição já sugere parada — e o resto vem atrás.
+
+   `backwards` em vez de `opacity: 0` na regra base: assim o estado
+   escondido só existe enquanto a animação está pendente. Com movimento
+   reduzido ligado (a regra lá em cima desliga animação), tudo aparece
+   normal em vez de ficar preso em invisível — que é como página com
+   animação costuma sumir pra quem desligou. */
+@keyframes sobe-e-aparece {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
 }
-.fachada img {
-  width: 100%;
-  height: clamp(220px, 38vh, 420px);
-  object-fit: cover;
-  object-position: center 42%;
-  border-radius: var(--curva);
+/* O prato não só desce: ele passa um pouco do ponto e volta. É o
+   assentar de um prato pousado na mesa, não um objeto deslizando. */
+@keyframes pousa {
+  0%   { opacity: 0; transform: translateY(-54px) scale(.94); }
+  65%  { opacity: 1; transform: translateY(7px) scale(1.01); }
+  100% { opacity: 1; transform: none; }
 }
-.fachada.sem-foto img { display: none; }
+@keyframes so-aparece {
+  from { opacity: 0; }
+}
+
+.titulo-hero   { animation: sobe-e-aparece .55s ease-out backwards; }
+.hero-lanche   { animation: pousa .8s cubic-bezier(.2, .72, .3, 1) .15s backwards; }
+.titulo-eco    { animation: sobe-e-aparece .5s ease-out .42s backwards; }
+.hero .apoio   { animation: sobe-e-aparece .5s ease-out .54s backwards; }
+.hero-botoes   { animation: sobe-e-aparece .5s ease-out .64s backwards; }
+/* As peças soltas são decoração: entram por último e só desbotando, pra
+   não disputar atenção com o que precisa ser lido. */
+.hero-solto    { animation: so-aparece .7s ease-out .75s backwards; }
 
 /* ---------- a casa ---------- */
 
@@ -252,8 +297,8 @@ main section[id] { scroll-margin-top: 5.5rem; }
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 1.3fr 0.7fr;
-  gap: var(--respiro);
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(2rem, 5vw, 4.5rem);
   align-items: center;
   padding: clamp(3.5rem, 7vw, 6rem) var(--margem);
   border-top: 1px solid var(--marrom-leve);
@@ -276,79 +321,80 @@ main section[id] { scroll-margin-top: 5.5rem; }
   pointer-events: none;
 }
 .casa-texto { min-width: 0; }
-.casa .apoio { margin-bottom: 0; }
+.casa .apoio { margin-bottom: clamp(1.5rem, 3vw, 2.25rem); }
 
-.numeros { display: grid; gap: 1rem; }
-.numero-card {
-  padding: 1.5rem;
-  border-radius: var(--curva);
+/* Os números numa pílula só, divididos por uma linha — o layout da
+   referência dela. A divisória é borda do item, não elemento à parte:
+   assim o primeiro nunca ganha uma linha solta na frente. */
+.numeros {
+  display: inline-flex;
+  flex-wrap: wrap;
   border: 2px solid var(--marrom-leve);
-  background: color-mix(in srgb, var(--papel) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--papel) 85%, transparent);
   backdrop-filter: blur(2px);
+  overflow: hidden;
 }
-.numero-card strong {
+.numero {
+  padding: 1rem clamp(1.25rem, 2.5vw, 2rem);
+  text-align: center;
+}
+.numero + .numero { border-left: 2px solid var(--marrom-leve); }
+.numero strong {
   display: block;
-  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-size: clamp(1.6rem, 3vw, 2.25rem);
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--marrom-forte);
 }
-.numero-card span {
+.numero span {
   display: block;
-  margin-top: 0.4rem;
-  font-size: 0.9rem;
+  margin-top: 0.3rem;
+  max-width: 16ch;
+  font-size: 0.82rem;
   color: var(--marrom-fraco);
 }
 
-/* ---------- os rituais ---------- */
-
-.rituais {
-  padding: clamp(3rem, 6vw, 4.5rem) var(--margem);
-  border-top: 1px solid var(--marrom-leve);
+/* As duas fotos: a grande manda no espaço, a pequena pousa no canto e
+   sai pra fora dele. O `padding` embaixo e à esquerda é o que reserva o
+   lugar da que sobra — sem ele a pequena sairia da seção. */
+.casa-fotos {
+  position: relative;
+  padding: 0 0 clamp(2.5rem, 6vw, 4rem) clamp(2rem, 5vw, 3.5rem);
 }
-.rituais-chamada { margin-bottom: clamp(2rem, 4vw, 3rem); }
-.rituais-chamada .titulo-display { margin-bottom: 0; }
-
-.rituais-lista {
+.casa-foto {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--respiro);
-  align-items: start;
-}
-/* Sem caixa em volta: a imagem já delimita cada um, e borda por cima
-   disso só empilharia moldura. */
-.ritual { display: grid; gap: 0.5rem; }
-.ritual-foto {
-  margin: 0 0 0.5rem;
-  aspect-ratio: 4 / 5;
-  border-radius: var(--curva);
   overflow: hidden;
-  background: var(--marrom-leve);
+  border-radius: var(--curva);
+  background: var(--marrom-forte);
 }
-.ritual-foto img { width: 100%; height: 100%; object-fit: cover; }
-/* Sem o arquivo, o espaço vira o ladrilho da marca em vez de ícone
-   quebrado — o mesmo truque do hero enquanto a foto não chegava. */
-.ritual-foto.sem-foto { position: relative; background: var(--marrom-leve); }
-.ritual-foto.sem-foto img { display: none; }
-.ritual-foto.sem-foto::after {
+.casa-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.casa-foto-grande { aspect-ratio: 4 / 3; }
+.casa-foto-pequena {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 46%;
+  aspect-ratio: 1 / 1;
+  /* A borda na cor da página é o que separa uma foto da outra sem
+     precisar de sombra. */
+  border: 6px solid var(--papel);
+  border-radius: calc(var(--curva) + 4px);
+}
+/* Sem o arquivo, o quadro vira o ladrilho da marca em vez de ícone
+   quebrado — o mesmo que o hero fez enquanto a foto não chegava. */
+.casa-foto.sem-foto { position: relative; background: var(--marrom-leve); }
+.casa-foto.sem-foto img { display: none; }
+.casa-foto.sem-foto::after {
   content: '';
   position: absolute;
   inset: 0;
   background: url('imgs/artesanos-ladrilho.png') repeat;
   background-size: 150px auto;
-  opacity: .18;
+  opacity: .3;
 }
-.ritual-nome {
-  font-size: clamp(1.1rem, 2vw, 1.35rem);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--marrom-forte);
-}
-.ritual p { margin: 0; color: var(--marrom); font-size: 0.95rem; }
+.casa-foto-pequena.sem-foto { position: absolute; }
 
 /* ---------- informações ---------- */
 
@@ -359,12 +405,41 @@ main section[id] { scroll-margin-top: 5.5rem; }
    Sem borda em cima: a troca de cor já é a separação, e uma linha clara
    em cima do marrom seria sujeira. */
 .informacoes {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--respiro);
-  padding: clamp(3rem, 6vw, 4.5rem) var(--margem);
+  /* O espaço de cima é grande de propósito: é por ele que o letreiro
+     "artesanos burger" aparece sem texto por cima. */
+  padding: clamp(10rem, 26vw, 19rem) var(--margem) clamp(3rem, 6vw, 4.5rem);
   background: var(--marrom);
   color: var(--papel);
+}
+/* A foto, por cima do marrom. */
+.informacoes::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: url('imgs/fachada.jpg') center 12% / cover no-repeat;
+  opacity: .72;
+}
+/* O véu. É ele que resolve o conflito entre "mostrar bem a fachada" e
+   "o texto tem que ser legível": transparente em cima, onde está o
+   letreiro, e quase marrom cheio embaixo, onde ficam os dados. Opacidade
+   única na foto inteira obrigaria a escolher um dos dois. */
+.informacoes::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to bottom,
+    rgba(79, 38, 18, .12) 0%,
+    rgba(79, 38, 18, .10) 34%,
+    rgba(79, 38, 18, .90) 62%,
+    rgba(79, 38, 18, .97) 100%);
 }
 /* Claro e escuro trocam de lado aqui dentro — cada cor precisa do par
    da faixa, não do par da página. */
@@ -575,28 +650,26 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 @media (max-width: 900px) {
   .casa, .reservas { grid-template-columns: 1fr; }
-  /* Carrossel no lugar da pilha. O card ocupa 78% e não 100%: o pedaço
-     do próximo espiando na borda é o que avisa que desliza — sem ele a
-     pessoa vê um card e acha que acabou.
-     As margens negativas sangram até a borda da tela, senão o card
-     "espiando" pararia na margem e pareceria cortado por engano. */
-  .rituais-lista {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: 78%;
-    gap: 0.9rem;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    margin-inline: calc(var(--margem) * -1);
-    padding-inline: var(--margem);
-    scroll-padding-inline: var(--margem);
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+  /* As fotos vão pro fim e a pílula ocupa a linha toda. */
+  .casa-fotos { padding-left: clamp(1.5rem, 8vw, 3rem); }
+  .numeros { display: flex; width: 100%; }
+  .numero { flex: 1; }
+  /* Em coluna única o texto empilha e sobe pela faixa inteira, entrando
+     na parte clara da foto. O véu então fecha mais cedo e mais forte, e a
+     fachada fica com o pedaço de cima — que é onde está o letreiro. */
+  .informacoes {
+    grid-template-columns: 1fr;
+    gap: 1.75rem;
+    padding-top: clamp(8rem, 38vw, 13rem);
   }
-  .rituais-lista::-webkit-scrollbar { display: none; }
-  .ritual { scroll-snap-align: start; }
-  .casa .numeros { grid-template-columns: 1fr 1fr; }
-  .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }
+  .informacoes::after {
+    background: linear-gradient(
+      to bottom,
+      rgba(79, 38, 18, .12) 0%,
+      rgba(79, 38, 18, .12) 18%,
+      rgba(79, 38, 18, .94) 36%,
+      rgba(79, 38, 18, .98) 100%);
+  }
   .reservas-chamada { position: static; }
   /* Na tela estreita o prato encolhe e os soltos saem: em volta de um
      título que já ocupa a largura toda, eles viram sujeira. */
@@ -609,7 +682,11 @@ main section[id] { scroll-margin-top: 5.5rem; }
 @media (max-width: 480px) {
   .casa::before { background-size: 185px auto; }
   .campo-dupla { grid-template-columns: 1fr; }
-  .casa .numeros { grid-template-columns: 1fr; }
+  /* Em tela bem estreita a pílula vira duas linhas, e a divisória
+     vertical entre elas ficaria atravessada. */
+  .numero + .numero { border-left: 0; border-top: 2px solid var(--marrom-leve); }
+  .numeros { flex-direction: column; border-radius: var(--curva); }
+  .numero span { max-width: none; }
   .hero-botoes .btn { width: 100%; }
   .btn-topo { padding: 0.75rem 1.25rem; }
 }

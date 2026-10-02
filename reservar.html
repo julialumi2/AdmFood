@@ -56,11 +56,11 @@
         <!-- Marca da casa girando em volta, no lugar dos cartões da
              referência. São decoração: aria-hidden pra leitor de tela não
              anunciar três imagens sem conteúdo. -->
-        <img class="hero-solto hero-solto-esq" src="imgs/artesanos-marca.png"
+        <img class="hero-solto hero-solto-esq" src="imgs/artesanos-marca-creme.png"
              alt="" aria-hidden="true" onerror="this.remove()">
-        <img class="hero-solto hero-solto-dir" src="imgs/artesanos-marca.png"
+        <img class="hero-solto hero-solto-dir" src="imgs/artesanos-marca-creme.png"
              alt="" aria-hidden="true" onerror="this.remove()">
-        <img class="hero-solto hero-solto-baixo" src="imgs/artesanos-art.png"
+        <img class="hero-solto hero-solto-baixo" src="imgs/artesanos-art-creme.png"
              alt="" aria-hidden="true" onerror="this.remove()">
       </div>
 
@@ -74,13 +74,6 @@
       </div>
     </section>
 
-    <!-- A fachada ganha faixa própria: ela é cena, não objeto, e dentro do
-         palco brigaria com o prato recortado. -->
-    <figure class="fachada">
-      <img src="imgs/fachada.jpg" alt="A fachada do Artesanos Burger à noite, com o letreiro aceso"
-           onerror="this.closest('.fachada').classList.add('sem-foto')">
-    </figure>
-
     <!-- A CASA -->
     <section class="casa" id="a-casa">
       <div class="casa-texto">
@@ -92,61 +85,39 @@
         <p class="apoio">
           O pedido entrou, a carne foi pra chapa. Na hora. O pão passa na manteiga e o queijo derrete na hora em cima. É frescor puro do começo ao fim. Por isso que vale a pena garantir a mesa e chegar com tudo pronto para você.
         </p>
+        <!-- Os dois números numa pílula só, com a divisória entre eles —
+             é o layout que ela mandou. Dois e não três: só tenho dois
+             números que são verdade. -->
+        <div class="numeros">
+          <div class="numero">
+            <strong>110g</strong>
+            <span>de smash em cada clássico</span>
+          </div>
+          <div class="numero">
+            <strong>51 mil</strong>
+            <span>pessoas acompanham a gente</span>
+          </div>
+        </div>
       </div>
-      <div class="numeros">
-        <div class="numero-card">
-          <strong>110g</strong>
-          <span>de smash em cada clássico</span>
-        </div>
-        <div class="numero-card">
-          <strong>51 mil</strong>
-          <span>pessoas acompanham a gente</span>
-        </div>
+
+      <!-- Foto grande com a menor pousada no canto, saindo pra fora. -->
+      <div class="casa-fotos">
+        <figure class="casa-foto casa-foto-grande">
+          <img src="imgs/salao.jpg" alt="O salão do Artesanos Burger"
+               onerror="this.closest('.casa-foto').classList.add('sem-foto')">
+        </figure>
+        <figure class="casa-foto casa-foto-pequena">
+          <img src="imgs/aniver.png" alt="Um smash do Artesanos com vela de aniversário"
+               onerror="this.closest('.casa-foto').classList.add('sem-foto')">
+        </figure>
       </div>
     </section>
 
-    <!-- OS RITUAIS -->
-    <section class="rituais" id="rituais">
-      <div class="rituais-chamada">
-        <span class="sobrancelha">Motivos</span>
-        <h2 class="titulo-display">Nem todo dia<br><em>é igual.</em></h2>
-      </div>
-      <!-- Os textos vieram dos destaques do Instagram deles, não de
-           invenção minha. Enquanto a arte de cada um não chega, o espaço
-           da imagem mostra o ladrilho da marca em vez de ícone quebrado. -->
-      <ul class="rituais-lista" tabindex="0" role="group"
-          aria-label="Motivos pra vir: terça em dobro, combo casal e niver no art">
-        <li class="ritual">
-          <figure class="ritual-foto">
-            <img src="imgs/terca-em-dobro.jpg" alt="Arte da promoção Terça em Dobro"
-                 onerror="this.closest('.ritual-foto').classList.add('sem-foto')">
-          </figure>
-          <span class="ritual-nome">#TERÇOUEMDOBRO</span>
-          <p>Qualquer lanche clássico às terças vai com carne em dobro.
-             Vale no salão e no delivery.</p>
-        </li>
-        <li class="ritual">
-          <figure class="ritual-foto">
-            <img src="imgs/combo-casal.jpg" alt="Arte do Combo Casal"
-                 onerror="this.closest('.ritual-foto').classList.add('sem-foto')">
-          </figure>
-          <span class="ritual-nome">Combo casal</span>
-          <p>2 lanches, 2 batatas e 2 bebidas. Pra curtir e dividir.</p>
-        </li>
-        <li class="ritual">
-          <figure class="ritual-foto">
-            <img src="imgs/niver-no-art.jpg" alt="Arte do Niver no Art"
-                 onerror="this.closest('.ritual-foto').classList.add('sem-foto')">
-          </figure>
-          <span class="ritual-nome">Niver no art.</span>
-          <p>Traga +1 pagante e o aniversariante ganha milkshake.
-             +5, um brownie. +10, lanche e brownie.</p>
-        </li>
-      </ul>
-    </section>
-
-    <!-- INFORMAÇÕES -->
-    <section class="informacoes" id="informacoes">
+    <!-- A fachada é o fundo daqui: a seção que diz ONDE fica a casa é o
+         lugar onde a foto da casa trabalha. O letreiro fica na parte de
+         cima, livre de texto; os dados ficam embaixo, onde o véu já cobriu
+         a foto quase inteira. -->
+    <section class="informacoes" id="informacoes" aria-label="Endereço, horários e contato">
       <div class="info-card">
         <span class="sobrancelha">Endereço</span>
         <p>
