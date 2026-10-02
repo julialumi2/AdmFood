@@ -158,54 +158,92 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 /* ---------- hero ---------- */
 
-/* O espaço de cima é curto de propósito: o que precisa ser visto sem
-   rolar é o título e os dois botões. */
+/* Centralizado e empilhado, como as referências que ela mandou: o título
+   manda, o prato pousa em cima dele, o resto vem embaixo. */
 .hero {
   display: grid;
-  /* `auto` na segunda coluna: a foto agora tem largura própria, e uma
-     fração reservaria pra ela espaço que ela não usa — espaço que faz
-     falta pro título caber em duas linhas. */
-  grid-template-columns: 1fr auto;
-  gap: var(--respiro);
-  align-items: center;
-  padding: clamp(1.5rem, 3vw, 2.75rem) var(--margem) clamp(2.5rem, 5vw, 4rem);
+  justify-items: center;
+  text-align: center;
+  padding: clamp(1.5rem, 3vw, 2.5rem) var(--margem) clamp(2.5rem, 5vw, 3.5rem);
 }
-.hero-texto { min-width: 0; }
-.hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.hero .sobrancelha { margin-bottom: 0.5rem; }
+.hero .apoio { margin: 0 0 1.75rem; max-width: 46ch; }
+.hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
 
-/* A única foto da página. Fica no hero porque é lá que ela trabalha:
-   quem chega quer ver a casa antes de decidir.
+/* O palco. `isolation` prende o empilhamento aqui dentro: sem isso o
+   z-index do prato competiria com o cabeçalho fixo. */
+.hero-palco {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  max-width: 62rem;
+  margin-bottom: clamp(1.25rem, 2.5vw, 2rem);
+}
 
-   A ALTURA é que manda, e a largura segue. Com a proporção presa à
-   largura da coluna, numa tela larga a foto virava 600px de altura,
-   esticava a linha do grid e empurrava o título pra baixo da dobra —
-   exatamente o que não pode acontecer num hero. Presa à altura da
-   janela, ela nunca passa do que cabe na primeira olhada. */
-.foto {
+.titulo-hero {
   margin: 0;
-  height: min(50vh, 400px);
-  aspect-ratio: 4 / 3;
-  width: auto;
-  border-radius: var(--curva);
-  overflow: hidden;
-  background: var(--marrom-leve);
+  font-weight: 900;
+  font-size: clamp(2.8rem, 9.5vw, 7rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--marrom-forte);
 }
-.foto img { width: 100%; height: 100%; object-fit: cover; object-position: center 42%; }
-/* Sem o arquivo, vira um bloco da cor da casa em vez de ícone quebrado. */
-.foto.sem-foto {
-  background: var(--marrom-leve);
-  border: 1px dashed var(--marrom-fraco);
-}
-/* O alt da imagem quebrada apareceria por cima do bloco. Some com ele:
-   o lugar já se explica sozinho. */
-.foto.sem-foto img { display: none; }
-.foto.sem-foto::after {
-  content: '';
+
+/* O prato fica no FLUXO, não solto: assim ele reserva o próprio espaço e
+   a linha de baixo nunca cai por cima dele. O que sobrepõe é a margem
+   negativa — só o terço de baixo do título, que é o quanto dá pra cobrir
+   sem trocar o efeito pela palavra. */
+.hero-lanche {
+  position: relative;
+  z-index: 2;
   display: block;
-  height: 100%;
-  background: url('imgs/artesanos-art.png') center / clamp(120px, 28%, 220px) no-repeat;
-  opacity: .25;
+  width: clamp(190px, 25vw, 330px);
+  height: auto;
+  margin-top: clamp(-60px, -4.5vw, -22px);
+  filter: drop-shadow(0 18px 26px rgba(69, 34, 25, .22));
+  pointer-events: none;
 }
+
+.titulo-eco {
+  margin: 0.35rem 0 0;
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(1.35rem, 3.6vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--marrom);
+}
+
+/* Os elementos soltos: a marca da casa no lugar dos cartões da
+   referência. Três e não oito — passou disso vira ruído em volta de um
+   título que é pra ser o que se lê primeiro. */
+.hero-solto {
+  position: absolute;
+  z-index: 1;
+  width: clamp(44px, 6vw, 78px);
+  height: auto;
+  opacity: .85;
+  pointer-events: none;
+}
+.hero-solto-esq   { left: -1%;  top: 6%;   transform: rotate(-16deg); }
+.hero-solto-dir   { right: 0;   top: 30%;  transform: rotate(13deg); }
+.hero-solto-baixo { right: 8%;  bottom: 2%; width: clamp(56px, 7vw, 96px); transform: rotate(-7deg); opacity: .5; }
+
+/* A fachada, agora em faixa própria entre o hero e "A casa". */
+.fachada {
+  margin: 0;
+  padding: 0 var(--margem) clamp(2.5rem, 5vw, 4rem);
+}
+.fachada img {
+  width: 100%;
+  height: clamp(220px, 38vh, 420px);
+  object-fit: cover;
+  object-position: center 42%;
+  border-radius: var(--curva);
+}
+.fachada.sem-foto img { display: none; }
 
 /* ---------- a casa ---------- */
 
@@ -536,18 +574,17 @@ main section[id] { scroll-margin-top: 5.5rem; }
 /* ---------- telas estreitas ---------- */
 
 @media (max-width: 900px) {
-  .hero, .casa, .reservas { grid-template-columns: 1fr; }
+  .casa, .reservas { grid-template-columns: 1fr; }
   .rituais-lista { grid-template-columns: 1fr; }
   .ritual-foto { aspect-ratio: 3 / 2; }
-  .hero { padding-top: clamp(2rem, 6vw, 3rem); }
   .casa .numeros { grid-template-columns: 1fr 1fr; }
   .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }
   .reservas-chamada { position: static; }
-  .foto {
-    height: auto;
-    width: 100%;
-    aspect-ratio: 3 / 2;
-  }
+  /* Na tela estreita o prato encolhe e os soltos saem: em volta de um
+     título que já ocupa a largura toda, eles viram sujeira. */
+  /* Largura já vem do clamp lá em cima — repetir aqui só criava uma
+     segunda verdade que brigava com a primeira. */
+  .hero-solto { display: none; }
   .topo-menu { display: none; }
 }
 
