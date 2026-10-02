@@ -187,7 +187,11 @@ main section[id] { scroll-margin-top: 5rem; }
    8% e não os 13% de lá, e com o ARQUIVO CLARO: padrão claro sobre escuro
    salta mais que escuro sobre claro na mesma opacidade — o olho pega marca
    clara em fundo escuro com muito mais facilidade. A 13% ele gritaria em
-   cima do título e do prato, que são o que o hero tem de melhor. */
+   cima do título e do prato.
+
+   Eu tinha baixado pra 5% achando que a 8% ele disputava demais; ela viu
+   as duas e escolheu a 8%. É escolha dela, e o contraste aguenta: no pior
+   caso a sobrancelha de 11px fica em 5,83:1. */
 .hero::before {
   content: '';
   position: absolute;
@@ -196,7 +200,7 @@ main section[id] { scroll-margin-top: 5rem; }
   background: url('imgs/artesanos-ladrilho-claro.png') repeat;
   background-size: 265px auto;
   transform: rotate(-6deg);
-  opacity: .05;
+  opacity: .08;
   pointer-events: none;
 }
 
