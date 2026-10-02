@@ -1,15 +1,24 @@
 :root {
-  --papel:         #fffed9;  /* o claro da paleta dela (02/10) */
-  --marrom:        #4f2612;  /* o marrom da paleta dela (02/10) */
-  --marrom-forte:  #391b0d;  /* títulos e o que precisa pesar */
-  --marrom-fraco:  #7b5c44;  /* apoio, rótulo, o que vem em segundo */
-  --marrom-leve:   #f1edc9;  /* linha, campo, fundo de bloco */
-  --creme-fraco:   #cec2a1;  /* o apoio DENTRO do marrom */
-  --alerta:        #b2301f;  /* lotado — convive com o marrom sem brigar */
+  /* A página virou escura inteira (02/10, especificação dela). Os nomes
+     são de PAPEL e não de cor: a paleta já mudou três vezes hoje, e nome
+     de cor vira mentira na primeira troca.
+
+     Conferidos contra o fundo onde cada um aparece de fato:
+     texto 15,4:1 · texto-fraco 10,1:1 · destaque 8,1:1 · alerta 6,7:1. */
+  --fundo:         #2b1b17;  /* a página e as seções */
+  --card:          #38241f;  /* o cartão do formulário e os quadros */
+  --borda:         #543a32;  /* a linha discreta entre as coisas */
+  --texto:         #f8f7f4;  /* branco suave */
+  --texto-fraco:   #d1c9c1;  /* bege claro, o que vem em segundo */
+  --destaque:      #e0a996;  /* terracota — o botão e o que chama */
+  /* O vermelho antigo dava 2,6:1 neste fundo. Em página escura o alerta
+     tem que CLAREAR, não escurecer. */
+  --alerta:        #ef8a74;
 
   --respiro:       clamp(1.25rem, 4vw, 3rem);
   --margem:        clamp(1rem, 5vw, 5.5rem);
   --curva:         14px;
+  --curva-card:    26px;     /* o cartão do formulário, bem arredondado */
 }
 
 * { box-sizing: border-box; }
@@ -22,8 +31,8 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: var(--papel);
-  color: var(--marrom);
+  background: var(--fundo);
+  color: var(--texto);
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 1.0625rem;
   line-height: 1.6;
@@ -33,7 +42,7 @@ body {
 img { max-width: 100%; display: block; }
 
 :focus-visible {
-  outline: 3px solid var(--marrom);
+  outline: 3px solid var(--destaque);
   outline-offset: 3px;
   border-radius: 4px;
 }
@@ -44,13 +53,13 @@ img { max-width: 100%; display: block; }
   font-size: clamp(2.2rem, 6vw, 4.2rem);
   line-height: 1.06;
   letter-spacing: -0.02em;
-  color: var(--marrom-forte);
+  color: var(--texto);
   margin: 0 0 1.25rem;
   text-wrap: balance;
 }
 .titulo-display em {
   font-style: italic;
-  color: var(--marrom);
+  color: var(--destaque);
 }
 
 .sobrancelha {
@@ -59,17 +68,17 @@ img { max-width: 100%; display: block; }
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
   margin-bottom: 1rem;
 }
 
 .apoio {
   margin: 0 0 1.75rem;
   max-width: 46ch;
-  color: var(--marrom);
+  color: var(--texto-fraco);
 }
-.apoio strong { font-weight: 800; color: var(--marrom-forte); }
-.apoio-menor { font-size: 0.95rem; color: var(--marrom-fraco); }
+.apoio strong { font-weight: 800; color: var(--texto); }
+.apoio-menor { font-size: 0.95rem; color: var(--texto-fraco); }
 
 /* ---------- botões ---------- */
 
@@ -79,7 +88,7 @@ img { max-width: 100%; display: block; }
   justify-content: center;
   gap: 0.5rem;
   padding: 0.95rem 1.75rem;
-  border: 2px solid var(--marrom);
+  border: 2px solid var(--destaque);
   border-radius: 999px;
   font: inherit;
   font-weight: 800;
@@ -87,10 +96,10 @@ img { max-width: 100%; display: block; }
   cursor: pointer;
   transition: background-color .18s ease, color .18s ease, transform .18s ease;
 }
-.btn-primario { background: var(--marrom); color: var(--papel); }
-.btn-primario:hover { background: var(--marrom-forte); border-color: var(--marrom-forte); }
-.btn-contorno { background: transparent; color: var(--marrom); }
-.btn-contorno:hover { background: var(--marrom-leve); }
+.btn-primario { background: var(--destaque); color: var(--fundo); }
+.btn-primario:hover { background: var(--texto); border-color: var(--texto); color: var(--fundo); }
+.btn-contorno { background: transparent; color: var(--destaque); }
+.btn-contorno:hover { background: var(--card); }
 .btn:active { transform: translateY(1px); }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 .btn-largo { width: 100%; padding: 1.1rem; font-size: 1.05rem; }
@@ -103,19 +112,21 @@ img { max-width: 100%; display: block; }
    o fundo é chapado de novo, e com isso o contraste do menu volta pro
    máximo da paleta em vez de depender do que passa por baixo. */
 .topo {
-  position: sticky;
+  position: fixed;
   top: clamp(8px, 1.4vw, 16px);
+  left: 0;
+  right: 0;
   z-index: 10;
   display: flex;
   align-items: center;
   gap: 1.25rem;
   width: min(100% - 2 * var(--margem), 72rem);
-  margin: clamp(8px, 1.4vw, 16px) auto 0;
+  margin-inline: auto;
   padding: 0.45rem 0.45rem 0.45rem 1.15rem;
-  border: 1px solid color-mix(in srgb, var(--marrom) 14%, transparent);
+  border: 1px solid var(--borda);
   border-radius: 999px;
-  background: var(--papel);
-  box-shadow: 0 6px 26px rgba(79, 38, 18, .12);
+  background: var(--card);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
 }
 
 .marca {
@@ -133,23 +144,23 @@ img { max-width: 100%; display: block; }
   font-weight: 900;
   font-size: 1.45rem;
   letter-spacing: -0.02em;
-  color: var(--marrom);
+  color: var(--texto);
 }
 .marca-escrita + .marca-nome { display: none; }
 
 .topo-menu { display: flex; gap: 1.5rem; font-size: 0.95rem; }
 .topo-menu a {
-  color: var(--marrom);
+  color: var(--texto-fraco);
   text-decoration: none;
   font-weight: 500;
   padding: .25rem 0;
   border-bottom: 2px solid transparent;
 }
-.topo-menu a:hover { border-bottom-color: var(--marrom); }
+.topo-menu a:hover { border-bottom-color: var(--destaque); color: var(--texto); }
 
 /* O topo é fixo: sem isso, o link do menu para a seção com o título já
    por baixo da faixa. */
-main section[id] { scroll-margin-top: 5rem; }
+main section[id] { scroll-margin-top: 6rem; }
 
 /* ---------- hero ---------- */
 
@@ -163,28 +174,28 @@ main section[id] { scroll-margin-top: 5rem; }
   display: grid;
   justify-items: center;
   text-align: center;
-  padding: clamp(2rem, 4vw, 3.25rem) var(--margem) clamp(3rem, 5.5vw, 4.25rem);
-  background: var(--marrom);
-  color: var(--papel);
+  padding: clamp(6rem, 9vw, 7rem) var(--margem) clamp(3rem, 5.5vw, 4.25rem);
+  background: var(--fundo);
+  color: var(--texto);
 }
-.hero .sobrancelha { margin-bottom: 0.5rem; color: var(--creme-fraco); }
-.hero .apoio { margin: 0 0 1.75rem; max-width: 46ch; color: var(--creme-fraco); }
+.hero .sobrancelha { margin-bottom: 0.5rem; color: var(--texto-fraco); }
+.hero .apoio { margin: 0 0 1.75rem; max-width: 46ch; color: var(--texto-fraco); }
 .hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
 
 /* O botão cheio era marrom em fundo claro; aqui ele sumiria no próprio
    fundo. Inverte: creme cheio, e o contorno em creme. */
 .hero .btn-primario {
-  background: var(--papel);
-  border-color: var(--papel);
-  color: var(--marrom-forte);
+  background: var(--destaque);
+  border-color: var(--destaque);
+  color: var(--fundo);
 }
 .hero .btn-primario:hover {
-  background: var(--marrom-leve);
-  border-color: var(--marrom-leve);
+  background: var(--texto);
+  border-color: var(--texto);
 }
-.hero .btn-contorno { color: var(--papel); border-color: var(--papel); }
+.hero .btn-contorno { color: var(--destaque); border-color: var(--destaque); }
 .hero .btn-contorno:hover { background: rgba(255, 254, 217, .14); }
-.hero :focus-visible { outline-color: var(--papel); }
+.hero :focus-visible { outline-color: var(--destaque); }
 
 /* O palco. `isolation` prende o empilhamento aqui dentro: sem isso o
    z-index do prato competiria com o cabeçalho fixo. */
@@ -204,7 +215,7 @@ main section[id] { scroll-margin-top: 5rem; }
   font-size: clamp(2.8rem, 9.5vw, 7rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
-  color: var(--papel);
+  color: var(--texto);
 }
 
 /* O prato fica no FLUXO, não solto: assim ele reserva o próprio espaço e
@@ -229,7 +240,7 @@ main section[id] { scroll-margin-top: 5rem; }
   font-size: clamp(1.35rem, 3.6vw, 2.6rem);
   line-height: 1.05;
   letter-spacing: -0.02em;
-  color: var(--creme-fraco);
+  color: var(--texto-fraco);
 }
 
 /* Os elementos soltos: a marca da casa no lugar dos cartões da
@@ -246,6 +257,35 @@ main section[id] { scroll-margin-top: 5rem; }
 .hero-solto-esq   { left: -1%;  top: 6%;   transform: rotate(-16deg); }
 .hero-solto-dir   { right: 0;   top: 30%;  transform: rotate(13deg); }
 .hero-solto-baixo { right: 8%;  bottom: 2%; width: clamp(56px, 7vw, 96px); transform: rotate(-7deg); opacity: .5; }
+
+/* O selo de qualidade. Fica solto no palco e flutua em contratempo com o
+   prato — meio ciclo atrás —, pra os dois não subirem juntos e parecerem
+   uma coisa só balançando. */
+.hero-selo {
+  position: absolute;
+  z-index: 3;
+  right: 4%;
+  top: 52%;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--destaque);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--destaque);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: rotate(-5deg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+  animation: flutua-selo 4.5s ease-in-out 3.2s infinite;
+}
+@keyframes flutua-selo {
+  0%, 100% { transform: rotate(-5deg) translateY(0); }
+  50%      { transform: rotate(-5deg) translateY(-9px); }
+}
+.hero-selo strong { font-weight: 900; font-size: 1.05rem; }
 
 /* A entrada do hero. Um momento só, de pouco mais de um segundo: o
    título sobe, o prato desce e POUSA no título — que é o movimento que a
@@ -272,7 +312,20 @@ main section[id] { scroll-margin-top: 5rem; }
 }
 
 .titulo-hero   { animation: sobe-e-aparece .55s ease-out backwards; }
-.hero-lanche   { animation: pousa .8s cubic-bezier(.2, .72, .3, 1) .15s backwards; }
+/* Duas animações no mesmo elemento: o pouso roda uma vez e a flutuação
+   assume quando ele termina (atraso = .15 + .8). Elas disputam a mesma
+   propriedade `transform`, e é o ATRASO que decide quem manda em cada
+   momento — sem ele a flutuação atropelaria o pouso desde o primeiro
+   quadro. */
+.hero-lanche {
+  animation:
+    pousa .8s cubic-bezier(.2, .72, .3, 1) .15s backwards,
+    flutua 4.5s ease-in-out .95s infinite;
+}
+@keyframes flutua {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-11px); }
+}
 .titulo-eco    { animation: sobe-e-aparece .5s ease-out .42s backwards; }
 .hero .apoio   { animation: sobe-e-aparece .5s ease-out .54s backwards; }
 .hero-botoes   { animation: sobe-e-aparece .5s ease-out .64s backwards; }
@@ -291,7 +344,7 @@ main section[id] { scroll-margin-top: 5rem; }
   gap: clamp(2rem, 5vw, 4.5rem);
   align-items: center;
   padding: clamp(3.5rem, 7vw, 6rem) var(--margem);
-  border-top: 1px solid var(--marrom-leve);
+  border-top: 1px solid var(--borda);
 }
 /* O ladrilho da marca, montado do arquivo original deles: a escrita e o
    desenho alternados, em encaixe de tijolo.
@@ -319,9 +372,9 @@ main section[id] { scroll-margin-top: 5rem; }
 .numeros {
   display: inline-flex;
   flex-wrap: wrap;
-  border: 2px solid var(--marrom-leve);
+  border: 2px solid var(--borda);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--papel) 85%, transparent);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
   backdrop-filter: blur(2px);
   overflow: hidden;
 }
@@ -329,21 +382,21 @@ main section[id] { scroll-margin-top: 5rem; }
   padding: 1rem clamp(1.25rem, 2.5vw, 2rem);
   text-align: center;
 }
-.numero + .numero { border-left: 2px solid var(--marrom-leve); }
+.numero + .numero { border-left: 2px solid var(--borda); }
 .numero strong {
   display: block;
   font-size: clamp(1.6rem, 3vw, 2.25rem);
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: var(--marrom-forte);
+  color: var(--texto);
 }
 .numero span {
   display: block;
   margin-top: 0.3rem;
   max-width: 16ch;
   font-size: 0.82rem;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
 }
 
 /* As duas fotos: a grande manda no espaço, a pequena pousa no canto e
@@ -357,7 +410,7 @@ main section[id] { scroll-margin-top: 5rem; }
   margin: 0;
   overflow: hidden;
   border-radius: var(--curva);
-  background: var(--marrom-forte);
+  background: var(--card);
 }
 .casa-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .casa-foto-grande { aspect-ratio: 1 / 1; }
@@ -370,12 +423,12 @@ main section[id] { scroll-margin-top: 5rem; }
   aspect-ratio: 1 / 1;
   /* A borda na cor da página é o que separa uma foto da outra sem
      precisar de sombra. */
-  border: 6px solid var(--papel);
+  border: 6px solid var(--fundo);
   border-radius: calc(var(--curva) + 4px);
 }
 /* Sem o arquivo, o quadro vira o ladrilho da marca em vez de ícone
    quebrado — o mesmo que o hero fez enquanto a foto não chegava. */
-.casa-foto.sem-foto { position: relative; background: var(--marrom-leve); }
+.casa-foto.sem-foto { position: relative; background: var(--card); }
 .casa-foto.sem-foto img { display: none; }
 .casa-foto.sem-foto::after {
   content: '';
@@ -404,8 +457,8 @@ main section[id] { scroll-margin-top: 5rem; }
   /* O espaço de cima é grande de propósito: é por ele que o letreiro
      "artesanos burger" aparece sem texto por cima. */
   padding: clamp(10rem, 26vw, 19rem) var(--margem) clamp(3rem, 6vw, 4.5rem);
-  background: var(--marrom);
-  color: var(--papel);
+  background: var(--fundo);
+  color: var(--texto);
 }
 /* A foto, por cima do marrom. */
 .informacoes::before {
@@ -427,21 +480,21 @@ main section[id] { scroll-margin-top: 5rem; }
   z-index: -1;
   background: linear-gradient(
     to bottom,
-    rgba(79, 38, 18, .12) 0%,
-    rgba(79, 38, 18, .10) 34%,
-    rgba(79, 38, 18, .90) 62%,
-    rgba(79, 38, 18, .97) 100%);
+    rgba(43, 27, 23, .12) 0%,
+    rgba(43, 27, 23, .10) 34%,
+    rgba(43, 27, 23, .90) 62%,
+    rgba(43, 27, 23, .97) 100%);
 }
 /* Claro e escuro trocam de lado aqui dentro — cada cor precisa do par
    da faixa, não do par da página. */
-.informacoes .sobrancelha { color: var(--creme-fraco); }
+.informacoes .sobrancelha { color: var(--texto-fraco); }
 .info-card p { margin: 0; font-weight: 500; }
 .info-card a {
-  color: var(--papel);
+  color: var(--texto);
   text-decoration: none;
-  border-bottom: 1px solid var(--creme-fraco);
+  border-bottom: 1px solid var(--borda);
 }
-.info-card a:hover { border-bottom-color: var(--papel); }
+.info-card a:hover { border-bottom-color: var(--destaque); color: var(--destaque); }
 
 /* ---------- reservas ---------- */
 
@@ -454,13 +507,30 @@ main section[id] { scroll-margin-top: 5rem; }
 }
 .reservas-chamada { 
   position: sticky; 
-  top: 5.5rem; 
+  top: 6.5rem; 
 }
 .reservas-chamada .apoio { 
   margin-bottom: 1rem; 
 }
 
-.reservas-form { display: grid; gap: 1.1rem; }
+/* O formulário vira cartão: superfície própria, borda discreta e canto
+   bem arredondado. Num fundo escuro chapado, sem isso ele seria só um
+   monte de campo solto no vazio — o cartão é o que diz "isto aqui é uma
+   coisa só, preencha". */
+.reservas-form {
+  display: grid;
+  gap: 1.1rem;
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+  border: 1px solid var(--borda);
+  border-radius: var(--curva-card);
+  background: var(--card);
+}
+.reservas-ok {
+  padding: clamp(1.75rem, 3.5vw, 2.5rem);
+  border: 1px solid var(--borda);
+  border-radius: var(--curva-card);
+  background: var(--card);
+}
 
 /* `align-content: start` é o que mantém os dois campos de uma dupla
    alinhados. Sem isso, o campo que tem dica embaixo estica a linha, e o
@@ -472,26 +542,26 @@ main section[id] { scroll-margin-top: 5rem; }
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
 }
 .campo .opcional { font-weight: 500; letter-spacing: 0; text-transform: none; }
 
 .campo input {
   width: 100%;
   padding: 0.9rem 1rem;
-  border: 2px solid var(--marrom-leve);
-  border-radius: 10px;
-  background: var(--papel);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  background: var(--fundo);
   font: inherit;
-  color: var(--marrom-forte);
+  color: var(--texto);
   transition: border-color .15s ease;
 }
-.campo input::placeholder { color: var(--marrom-fraco); }
-.campo input:hover { border-color: var(--marrom-fraco); }
-.campo input:focus { border-color: var(--marrom); outline: none; }
+.campo input::placeholder { color: var(--texto-fraco); }
+.campo input:hover { border-color: var(--texto-fraco); }
+.campo input:focus { border-color: var(--destaque); outline: none; }
 .campo input:focus-visible { outline: none; }
 
-.campo-dica { font-size: 0.8rem; color: var(--marrom-fraco); }
+.campo-dica { font-size: 0.8rem; color: var(--texto-fraco); }
 
 .campo-dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
 
@@ -499,9 +569,9 @@ main section[id] { scroll-margin-top: 5rem; }
    não faz. A barra é a ocupação real do turno, não enfeite. */
 .vagas {
   padding: 1.1rem 1.25rem;
-  border: 2px solid var(--marrom-leve);
+  border: 1px solid var(--borda);
   border-radius: var(--curva);
-  background: var(--marrom-leve);
+  background: var(--fundo);
 }
 .vagas-topo {
   display: flex;
@@ -510,31 +580,31 @@ main section[id] { scroll-margin-top: 5rem; }
   gap: 1rem;
   margin-bottom: 0.7rem;
 }
-.vagas-rotulo { font-weight: 800; color: var(--marrom-forte); }
+.vagas-rotulo { font-weight: 800; color: var(--texto); }
 .vagas-conta {
   font-size: 0.85rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
   white-space: nowrap;
 }
 .vagas-trilho {
   height: 10px;
   border-radius: 999px;
-  background: var(--papel);
+  background: var(--fundo);
   overflow: hidden;
 }
 .vagas-ocupado {
   height: 100%;
   width: 0;
-  background: var(--marrom);
+  background: var(--destaque);
   border-radius: 999px;
   transition: width .35s ease;
 }
 .vagas-recado {
   margin: 0.7rem 0 0;
   font-size: 0.9rem;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
 }
 /* Lotado não é erro de preenchimento: é informação, e a cor diz isso
    sem gritar. */
@@ -549,13 +619,13 @@ main section[id] { scroll-margin-top: 5rem; }
   padding: 0.85rem 1rem;
   border-radius: 10px;
   background: var(--alerta);
-  color: var(--papel);
+  color: var(--fundo);
   font-weight: 700;
   font-size: 0.95rem;
 }
-.form-nota { margin: 0; font-size: 0.85rem; color: var(--marrom-fraco); text-align: center; }
+.form-nota { margin: 0; font-size: 0.85rem; color: var(--texto-fraco); text-align: center; }
 
-.reservas-ok { align-self: center; }
+.reservas-ok { align-self: start; }
 .reservas-ok .form-nota { text-align: left; }
 
 /* As pílulas da ocasião. O radio de verdade continua lá, só invisível:
@@ -575,24 +645,24 @@ main section[id] { scroll-margin-top: 5rem; }
 }
 .ocasioes label {
   padding: 0.6rem 1.15rem;
-  border: 2px solid var(--marrom-leve);
+  border: 2px solid var(--borda);
   border-radius: 999px;
   font-size: 0.92rem;
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
-  color: var(--marrom);
+  color: var(--texto-fraco);
   cursor: pointer;
   transition: border-color .15s ease, background-color .15s ease, color .15s ease;
 }
-.ocasioes label:hover { border-color: var(--marrom-fraco); }
+.ocasioes label:hover { border-color: var(--texto-fraco); }
 .ocasioes input:checked + label {
-  background: var(--marrom);
-  border-color: var(--marrom);
-  color: var(--papel);
+  background: var(--destaque);
+  border-color: var(--destaque);
+  color: var(--fundo);
 }
 .ocasioes input:focus-visible + label {
-  outline: 3px solid var(--marrom);
+  outline: 3px solid var(--destaque);
   outline-offset: 3px;
 }
 
@@ -601,9 +671,9 @@ main section[id] { scroll-margin-top: 5rem; }
 .presente {
   margin: 0.85rem 0 0;
   padding: 0.15rem 0 0.15rem 0.9rem;
-  border-left: 3px solid var(--marrom);
+  border-left: 3px solid var(--destaque);
   font-size: 0.92rem;
-  color: var(--marrom-forte);
+  color: var(--texto);
 }
 
 /* O rótulo do grupo não é <label>: ele não aponta pra um campo só. */
@@ -612,7 +682,7 @@ main section[id] { scroll-margin-top: 5rem; }
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
 }
 .campo-rotulo .opcional { font-weight: 500; letter-spacing: 0; text-transform: none; }
 
@@ -624,17 +694,17 @@ main section[id] { scroll-margin-top: 5rem; }
   justify-content: space-between;
   gap: 0.5rem 1.5rem;
   padding: 2rem var(--margem);
-  border-top: 1px solid var(--marrom-leve);
+  border-top: 1px solid var(--borda);
   font-size: 0.9rem;
-  color: var(--marrom-fraco);
+  color: var(--texto-fraco);
 }
-.rodape strong { font-weight: 900; color: var(--marrom); letter-spacing: -0.01em; }
+.rodape strong { font-weight: 900; color: var(--texto); letter-spacing: -0.01em; }
 /* Como eles assinam tudo no Instagram. Fica por último, que é o lugar de
    assinatura. */
 .assinatura {
   font-weight: 800;
   letter-spacing: 0.06em;
-  color: var(--marrom);
+  color: var(--destaque);
 }
 
 /* ---------- telas estreitas ---------- */
@@ -656,10 +726,10 @@ main section[id] { scroll-margin-top: 5rem; }
   .informacoes::after {
     background: linear-gradient(
       to bottom,
-      rgba(79, 38, 18, .12) 0%,
-      rgba(79, 38, 18, .12) 18%,
-      rgba(79, 38, 18, .94) 36%,
-      rgba(79, 38, 18, .98) 100%);
+      rgba(43, 27, 23, .12) 0%,
+      rgba(43, 27, 23, .12) 18%,
+      rgba(43, 27, 23, .94) 36%,
+      rgba(43, 27, 23, .98) 100%);
   }
   .reservas-chamada { position: static; }
   /* Na tela estreita o prato encolhe e os soltos saem: em volta de um
@@ -667,6 +737,18 @@ main section[id] { scroll-margin-top: 5rem; }
   /* Largura já vem do clamp lá em cima — repetir aqui só criava uma
      segunda verdade que brigava com a primeira. */
   .hero-solto { display: none; }
+  /* O selo sai de cima do prato e desce pra baixo dele: lado a lado numa
+     tela estreita, os dois não cabem sem se sobrepor. */
+  .hero-selo {
+    position: static;
+    display: inline-flex;
+    margin: 1rem auto 0;
+    transform: rotate(-3deg);
+  }
+  @keyframes flutua-selo {
+    0%, 100% { transform: rotate(-3deg) translateY(0); }
+    50%      { transform: rotate(-3deg) translateY(-7px); }
+  }
   .topo-menu { display: none; }
 }
 
@@ -675,7 +757,7 @@ main section[id] { scroll-margin-top: 5rem; }
   .campo-dupla { grid-template-columns: 1fr; }
   /* Em tela bem estreita a pílula vira duas linhas, e a divisória
      vertical entre elas ficaria atravessada. */
-  .numero + .numero { border-left: 0; border-top: 2px solid var(--marrom-leve); }
+  .numero + .numero { border-left: 0; border-top: 2px solid var(--borda); }
   .numeros { flex-direction: column; border-radius: var(--curva); }
   .numero span { max-width: none; }
   .hero-botoes .btn { width: 100%; }
