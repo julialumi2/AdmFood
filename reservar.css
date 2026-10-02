@@ -261,9 +261,20 @@ main section[id] { scroll-margin-top: 5rem; }
   pointer-events: none;
 }
 
-/* "Artesanos" é o que a frase existe pra dizer. Sem itálico (Anton não
-   tem), o destaque é o claro mais forte contra o apoio do resto. */
-.titulo-eco em { font-style: normal; color: var(--papel); }
+/* "Artesanos" é o que a frase existe pra dizer: fica no claro mais forte
+   contra o apoio do resto.
+
+   A fonte é Archivo Black e não Anton porque ela é a mais parecida com a
+   da logo deles — uma grotesca pesadíssima, não condensada. ATENÇÃO: é
+   APROXIMAÇÃO, não a fonte original. Ninguém sabe qual é a da logo, e num
+   peso tão alto as grotescas ficam parecidas entre si. Se um dia aparecer
+   a fonte de verdade, é esta linha que muda. */
+.titulo-eco em {
+  font-style: normal;
+  font-family: 'Archivo Black', 'Arial Black', sans-serif;
+  letter-spacing: -0.02em;
+  color: var(--papel);
+}
 .titulo-eco {
   margin: 0.35rem 0 0;
   font-family: var(--fonte-titulo);
