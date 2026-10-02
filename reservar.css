@@ -294,7 +294,11 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 .reservas-form { display: grid; gap: 1.1rem; }
 
-.campo { display: grid; gap: 0.4rem; min-width: 0; }
+/* `align-content: start` é o que mantém os dois campos de uma dupla
+   alinhados. Sem isso, o campo que tem dica embaixo estica a linha, e o
+   campo vizinho — que só tem rótulo e caixa — faz a caixa crescer pra
+   preencher a sobra. As duas caixas ficavam de alturas diferentes. */
+.campo { display: grid; gap: 0.4rem; min-width: 0; align-content: start; }
 .campo label {
   font-size: 0.78rem;
   font-weight: 800;
