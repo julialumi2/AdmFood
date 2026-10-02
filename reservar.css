@@ -157,21 +157,34 @@ main section[id] { scroll-margin-top: 5.5rem; }
 
 /* ---------- hero ---------- */
 
+/* O espaço de cima é curto de propósito: o que precisa ser visto sem
+   rolar é o título e os dois botões. */
 .hero {
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  /* `auto` na segunda coluna: a foto agora tem largura própria, e uma
+     fração reservaria pra ela espaço que ela não usa — espaço que faz
+     falta pro título caber em duas linhas. */
+  grid-template-columns: 1fr auto;
   gap: var(--respiro);
   align-items: center;
-  padding: clamp(3rem, 8vw, 6.5rem) var(--margem);
+  padding: clamp(1.5rem, 3vw, 2.75rem) var(--margem) clamp(2.5rem, 5vw, 4rem);
 }
 .hero-texto { min-width: 0; }
 .hero-botoes { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
 /* A única foto da página. Fica no hero porque é lá que ela trabalha:
-   quem chega quer ver a casa antes de decidir. */
+   quem chega quer ver a casa antes de decidir.
+
+   A ALTURA é que manda, e a largura segue. Com a proporção presa à
+   largura da coluna, numa tela larga a foto virava 600px de altura,
+   esticava a linha do grid e empurrava o título pra baixo da dobra —
+   exatamente o que não pode acontecer num hero. Presa à altura da
+   janela, ela nunca passa do que cabe na primeira olhada. */
 .foto {
   margin: 0;
+  height: min(58vh, 480px);
   aspect-ratio: 4 / 5;
+  width: auto;
   border-radius: var(--curva);
   overflow: hidden;
   background: var(--marrom-leve);
@@ -389,7 +402,11 @@ main section[id] { scroll-margin-top: 5.5rem; }
   .casa .numeros { grid-template-columns: 1fr 1fr; }
   .informacoes { grid-template-columns: 1fr; gap: 1.75rem; }
   .reservas-chamada { position: static; }
-  .foto { aspect-ratio: 3 / 2; }
+  .foto {
+    height: auto;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+  }
   .topo-menu { display: none; }
 }
 
