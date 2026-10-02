@@ -272,6 +272,12 @@ main section[id] { scroll-margin-top: 5.5rem; }
   border-top: 1px solid var(--marrom-leve);
 }
 .info-card p { margin: 0; font-weight: 500; }
+.info-card a {
+  color: var(--marrom);
+  text-decoration: none;
+  border-bottom: 1px solid var(--marrom-leve);
+}
+.info-card a:hover { border-bottom-color: var(--marrom); }
 
 /* ---------- reservas ---------- */
 
